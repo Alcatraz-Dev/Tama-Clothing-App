@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Tama Clothing",
+    "slug": "tama-clothing",
+    "scheme": "tama-clothing",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/AppIcons/appstore.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/AppIcons/appstore.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "hideAppName": true
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alcatrazdev.tamaclothing",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "ZPNsAppDelegateProxyEnabled": false,
+        "ZPNsProxyEnabled": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/AppIcons/playstore.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.alcatrazdev.tamaclothing",
+      "permissions": [
+        "ACCESS_WIFI_STATE",
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3d48b864-f404-40a3-a69d-ac13e74fe8a2"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3d48b864-f404-40a3-a69d-ac13e74fe8a2"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/AppIcons/appstore.png",
+          "color": "#ffffff"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          },
+          "android": {
+            "extraProguardRules": "-keep class **.zego.** { *; }"
+          }
+        }
+      ]
+    ]
+  }
+}
