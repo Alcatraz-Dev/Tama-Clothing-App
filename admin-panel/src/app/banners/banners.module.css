@@ -1,0 +1,337 @@
+.container {
+    padding: 0;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 100px 0;
+    color: var(--text-muted);
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+    width: 32px;
+    height: 32px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.tableCard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    text-align: left;
+    padding: 20px 24px;
+    border-bottom: 2px solid var(--border);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+}
+
+.table td {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.bannerThumb {
+    width: 120px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 12px;
+    background: var(--secondary);
+    border: 1px solid var(--border);
+}
+
+.bannerInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bannerInfo strong {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.bannerInfo p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.statusBadge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.activeBadge {
+    background: rgba(39, 174, 96, 0.1);
+    color: #27ae60;
+}
+
+.inactiveBadge {
+    background: rgba(142, 142, 147, 0.1);
+    color: #8e8e93;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+}
+
+.iconBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.iconBtn:hover {
+    color: var(--foreground);
+}
+
+/* Modal Styling */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+}
+
+.modal {
+    background: var(--background);
+    width: 95%;
+    max-width: 600px;
+    border-radius: var(--card-radius);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.form {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inputGroup label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.inputGroup input {
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--secondary);
+    color: var(--foreground);
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.inputGroup input:focus {
+    outline: none;
+    border-color: var(--foreground);
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.03);
+    background: var(--background);
+}
+
+.columnLabel {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+}
+
+.imageUploadArea {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.previewImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.uploadPrompt {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.hiddenInput {
+    display: none;
+}
+
+.modalActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.error {
+    color: #ff4d4f;
+    font-size: 0.85rem;
+    background: rgba(255, 77, 79, 0.1);
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+/* RESPONSIVE STYLES */
+
+@media (max-width: 1024px) {
+    .tableCard {
+        overflow-x: auto;
+    }
+
+    .table {
+        min-width: 650px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .form {
+        padding: 24px;
+    }
+
+    .modalActions {
+        flex-direction: column-reverse;
+    }
+
+    .modalActions button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .title {
+        font-size: 1.25rem;
+    }
+
+    .subtitle {
+        font-size: 0.75rem;
+    }
+
+    .form {
+        padding: 16px;
+    }
+
+    .table th,
+    .table td {
+        padding: 12px 16px;
+    }
+
+    .bannerInfo strong {
+        font-size: 0.85rem;
+    }
+
+    .bannerInfo p {
+        font-size: 0.7rem;
+    }
+
+    .bannerThumb {
+        width: 80px;
+        height: 50px;
+    }
+
+    .modalHeader {
+        padding: 16px 20px;
+    }
+}
