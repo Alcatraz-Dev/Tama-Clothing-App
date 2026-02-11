@@ -90,6 +90,8 @@ import CollaborationScreen from './src/screens/CollaborationScreen';
 import AdminCollaborationScreen from './src/screens/AdminCollaborationScreen';
 import CollaborationDetailScreen from './src/screens/CollaborationDetailScreen';
 import LiveStreamScreen from './src/screens/LiveStreamScreen';
+import HostLiveScreen from './src/screens/HostLiveScreen';
+import AudienceLiveScreen from './src/screens/AudienceLiveScreen';
 import LiveAnalyticsScreen from './src/screens/LiveAnalyticsScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 
@@ -298,6 +300,11 @@ const Translations: any = {
     rateProduct: 'ÉVALUER LE PRODUIT', writeReview: 'Écrivez votre avis...',
     cancel: 'ANNULER', submit: 'ENVOYER', rate: 'NOTER', reviewed: 'ÉVALUÉ ✓',
     notifications: 'NOTIFICATIONS', clearAll: 'TOUT EFFACER', noNotifications: 'AUCUNE NOTIFICATION',
+    sendAGift: 'ENVOYER UN CADEAU', giftSent: 'Cadeau envoyé !', sentA: 'a envoyé un',
+    disconnectUser: 'Déconnecter Utilisateur', confirmDisconnect: 'Confirmer Déconnexion', areYouSureDisconnect: 'Voulez-vous déconnecter', disconnect: 'Déconnecter',
+    blockComment: 'Bloquer Chat', blockApplying: 'Bloquer Demande', manageUser: 'Gérer l\'utilisateur',
+    userBlockedInfo: 'a été bloqué du chat', removeUser: 'Retirer du Live',
+    removeUserFromRoom: 'Retirer du Salon', inviteToCoHost: 'Inviter à Co-hoster', stopCoHosting: 'Arrêter le Co-hosting', confirmRemove: 'Confirmer Retrait', areYouSureRemove: 'Voulez-vous retirer',
     showResults: 'AFFICHER LES RÉSULTATS', yourBag: 'VOTRE PANIER', thankYou: 'MERCI POUR VOTRE COMMANDE',
     preparingDelivery: 'Nous préparons votre livraison TAMA.',
     createAccount: 'Créer un Compte', searchCollections: 'RECHERCHER...', all: 'TOUT',
@@ -545,6 +552,11 @@ const Translations: any = {
     rateProduct: 'تقييم المنتج', writeReview: 'اكتب تقييمك...',
     cancel: 'إلغاء', submit: 'إرسال', rate: 'تقييم', reviewed: 'تم التقييم ✓',
     notifications: 'التنبيهات', clearAll: 'مسح الكل', noNotifications: 'لا توجد تنبيهات',
+    sendAGift: 'ارسال هدية', giftSent: 'تم ارسال الهدية!', sentA: 'أرسل',
+    disconnectUser: 'فصل المستخدم', confirmDisconnect: 'تأكيد الفصل', areYouSureDisconnect: 'هل أنت متأكد من فصل', disconnect: 'فصل',
+    blockComment: 'حظر الدردشة', blockApplying: 'حظر الطلبات', manageUser: 'إدارة المستخدم',
+    userBlockedInfo: 'تم حظره من الدردشة', removeUser: 'إزالة من البث',
+    removeUserFromRoom: 'إزالة من الغرفة', inviteToCoHost: 'دعوة للانضمام للبث', stopCoHosting: 'إيقاف البث المشترك', confirmRemove: 'تأكيد الإزالة', areYouSureRemove: 'هل أنت متأكد من إزالة',
     showResults: 'عرض النتائج', yourBag: 'الحقيبة', thankYou: 'شكراً لطلبك', preparingDelivery: 'نحن نجهز طلبك من TAMA.',
     createAccount: 'إنشاء حساب', searchCollections: 'ابحث...', all: 'الكل',
     signIn: 'دخول', getStarted: 'ابدأ الآن', shopByBrand: 'تسوق حسب العلامة', allBrands: 'كل العلامات',
@@ -832,8 +844,29 @@ export default function App() {
     if (user && expoPushToken) {
       const saveToken = async () => {
         try {
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
+          // Check by UID first
+          let userRef = doc(db, 'users', user.uid);
+          let userSnap = await getDoc(userRef);
+
+          // IMPORTANT: If not found by UID, check by Email (for project migrations)
+          // We do this BEFORE potentially creating a blank customer profile
+          if (!userSnap.exists() && user.email) {
+            const usersByEmail = await getDocs(query(collection(db, 'users'), where('email', '==', user.email), limit(1)));
+            if (!usersByEmail.empty) {
+              const oldDoc = usersByEmail.docs[0];
+              const oldData = oldDoc.data();
+              // Create new doc with new UID and old data
+              const migratedData = {
+                ...oldData,
+                expoPushToken,
+                lastLogin: serverTimestamp()
+              };
+              await setDoc(userRef, migratedData);
+              userSnap = await getDoc(userRef);
+              setProfileData(migratedData); // Update state immediately
+              console.log('🔄 Migrated user profile from old UID to new UID via email (Token Hook)');
+            }
+          }
 
           if (userSnap.exists()) {
             await updateDoc(userRef, {
@@ -841,13 +874,16 @@ export default function App() {
               lastLogin: serverTimestamp()
             });
           } else {
+            // ONLY create a new customer if absolutely no profile exists for this email
             await setDoc(userRef, {
               expoPushToken,
               email: user.email,
               role: 'customer',
+              fullName: user.displayName || 'User',
               createdAt: serverTimestamp(),
               lastLogin: serverTimestamp()
             });
+            setProfileData({ email: user.email, role: 'customer', fullName: user.displayName || 'User' });
           }
         } catch (e) {
           console.log('Error saving token:', e);
@@ -906,15 +942,29 @@ export default function App() {
       if (u) {
         setUser(u);
         setAppState('Main');
-        // Fetch additional profile data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', u.uid));
-        if (userDoc.exists()) {
-          const ud = userDoc.data();
-          setProfileData(ud);
-          if (ud.followedCollabs) {
-            setFollowedCollabs(ud.followedCollabs);
+        const fetchUserData = async () => {
+          let userData = null;
+          const userSnap = await getDoc(doc(db, 'users', u.uid));
+          if (userSnap.exists()) {
+            userData = userSnap.data();
+          } else if (u.email) {
+            const emailQ = query(collection(db, 'users'), where('email', '==', u.email), limit(1));
+            const emailS = await getDocs(emailQ);
+            if (!emailS.empty) {
+              userData = emailS.docs[0].data();
+              await setDoc(doc(db, 'users', u.uid), userData, { merge: true });
+            }
           }
-        }
+          if (userData) {
+            setProfileData(userData);
+            if (userData.followedCollabs) setFollowedCollabs(userData.followedCollabs);
+          } else if (u.email) {
+            const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User' };
+            setProfileData(def);
+            await setDoc(doc(db, 'users', u.uid), def, { merge: true });
+          }
+        };
+        fetchUserData();
 
         // Cleanup any stale live sessions owned by this user
         // If the app is just starting, the user cannot be live.
@@ -1136,8 +1186,8 @@ export default function App() {
   const handleJoinLive = (info: any) => {
     if (typeof info === 'string') {
       setActiveLiveChannel(info);
-      const isActuallyHost = profileData?.role === 'admin' || profileData?.brandId === info || profileData?.id === info;
-      setIsLiveHost(isActuallyHost);
+      // Joining via simple channel ID should default to Audience to be safe
+      setIsLiveHost(false);
       setLiveStreamData({ channelId: info });
     } else {
       setActiveLiveChannel(info.channelId);
@@ -1150,16 +1200,39 @@ export default function App() {
     setActiveTab('LiveStream');
   };
 
-  const handleStartLive = (collabId?: any) => {
-    // Use collabId as channelId if provided and it's a string, otherwise generate one
-    const actualCollabId = typeof collabId === 'string' ? collabId : undefined;
+  const handleStartLive = (arg?: any) => {
+    // Check if we were passed a collaboration ID (string) or a brandInfo object
+    const isObject = arg && typeof arg === 'object';
+    const actualCollabId = typeof arg === 'string' ? arg : (isObject ? arg.id : undefined);
+
+    // Generate channelId
     const channelId = actualCollabId || `live_${profileData?.brandId || profileData?.id || user?.uid}_${Date.now()}`;
+
+    // Set avatar: priority to the passed info object, then profile data
+    const infoAvatar = isObject ? (arg.logoUrl || arg.image || arg.logo || arg.coverImageUrl) : null;
+
+    let infoName = isObject ? (arg.name || arg.displayName || arg.brandName || arg.title) : null;
+    if (infoName && typeof infoName === 'object') {
+      // Handle localized name object or unexpected object
+      infoName = infoName[language] || infoName.en || infoName.fr || infoName.ar || Object.values(infoName)[0] || null;
+    }
+
+    let baseName = profileData?.brandName || profileData?.fullName || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Host');
+    if (baseName && typeof baseName === 'object') {
+      baseName = baseName[language] || baseName.en || baseName.fr || baseName.ar || Object.values(baseName)[0] || 'Host';
+    }
+
+    const finalHostName = (typeof infoName === 'string' && infoName) ? infoName : (typeof baseName === 'string' ? baseName : 'Host');
+
     setActiveLiveChannel(channelId);
     setIsLiveHost(true);
     setLiveStreamData({
       channelId,
       brandId: profileData?.brandId || (actualCollabId && !actualCollabId.startsWith('live_') ? actualCollabId : undefined),
-      isHost: true
+      collabId: actualCollabId,
+      isHost: true,
+      hostAvatar: infoAvatar || profileData?.avatarUrl || profileData?.logoUrl || user?.photoURL,
+      hostName: finalHostName
     });
     setIsLiveReplay(false);
     setReplayUrl('');
@@ -1188,21 +1261,27 @@ export default function App() {
         />
       );
       case 'LiveStream': return (
-        <LiveStreamScreen
-          channelId={activeLiveChannel}
-          isHost={isLiveHost}
-          isAdmin={profileData?.role === 'admin'}
-          userId={user?.uid || 'guest'}
-          userName={profileData?.fullName || 'Guest'}
-          brandId={liveStreamData?.brandId}
-          onClose={() => setActiveTab('Home')}
-          onAddToCart={(p: any) => setQuickAddProduct(p)}
-          onProductPress={navigateToProduct}
-          language={language}
-          t={t}
-          isReplay={isLiveReplay}
-          replayUrl={replayUrl}
-        />
+        isLiveHost ? (
+          <HostLiveScreen
+            channelId={activeLiveChannel}
+            userId={user?.uid || 'guest'}
+            userName={liveStreamData?.hostName || profileData?.fullName || user?.displayName || user?.email?.split('@')[0] || 'Host'}
+            brandId={liveStreamData?.brandId}
+            collabId={liveStreamData?.collabId}
+            onClose={() => setActiveTab('Home')}
+            t={t}
+            hostAvatar={liveStreamData?.hostAvatar || profileData?.avatarUrl || user?.photoURL}
+          />
+        ) : (
+          <AudienceLiveScreen
+            channelId={activeLiveChannel}
+            userId={user?.uid || 'guest'}
+            userName={profileData?.fullName || user?.displayName || user?.email?.split('@')[0] || 'User'}
+            userAvatar={profileData?.avatarUrl || user?.photoURL}
+            onClose={() => setActiveTab('Home')}
+            t={t}
+          />
+        )
       );
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
@@ -1652,15 +1731,28 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
       setAds(adsList);
 
       // Fetch Flash Sale
-      const flashSnap = await getDoc(doc(db, 'settings', 'flashSale'));
-      if (flashSnap.exists() && flashSnap.data().active) {
-        const fsData = flashSnap.data();
-        setFlashSale(fsData);
-        if (fsData.productIds?.length > 0) {
-          // Firestore 'in' query supports up to 10 IDs
-          const pSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', fsData.productIds.slice(0, 10))));
-          setFlashProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      try {
+        const flashSnap = await getDoc(doc(db, 'settings', 'flashSale'));
+        if (flashSnap.exists() && flashSnap.data().active) {
+          const fsData = flashSnap.data();
+          const now = new Date().getTime();
+          const end = fsData.endTime ? new Date(fsData.endTime).getTime() : 0;
+
+          if (end > now) {
+            setFlashSale(fsData);
+            if (fsData.productIds?.length > 0) {
+              const pSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', fsData.productIds.slice(0, 10))));
+              setFlashProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            }
+          } else {
+            setFlashSale(null);
+          }
+        } else {
+          setFlashSale(null);
         }
+      } catch (fsErr) {
+        console.log("Error fetching flash sale", fsErr);
+        setFlashSale(null);
       }
       // Fetch Promo Banners
       const promoSnap = await getDocs(collection(db, 'promoBanners'));
@@ -1802,14 +1894,13 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           return (
             <TouchableOpacity
               onPress={() => {
-                const isUserHost = profileData?.role === 'admin' || profileData?.brandId === (bestCollab?.brandId || bestLiveSession.brandId);
-                console.log('🎬 Joining Live - isUserHost:', isUserHost, 'profileRole:', profileData?.role, 'profileBrandId:', profileData?.brandId, 'sessionBrandId:', bestLiveSession.brandId);
                 onJoinLive && onJoinLive({
                   channelId: bestLiveSession.channelId,
-                  isHost: isUserHost,
+                  isHost: false, // Joining an existing live from banner is always Audience
                   userName: profileData?.fullName || user?.displayName || 'Guest',
                   userId: user?.uid,
-                  brandId: bestCollab?.brandId || bestLiveSession.brandId
+                  brandId: bestCollab?.brandId || bestLiveSession.brandId,
+                  hostAvatar: bestCollab?.coverImageUrl || bestCollab?.imageUrl || bestLiveSession.hostAvatar
                 });
               }}
               activeOpacity={0.9}
@@ -1932,13 +2023,23 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                   key={c.id}
                   style={{ alignItems: 'center' }}
                   onPress={() => {
-                    const isUserHost = profileData?.role === 'admin' || profileData?.brandId === c.brandId;
+                    // Find actual session to get correct channelId
+                    const session = liveSessions.find(s =>
+                      s.brandId === c.brandId ||
+                      s.collabId === c.id ||
+                      s.channelId === c.id ||
+                      (c.brandId && s.channelId === c.brandId) // fallback check
+                    );
+
+                    const targetChannelId = session?.channelId || c.id;
+
                     onJoinLive && onJoinLive({
-                      channelId: c.id,
-                      isHost: isUserHost,
+                      channelId: targetChannelId,
+                      isHost: false, // Joining from Live Now list is always Audience
                       userName: profileData?.fullName || user?.displayName || 'Guest',
                       userId: user?.uid,
-                      brandId: c.brandId
+                      brandId: c.brandId,
+                      hostAvatar: c.coverImageUrl || c.imageUrl
                     });
                   }}
                 >
@@ -2105,7 +2206,10 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                     <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('flashSale')}</Text>
                     <View style={{ width: 25, height: 2, backgroundColor: colors.accent, marginTop: 4 }} />
                   </View>
-                  <FlashSaleCountdown endTime={flashSale.endTime} />
+                  <FlashSaleCountdown
+                    endTime={flashSale.endTime}
+                    onEnd={() => setFlashSale(null)}
+                  />
                 </View>
                 <TouchableOpacity onPress={() => onNavigate('Shop')}>
                   <Text style={[styles.modernSectionLink, { color: colors.accent }]}>{t('seeAll')}</Text>
@@ -2347,9 +2451,23 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
 
   const fetchBrandInfo = async () => {
     try {
-      const brandSnap = await getDoc(doc(db, 'brands', profileData.brandId));
+      const brandId = profileData.brandId;
+      const brandSnap = await getDoc(doc(db, 'brands', brandId));
       if (brandSnap.exists()) {
-        setBrandInfo(brandSnap.data());
+        const data = brandSnap.data();
+
+        // Find matching collaboration to get the 'type'
+        const collabQuery = query(collection(db, 'collaborations'), where('brandId', '==', brandId), limit(1));
+        const collabSnap = await getDocs(collabQuery);
+
+        if (!collabSnap.empty) {
+          data.type = collabSnap.docs[0].data().type;
+        } else {
+          // Fallback to 'Brand' for brand owners if no collab doc found
+          data.type = 'Brand';
+        }
+
+        setBrandInfo(data);
       }
     } catch (e) {
       console.error('Error fetching brand info', e);
@@ -2422,7 +2540,15 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
       setIsStatsVisible(true);
     }
   };
+  const getBadgeColor = () => {
+    if (!brandInfo) return '#22C55E';
+    if (brandInfo.type === 'Brand') return '#FFD700';
+    if (brandInfo.type === 'Person') return '#A855F7';
+    if (brandInfo.type === 'Company') return '#3B82F6';
+    return '#22C55E';
+  };
 
+  const badgeColor = getBadgeColor();
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Sticky Animated Blur Header */}
@@ -2516,7 +2642,11 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                 )}
                 <View>
                   <Text style={{ color: theme === 'dark' ? '#FFF' : '#000', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 }}>{getName(brandInfo?.name, 'TAMA BRAND').toUpperCase()}</Text>
-                  <Text style={{ color: theme === 'dark' ? '#FFF' : '#000', fontSize: 9, fontWeight: '700', letterSpacing: 1 }}>OFFICIAL PARTNER</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ color: theme === 'dark' ? '#FFF' : '#000', fontSize: 9, fontWeight: '700', letterSpacing: 1 }}>{t('officialPartner').toUpperCase()}</Text>
+                    <CheckCircle2 size={10} color={badgeColor} />
+                  </View>
+
                 </View>
               </View>
             </View>
@@ -2707,7 +2837,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
           {/* Start Live Floating Card - Premium UI */}
           {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
             <TouchableOpacity
-              onPress={() => onStartLive && onStartLive()}
+              onPress={() => onStartLive && onStartLive(brandInfo)}
               activeOpacity={0.9}
               style={{
                 marginHorizontal: 0,
@@ -3073,7 +3203,7 @@ function FollowManagementScreen({ onBack, followedCollabs, toggleFollowCollab, s
                   borderWidth: 3,
                   borderColor: theme === 'dark' ? '#121218' : '#FFF'
                 }}>
-                  <CheckCircle2 size={10} color="#FFF" />
+                  <CheckCircle2 size={10} color={theme === 'dark' ? '#121218' : '#FFF'} />
                 </View>
               </View>
 
@@ -9411,8 +9541,12 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchFlashSale();
-    fetchProducts();
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchFlashSale(), fetchProducts()]);
+      setLoading(false);
+    };
+    init();
   }, []);
 
   const fetchFlashSale = async () => {
@@ -9427,12 +9561,31 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
   };
 
   const fetchProducts = async () => {
-    const snap = await getDocs(collection(db, 'products'));
-    setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    try {
+      const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'), limit(100));
+      const snap = await getDocs(q);
+      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error("Error fetching products for flash sale:", err);
+    }
   };
 
   const handleSave = async () => {
+    if (!title || !endTime) {
+      Alert.alert(t('error'), t('fillAllFields'));
+      return;
+    }
+
+    // Validate date format
+    const testDate = new Date(endTime);
+    if (isNaN(testDate.getTime())) {
+      Alert.alert(t('error'), t('invalidDateFormat'));
+      return;
+    }
+
     setLoading(true);
+    console.log("Saving flash sale...", { active, title, endTime, products: selectedProductIds.length });
+
     try {
       await setDoc(doc(db, 'settings', 'flashSale'), {
         active,
@@ -9441,9 +9594,11 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
         productIds: selectedProductIds,
         updatedAt: serverTimestamp()
       });
+      console.log("Flash sale saved successfully");
       Alert.alert(t('successTitle'), t('flashSaleUpdated'));
-    } catch (e) {
-      Alert.alert(t('error'), t('failedToSave'));
+    } catch (e: any) {
+      console.error("Error saving flash sale:", e);
+      Alert.alert(t('error'), e.message || t('failedToSave'));
     } finally {
       setLoading(false);
     }
@@ -9487,7 +9642,7 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
               onPress={() => {
                 const d = new Date();
                 d.setHours(d.getHours() + h);
-                setEndTime(d.toISOString().split('.')[0]);
+                setEndTime(d.toISOString());
               }}
               style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderRadius: 10, borderWidth: 1, borderColor: appColors.border }}
             >
@@ -9836,7 +9991,7 @@ function AdminPromoBannersScreen({ onBack, t }: any) {
   );
 }
 
-function FlashSaleCountdown({ endTime }: { endTime: string }) {
+function FlashSaleCountdown({ endTime, onEnd }: { endTime: string, onEnd?: () => void }) {
   const [timeLeft, setTimeLeft] = useState({ h: '00', m: '00', s: '00' });
 
   useEffect(() => {
@@ -9848,6 +10003,7 @@ function FlashSaleCountdown({ endTime }: { endTime: string }) {
       if (diff <= 0) {
         clearInterval(timer);
         setTimeLeft({ h: '00', m: '00', s: '00' });
+        if (onEnd) onEnd();
       } else {
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));

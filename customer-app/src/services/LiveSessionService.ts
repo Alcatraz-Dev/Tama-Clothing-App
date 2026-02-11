@@ -274,7 +274,7 @@ export const LiveSessionService = {
     },
 
     // Start a live stream for a collaboration
-    startCollabSession: async (channelId: string, hostName: string, hostId: string, collabId: string, brandId?: string) => {
+    startCollabSession: async (channelId: string, hostName: string, hostId: string, collabId: string, brandId?: string, hostAvatar?: string) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await setDoc(sessionRef, {
             channelId,
@@ -286,7 +286,7 @@ export const LiveSessionService = {
             status: 'live',
             hostName,
             hostId,
-            hostAvatar: null,
+            hostAvatar: hostAvatar || null,
             collaboratorIds: [],
             moderatorIds: [],
             participantIds: [hostId], // Host is first participant

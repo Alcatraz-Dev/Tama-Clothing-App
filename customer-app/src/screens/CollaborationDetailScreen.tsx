@@ -89,7 +89,7 @@ interface CollaborationDetailScreenProps {
     toggleFollowCollab: (collabId: string) => void;
     profileData: any;
     onJoinLive: (info: any) => void;
-    onStartLive: (collabId: string) => void;
+    onStartLive: (collab: any) => void;
 }
 
 export default function CollaborationDetailScreen({
@@ -374,19 +374,20 @@ export default function CollaborationDetailScreen({
         const isLive = liveSession?.status === 'live';
 
         // CRITICAL LOGIC:
-        // - If NO stream is running: Owner can START as HOST
-        // - If stream IS running: EVERYONE joins as AUDIENCE (even the owner)
-        const isHost = !isLive && isOwner;
+        // - If NO stream is running: Owner or Admin can START as HOST
+        // - If stream IS running: EVERYONE joins as AUDIENCE (including owner/admin)
+        const isHost = !isLive && (isOwner || isAdmin);
 
-        console.log('🎬 CollabDetail Live Action - isLive:', isLive, 'isOwner:', isOwner, 'isHost:', isHost);
+        console.log('🎬 CollabDetail Live Action - isLive:', isLive, 'isOwner:', isOwner, 'isAdmin:', isAdmin, 'isHost:', isHost);
 
         // Navigate to Live Stream
         onJoinLive({
-            channelId: collab.id,
+            channelId: (isLive && liveSession?.channelId) ? liveSession.channelId : collab.id,
             isHost: isHost,
             userName: profileData?.fullName || auth.currentUser.displayName || 'Guest',
             userId: auth.currentUser.uid,
-            brandId: collab.brandId
+            brandId: collab.brandId,
+            hostAvatar: collab.coverImageUrl || collab.imageUrl
         });
     };
 
@@ -789,7 +790,7 @@ export default function CollaborationDetailScreen({
                                 {isOwner && (
                                     <TouchableOpacity
                                         style={[styles.liveActionButton, { backgroundColor: '#EF4444', width: '48%' }]}
-                                        onPress={() => onStartLive && onStartLive(collab.id)}
+                                        onPress={() => onStartLive && onStartLive(collab)}
                                     >
                                         <Camera size={16} color="#FFF" style={{ marginRight: 6 }} />
                                         <Text style={styles.liveActionText} numberOfLines={1} adjustsFontSizeToFit>

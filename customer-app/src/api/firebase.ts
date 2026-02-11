@@ -12,12 +12,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyARYACJ1kXfSAXGYp2xc65LTUyjnX5hqpY",
-    authDomain: "tama-clothing-tunisia.firebaseapp.com",
-    projectId: "tama-clothing-tunisia",
-    storageBucket: "tama-clothing-tunisia.firebasestorage.app",
-    messagingSenderId: "720312684180",
-    appId: "1:720312684180:web:b56c9ef0cd926f00172e81"
+    apiKey: "AIzaSyAZYgY-PsjDK5vSxssjsWmUI9J8CE6FUFw",
+    authDomain: "tama-clothing-v2-alcatraz.firebaseapp.com",
+    projectId: "tama-clothing-v2-alcatraz",
+    storageBucket: "tama-clothing-v2-alcatraz.firebasestorage.app",
+    messagingSenderId: "32411249289",
+    appId: "1:32411249289:web:fd4b30ad0233dec21df458"
 };
 
 // Singleton pattern for Firebase initialization

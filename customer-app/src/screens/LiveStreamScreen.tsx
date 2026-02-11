@@ -39,6 +39,16 @@ import { LiveSessionService } from "../services/LiveSessionService";
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
 
+// ✅ Conditionally import ZIM only in dev builds (not Expo Go)
+let ZIM: any = null;
+if (!isExpoGo) {
+    try {
+        ZIM = require('zego-zim-react-native');
+    } catch (e) {
+        console.log('ZIM plugin not available');
+    }
+}
+
 // ✅ Put them in env or constants
 const ZEGO_APP_ID = 1327315162; // Placeholder ID - User should replace with real one
 const ZEGO_APP_SIGN = '2c0f518d65e837480793f1ebe41b0ad44e999bca88ef783b65ef4391b4514ace'; // Placeholder Sign
@@ -434,6 +444,7 @@ function LiveDevBuildOnly({
                         userName={userName}
                         liveID={channelId}
                         config={config}
+                        {...(ZIM ? { plugins: [ZIM] } : {})}
                     />
 
                     {/* Pinned Product Overlay - Adjusted position to not overlap Zego header */}
