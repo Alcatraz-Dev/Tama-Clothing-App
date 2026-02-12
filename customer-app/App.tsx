@@ -500,8 +500,44 @@ const Translations: any = {
     zegoFailed: 'Le SDK a échoué. Veuillez reconstruire l\'application.',
     selectProductToPin: 'Sélectionner un produit à épingler',
     pinned: 'ÉPINGLÉ',
+    sessionSummary: 'Résumé de la session',
+    hostLabel: 'Hôte',
+    totalLikes: 'Total Likes',
+    giftPoints: 'Points Cadeaux',
+    pkWins: 'Victoires PK',
+    pkLosses: 'Défaites PK',
+    totalViewers: 'Total Spectateurs',
+    peakViewers: "Pic d'Audience",
+    duration: 'Durée',
+    engagement: 'Engagement',
+    likesPerMin: 'Likes/Min',
+    giftsPerMin: 'Cadeaux/Min',
+    viewStatsInfo: 'Statistiques finales de votre live terminé',
+    loadingAnalytics: 'Chargement des statistiques...',
+    noAnalyticsData: 'Aucune donnée disponible',
+    selectRecipient: 'CHOISIR DESTINATAIRE',
+    noParticipants: 'Aucun autre participant...',
+    selectGift: 'CHOISIR CADEAU',
+    sendGiftToParticipant: 'ENVOYER CADEAU AU PARTICIPANT',
+    success: 'SUCCÈS',
+    invitationSentTo: 'Invitation envoyée à',
+    sendingInvitation: 'Envoi de l\'invitation...',
+    stoppedCoHostingFor: 'Co-hosting arrêté pour',
+    areYouSureRemoveFromRoom: 'Voulez-vous retirer cet utilisateur du salon ?',
+    pkWinnerTitle: 'Gagnant du Duel PK',
+    battleEnded: 'Duel Terminé',
+    itsADraw: 'Match Nul !',
+    dropCoupon: 'Lancer un Coupon',
+    discountAmount: 'Montant (TND ou %)',
+    expiryMinutes: 'Validité (minutes)',
+    claimCoupon: 'Récupérer',
+    couponDropped: 'Coupon activé !',
+    couponEnded: 'Coupon expiré',
+    couponCopied: 'Code copié !',
+    limitedTimeOffer: 'OFFRE LIMITÉE',
   },
   ar: {
+    success: 'تم بنجاح',
     home: 'الرئيسية', shop: 'المتجر', bag: 'الحقيبة', me: 'أنا',
     explore: 'استكشف', seeAll: 'عرض الكل', refineGallery: 'المعرض',
     collections: 'التشكيلات', flashSale: 'تخفيضات', campaigns: 'الحملات',
@@ -524,7 +560,7 @@ const Translations: any = {
     category: 'الفئة', brand: 'العلامة التجارية', sizesLabel: 'المقاسات', colorsLabel: 'الألوان',
     soldOutStatus: 'حالة نفاذ الكمية', markUnavailable: 'تحديد كغير متوفر',
     colorPlaceholder: 'Hex (#000) أو الاسم (أحمر، أزرق...)',
-    descriptionFr: 'الوصف (فرنسي)', descriptionAr: 'الوصف (عربي)',
+    descriptionFr: 'الوصف (فرنسي)', descriptionAr: 'الوصف بالعربية...',
     images: 'صور', duplicateColor: 'هذا اللون مضاف بالفعل',
     frenchDesc: 'Description en français...', arabicDesc: 'الوصف بالعربية...',
     brandOwner: 'مسؤول العلامة', role: 'الدور', admin: 'مسؤول', customer: 'عميل',
@@ -729,6 +765,40 @@ const Translations: any = {
     searchClients: 'البحث عن العملاء...',
     noClients: 'لم يتم العثور على عملاء',
     banned: 'محظور',
+    sessionSummary: 'ملخص البث',
+    hostLabel: 'المستضيف',
+    totalLikes: 'إجمالي الإعجابات',
+    giftPoints: 'نقاط الهدايا',
+    pkWins: 'انتصارات PK',
+    pkLosses: 'هزائم PK',
+    totalViewers: 'إجمالي المشاهدين',
+    peakViewers: 'ذروة المشاهدة',
+    duration: 'المدة',
+    engagement: 'التفاعل',
+    likesPerMin: 'إعجاب/دقيقة',
+    giftsPerMin: 'هدية/دقيقة',
+    viewStatsInfo: 'الإحصائيات النهائية للبث المباشر المكتمل',
+    loadingAnalytics: 'جاري تحميل الإحصائيات...',
+    noAnalyticsData: 'لا توجد بيانات متاحة',
+    selectRecipient: 'اختر المستلم',
+    noParticipants: 'لا يوجد مشاركون آخرون...',
+    selectGift: 'اختر الهدية',
+    sendGiftToParticipant: 'إرسال هدية للمشارك',
+    invitationSentTo: 'تم إرسال الدعوة إلى',
+    sendingInvitation: 'جاري إرسال الدعوة...',
+    stoppedCoHostingFor: 'تم إيقاف البث المشترك لـ',
+    areYouSureRemoveFromRoom: 'هل أنت متأكد من إزالة هذا المستخدم من الغرفة؟',
+    pkWinnerTitle: 'فائز تحدي PK',
+    battleEnded: 'انتهى التحدي',
+    itsADraw: 'تعادل !',
+    dropCoupon: 'إرسال كوبون',
+    discountAmount: 'قيمة الخصم',
+    expiryMinutes: 'الدقائق الصالحة',
+    claimCoupon: 'احصل عليه',
+    couponDropped: 'تم تفعيل الكوبون!',
+    couponEnded: 'انتهت صلاحية الكوبون',
+    couponCopied: 'تم نسخ الرمز!',
+    limitedTimeOffer: 'عرض لفترة محدودة',
   }
 };
 
@@ -1270,6 +1340,7 @@ export default function App() {
             collabId={liveStreamData?.collabId}
             onClose={() => setActiveTab('Home')}
             t={t}
+            language={language}
             hostAvatar={liveStreamData?.hostAvatar || profileData?.avatarUrl || user?.photoURL}
           />
         ) : (
@@ -1307,6 +1378,7 @@ export default function App() {
           }}
           theme={theme}
           language={language}
+          t={t}
         />
       );
 
@@ -1685,7 +1757,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
       const now = Date.now();
       const active = sessions.filter(s => {
         const start = s.startedAt?.toMillis?.() || (s.startedAt?.seconds ? s.startedAt.seconds * 1000 : 0);
-        return (now - start) < (6 * 60 * 60 * 1000); // Only show sessions from last 6 hours
+        return s.status === 'live' && (now - start) < (6 * 60 * 60 * 1000); // Only show sessions from last 6 hours
       });
       setLiveSessions(active);
       const liveIds = active.flatMap(s => [s.brandId, s.collabId, s.channelId]).filter(Boolean) as string[];

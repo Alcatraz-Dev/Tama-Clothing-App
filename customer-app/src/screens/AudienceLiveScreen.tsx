@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, findNodeHandle } from 'react-native';
+import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions, Clipboard, StyleSheet, View, findNodeHandle } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions } from 'react-native';
-import { Gift, Share2, Heart, Flame } from 'lucide-react-native';
+import { Gift, Share2, Heart, Flame, Ticket, X, Clock } from 'lucide-react-native';
 import { FlameCounter } from '../components/FlameCounter';
 
 
@@ -64,7 +63,8 @@ type Props = {
 };
 
 export default function AudienceLiveScreen(props: Props) {
-    const { channelId, userId, userName, userAvatar, onClose, t } = props;
+    const t = props.t || ((key: string) => key);
+    const { channelId, userId, userName, userAvatar, onClose } = props;
     const prebuiltRef = useRef<any>(null);
     const mediaViewRef = useRef<any>(null);
     const mediaPlayerRef = useRef<any>(null);
@@ -82,6 +82,11 @@ export default function AudienceLiveScreen(props: Props) {
     const [pkEndTime, setPkEndTime] = useState<number | null>(null);
     const [pkWinner, setPkWinner] = useState<string | null>(null);
     const [showPKResult, setShowPKResult] = useState(false);
+
+    // Coupon State
+    const [activeCoupon, setActiveCoupon] = useState<any>(null);
+    const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
+    const couponTimerRef = useRef<any>(null);
     const [likeCount, setLikeCount] = useState(0);
     const [totalLikes, setTotalLikes] = useState(0);
     const [floatingHearts, setFloatingHearts] = useState<{ id: number, x: number }[]>([]);
@@ -172,7 +177,7 @@ export default function AudienceLiveScreen(props: Props) {
 
         // 4. Update Firestore for reliable Sync
         if (channelId) {
-            LiveSessionService.incrementLikes(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
+            LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
 
             // 5. Broadcast Gift for Real-time Animation
             LiveSessionService.broadcastGift(channelId, {
@@ -199,58 +204,72 @@ export default function AudienceLiveScreen(props: Props) {
             CustomBuilder.registerAvatar(userId, userAvatar);
         }
 
-        // 1. Subscribe to session to get host details
+        // 1. Subscribe to session to get host details and sync state
         const unsubscribe = LiveSessionService.subscribeToSession(channelId, (session) => {
+            if (session.status === 'ended') {
+                console.log('🎬 Session ended by host, closing screen');
+                onClose();
+                return;
+            }
+
             if (session.hostId) {
                 setStreamHostId(session.hostId);
                 if (session.hostAvatar) {
-                    console.log('🖼️ Registering host avatar from Firestore:', session.hostAvatar);
                     CustomBuilder.registerAvatar(session.hostId, session.hostAvatar);
                 }
             }
 
-            // ✅ Sync Flame Count from Firestore (Aggregated from all users)
+            // Sync Flame Count
             if (session.totalLikes !== undefined) {
-                setTotalLikes(prev => {
-                    // Prevent rollback if local optimistic updates are ahead briefly, 
-                    // but allow catching up if Firestore jumps ahead (e.g. big gift)
-                    return Math.max(prev, session.totalLikes as number);
-                });
+                setTotalLikes(prev => Math.max(prev, session.totalLikes as number));
             }
 
-            // ✅ Sync PK State from Firestore (Source of Truth when signaling fails)
+            // Sync PK State
             if (session.pkState) {
-                console.log('🔥 PK State Sync from Firestore:', session.pkState);
                 setIsInPK(session.pkState.isActive);
                 setHostScore(session.pkState.hostScore);
                 setGuestScore(session.pkState.guestScore);
                 if (session.pkState.opponentName) setOpponentName(session.pkState.opponentName);
                 if (session.pkState.hostName) setPkHostName(session.pkState.hostName);
 
-                // Sync timer information
                 if (session.pkState.endTime) {
                     setPkEndTime(session.pkState.endTime);
                     const remaining = Math.max(0, Math.floor((session.pkState.endTime - Date.now()) / 1000));
                     setPkTimeRemaining(remaining);
                 }
 
-                // Sync winner if battle ended
                 if (session.pkState.winner) {
-                    setPkWinner(session.pkState.winner);
-                    setShowPKResult(true);
-                    setTimeout(() => {
-                        setShowPKResult(false);
-                        setPkWinner(null);
-                    }, 5000);
+                    // Only show result if scores are not 0-0
+                    const hScore = session.pkState.hostScore || 0;
+                    const gScore = session.pkState.guestScore || 0;
+
+                    if (hScore > 0 || gScore > 0) {
+                        setPkWinner(session.pkState.winner);
+                        setShowPKResult(true);
+                        setTimeout(() => {
+                            setShowPKResult(false);
+                            setPkWinner(null);
+                        }, 5000);
+                    }
                 }
             }
 
-            // ✅ Sync Gift Animations from Firestore (Real-time for all viewers)
-            if (session.lastGift && session.lastGift.timestamp > lastGiftTimestampRef.current) {
-                console.log('🎁 Gift Animation Sync from Firestore:', session.lastGift);
-                lastGiftTimestampRef.current = session.lastGift.timestamp;
+            // Sync Active Coupon from Firestore
+            if (session.activeCoupon) {
+                setActiveCoupon(session.activeCoupon);
+                // Calculate remaining time
+                if (session.activeCoupon.endTime) {
+                    const remaining = Math.max(0, Math.floor((session.activeCoupon.endTime - Date.now()) / 1000));
+                    setCouponTimeRemaining(remaining);
+                }
+            } else {
+                setActiveCoupon(null);
+                setCouponTimeRemaining(0);
+            }
 
-                // Add to gift queue if not from current user (avoid duplicate for sender)
+            // Sync Gift Animations
+            if (session.lastGift && session.lastGift.timestamp > lastGiftTimestampRef.current) {
+                lastGiftTimestampRef.current = session.lastGift.timestamp;
                 if (session.lastGift.senderName !== userName) {
                     setGiftQueue(prev => [...prev, {
                         senderName: session.lastGift!.senderName,
@@ -266,25 +285,23 @@ export default function AudienceLiveScreen(props: Props) {
         const joinFirestore = async () => {
             try {
                 await LiveSessionService.joinSession(channelId);
-                console.log('🎬 Audience joined Firestore session');
             } catch (error) {
-                console.error('Error joining Firestore session:', error);
+                console.error('Error joining Firestore:', error);
             }
         };
 
         const leaveFirestore = async () => {
             try {
                 await LiveSessionService.leaveSession(channelId);
-                console.log('🎬 Audience left Firestore session');
             } catch (error) {
-                console.error('Error leaving Firestore session:', error);
+                console.error('Error leaving Firestore:', error);
             }
         };
 
         joinFirestore();
 
         return () => {
-            unsubscribe();
+            if (unsubscribe) unsubscribe();
             leaveFirestore();
         };
     }, [channelId, userAvatar, userId, userName]);
@@ -428,6 +445,10 @@ export default function AudienceLiveScreen(props: Props) {
                             icon: data.icon,
                             isHost: (data.userName || '').includes('Host')
                         }]);
+                    } else if (data.type === 'coupon_drop') {
+                        setActiveCoupon(data);
+                        const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+                        setCouponTimeRemaining(remaining);
                     }
                 } catch (e) {
                     console.error('Error parsing signaling command:', e);
@@ -436,6 +457,27 @@ export default function AudienceLiveScreen(props: Props) {
             return () => { };
         }
     }, [ZegoUIKit]);
+
+    // Coupon Timer Effect - Robust Date-based calculation
+    useEffect(() => {
+        if (activeCoupon?.endTime) {
+            const updateTimer = () => {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.floor((activeCoupon.endTime - now) / 1000));
+                setCouponTimeRemaining(remaining);
+
+                if (remaining <= 0) {
+                    setActiveCoupon(null);
+                }
+            };
+
+            updateTimer(); // Immediate update
+            const interval = setInterval(updateTimer, 1000);
+            return () => clearInterval(interval);
+        } else {
+            setCouponTimeRemaining(0);
+        }
+    }, [activeCoupon]);
 
     const likeBatchRef = useRef(0);
     const lastLikeSentTimeRef = useRef(0);
@@ -538,7 +580,16 @@ export default function AudienceLiveScreen(props: Props) {
                         Live Streaming features require native modules not available in Expo Go. Please use a Development Build or the standalone app.
                     </Text>
                     <TouchableOpacity
-                        onPress={onClose}
+                        onPress={async () => {
+                            // ✅ Leave session before closing (decrement view count)
+                            console.log('🎬 Expo Go: Leaving session before close');
+                            try {
+                                await LiveSessionService.leaveSession(channelId);
+                            } catch (error) {
+                                console.error('Error leaving session:', error);
+                            }
+                            onClose();
+                        }}
                         style={{
                             backgroundColor: '#FF0055',
                             paddingHorizontal: 24,
@@ -691,7 +742,7 @@ export default function AudienceLiveScreen(props: Props) {
                                 letterSpacing: 2,
                                 textTransform: 'uppercase'
                             }}>
-                                {pkWinner === 'Draw' ? 'Battle Ended' : 'PK Battle Winner'}
+                                {pkWinner === 'Draw' ? t('battleEnded') : t('pkWinnerTitle')}
                             </Text>
 
                             {/* Winner Name */}
@@ -715,7 +766,7 @@ export default function AudienceLiveScreen(props: Props) {
                                     textShadowOffset: { width: 0, height: 1 },
                                     textShadowRadius: 2
                                 }}>
-                                    {pkWinner === 'Draw' ? "It's a Draw!" : pkWinner}
+                                    {pkWinner === 'Draw' ? t('itsADraw') : pkWinner}
                                 </Text>
                             </LinearGradient>
 
@@ -834,7 +885,16 @@ export default function AudienceLiveScreen(props: Props) {
                         },
                     },
                     onInRoomCommandReceived: (messageData: any) => {
-                        // Logic moved to direct signaling listener
+                        try {
+                            const data = typeof messageData.message === 'string' ? JSON.parse(messageData.message) : messageData.message;
+                            if (data.type === 'coupon_drop') {
+                                setActiveCoupon(data);
+                                const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+                                setCouponTimeRemaining(remaining);
+                            }
+                        } catch (e) {
+                            console.log('Error parsing audience command:', e);
+                        }
                     },
                     inRoomChatConfig: {
                         itemBuilder: (message: any) => {
@@ -938,7 +998,7 @@ export default function AudienceLiveScreen(props: Props) {
                         minHeight: 250
                     }}>
                         <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginBottom: 20, textAlign: 'center' }}>
-                            {t ? t('sendAGift') || 'SEND A GIFT' : 'SEND A GIFT'}
+                            {t('sendAGift')}
                         </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             {gifts.map(gift => (
@@ -1106,6 +1166,105 @@ export default function AudienceLiveScreen(props: Props) {
                     <Gift size={24} color="#000" strokeWidth={2.5} />
                 </TouchableOpacity>
             </View>
+
+            {/* LIVE COUPON OVERLAY - Horizontal Ticket Style */}
+            {activeCoupon && (
+                <Animatable.View
+                    animation="bounceInLeft"
+                    style={{
+                        position: 'absolute',
+                        bottom: 290, // Positioned above comments (approx)
+                        left: 15,
+                        width: 200,
+                        zIndex: 3000
+                    }}
+                >
+                    <LinearGradient
+                        colors={['#F59E0B', '#B45309']}
+                        style={{
+                            borderRadius: 10,
+                            padding: 1, // Border effect
+                        }}
+                    >
+                        <View style={{
+                            backgroundColor: '#121218',
+                            borderRadius: 9,
+                            flexDirection: 'row',
+                            height: 75,
+                            overflow: 'hidden',
+                            position: 'relative'
+                        }}>
+                            {/* Coupon Notches */}
+                            <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+                            <View style={{ position: 'absolute', bottom: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+
+                            {/* Left Side: Info */}
+                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
+                                <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer').toUpperCase()}</Text>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
+
+                                {couponTimeRemaining > 0 && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                        <Clock size={8} color="#EF4444" style={{ marginRight: 3 }} />
+                                        <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '800' }}>
+                                            {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, '0')}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Vertical Dashed Divider */}
+                            <View style={{ width: 1, height: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', left: '50%', position: 'absolute' }} />
+
+                            {/* Right Side: Action */}
+                            <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
+                                <View style={{
+                                    backgroundColor: 'rgba(255,255,255,0.05)',
+                                    paddingVertical: 3,
+                                    paddingHorizontal: 6,
+                                    borderRadius: 4,
+                                    borderStyle: 'dashed',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(245, 158, 11, 0.4)',
+                                    marginBottom: 6,
+                                    width: '100%',
+                                    alignItems: 'center'
+                                }}>
+                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (Clipboard) {
+                                            Clipboard.setString(activeCoupon.code);
+                                            Alert.alert(t('success'), t('couponCopied'));
+                                        } else {
+                                            Alert.alert(t('couponCode'), activeCoupon.code);
+                                        }
+                                    }}
+                                    activeOpacity={0.8}
+                                    style={{ width: '100%', borderRadius: 4, overflow: 'hidden' }}
+                                >
+                                    <LinearGradient
+                                        colors={['#F59E0B', '#D97706']}
+                                        style={{ paddingVertical: 4, alignItems: 'center' }}
+                                    >
+                                        <Text style={{ color: '#000', fontWeight: '900', fontSize: 8 }}>{t('claimCoupon').toUpperCase()}</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Close Button overlay */}
+                            <TouchableOpacity
+                                onPress={() => setActiveCoupon(null)}
+                                style={{ position: 'absolute', top: 4, right: 4 }}
+                            >
+                                <X size={10} color="rgba(255,255,255,0.3)" />
+                            </TouchableOpacity>
+                        </View>
+                    </LinearGradient>
+                </Animatable.View>
+            )}
         </View>
     );
 }

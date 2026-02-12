@@ -141,10 +141,8 @@ export default function CollaborationDetailScreen({
 
     const isAdmin = profileData?.role === 'admin' || profileData?.role === 'editor';
     const isOwner = (collab.brandId && profileData?.brandId === collab.brandId) ||
-        (collab.type === 'Person' && profileData?.role === 'brand_owner') ||
-        (profileData?.brandId === collab.id) ||
-        (profileData?.role === 'brand_owner' && profileData?.brandId === collab.brandId);
-    const isHost = isAdmin || isOwner;
+        (profileData?.brandId === collab.id);
+    const isHost = isOwner;
 
     const isFollowed = followedCollabs.includes(collab.id);
 
@@ -193,18 +191,23 @@ export default function CollaborationDetailScreen({
     // Get translated live button text
     const getLiveButtonText = () => {
         const isLive = liveSession?.status === 'live';
+        if (isLive && !isHost) {
+            if (language === 'ar') return 'انضم الآن';
+            return 'REJOINDRE';
+        }
+
         const fallbackText = isLive ? 'JOIN LIVE' : 'START LIVE';
         const translation = t(isLive ? 'joinLive' : 'startLive');
 
         // Handle both direct string translations and object translations
         if (typeof translation === 'string') {
-            return translation;
+            return translation.toUpperCase();
         }
         // If translation is an object with language keys
         if (translation && typeof translation === 'object') {
-            return getName(translation, fallbackText);
+            return getName(translation, fallbackText).toUpperCase();
         }
-        return fallbackText;
+        return fallbackText.toUpperCase();
     };
 
     const fetchBrandProducts = async () => {
@@ -266,10 +269,14 @@ export default function CollaborationDetailScreen({
         fetchBrandProducts();
         fetchCollabReviews();
 
-        // Subscribe to live session for this collaboration
-        const unsubscribeLive = LiveSessionService.subscribeToCollabSessions(collab.id, (session) => {
-            setLiveSession(session);
-        });
+        // Subscribe to live session for this collaboration (or brand)
+        const unsubscribeLive = LiveSessionService.subscribeToCollabSessions(
+            collab.id,
+            (session) => {
+                setLiveSession(session);
+            },
+            collab.brandId
+        );
 
         return () => unsubscribeLive();
     }, [collab.id, collab.brandId]);
@@ -374,9 +381,10 @@ export default function CollaborationDetailScreen({
         const isLive = liveSession?.status === 'live';
 
         // CRITICAL LOGIC:
-        // - If NO stream is running: Owner or Admin can START as HOST
-        // - If stream IS running: EVERYONE joins as AUDIENCE (including owner/admin)
-        const isHost = !isLive && (isOwner || isAdmin);
+        // - If NO stream is running: Only Owner can START as HOST
+        // - If stream IS running: EVERYONE joins as AUDIENCE (including owner/admin if joining via this button)
+        // - Strict Role Check: Use isOwner, remove isAdmin from host privileges
+        const isHost = !isLive && isOwner;
 
         console.log('🎬 CollabDetail Live Action - isLive:', isLive, 'isOwner:', isOwner, 'isAdmin:', isAdmin, 'isHost:', isHost);
 
@@ -729,11 +737,13 @@ export default function CollaborationDetailScreen({
                     </View>
 
                     {/* Action Bar */}
-                    <View style={[styles.actionBar, (!liveSession?.status || liveSession?.status !== 'live') && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-                        {/* When live stream is running */}
+                    <View style={styles.actionBar}>
                         {liveSession?.status === 'live' ? (
+                            // === LIVE STATE ===
+                            // 1. Live Banner (Viewer Count)
+                            // 2. Join Button (Red) - Visible to ALL
+                            // 3. Follow/Shop Buttons
                             <>
-                                {/* Live Indicator with Viewer Count */}
                                 <View style={styles.liveSessionBanner}>
                                     <View style={styles.liveSessionBadge}>
                                         <Animatable.View
@@ -753,15 +763,28 @@ export default function CollaborationDetailScreen({
                                 </View>
 
                                 <View style={{ flexDirection: 'row', width: '100%', gap: 12, marginBottom: 12 }}>
+                                    {/* JOIN BUTTON - Visible to everyone */}
                                     <TouchableOpacity
-                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', flex: 1 }]}
+                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
                                         onPress={handleLiveAction}
                                     >
+                                        <Animatable.View
+                                            animation="pulse"
+                                            iterationCount="infinite"
+                                            style={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: 4,
+                                                backgroundColor: '#FFF',
+                                                marginRight: 8
+                                            }}
+                                        />
                                         <Text style={styles.liveActionText} numberOfLines={1} adjustsFontSizeToFit>
                                             {getLiveButtonText()}
                                         </Text>
                                     </TouchableOpacity>
 
+                                    {/* FOLLOW BUTTON */}
                                     <TouchableOpacity
                                         style={[styles.secondaryAction, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}
                                         onPress={() => toggleFollowCollab(collab.id)}
@@ -772,6 +795,7 @@ export default function CollaborationDetailScreen({
                                     </TouchableOpacity>
                                 </View>
 
+                                {/* SHOP BUTTON (If Brand) */}
                                 {collab.type === 'Brand' && collab.brandId && (
                                     <TouchableOpacity
                                         style={[styles.primaryAction, { backgroundColor: isDark ? '#FFF' : '#000', width: '100%' }]}
@@ -784,23 +808,26 @@ export default function CollaborationDetailScreen({
                                 )}
                             </>
                         ) : (
-                            /* No live stream running */
-                            <>
-                                {/* START LIVE button for owner */}
-                                {isOwner && (
+                            // === NOT LIVE STATE ===
+                            // 1. Host: Show Start Live Link
+                            // 2. Everyone: Follow/Shop
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                {/* START BUTTON - ONLY FOR HOST */}
+                                {isHost && (
                                     <TouchableOpacity
-                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', width: '48%' }]}
-                                        onPress={() => onStartLive && onStartLive(collab)}
+                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
+                                        onPress={handleLiveAction}
                                     >
                                         <Camera size={16} color="#FFF" style={{ marginRight: 6 }} />
                                         <Text style={styles.liveActionText} numberOfLines={1} adjustsFontSizeToFit>
-                                            {t('startLive')}
+                                            {t('startLive') || 'START LIVE'}
                                         </Text>
                                     </TouchableOpacity>
                                 )}
 
+                                {/* FOLLOW BUTTON - Always visible (flex grows if no start button) */}
                                 <TouchableOpacity
-                                    style={[styles.secondaryAction, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7', width: isOwner ? '48%' : '100%' }]}
+                                    style={[styles.secondaryAction, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7', flex: 1 }]}
                                     onPress={() => toggleFollowCollab(collab.id)}
                                 >
                                     <Text
@@ -812,9 +839,10 @@ export default function CollaborationDetailScreen({
                                     </Text>
                                 </TouchableOpacity>
 
+                                {/* SHOP BUTTON (If Brand) - Full width in own row usually, but here flexed */}
                                 {collab.type === 'Brand' && collab.brandId && (
                                     <TouchableOpacity
-                                        style={[styles.primaryAction, { backgroundColor: isDark ? '#FFF' : '#000', width: '100%' }]}
+                                        style={[styles.primaryAction, { backgroundColor: isDark ? '#FFF' : '#000', flex: 1 }]}
                                         onPress={() => onNavigateToShop(collab.brandId!)}
                                     >
                                         <Text
@@ -826,7 +854,7 @@ export default function CollaborationDetailScreen({
                                         </Text>
                                     </TouchableOpacity>
                                 )}
-                            </>
+                            </View>
                         )}
                     </View>
 
@@ -1024,9 +1052,9 @@ const styles = StyleSheet.create({
         marginTop: -60,
     },
     imageContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 40,
+        width: 124,
+        height: 124,
+        borderRadius: 42,
         padding: 4,
         borderWidth: 4,
         backgroundColor: '#FFF',
@@ -1037,32 +1065,35 @@ const styles = StyleSheet.create({
     profileImage: {
         width: '100%',
         height: '100%',
-        borderRadius: 36,
+        borderRadius: 38,
     },
     verifiedBadge: {
         position: 'absolute',
-        bottom: -2,
-        right: -2,
+        bottom: 2,
+        right: 2,
         backgroundColor: '#22C55E',
         padding: 4,
         borderRadius: 12,
         borderWidth: 3,
-        zIndex: 5,
+        zIndex: 20,
     },
     liveIndicator: {
         position: 'absolute',
-        bottom: -10,
-        zIndex: 15,
+        bottom: -8,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 25,
     },
     liveNowBadge: {
         backgroundColor: '#EF4444',
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 10,
         paddingVertical: 3,
-        borderRadius: 8,
+        borderRadius: 6,
         borderWidth: 1.5,
-        borderColor: '#FFF',
+        borderColor: '#000',
         gap: 5,
         shadowColor: '#EF4444',
         shadowOffset: { width: 0, height: 2 },
@@ -1100,9 +1131,9 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     badgeText: {
-        fontSize: 8,
+        fontSize: 7.5,
         fontWeight: '800',
-        letterSpacing: 1,
+        letterSpacing: 0.5,
     },
     actionBar: {
         paddingHorizontal: 20,
@@ -1118,7 +1149,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     primaryActionText: {
-        fontSize: 8.5,
+        fontSize: 7.5,
         fontWeight: '900',
         letterSpacing: 0.5,
     },
@@ -1242,7 +1273,7 @@ const styles = StyleSheet.create({
     },
     liveActionText: {
         color: '#FFF',
-        fontSize: 8.5,
+        fontSize: 7.5,
         fontWeight: '900',
         letterSpacing: 0.5,
     },

@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
+import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing, AppState, KeyboardAvoidingView, Dimensions, Clipboard } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Gift, Swords, Sparkles, MoreHorizontal, X, Share2, Flame } from 'lucide-react-native';
+import { Gift, Swords, Sparkles, MoreHorizontal, X, Share2, Flame, Radio, Ticket, Clock } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
@@ -62,10 +62,12 @@ type Props = {
     hostAvatar?: string;
     onClose: () => void;
     t?: (key: string) => string;
+    language?: 'fr' | 'ar';
 };
 
 export default function HostLiveScreen(props: Props) {
-    const { channelId, userId, userName, brandId, collabId, hostAvatar, onClose, t } = props;
+    const t = props.t || ((key: string) => key);
+    const { channelId, userId, userName, brandId, collabId, hostAvatar, onClose, language } = props;
     const prebuiltRef = useRef<any>(null);
     const mediaViewRef = useRef<any>(null);
     const mediaPlayerRef = useRef<any>(null);
@@ -96,9 +98,18 @@ export default function HostLiveScreen(props: Props) {
 
     // PK Timer State
     const [pkDuration, setPkDuration] = useState(180); // Default 3 minutes in seconds
+    const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
     const [pkTimeRemaining, setPkTimeRemaining] = useState(0);
     const [pkEndTime, setPkEndTime] = useState<number | null>(null);
     const [pkWinner, setPkWinner] = useState<string | null>(null);
+    // Coupon State
+    const [showCouponModal, setShowCouponModal] = useState(false);
+    const [couponCode, setCouponCode] = useState('');
+    const [discountAmount, setDiscountAmount] = useState('');
+    const [couponExpiry, setCouponExpiry] = useState('5'); // Default 5 minutes
+    const [activeCoupon, setActiveCoupon] = useState<any>(null);
+    const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
+    const couponTimerRef = useRef<any>(null);
     const [showPKResult, setShowPKResult] = useState(false);
 
     // ✅ Sync PK state periodically for late joiners
@@ -106,6 +117,8 @@ export default function HostLiveScreen(props: Props) {
     const totalLikesRef = useRef(0);
     const pkStartLikesRef = useRef(0); // Baseline for PK Score
     const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
+    const sessionEndedRef = useRef(false); // Track if session has been ended to prevent double-calling
+    const peakViewersRef = useRef(0); // Track peak viewers for analytics
 
     // Capture baseline likes when PK Starts
     useEffect(() => {
@@ -142,6 +155,11 @@ export default function HostLiveScreen(props: Props) {
         if (!channelId) return;
         const unsubscribe = LiveSessionService.subscribeToSession(channelId, (session) => {
             if (session) {
+                // ✅ Sync local state if already live (re-entry)
+                if (session.status === 'live') {
+                    setIsLiveStarted(true);
+                }
+
                 if (session.totalLikes !== undefined) {
                     setTotalLikes(session.totalLikes);
                     // If in PK, my score is derived from total engagement (likes + gifts points)
@@ -164,6 +182,14 @@ export default function HostLiveScreen(props: Props) {
                         icon: session.lastGift!.icon,
                         isHost: false
                     }]);
+                }
+
+                // ✅ Track Peak Viewers
+                if (session.viewCount && session.viewCount > peakViewersRef.current) {
+                    peakViewersRef.current = session.viewCount;
+                    LiveSessionService.updatePeakViewers(channelId, session.viewCount).catch(e =>
+                        console.error('Peak Viewers Update Error:', e)
+                    );
                 }
             }
         });
@@ -280,6 +306,13 @@ export default function HostLiveScreen(props: Props) {
                     LiveSessionService.updatePKState(channelId, finalPkState).catch(e =>
                         console.error('Winner Broadcast Error:', e)
                     );
+
+                    // Track Win/Loss for Analytics
+                    if (winner === userName) {
+                        LiveSessionService.incrementPKWin(channelId).catch(e => console.error('PK Win Count Error:', e));
+                    } else if (winner === opponentName) {
+                        LiveSessionService.incrementPKLoss(channelId).catch(e => console.error('PK Loss Count Error:', e));
+                    }
                 }
 
                 // Auto-hide result after 5 seconds
@@ -333,6 +366,75 @@ export default function HostLiveScreen(props: Props) {
         }
         setShowGifts(true);
     };
+
+    // 🎫 Coupon Logic
+    const dropCoupon = async () => {
+        if (!couponCode || !discountAmount) {
+            Alert.alert(t('error') || 'Error', t('invalidCoupon') || 'Invalid coupon details');
+            return;
+        }
+
+        const expirySecs = parseInt(couponExpiry) * 60;
+        const couponData = {
+            type: 'coupon_drop',
+            code: couponCode.toUpperCase(),
+            discount: discountAmount,
+            expiryMinutes: parseInt(couponExpiry),
+            endTime: Date.now() + (expirySecs * 1000),
+            hostName: userName,
+        };
+
+        try {
+            // 1. Update Firestore session doc
+            await LiveSessionService.activateCoupon(channelId, {
+                code: couponData.code,
+                discount: parseInt(couponData.discount.replace(/[^0-9]/g, '')),
+                type: couponData.discount.includes('%') ? 'percentage' : 'fixed',
+                endTime: couponData.endTime,
+                expiryMinutes: couponData.expiryMinutes
+            });
+
+            // 2. Send signaling command
+            if (ZegoUIKit) {
+                ZegoUIKit.sendInRoomCommand(JSON.stringify(couponData), [], () => { });
+            }
+
+            setActiveCoupon(couponData);
+            setCouponTimeRemaining(expirySecs);
+            setShowCouponModal(false);
+            Alert.alert(t('success') || 'Success', t('couponDropped') || 'Coupon dropped!');
+
+        } catch (error) {
+            console.error('Error dropping coupon:', error);
+            Alert.alert(t('error') || 'Error', t('failedToSave') || 'Failed to sync coupon');
+        }
+    };
+
+    // Coupon Timer Effect
+    // Coupon Timer Effect - Robust Date-based calculation
+    useEffect(() => {
+        if (activeCoupon?.endTime) {
+            const updateTimer = () => {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.floor((activeCoupon.endTime - now) / 1000));
+                setCouponTimeRemaining(remaining);
+
+                if (remaining <= 0) {
+                    clearInterval(couponTimerRef.current);
+                    setActiveCoupon(null);
+                    setCouponTimeRemaining(0);
+                    LiveSessionService.deactivateCoupon(channelId); // Kill in Firestore
+                }
+            };
+
+            updateTimer();
+            couponTimerRef.current = setInterval(updateTimer, 1000);
+            return () => clearInterval(couponTimerRef.current);
+        } else if (!activeCoupon && couponTimeRemaining > 0) {
+            // Cleanup if activeCoupon is cleared externally
+            setCouponTimeRemaining(0);
+        }
+    }, [activeCoupon]);
 
     const sendGift = (gift: any) => {
         setShowGifts(false);
@@ -407,6 +509,12 @@ export default function HostLiveScreen(props: Props) {
 
     // AUTO-START Firestore session on mount (since we skip the start button)
     useEffect(() => {
+        // ✅ CRITICAL: Don't start session if ZEGO modules aren't available (Expo Go)
+        if (!ZegoUIKitPrebuiltLiveStreaming) {
+            console.log('⚠️ ZEGO modules not available - skipping session start');
+            return;
+        }
+
         console.log('🚀 HostLiveScreen mounted, auto-starting session...');
         startFirestoreSession();
 
@@ -424,8 +532,74 @@ export default function HostLiveScreen(props: Props) {
             setLoadingSessions(false);
         });
 
-        return () => unsubscribeLive();
+        // ✅ CRITICAL: Cleanup when component unmounts (app closed, navigated away, etc.)
+        return () => {
+            console.log('🎬 HostLiveScreen unmounting - ending session');
+            unsubscribeLive();
+            endFirestoreSession();
+        };
     }, []);
+
+    // ✅ Handle app state changes (background, inactive, close) - Mobile only
+    useEffect(() => {
+        if (Platform.OS === 'web') return; // Skip for web, handled separately
+
+        const subscription = AppState.addEventListener('change', (nextAppState) => {
+            console.log('📱 AppState changed to:', nextAppState);
+
+            // If app goes to background or becomes inactive, end the session
+            if (nextAppState === 'background' || nextAppState === 'inactive') {
+                console.log('🎬 App backgrounded/inactive - ending live session');
+                endFirestoreSession();
+            }
+        });
+
+        return () => {
+            subscription?.remove();
+        };
+    }, [channelId]);
+
+    // ✅ Handle page refresh/close for web
+    useEffect(() => {
+        if (Platform.OS !== 'web') return; // Only for web
+
+        const handleBeforeUnload = () => {
+            console.log('🌐 Page unloading - ending live session');
+            endFirestoreSession();
+        };
+
+        // @ts-ignore - window is available on web
+        if (typeof window !== 'undefined') {
+            window.addEventListener('beforeunload', handleBeforeUnload);
+            return () => {
+                window.removeEventListener('beforeunload', handleBeforeUnload);
+            };
+        }
+    }, [channelId]);
+
+    // ✅ Heartbeat: Update session every 10 seconds to indicate host is still active
+    useEffect(() => {
+        // Run immediately
+        LiveSessionService.updateHeartbeat(channelId).catch(console.error);
+
+        const heartbeatInterval = setInterval(() => {
+            LiveSessionService.updateHeartbeat(channelId).catch(e =>
+                console.error('Heartbeat update error:', e)
+            );
+        }, 10000); // Update every 10 seconds
+
+        return () => clearInterval(heartbeatInterval);
+    }, [channelId]);
+
+    // ✅ Robust Cleanup: Ensure session ends if component unmounts (nav back, etc)
+    useEffect(() => {
+        return () => {
+            if (!sessionEndedRef.current) {
+                console.log('🛑 HostLiveScreen Unmounting - Triggering Safety Cleanup');
+                endFirestoreSession();
+            }
+        };
+    }, [channelId]);
 
     // Handle session lifecycle
     const startFirestoreSession = async () => {
@@ -435,6 +609,7 @@ export default function HostLiveScreen(props: Props) {
             } else {
                 await LiveSessionService.startSession(channelId, userName, brandId, hostAvatar, userId);
             }
+            setIsLiveStarted(true); // ✅ Show controls immediately
             console.log('🎬 Firestore session started');
         } catch (error) {
             console.error('Error starting Firestore session:', error);
@@ -497,6 +672,10 @@ export default function HostLiveScreen(props: Props) {
                         setIsInPK(false);
                         setPkBattleId(null);
                         Alert.alert("PK Battle", "The opponent has stopped the battle.");
+                    } else if (data.type === 'coupon_drop') {
+                        // Host also sees the coupon they dropped (sync)
+                        setActiveCoupon(data);
+                        setCouponTimeRemaining(data.expiryMinutes * 60);
                     }
                 } catch (e) {
                     console.error('HostGiftListener JSON Parse Error:', e);
@@ -631,11 +810,19 @@ export default function HostLiveScreen(props: Props) {
     }, [userId]);
 
     const endFirestoreSession = async () => {
+        // ✅ Prevent double-calling if session already ended
+        if (sessionEndedRef.current) {
+            console.log('⚠️ Session already ended, skipping duplicate call');
+            return;
+        }
+
         try {
+            sessionEndedRef.current = true; // Mark as ended immediately
             await LiveSessionService.endSession(channelId);
-            console.log('🎬 Firestore session ended');
+            console.log('🎬 Firestore session ended successfully');
         } catch (error) {
             console.error('Error ending Firestore session:', error);
+            sessionEndedRef.current = false; // Reset on error so it can be retried
         }
     };
 
@@ -650,7 +837,12 @@ export default function HostLiveScreen(props: Props) {
                         Live Streaming features require native modules not available in Expo Go. Please use a Development Build or the standalone app.
                     </Text>
                     <TouchableOpacity
-                        onPress={onClose}
+                        onPress={async () => {
+                            // ✅ End any potential session before closing (safety measure)
+                            console.log('🎬 Expo Go: Ending session before close');
+                            await endFirestoreSession();
+                            onClose();
+                        }}
                         style={{
                             backgroundColor: '#FF0055',
                             paddingHorizontal: 24,
@@ -1033,38 +1225,60 @@ export default function HostLiveScreen(props: Props) {
                     startLiveButtonBuilder: (onClick: any) => (
                         <TouchableOpacity
                             onPress={onClick}
+                            activeOpacity={0.8}
                             style={{
-                                backgroundColor: '#EF4444',
-                                width: '80%',
-                                maxWidth: 300,
-                                height: 55,
-                                borderRadius: 30,
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                width: 220,
+                                height: 50,
+                                borderRadius: 25,
+                                overflow: 'hidden',
                                 shadowColor: '#EF4444',
-                                shadowOpacity: 0.4,
-                                shadowRadius: 10,
-                                shadowOffset: { width: 0, height: 4 },
-                                elevation: 8,
-                                marginBottom: 40
+                                shadowOpacity: 0.5,
+                                shadowRadius: 15,
+                                shadowOffset: { width: 0, height: 6 },
+                                elevation: 12,
+                                marginBottom: 60, // Move up slightly
+                                alignSelf: 'center'
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 }}>
-                                Start Live
-                            </Text>
+                            <LinearGradient
+                                colors={['#EF4444', '#B91C1C']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={{
+                                    flex: 1,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingHorizontal: 20,
+                                    gap: 10
+                                }}
+                            >
+                                <Radio size={18} color="#FFF" />
+                                <Text style={{
+                                    color: '#fff',
+                                    fontSize: 13,
+                                    fontWeight: '900',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5,
+                                    textAlign: 'center'
+                                }}>
+                                    {t ? t('startLive') : 'START LIVE'}
+                                </Text>
+                            </LinearGradient>
                         </TouchableOpacity>
                     ),
                     onStartLiveButtonPressed: () => {
                         console.log('🎬 Host Pressed Start!');
                         startFirestoreSession();
                     },
-                    onLiveStreamingEnded: () => {
-                        console.log('🎬 Live streaming ended by SDK');
-                        endFirestoreSession();
+                    onLiveStreamingEnded: async () => {
+                        console.log('🎬 [Host] Live streaming ended by SDK (Stop button pressed)');
+                        await endFirestoreSession();
+                        // Don't call onClose() here - let onLeaveLiveStreaming handle it
                     },
-                    onLeaveLiveStreaming: () => {
-                        console.log('🎬 Host leaving live');
-                        endFirestoreSession();
+                    onLeaveLiveStreaming: async () => {
+                        console.log('🎬 [Host] Host leaving live (X button or back pressed)');
+                        await endFirestoreSession();
                         onClose();
                     },
                     durationConfig: {
@@ -1154,36 +1368,36 @@ export default function HostLiveScreen(props: Props) {
 
                             // Define Actions
                             const actionOptions = [
-                                'Cancel',
-                                `🚫 Remove ${targetName}`,
-                                isCoHost ? `📵 Stop Co-hosting` : `🤝 Invite to Co-host`,
-                                isCoHost ? `🔇 Mute ${targetName}` : null,
-                                isBlocked ? `✅ Unblock Apply` : `⛓️ Block Apply`
+                                t('cancel') || 'Cancel',
+                                `🚫 ${t('removeUser') || 'Remove'} ${targetName}`,
+                                isCoHost ? `📵 ${t('stopCoHosting') || 'Stop Co-hosting'}` : `🤝 ${t('inviteToCoHost') || 'Invite to Co-host'}`,
+                                isCoHost ? `🔇 ${t('mute') || 'Mute'} ${targetName}` : null,
+                                isBlocked ? `✅ ${t('unblock') || 'Unblock'} Apply` : `⛓️ ${t('block') || 'Block'} Apply`
                             ].filter(Boolean) as string[];
 
                             const handleAction = (selectedText: string) => {
-                                if (!selectedText || selectedText === 'Cancel') return;
+                                if (!selectedText || selectedText === t('cancel')) return;
 
-                                if (selectedText.includes('Remove')) {
-                                    Alert.alert('Confirm Disconnect', `Are you sure you want to remove ${targetName} from the room?`, [
-                                        { text: 'Cancel', style: 'cancel' },
+                                if (selectedText.includes(t('removeUser'))) {
+                                    Alert.alert(t('confirmRemove') || 'Confirm Disconnect', (t('areYouSureRemoveFromRoom') || `Are you sure you want to remove ${targetName} from the room?`).replace('${targetName}', targetName), [
+                                        { text: t('cancel') || 'Cancel', style: 'cancel' },
                                         {
-                                            text: 'Remove', style: 'destructive', onPress: () => {
+                                            text: t('remove') || 'Remove', style: 'destructive', onPress: () => {
                                                 const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
                                                 if (ZegoRN) ZegoRN.removeUserFromRoom([item.userID]);
                                             }
                                         }
                                     ]);
-                                } else if (selectedText.includes('Invite to Co-host')) {
+                                } else if (selectedText.includes(t('inviteToCoHost'))) {
                                     if (ZegoUIKit) {
                                         ZegoUIKit.getSignalingPlugin().sendInvitation([item.userID], 60, 2, JSON.stringify({ "inviter_name": userName, "type": 2 }))
-                                            .then(() => Alert.alert("Success", `Invitation sent to ${targetName}`))
-                                            .catch(() => Alert.alert("Info", `Sending invitation...`));
+                                            .then(() => Alert.alert(t('success') || "Success", `${t('invitationSentTo') || 'Invitation sent to'} ${targetName}`))
+                                            .catch(() => Alert.alert("Info", t('sendingInvitation') || `Sending invitation...`));
                                     }
-                                } else if (selectedText.includes('Stop Co-hosting')) {
+                                } else if (selectedText.includes(t('stopCoHosting'))) {
                                     if (ZegoUIKit) {
                                         ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'stop_cohosting', target: item.userID }), [item.userID], () => { });
-                                        Alert.alert("Success", `Stopped co-hosting for ${targetName}`);
+                                        Alert.alert(t('success') || "Success", `${t('stoppedCoHostingFor') || 'Stopped co-hosting for'} ${targetName}`);
                                     }
                                 } else if (selectedText.includes('Mute')) {
                                     const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
@@ -1237,6 +1451,12 @@ export default function HostLiveScreen(props: Props) {
 
                                 // PK Score Update
                                 updatePKScore(data.giftName);
+                                // Coupon Drop Redundancy
+                                if (data.type === 'coupon_drop') {
+                                    setActiveCoupon(data);
+                                    const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+                                    setCouponTimeRemaining(remaining);
+                                }
                             }
                         } catch (e) {
                             console.log('Error parsing host command:', e);
@@ -1286,6 +1506,9 @@ export default function HostLiveScreen(props: Props) {
                 }}
                 plugins={ZIM ? [ZIM] : []}
             />
+
+
+
 
             {/* ALPHA VIDEO OVERLAY */}
             {showGiftVideo && ZegoTextureView && (
@@ -1359,7 +1582,7 @@ export default function HostLiveScreen(props: Props) {
                                 )}
                             </Text>
                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700', textAlign: 'center', opacity: 0.9 }}>
-                                {t ? t('sentA') || 'sent a' : 'sent a'} {recentGift.giftName}!
+                                {t('sentA')} {recentGift.giftName}!
                             </Text>
                         </View>
                     </Animatable.View>
@@ -1386,14 +1609,14 @@ export default function HostLiveScreen(props: Props) {
                         maxHeight: '60%'
                     }}>
                         <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginBottom: 15, textAlign: 'center' }}>
-                            SEND GIFT TO PARTICIPANT
+                            {t('sendGiftToParticipant') || 'SEND GIFT TO PARTICIPANT'}
                         </Text>
 
                         {/* User Selection List */}
-                        <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 10, fontWeight: '700' }}>SELECT RECIPIENT:</Text>
+                        <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 10, fontWeight: '700' }}>{t('selectRecipient') || 'SELECT RECIPIENT'}:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
                             {roomUsers.length === 0 ? (
-                                <Text style={{ color: '#666', fontSize: 14 }}>No other participants yet...</Text>
+                                <Text style={{ color: '#666', fontSize: 14 }}>{t('noParticipants') || 'No other participants yet...'}</Text>
                             ) : (
                                 roomUsers.map(user => (
                                     <TouchableOpacity
@@ -1416,7 +1639,7 @@ export default function HostLiveScreen(props: Props) {
                         </ScrollView>
 
                         {/* Gift Selection */}
-                        <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 10, fontWeight: '700' }}>SELECT GIFT:</Text>
+                        <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 10, fontWeight: '700' }}>{t('selectGift') || 'SELECT GIFT'}:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             {gifts.map(gift => (
                                 <TouchableOpacity
@@ -1448,95 +1671,121 @@ export default function HostLiveScreen(props: Props) {
             </Modal>
 
             {/* FLOATING HOST CONTROLS - Moved to bottom right */}
-            <View style={{ position: 'absolute', bottom: 100, right: 15, gap: 12, alignItems: 'center', zIndex: 1000 }}>
-                {/* PK Toggle Button */}
-                <TouchableOpacity
-                    onPress={() => setShowPKInviteModal(true)}
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 21,
-                        backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.4)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: isInPK ? '#fff' : 'rgba(255,255,255,0.6)',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 3,
-                        elevation: 5
-                    }}
-                >
-                    <Swords size={18} color="#fff" />
-                </TouchableOpacity>
+            {/* ✅ Only show after live starts to prevent bugs */}
+            {isLiveStarted && (
+                <View style={{ position: 'absolute', bottom: 100, right: 15, gap: 12, alignItems: 'center', zIndex: 1000 }}>
+                    {/* PK Toggle Button */}
+                    <TouchableOpacity
+                        onPress={() => setShowPKInviteModal(true)}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 21,
+                            backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.4)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: isInPK ? '#fff' : 'rgba(255,255,255,0.6)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 3,
+                            elevation: 5
+                        }}
+                    >
+                        <Swords size={18} color="#fff" />
+                    </TouchableOpacity>
 
-                {/* Gift Button for Host */}
-                <TouchableOpacity
-                    onPress={openGiftModal}
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 21,
-                        backgroundColor: '#FF0066',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 2,
-                        borderColor: '#fff',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 3,
-                        elevation: 5
-                    }}
-                >
-                    <Gift size={18} color="#fff" strokeWidth={2.5} />
-                </TouchableOpacity>
+                    {/* Gift Button for Host */}
+                    <TouchableOpacity
+                        onPress={openGiftModal}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 21,
+                            backgroundColor: '#FF0066',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 2,
+                            borderColor: '#fff',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 3,
+                            elevation: 5
+                        }}
+                    >
+                        <Gift size={18} color="#fff" strokeWidth={2.5} />
+                    </TouchableOpacity>
 
-                {/* Beauty Toggle Button */}
-                <TouchableOpacity
-                    onPress={() => Alert.alert("Beauty", "Beauty Filters toggled!")}
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 21,
-                        backgroundColor: 'rgba(0,0,0,0.4)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.6)',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 3,
-                        elevation: 5
-                    }}
-                >
-                    <Sparkles size={18} color="#fff" />
-                </TouchableOpacity>
+                    {/* Coupon Button */}
+                    <TouchableOpacity
+                        onPress={() => setShowCouponModal(true)}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 21,
+                            backgroundColor: activeCoupon ? '#F59E0B' : 'rgba(0,0,0,0.4)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: activeCoupon ? '#fff' : 'rgba(255,255,255,0.6)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 3,
+                            elevation: 5
+                        }}
+                    >
+                        <Ticket size={18} color="#fff" />
+                    </TouchableOpacity>
 
-                {/* Share Button as requested */}
-                <TouchableOpacity
-                    onPress={() => Alert.alert("Share", "Sharing live stream...")}
-                    style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 21,
-                        backgroundColor: 'rgba(0,0,0,0.4)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.6)',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 3,
-                        elevation: 5
-                    }}
-                >
-                    <Share2 size={18} color="#fff" />
-                </TouchableOpacity>
-            </View>
+                    {/* Beauty Toggle Button */}
+                    <TouchableOpacity
+                        onPress={() => Alert.alert("Beauty", "Beauty Filters toggled!")}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 21,
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.6)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 3,
+                            elevation: 5
+                        }}
+                    >
+                        <Sparkles size={18} color="#fff" />
+                    </TouchableOpacity>
+
+
+                    {/* Share Button as requested */}
+                    <TouchableOpacity
+                        onPress={() => Alert.alert("Share", "Sharing live stream...")}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 21,
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.6)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 3,
+                            elevation: 5
+                        }}
+                    >
+                        <Share2 size={18} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* PK Invite Modal */}
             <Modal
@@ -1682,7 +1931,221 @@ export default function HostLiveScreen(props: Props) {
                     </View>
                 </View>
             </Modal>
-        </View>
+
+            {/* 🎫 LIVE COUPON OVERLAY FOR HOST - Horizontal Ticket Style */}
+            {activeCoupon && (
+                <Animatable.View
+                    animation="bounceInLeft"
+                    style={{
+                        position: 'absolute',
+                        bottom: 290, // Positioned above comments (approx)
+                        left: 15,
+                        width: 200,
+                        zIndex: 3000
+                    }}
+                >
+                    <LinearGradient
+                        colors={['#F59E0B', '#B45309']}
+                        style={{
+                            borderRadius: 10,
+                            padding: 1, // Border effect
+                        }}
+                    >
+                        <View style={{
+                            backgroundColor: '#121218',
+                            borderRadius: 9,
+                            flexDirection: 'row',
+                            height: 75,
+                            overflow: 'hidden',
+                            position: 'relative'
+                        }}>
+                            {/* Coupon Notches */}
+                            <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+                            <View style={{ position: 'absolute', bottom: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+
+
+                            {/* LIVE PK STATUS BAR */}
+                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
+                                <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer').toUpperCase()}</Text>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
+
+                                {couponTimeRemaining > 0 && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                        <Clock size={8} color="#EF4444" style={{ marginRight: 3 }} />
+                                        <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '800' }}>
+                                            {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, '0')}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Vertical Dashed Divider */}
+                            <View style={{ width: 1, height: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', left: '50%', position: 'absolute' }} />
+
+                            {/* Right Side: Action */}
+                            {/* Right Side: Action (Host View - View Only) */}
+                            <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
+                                <View style={{
+                                    backgroundColor: 'rgba(255,255,255,0.05)',
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 8,
+                                    borderRadius: 6,
+                                    borderStyle: 'dashed',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(245, 158, 11, 0.4)',
+                                    width: '100%',
+                                    alignItems: 'center'
+                                }}>
+                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 8, fontWeight: '700', marginBottom: 2 }}>CODE</Text>
+                                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                                </View>
+                            </View>
+
+                            {/* Close Button overlay */}
+                            <TouchableOpacity
+                                onPress={() => setActiveCoupon(null)}
+                                style={{ position: 'absolute', top: 4, right: 4 }}
+                            >
+                                <X size={10} color="rgba(255,255,255,0.3)" />
+                            </TouchableOpacity>
+                        </View>
+                    </LinearGradient>
+                </Animatable.View>
+            )}
+
+            {/* NEW COUPON CREATION MODAL */}
+            <Modal
+                visible={showCouponModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowCouponModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}
+                >
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => setShowCouponModal(false)}
+                    />
+
+                    <Animatable.View
+                        animation="zoomIn"
+                        duration={300}
+                        style={{
+                            backgroundColor: '#1A1A24',
+                            width: Dimensions.get('window').width * 0.9,
+                            maxWidth: 400,
+                            borderRadius: 30,
+                            padding: 24,
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 20,
+                            elevation: 15
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 0.5 }}>
+                                {t('createCoupon')}
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowCouponModal(false)}>
+                                <X size={24} color="rgba(255,255,255,0.5)" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ gap: 16 }}>
+                            <View>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
+                                    {t('couponCode').toUpperCase()}
+                                </Text>
+                                <TextInput
+                                    placeholder="e.g. LIVE30"
+                                    placeholderTextColor="#555"
+                                    value={couponCode}
+                                    onChangeText={setCouponCode}
+                                    autoCapitalize="characters"
+                                    style={{
+                                        backgroundColor: '#0F0F16',
+                                        borderRadius: 12,
+                                        padding: 14,
+                                        color: '#fff',
+                                        fontSize: 16,
+                                        fontWeight: 'bold',
+                                        borderWidth: 1,
+                                        borderColor: '#333'
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
+                                    {t('discountAmount').toUpperCase()}
+                                </Text>
+                                <TextInput
+                                    placeholder="30% or 10TND"
+                                    placeholderTextColor="#555"
+                                    value={discountAmount}
+                                    onChangeText={setDiscountAmount}
+                                    style={{
+                                        backgroundColor: '#0F0F16',
+                                        borderRadius: 12,
+                                        padding: 14,
+                                        color: '#fff',
+                                        fontSize: 14,
+                                        fontWeight: 'bold',
+                                        borderWidth: 1,
+                                        borderColor: '#333'
+                                    }}
+                                />
+                            </View>
+
+                            <View>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
+                                    {t('expiryMinutes').toUpperCase()}
+                                </Text>
+                                <TextInput
+                                    keyboardType="numeric"
+                                    value={couponExpiry}
+                                    onChangeText={setCouponExpiry}
+                                    placeholder="e.g. 5"
+                                    placeholderTextColor="#555"
+                                    style={{
+                                        backgroundColor: '#0F0F16',
+                                        borderRadius: 12,
+                                        padding: 14,
+                                        color: '#fff',
+                                        fontSize: 14,
+                                        fontWeight: 'bold',
+                                        textAlign: 'left',
+                                        borderWidth: 1,
+                                        borderColor: '#333'
+                                    }}
+                                />
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={dropCoupon}
+                                activeOpacity={0.8}
+                                style={{ marginTop: 10, borderRadius: 15, overflow: 'hidden' }}
+                            >
+                                <LinearGradient
+                                    colors={['#F59E0B', '#D97706']}
+                                    style={{ paddingVertical: 16, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <Text style={{ color: '#000', fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
+                                        {t('dropCoupon').toUpperCase()}
+                                    </Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </View>
+                    </Animatable.View>
+                </KeyboardAvoidingView>
+            </Modal>
+        </View >
     );
 }
 

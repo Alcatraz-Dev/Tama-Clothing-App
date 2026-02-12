@@ -16,7 +16,8 @@ import {
     limit,
     arrayUnion,
     arrayRemove,
-    deleteDoc
+    deleteDoc,
+    or
 } from 'firebase/firestore';
 
 export interface LiveSession {
@@ -25,6 +26,8 @@ export interface LiveSession {
     identityRing: boolean;
     currentProductId?: string;
     viewCount: number;
+    totalViewers?: number;
+    peakViewers?: number;
     status: 'live' | 'ended';
     hostName?: string;
     hostAvatar?: string;
@@ -33,19 +36,26 @@ export interface LiveSession {
     adminIds?: string[]; // List of admin IDs
     startedAt?: any;
     endedAt?: any;
+    lastHeartbeat?: any; // Track when host was last active (for auto-cleanup)
     recordingUrl?: string;
     pinnedTimeline?: { productId: string; timestamp: number }[];
     activeCoupon?: {
         code: string;
         discount: number;
         type: 'percentage' | 'fixed';
+        endTime?: number;
+        expiryMinutes?: number;
     };
     brandId?: string;
     moderatorIds?: string[];
     collabId?: string; // Link to collaboration if applicable
     participantIds?: string[]; // Active participants
     pkScore?: number; // PK Battle sync score
-    totalLikes?: number; // Flame Count
+    totalLikes?: number; // Flame Count (Combined Score)
+    likesCount?: number; // Separate likes counter
+    giftsCount?: number; // Separate gifts points counter
+    pkWins?: number; // Total PK battles won in this session
+    pkLosses?: number; // Total PK battles lost in this session
     pkState?: { // Comprehensive PK State for Audience Sync
         isActive: boolean;
         hostScore: number;
@@ -96,6 +106,7 @@ export const LiveSessionService = {
             hostId: hostUserId || null,
             collaboratorIds: collaboratorIds || [],
             startedAt: serverTimestamp(),
+            lastHeartbeat: serverTimestamp(),
             pinnedTimeline: [],
             activeCoupon: null
         }, { merge: true });
@@ -104,18 +115,19 @@ export const LiveSessionService = {
     // End a session
     endSession: async (channelId: string) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
-        await updateDoc(sessionRef, {
+        await setDoc(sessionRef, {
             status: 'ended',
             endedAt: serverTimestamp(),
             activeCoupon: null // Deactivate coupon on end
-        });
+        }, { merge: true });
     },
 
     // Join a session (Viewer) uses this to track view count
     joinSession: async (channelId: string) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
-            viewCount: increment(1)
+            viewCount: increment(1),
+            totalViewers: increment(1) // Track total join attempts for analytics
         });
     },
 
@@ -124,6 +136,14 @@ export const LiveSessionService = {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
             viewCount: increment(-1)
+        });
+    },
+
+    // Track peak viewers
+    updatePeakViewers: async (channelId: string, count: number) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await updateDoc(sessionRef, {
+            peakViewers: count
         });
     },
 
@@ -189,7 +209,8 @@ export const LiveSessionService = {
     },
 
     // Activate a coupon for the session
-    activateCoupon: async (channelId: string, coupon: { code: string; discount: number; type: 'percentage' | 'fixed' }) => {
+    // Activate a coupon for the session
+    activateCoupon: async (channelId: string, coupon: { code: string; discount: number; type: 'percentage' | 'fixed'; endTime?: number; expiryMinutes?: number }) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
             activeCoupon: coupon
@@ -224,11 +245,32 @@ export const LiveSessionService = {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as LiveSession));
     },
 
-    // Subscribe to all active sessions
+    // Subscribe to all active sessions with Heartbeat Filtering
     subscribeToAllSessions: (callback: (sessions: LiveSession[]) => void) => {
         const q = query(collection(db, SESSIONS_COLLECTION), where('status', '==', 'live'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const sessions = snapshot.docs.map(doc => ({ ...doc.data() } as LiveSession));
+            const now = Date.now();
+            const sessions = snapshot.docs
+                .map(doc => ({ ...doc.data() } as LiveSession))
+                .filter(s => {
+                    // 1. If explicitly ended (should be filtered by query, but double check)
+                    if (s.status === 'ended') return false;
+
+                    // 2. Heartbeat Check (Grace period: 3 minutes)
+                    if (s.lastHeartbeat) {
+                        const hbTime = s.lastHeartbeat.toMillis ? s.lastHeartbeat.toMillis() : (s.lastHeartbeat.seconds * 1000);
+                        return (now - hbTime) < 180000; 
+                    }
+
+                    // 3. If no heartbeat, check start time (Grace period: 5 minutes for new sessions)
+                    if (s.startedAt) {
+                         const startTime = s.startedAt.toMillis ? s.startedAt.toMillis() : (s.startedAt.seconds * 1000);
+                         return (now - startTime) < 300000;
+                    }
+
+                    return true; // Fallback: show if no time data (unlikely)
+                });
+            
             callback(sessions);
         }, (error) => {
             console.error('Error subscribing to all sessions:', error);
@@ -312,6 +354,7 @@ export const LiveSessionService = {
             moderatorIds: [],
             participantIds: [hostId], // Host is first participant
             startedAt: serverTimestamp(),
+            lastHeartbeat: serverTimestamp(),
             pinnedTimeline: [],
             activeCoupon: null
         }, { merge: true });
@@ -359,23 +402,150 @@ export const LiveSessionService = {
         return null;
     },
 
-    // Subscribe to sessions for a specific collaboration
-    subscribeToCollabSessions: (collabId: string, callback: (session: LiveSession | null) => void) => {
-        const q = query(
+    subscribeToCollabSessions: (id: string, callback: (session: LiveSession | null) => void, brandId?: string) => {
+        // Query by Collab ID
+        const qCollab = query(
             collection(db, SESSIONS_COLLECTION),
-            where('collabId', '==', collabId),
-            where('status', '==', 'live')
+            where('status', '==', 'live'),
+            where('collabId', '==', id)
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+
+        // Query by Brand ID (using the primary id)
+        const qBrand = query(
+            collection(db, SESSIONS_COLLECTION),
+            where('status', '==', 'live'),
+            where('brandId', '==', id)
+        );
+
+        let sessionCollab: LiveSession | null = null;
+        let sessionBrand: LiveSession | null = null;
+        let sessionBrandExplicit: LiveSession | null = null;
+
+        const updateCallback = () => {
+             const now = Date.now();
+             const zombieCheck = (s: LiveSession | null) => {
+                if (!s) return null;
+                // 1. Explicitly ended
+                if (s.status === 'ended') return null;
+
+                // 2. Heartbeat Check (3 mins)
+                if (s.lastHeartbeat) {
+                    const hbTime = s.lastHeartbeat.toMillis ? s.lastHeartbeat.toMillis() : (s.lastHeartbeat.seconds * 1000);
+                    if ((now - hbTime) > 180000) return null;
+                }
+                
+                // 3. Start Time Check (5 mins) if no heartbeat
+                else if (s.startedAt) {
+                     const startTime = s.startedAt.toMillis ? s.startedAt.toMillis() : (s.startedAt.seconds * 1000);
+                     if ((now - startTime) > 300000) return null;
+                }
+
+                return s;
+             };
+
+             const validCollab = zombieCheck(sessionCollab);
+             const validBrand = zombieCheck(sessionBrand);
+             const validBrandExplicit = zombieCheck(sessionBrandExplicit);
+
+            // Prioritize specific collab, then explicit brand, then ID brand match
+            callback(validCollab || validBrandExplicit || validBrand);
+        };
+
+        const unsubCollab = onSnapshot(qCollab, (snapshot) => {
+            sessionCollab = !snapshot.empty ? snapshot.docs[0].data() as LiveSession : null;
+            updateCallback();
+        }, (error) => console.error('Collab sub error:', error));
+
+        const unsubBrand = onSnapshot(qBrand, (snapshot) => {
+            sessionBrand = !snapshot.empty ? snapshot.docs[0].data() as LiveSession : null;
+            updateCallback();
+        }, (error) => console.error('Brand sub error:', error));
+
+        let unsubBrandExplicit = () => {};
+        if (brandId && brandId !== id) {
+             const qBrandExplicit = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('status', '==', 'live'),
+                where('brandId', '==', brandId)
+            );
+            unsubBrandExplicit = onSnapshot(qBrandExplicit, (snapshot) => {
+                sessionBrandExplicit = !snapshot.empty ? snapshot.docs[0].data() as LiveSession : null;
+                updateCallback();
+            }, (error) => console.error('Brand Explicit sub error:', error));
+        }
+
+        return () => {
+            unsubCollab();
+            unsubBrand();
+            unsubBrandExplicit();
+        };
+    },
+
+    // Get the most recent session for a brand (including ended ones)
+    getLatestSessionByBrand: async (brandId: string): Promise<LiveSession | null> => {
+        try {
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('brandId', '==', brandId),
+                orderBy('startedAt', 'desc'),
+                limit(1)
+            );
+            const snapshot = await getDocs(q);
             if (!snapshot.empty) {
-                callback(snapshot.docs[0].data() as LiveSession);
-            } else {
-                callback(null);
+                return snapshot.docs[0].data() as LiveSession;
             }
-        }, (error) => {
-            console.error('Error subscribing to collab sessions:', error);
-        });
-        return unsubscribe;
+        } catch (error) {
+            console.log('⚠️ [LiveSessionService] Indexed query failed, falling back to in-memory sort:', error);
+            // Fallback: fetch without ordering and sort in memory (safe for small number of sessions)
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('brandId', '==', brandId)
+            );
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                const sessions = snapshot.docs.map(d => d.data() as LiveSession);
+                sessions.sort((a, b) => {
+                    const timeA = a.startedAt?.toMillis?.() || (a.startedAt?.seconds ? a.startedAt.seconds * 1000 : 0);
+                    const timeB = b.startedAt?.toMillis?.() || (b.startedAt?.seconds ? b.startedAt.seconds * 1000 : 0);
+                    return timeB - timeA;
+                });
+                return sessions[0];
+            }
+        }
+        return null;
+    },
+
+    // Get the most recent session for a host (including ended ones)
+    getLatestSessionByHost: async (hostId: string): Promise<LiveSession | null> => {
+        try {
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('hostId', '==', hostId),
+                orderBy('startedAt', 'desc'),
+                limit(1)
+            );
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                return snapshot.docs[0].data() as LiveSession;
+            }
+        } catch (error) {
+            console.log('⚠️ [LiveSessionService] Indexed query failed for hostId, falling back to in-memory sort:', error);
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('hostId', '==', hostId)
+            );
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                const sessions = snapshot.docs.map(d => d.data() as LiveSession);
+                sessions.sort((a, b) => {
+                    const timeA = a.startedAt?.toMillis?.() || (a.startedAt?.seconds ? a.startedAt.seconds * 1000 : 0);
+                    const timeB = b.startedAt?.toMillis?.() || (b.startedAt?.seconds ? b.startedAt.seconds * 1000 : 0);
+                    return timeB - timeA;
+                });
+                return sessions[0];
+            }
+        }
+        return null;
     },
 
     // Update Host Score specifically for Host-to-Host Sync
@@ -386,13 +556,37 @@ export const LiveSessionService = {
         }, { merge: true });
     },
 
-    // Increment Total Likes (Flame Count)
+    // Increment Total Likes (Flame Count) and separate likesCount
     incrementLikes: async (channelId: string, amount: number) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
-        // increment requires updateDoc usually, or setDoc with merge. 
-        // setDoc with merge + increment works fine since Firestore handles field paths.
         await setDoc(sessionRef, {
-            totalLikes: increment(amount)
+            totalLikes: increment(amount),
+            likesCount: increment(amount)
+        }, { merge: true });
+    },
+
+    // Increment Total Likes (Flame Count) and separate giftsCount
+    incrementGifts: async (channelId: string, amount: number) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            totalLikes: increment(amount),
+            giftsCount: increment(amount)
+        }, { merge: true });
+    },
+
+    // Increment PK battles won
+    incrementPKWin: async (channelId: string) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            pkWins: increment(1)
+        }, { merge: true });
+    },
+
+    // Increment PK battles lost
+    incrementPKLoss: async (channelId: string) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            pkLosses: increment(1)
         }, { merge: true });
     },
 
@@ -423,6 +617,14 @@ export const LiveSessionService = {
                 ...gift,
                 timestamp: Date.now()
             }
+        }, { merge: true });
+    },
+
+    // Update heartbeat to indicate host is still active
+    updateHeartbeat: async (channelId: string) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            lastHeartbeat: serverTimestamp()
         }, { merge: true });
     }
 };
