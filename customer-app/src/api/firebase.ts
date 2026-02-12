@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAZYgY-PsjDK5vSxssjsWmUI9J8CE6FUFw",
+    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
     authDomain: "tama-clothing-v2-alcatraz.firebaseapp.com",
     projectId: "tama-clothing-v2-alcatraz",
     storageBucket: "tama-clothing-v2-alcatraz.firebasestorage.app",

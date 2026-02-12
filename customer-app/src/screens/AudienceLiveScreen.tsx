@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, findNodeHandle } from 'react-native';
 import * as Animatable from 'react-native-animatable';
+import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
-import { Gift } from 'lucide-react-native';
+import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions } from 'react-native';
+import { Gift, Share2, Heart, Flame } from 'lucide-react-native';
+import { FlameCounter } from '../components/FlameCounter';
+
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -70,6 +73,31 @@ export default function AudienceLiveScreen(props: Props) {
     const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean }[]>([]);
     const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean } | null>(null);
     const [streamHostId, setStreamHostId] = useState<string | null>(null);
+    const [isInPK, setIsInPK] = useState(false);
+    const [hostScore, setHostScore] = useState(0);
+    const [guestScore, setGuestScore] = useState(0);
+    const [opponentName, setOpponentName] = useState<string>('Opponent');
+    const [pkHostName, setPkHostName] = useState('Host');
+    const [pkTimeRemaining, setPkTimeRemaining] = useState(0);
+    const [pkEndTime, setPkEndTime] = useState<number | null>(null);
+    const [pkWinner, setPkWinner] = useState<string | null>(null);
+    const [showPKResult, setShowPKResult] = useState(false);
+    const [likeCount, setLikeCount] = useState(0);
+    const [totalLikes, setTotalLikes] = useState(0);
+    const [floatingHearts, setFloatingHearts] = useState<{ id: number, x: number }[]>([]);
+    const heartCounter = useRef(0);
+
+    const isInPKRef = useRef(false);
+    const hostScoreRef = useRef(0);
+    const guestScoreRef = useRef(0);
+    const streamHostIdRef = useRef<string | null>(null);
+    const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
+
+    // ✅ Sync refs
+    useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
+    useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
+    useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
+    useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
 
     // Sync Toast and Video via the Queue
     useEffect(() => {
@@ -82,10 +110,15 @@ export default function AudienceLiveScreen(props: Props) {
             setShowGiftVideo(true);
             // If already shown (view mounted), trigger animation manually
             if (showGiftVideo) {
-                showGiftAnimation();
+                const gift = gifts.find(g => g.name === nextGift.giftName);
+                if (gift) {
+                    showGiftAnimation(gift.url);
+                } else {
+                    showGiftAnimation();
+                }
             }
         }
-    }, [giftQueue, recentGift]);
+    }, [giftQueue, recentGift, showGiftVideo]);
 
     // Auto-clear gift notification
     useEffect(() => {
@@ -96,10 +129,10 @@ export default function AudienceLiveScreen(props: Props) {
     }, [recentGift]);
 
     const gifts = [
-        { id: 'rose', name: 'Rose', icon: '🌹', points: 1 },
-        { id: 'heart', name: 'Finger Heart', icon: '🫰', points: 5 },
-        { id: 'perfume', name: 'Perfume', icon: '🧴', points: 99 },
-        { id: 'crown', name: 'Crown', icon: '👑', points: 299 },
+        { id: '1', name: 'Rose', icon: '🌹', points: 1, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/1.mp4' },
+        { id: '2', name: 'Finger Heart', icon: '🫰', points: 5, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/2.mp4' },
+        { id: '3', name: 'Perfume', icon: '🧴', points: 99, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/3.mp4' },
+        { id: '4', name: 'Crown', icon: '👑', points: 299, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/4.mp4' },
     ];
 
     const sendGift = (gift: any) => {
@@ -113,12 +146,19 @@ export default function AudienceLiveScreen(props: Props) {
             isHost: false // Audience is not host
         }]);
 
+        // Optimistically update totalLikes with gift points
+        setTotalLikes(prev => prev + (gift.points || 1));
+        if (streamHostIdRef.current) {
+            setHostScore(prev => prev + (gift.points || 1));
+        }
+
         // 1. Send Command (for overlay logic on host side)
         if (ZegoUIKit) {
             ZegoUIKit.sendInRoomCommand(JSON.stringify({
                 type: 'gift',
                 giftName: gift.name,
                 icon: gift.icon,
+                points: gift.points || 1, // New field
                 userName: userName
             }), [], () => { });
 
@@ -129,10 +169,32 @@ export default function AudienceLiveScreen(props: Props) {
 
         // 3. Local Feedback via Console
         console.log('Gift Sent:', gift.name);
+
+        // 4. Update Firestore for reliable Sync
+        if (channelId) {
+            LiveSessionService.incrementLikes(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
+
+            // 5. Broadcast Gift for Real-time Animation
+            LiveSessionService.broadcastGift(channelId, {
+                giftName: gift.name,
+                icon: gift.icon,
+                points: gift.points || 1,
+                senderName: userName || 'Viewer'
+            }).catch(e => console.error('Gift Broadcast Error:', e));
+        }
     };
 
     // Register user avatar & Handle Join/Leave Firestore
     useEffect(() => {
+        // Reset State on Mount/Channel Change
+        setTotalLikes(0);
+        setHostScore(0);
+        setGuestScore(0);
+        setIsInPK(false);
+        setGiftQueue([]);
+        setFloatingHearts([]);
+        console.log('🔄 Audience Screen Refreshed for Channel:', channelId);
+
         if (userAvatar && userId) {
             CustomBuilder.registerAvatar(userId, userAvatar);
         }
@@ -144,6 +206,58 @@ export default function AudienceLiveScreen(props: Props) {
                 if (session.hostAvatar) {
                     console.log('🖼️ Registering host avatar from Firestore:', session.hostAvatar);
                     CustomBuilder.registerAvatar(session.hostId, session.hostAvatar);
+                }
+            }
+
+            // ✅ Sync Flame Count from Firestore (Aggregated from all users)
+            if (session.totalLikes !== undefined) {
+                setTotalLikes(prev => {
+                    // Prevent rollback if local optimistic updates are ahead briefly, 
+                    // but allow catching up if Firestore jumps ahead (e.g. big gift)
+                    return Math.max(prev, session.totalLikes as number);
+                });
+            }
+
+            // ✅ Sync PK State from Firestore (Source of Truth when signaling fails)
+            if (session.pkState) {
+                console.log('🔥 PK State Sync from Firestore:', session.pkState);
+                setIsInPK(session.pkState.isActive);
+                setHostScore(session.pkState.hostScore);
+                setGuestScore(session.pkState.guestScore);
+                if (session.pkState.opponentName) setOpponentName(session.pkState.opponentName);
+                if (session.pkState.hostName) setPkHostName(session.pkState.hostName);
+
+                // Sync timer information
+                if (session.pkState.endTime) {
+                    setPkEndTime(session.pkState.endTime);
+                    const remaining = Math.max(0, Math.floor((session.pkState.endTime - Date.now()) / 1000));
+                    setPkTimeRemaining(remaining);
+                }
+
+                // Sync winner if battle ended
+                if (session.pkState.winner) {
+                    setPkWinner(session.pkState.winner);
+                    setShowPKResult(true);
+                    setTimeout(() => {
+                        setShowPKResult(false);
+                        setPkWinner(null);
+                    }, 5000);
+                }
+            }
+
+            // ✅ Sync Gift Animations from Firestore (Real-time for all viewers)
+            if (session.lastGift && session.lastGift.timestamp > lastGiftTimestampRef.current) {
+                console.log('🎁 Gift Animation Sync from Firestore:', session.lastGift);
+                lastGiftTimestampRef.current = session.lastGift.timestamp;
+
+                // Add to gift queue if not from current user (avoid duplicate for sender)
+                if (session.lastGift.senderName !== userName) {
+                    setGiftQueue(prev => [...prev, {
+                        senderName: session.lastGift!.senderName,
+                        giftName: session.lastGift!.giftName,
+                        icon: session.lastGift!.icon,
+                        isHost: false
+                    }]);
                 }
             }
         });
@@ -168,16 +282,35 @@ export default function AudienceLiveScreen(props: Props) {
         };
 
         joinFirestore();
-        joinFirestore();
+
         return () => {
             unsubscribe();
             leaveFirestore();
         };
-    }, [channelId, userId, userAvatar]);
+    }, [channelId, userAvatar, userId, userName]);
 
-    // Gift Animation Logic (Same as Host)
-    const showGiftAnimation = async () => {
+    // PK Timer Countdown for Audience
+    useEffect(() => {
+        if (!isInPK || !pkEndTime) return;
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const remaining = Math.max(0, Math.floor((pkEndTime - now) / 1000));
+            setPkTimeRemaining(remaining);
+
+            if (remaining === 0) {
+                // Timer ended - winner should be synced from Firestore
+                clearInterval(interval);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [isInPK, pkEndTime]);
+
+    // Gift Animation Logic (Official Zego Virtual Gift Engine)
+    const showGiftAnimation = async (videoUrl?: string) => {
         if (!ZegoExpressEngine || !ZegoMediaPlayerResource) return;
+        const url = videoUrl || 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/1.mp4';
 
         try {
             if (!mediaPlayerRef.current) {
@@ -204,7 +337,7 @@ export default function AudienceLiveScreen(props: Props) {
                     let resource = new ZegoMediaPlayerResource();
                     resource.loadType = ZegoMultimediaLoadType.FilePath;
                     resource.alphaLayout = ZegoAlphaLayoutType.Left; // Assuming Left-Right alpha
-                    resource.filePath = 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/1.mp4';
+                    resource.filePath = url;
 
                     mediaPlayerRef.current.loadResourceWithConfig(resource).then((ret: any) => {
                         if (ret.errorCode === 0) {
@@ -224,37 +357,175 @@ export default function AudienceLiveScreen(props: Props) {
         }
     };
 
-    // ✅ Listen for In-Room Commands (Gifts) from other users
-    // This ensures ALL audience members see the gift animation
+    // ✅ Listen for PK and Gift commands via Signaling Plugin directly (More reliable)
     useEffect(() => {
         if (ZegoUIKit) {
-            const callbackID = 'AudienceGiftListener';
-            console.log('🎧 Registering AudienceGiftListener with ZegoUIKit');
+            const callbackID = 'AudiencePKStatusListener';
 
-            ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, (messageData: any) => {
-                const { roomID, message, senderUserID } = messageData;
-                console.log(`📬 AudienceGiftListener: Command from ${senderUserID}: ${message}`);
-
-                // Ignore own commands (handled locally for instant feedback)
-                if (senderUserID === userId) return;
+            ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, (msgData: any) => {
+                const message = msgData.message;
+                // console.log('Audience received CMD:', message); // Uncomment for full debug
 
                 try {
                     const data = JSON.parse(message);
-                    if (data.type === 'gift') {
+
+                    if (data.type === 'PK_START') {
+                        setIsInPK(true);
+                        setHostScore(data.hostScore || 0);
+                        setGuestScore(data.guestScore || 0);
+                        setOpponentName(data.opponentName || 'Opponent');
+                        setPkHostName(data.hostName || 'Host');
+                        if (data.hostId) setStreamHostId(data.hostId);
+
+                        // Set timer information
+                        if (data.endTime) {
+                            setPkEndTime(data.endTime);
+                            const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+                            setPkTimeRemaining(remaining);
+                        }
+                    } else if (data.type === 'PK_SCORE_SYNC') {
+                        const inPk = data.isInPK !== undefined ? data.isInPK : true;
+                        console.log('🔄 PK_SCORE_SYNC received. InPK:', inPk);
+                        setIsInPK(inPk); // Respect host's state
+
+                        if (data.totalLikes !== undefined) {
+                            setTotalLikes(prev => Math.max(prev, data.totalLikes));
+                        }
+                        setHostScore(data.hostScore);
+                        setGuestScore(data.guestScore);
+                        if (data.opponentName) setOpponentName(data.opponentName);
+                        if (data.hostName) setPkHostName(data.hostName);
+                        if (data.hostId) setStreamHostId(data.hostId);
+
+                        // Update timer if provided
+                        if (data.endTime) {
+                            setPkEndTime(data.endTime);
+                            const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+                            setPkTimeRemaining(remaining);
+                        }
+                    } else if (data.type === 'PK_VOTE') {
+                        setIsInPK(true);
+                        if (data.hostId && streamHostIdRef.current && data.hostId === streamHostIdRef.current) {
+                            setHostScore(prev => prev + (data.points || 0));
+                        } else {
+                            setGuestScore(prev => prev + (data.points || 0));
+                        }
+                    } else if (data.type === 'PK_LIKE') {
+                        const points = data.count || 1;
+                        setTotalLikes(prev => prev + points);
+                        if (data.hostId && streamHostIdRef.current && data.hostId === streamHostIdRef.current) {
+                            setHostScore(prev => prev + points);
+                        } else {
+                            setGuestScore(prev => prev + points);
+                        }
+                    } else if (data.type === 'PK_BATTLE_STOP') {
+                        setIsInPK(false);
+                    } else if (data.type === 'gift') {
+                        setTotalLikes(prev => prev + (data.points || 1)); // ✅ Add gift points to Total Likes
                         setGiftQueue(prev => [...prev, {
-                            senderName: data.userName || 'User',
-                            targetName: data.targetName,
+                            senderName: data.userName || 'Viewer',
                             giftName: data.giftName,
                             icon: data.icon,
-                            isHost: data.userName?.includes('Host') // Detect host from string
+                            isHost: (data.userName || '').includes('Host')
                         }]);
                     }
                 } catch (e) {
-                    console.error('AudienceGiftListener JSON Parse Error:', e);
+                    console.error('Error parsing signaling command:', e);
                 }
             });
+            return () => { };
         }
-    }, [userId]);
+    }, [ZegoUIKit]);
+
+    const likeBatchRef = useRef(0);
+    const lastLikeSentTimeRef = useRef(0);
+
+    const handleSendLike = () => {
+        if (!ZegoUIKit) return;
+
+        // Visual effects
+        const id = ++heartCounter.current;
+        const x = Math.random() * 60 - 30;
+        setFloatingHearts(prev => [...prev.slice(-15), { id, x }]);
+        setTimeout(() => {
+            setFloatingHearts(prev => prev.filter(h => h.id !== id));
+        }, 3000);
+
+        // Optimistic Updates
+        setLikeCount(prev => prev + 1);
+        setTotalLikes(prev => prev + 1);
+        if (streamHostIdRef.current) {
+            setHostScore(prev => prev + 1);
+        }
+
+        // Batching Logic
+        likeBatchRef.current += 1;
+        const now = Date.now();
+
+        // Send batch if > 1s passed or > 10 likes pending
+        if (now - lastLikeSentTimeRef.current > 1000 || likeBatchRef.current >= 10) {
+            const countToSend = likeBatchRef.current;
+            likeBatchRef.current = 0;
+            lastLikeSentTimeRef.current = now;
+
+            console.log(`❤️ Sending Batch Like (${countToSend}) to Host:`, streamHostIdRef.current);
+
+            // 1. Send Command (Fast, cheap)
+            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+                type: 'PK_LIKE',
+                hostId: streamHostIdRef.current,
+                userName: userName,
+                count: countToSend // New field
+            }), [], (res: any) => { if (res?.errorCode) console.error('SendCmd Error:', res) });
+
+            // 2. Update Firestore (Reliable, persistent)
+            LiveSessionService.incrementLikes(channelId, countToSend).catch(e => console.error('Firestore Like Error:', e));
+        }
+    };
+
+    const FloatingHeart = ({ x, id }: { x: number, id: number }) => {
+        const animation = useRef(new Animated.Value(0)).current;
+
+        useEffect(() => {
+            Animated.timing(animation, {
+                toValue: 1,
+                duration: 2500,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: true,
+            }).start();
+        }, []);
+
+        const translateY = animation.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, -500],
+        });
+
+        const opacity = animation.interpolate({
+            inputRange: [0, 0.7, 1],
+            outputRange: [1, 1, 0],
+        });
+
+        const scale = animation.interpolate({
+            inputRange: [0, 0.1, 1],
+            outputRange: [0.6, 1.2, 0.8],
+        });
+
+        return (
+            <Animated.View
+                key={id}
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    transform: [{ translateY }, { translateX: x }, { scale }],
+                    opacity,
+                }}
+            >
+                <Heart size={36} color="#FF0066" fill="#FF0066" />
+            </Animated.View>
+        );
+    };
+
+
 
     if (!ZegoUIKitPrebuiltLiveStreaming) {
         return (
@@ -284,7 +555,228 @@ export default function AudienceLiveScreen(props: Props) {
 
     return (
         <View style={styles.container}>
+            {/* Flame Counter */}
+            <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 175 : 102} />
+
+            {/* PK BATTLE SCORE BAR - Premium Look */}
+            {isInPK && (
+                <Animatable.View
+                    animation="slideInDown"
+                    duration={800}
+                    style={{
+                        position: 'absolute',
+                        top: 70,
+                        width: '100%',
+                        alignItems: 'center',
+                        zIndex: 2000,
+                        paddingHorizontal: 20
+                    }}>
+                    {/* Timer Display */}
+                    {pkTimeRemaining > 0 && (
+                        <View style={{
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            paddingHorizontal: 16,
+                            paddingVertical: 6,
+                            borderRadius: 20,
+                            marginBottom: 8,
+                            borderWidth: 2,
+                            borderColor: pkTimeRemaining <= 30 ? '#EF4444' : '#3B82F6'
+                        }}>
+                            <Text style={{
+                                color: pkTimeRemaining <= 30 ? '#EF4444' : '#fff',
+                                fontSize: 16,
+                                fontWeight: '900',
+                                letterSpacing: 1
+                            }}>
+                                ⏱️ {Math.floor(pkTimeRemaining / 60)}:{(pkTimeRemaining % 60).toString().padStart(2, '0')}
+                            </Text>
+                        </View>
+                    )}
+
+                    <View style={{ flexDirection: 'row', width: '100%', height: 28, borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                        <LinearGradient
+                            colors={['#FF0055', '#FF4D80']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={{
+                                flex: Math.max(hostScore, 1),
+                                justifyContent: 'center',
+                                paddingLeft: 12
+                            }}
+                        >
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{hostScore}</Text>
+                        </LinearGradient>
+                        <LinearGradient
+                            colors={['#3B82F6', '#60A5FA']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={{
+                                flex: Math.max(guestScore, 1),
+                                alignItems: 'flex-end',
+                                justifyContent: 'center',
+                                paddingRight: 12
+                            }}
+                        >
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{guestScore}</Text>
+                        </LinearGradient>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 8, paddingHorizontal: 2 }}>
+                        <View style={{ backgroundColor: '#FF0055', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
+                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pkHostName?.toUpperCase() || 'HOST'}</Text>
+                        </View>
+                        <View style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
+                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{opponentName?.toUpperCase() || 'OPPONENT'}</Text>
+                        </View>
+                    </View>
+                </Animatable.View>
+            )}
+
+            {/* PK Winner Announcement - Modern UI */}
+            {showPKResult && pkWinner && (
+                <Animatable.View
+                    animation="bounceIn"
+                    duration={800}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 3000,
+                        backgroundColor: 'rgba(0,0,0,0.85)'
+                    }}
+                >
+                    <LinearGradient
+                        colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B', '#D97706'] : ['#10B981', '#059669', '#047857']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                            width: '85%',
+                            maxWidth: 350,
+                            borderRadius: 30,
+                            padding: 3,
+                            shadowColor: pkWinner === 'Draw' ? '#FCD34D' : '#10B981',
+                            shadowOffset: { width: 0, height: 20 },
+                            shadowOpacity: 0.6,
+                            shadowRadius: 30
+                        }}
+                    >
+                        <View style={{
+                            backgroundColor: '#1A1A24',
+                            borderRadius: 27,
+                            paddingVertical: 40,
+                            paddingHorizontal: 30,
+                            alignItems: 'center'
+                        }}>
+                            {/* Confetti/Trophy Animation */}
+                            <View style={{
+                                flexDirection: 'row',
+                                marginBottom: 15,
+                                gap: 8
+                            }}>
+                                <Text style={{ fontSize: 32 }}>🎉</Text>
+                                <Text style={{ fontSize: 48 }}>
+                                    {pkWinner === 'Draw' ? '🤝' : '👑'}
+                                </Text>
+                                <Text style={{ fontSize: 32 }}>🎉</Text>
+                            </View>
+
+                            {/* Title */}
+                            <Text style={{
+                                color: '#fff',
+                                fontSize: 16,
+                                fontWeight: '600',
+                                marginBottom: 12,
+                                opacity: 0.7,
+                                letterSpacing: 2,
+                                textTransform: 'uppercase'
+                            }}>
+                                {pkWinner === 'Draw' ? 'Battle Ended' : 'PK Battle Winner'}
+                            </Text>
+
+                            {/* Winner Name */}
+                            <LinearGradient
+                                colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B'] : ['#10B981', '#34D399']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={{
+                                    paddingHorizontal: 24,
+                                    paddingVertical: 12,
+                                    borderRadius: 20,
+                                    marginBottom: 20
+                                }}
+                            >
+                                <Text style={{
+                                    color: '#000',
+                                    fontSize: 32,
+                                    fontWeight: '900',
+                                    textAlign: 'center',
+                                    textShadowColor: 'rgba(255,255,255,0.3)',
+                                    textShadowOffset: { width: 0, height: 1 },
+                                    textShadowRadius: 2
+                                }}>
+                                    {pkWinner === 'Draw' ? "It's a Draw!" : pkWinner}
+                                </Text>
+                            </LinearGradient>
+
+                            {/* Score Display */}
+                            <View style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                paddingHorizontal: 20,
+                                paddingVertical: 12,
+                                borderRadius: 15,
+                                gap: 15
+                            }}>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
+                                        {pkHostName?.toUpperCase()}
+                                    </Text>
+                                    <Text style={{
+                                        color: '#FF0055',
+                                        fontSize: 28,
+                                        fontWeight: '900'
+                                    }}>
+                                        {hostScore}
+                                    </Text>
+                                </View>
+
+                                <Text style={{ color: '#666', fontSize: 20, fontWeight: '700' }}>VS</Text>
+
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
+                                        {opponentName?.toUpperCase()}
+                                    </Text>
+                                    <Text style={{
+                                        color: '#3B82F6',
+                                        fontSize: 28,
+                                        fontWeight: '900'
+                                    }}>
+                                        {guestScore}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Celebration Message */}
+                            {pkWinner !== 'Draw' && (
+                                <Text style={{
+                                    color: '#888',
+                                    fontSize: 13,
+                                    marginTop: 20,
+                                    fontWeight: '600',
+                                    textAlign: 'center'
+                                }}>
+                                    🎊 Congratulations! 🎊
+                                </Text>
+                            )}
+                        </View>
+                    </LinearGradient>
+                </Animatable.View>
+            )}
+
             <ZegoUIKitPrebuiltLiveStreaming
+                key={channelId} // Force remount on channel switch
                 appID={ZEGO_APP_ID}
                 appSign={ZEGO_APP_SIGN}
                 userID={userId}
@@ -292,23 +784,6 @@ export default function AudienceLiveScreen(props: Props) {
                 liveID={channelId}
                 config={{
                     ...AUDIENCE_DEFAULT_CONFIG,
-                    inRoomChatConfig: {
-                        itemBuilder: (message: any) => {
-                            const isHostMsg = message.sender.userName.includes('Host') || message.sender.userID === streamHostId;
-                            return (
-                                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4, paddingHorizontal: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, marginVertical: 2, maxWidth: '90%', borderLeftWidth: isHostMsg ? 3 : 0, borderLeftColor: '#FFD700' }}>
-                                    <View>
-                                        <Text style={{ fontSize: 13 }}>
-                                            <Text style={{ color: isHostMsg ? '#FFD700' : '#88CCFF', fontWeight: '900' }}>
-                                                {message.sender.userName}:
-                                            </Text>
-                                            <Text style={{ color: '#fff', fontWeight: '500' }}> {message.message}</Text>
-                                        </Text>
-                                    </View>
-                                </View>
-                            );
-                        }
-                    },
                     role: ZegoLiveStreamingRole?.Audience ?? 2,
                     confirmStartLive: false,
                     showStartLiveButton: false,
@@ -319,6 +794,7 @@ export default function AudienceLiveScreen(props: Props) {
                         console.log('🎬 Audience leaving live via SDK');
                         onClose();
                     },
+                    pkConfig: {},
                     layout: {
                         mode: 0, // 0: Picture in Picture
                         config: {
@@ -357,23 +833,38 @@ export default function AudienceLiveScreen(props: Props) {
                             leaveBuilder: CustomBuilder.leaveBuilder,
                         },
                     },
-                    onInRoomCommandReceived: (callbackID: string, messageData: any) => {
-                        const { message, senderUserID } = messageData;
-                        // Ignore own commands
-                        if (senderUserID === userId) return;
+                    onInRoomCommandReceived: (messageData: any) => {
+                        // Logic moved to direct signaling listener
+                    },
+                    inRoomChatConfig: {
+                        itemBuilder: (message: any) => {
+                            const senderName = message.sender.userName || 'Viewer';
+                            const isHostMsg = senderName.includes('Host') || senderName === 'Tama Clothing';
 
-                        try {
-                            const data = JSON.parse(message);
-                            if (data.type === 'gift') {
-                                setGiftQueue(prev => [...prev, {
-                                    senderName: data.userName || 'User',
-                                    targetName: data.targetName,
-                                    giftName: data.giftName,
-                                    icon: data.icon,
-                                    isHost: data.userName?.includes('Host')
-                                }]);
-                            }
-                        } catch (e) { }
+                            return (
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'flex-start',
+                                    paddingVertical: 5,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: isHostMsg ? 'rgba(239, 68, 68, 0.75)' : 'rgba(0,0,0,0.45)',
+                                    borderRadius: 15,
+                                    marginVertical: 2,
+                                    maxWidth: '85%',
+                                    borderWidth: 1,
+                                    borderColor: isHostMsg ? 'rgba(255,255,255,0.3)' : 'transparent'
+                                }}>
+                                    <View>
+                                        <Text style={{ fontSize: 13 }}>
+                                            <Text style={{ color: isHostMsg ? '#FFD700' : '#A5F3FC', fontWeight: '800' }}>
+                                                {senderName}:
+                                            </Text>
+                                            <Text style={{ color: '#fff', fontWeight: '600' }}> {message.message}</Text>
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        }
                     },
                     onGiftButtonClick: () => {
                         setShowGifts(true);
@@ -420,7 +911,8 @@ export default function AudienceLiveScreen(props: Props) {
                         collapsable={false}
                         style={{ width: '100%', height: '100%' }}
                         onLayout={() => {
-                            showGiftAnimation();
+                            const gift = gifts.find(g => g.name === recentGift?.giftName);
+                            showGiftAnimation(gift?.url);
                         }}
                     />
                 </View>
@@ -538,31 +1030,82 @@ export default function AudienceLiveScreen(props: Props) {
                 </Animatable.View>
             )}
 
-            {/* FLOATING PINK GIFT BUTTON (COMPACT & HIGHER) */}
-            <TouchableOpacity
-                onPress={() => setShowGifts(true)}
-                style={{
-                    position: 'absolute',
-                    bottom: 120, // Pushed higher to top
-                    right: 15,
-                    width: 40,   // More smaller
-                    height: 40,  // More smaller
-                    borderRadius: 20,
-                    backgroundColor: '#FF0066',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 5,
-                    elevation: 8,
-                    zIndex: 1000,
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }}
-            >
-                <Gift size={20} color="#fff" strokeWidth={2.5} />
-            </TouchableOpacity>
+            {/* FLOATING ACTION BUTTONS */}
+            <View style={{ position: 'absolute', bottom: 120, right: 15, gap: 12, alignItems: 'center', zIndex: 1000 }}>
+                {/* Floating Heart Animations */}
+                <View style={{ position: 'absolute', bottom: 50, right: 0, width: 60, height: 400, pointerEvents: 'none' }}>
+                    {floatingHearts.map(heart => (
+                        <FloatingHeart key={heart.id} id={heart.id} x={heart.x} />
+                    ))}
+                </View>
+
+                {/* Share Button */}
+                <TouchableOpacity
+                    onPress={() => Alert.alert("Share", "Sharing live stream...")}
+                    style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(255,255,255,0.7)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 5,
+                        elevation: 8
+                    }}
+                >
+                    <Share2 size={20} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={handleSendLike}
+                    activeOpacity={0.7}
+                    style={{
+                        width: 50,
+                        height: 50,
+                        borderRadius: 25,
+                        backgroundColor: 'rgba(255,0,102,0.85)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                        shadowColor: '#FF0066',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 10,
+                        elevation: 10
+                    }}
+                >
+                    <Heart size={24} color="#fff" fill="#fff" />
+                </TouchableOpacity>
+
+                {/* PINK GIFT BUTTON */}
+                <TouchableOpacity
+                    onPress={() => setShowGifts(true)}
+                    activeOpacity={0.7}
+                    style={{
+                        width: 50,
+                        height: 50,
+                        borderRadius: 25,
+                        backgroundColor: '#FFD700',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: '#FFD700',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 10,
+                        elevation: 10,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }}
+                >
+                    <Gift size={24} color="#000" strokeWidth={2.5} />
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }

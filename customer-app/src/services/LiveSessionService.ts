@@ -44,6 +44,27 @@ export interface LiveSession {
     moderatorIds?: string[];
     collabId?: string; // Link to collaboration if applicable
     participantIds?: string[]; // Active participants
+    pkScore?: number; // PK Battle sync score
+    totalLikes?: number; // Flame Count
+    pkState?: { // Comprehensive PK State for Audience Sync
+        isActive: boolean;
+        hostScore: number;
+        guestScore: number;
+        opponentName?: string;
+        opponentChannelId?: string; // Link to opponent's session for Host recovery
+        startTime?: number;
+        duration?: number; // Duration in seconds (180, 300, 420, 600)
+        endTime?: number; // Timestamp when battle ends
+        winner?: string; // Winner's name when battle ends
+        hostName?: string; // Host's name for winner display
+    };
+    lastGift?: { // Real-time gift animation sync
+        giftName: string;
+        icon: string;
+        points: number;
+        senderName: string;
+        timestamp: number;
+    };
 }
 
 export interface LiveEvent {
@@ -355,5 +376,53 @@ export const LiveSessionService = {
             console.error('Error subscribing to collab sessions:', error);
         });
         return unsubscribe;
+    },
+
+    // Update Host Score specifically for Host-to-Host Sync
+    updatePKScore: async (channelId: string, score: number) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            pkScore: score
+        }, { merge: true });
+    },
+
+    // Increment Total Likes (Flame Count)
+    incrementLikes: async (channelId: string, amount: number) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        // increment requires updateDoc usually, or setDoc with merge. 
+        // setDoc with merge + increment works fine since Firestore handles field paths.
+        await setDoc(sessionRef, {
+            totalLikes: increment(amount)
+        }, { merge: true });
+    },
+
+    // Update comprehensive PK State for Audience Sync
+    updatePKState: async (channelId: string, state: { 
+        isActive: boolean; 
+        hostScore: number; 
+        guestScore: number; 
+        opponentName?: string; 
+        opponentChannelId?: string; 
+        startTime?: number;
+        duration?: number;
+        endTime?: number;
+        winner?: string;
+        hostName?: string;
+    }) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            pkState: state
+        }, { merge: true });
+    },
+
+    // Broadcast Gift for Real-time Animation Sync
+    broadcastGift: async (channelId: string, gift: { giftName: string; icon: string; points: number; senderName: string; }) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await setDoc(sessionRef, {
+            lastGift: {
+                ...gift,
+                timestamp: Date.now()
+            }
+        }, { merge: true });
     }
 };
