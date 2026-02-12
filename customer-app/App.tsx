@@ -535,6 +535,8 @@ const Translations: any = {
     couponEnded: 'Coupon expiré',
     couponCopied: 'Code copié !',
     limitedTimeOffer: 'OFFRE LIMITÉE',
+    liveEnded: 'Fin du Live',
+    hostEndedSession: 'L\'hôte a terminé la session live.',
   },
   ar: {
     success: 'تم بنجاح',
@@ -798,6 +800,8 @@ const Translations: any = {
     couponDropped: 'تم تفعيل الكوبون!',
     couponEnded: 'انتهت صلاحية الكوبون',
     couponCopied: 'تم نسخ الرمز!',
+    liveEnded: 'انتهى البث',
+    hostEndedSession: 'أنهى المضيف البث المباشر.',
     limitedTimeOffer: 'عرض لفترة محدودة',
   }
 };

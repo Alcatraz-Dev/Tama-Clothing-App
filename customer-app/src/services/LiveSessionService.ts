@@ -93,6 +93,22 @@ const EVENTS_SUBCOLLECTION = 'Live_events';
 export const LiveSessionService = {
     // Create or start a session (Broadcaster)
     startSession: async (channelId: string, hostName: string, brandId?: string, hostAvatar?: string, hostUserId?: string, collaboratorIds?: string[]) => {
+        // 1. Cleanup old sessions for this host
+        if (hostUserId) {
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('hostId', '==', hostUserId),
+                where('status', '==', 'live')
+            );
+            const snapshot = await getDocs(q);
+            snapshot.forEach(async (doc) => {
+                if (doc.id !== channelId) {
+                    console.log(`Cleaning up old session: ${doc.id}`);
+                    await updateDoc(doc.ref, { status: 'ended', endedAt: serverTimestamp() });
+                }
+            });
+        }
+
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await setDoc(sessionRef, {
             channelId,
@@ -338,6 +354,22 @@ export const LiveSessionService = {
 
     // Start a live stream for a collaboration
     startCollabSession: async (channelId: string, hostName: string, hostId: string, collabId: string, brandId?: string, hostAvatar?: string) => {
+        // 1. Cleanup: If this host already has a live session, mark it as ended
+        if (hostId) {
+            const q = query(
+                collection(db, SESSIONS_COLLECTION),
+                where('hostId', '==', hostId),
+                where('status', '==', 'live')
+            );
+            const snapshot = await getDocs(q);
+            snapshot.forEach(async (doc) => {
+                if (doc.id !== channelId) {
+                    console.log(`Cleaning up old session: ${doc.id}`);
+                    await updateDoc(doc.ref, { status: 'ended', endedAt: serverTimestamp() });
+                }
+            });
+        }
+
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await setDoc(sessionRef, {
             channelId,

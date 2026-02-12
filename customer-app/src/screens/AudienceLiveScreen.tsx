@@ -841,6 +841,12 @@ export default function AudienceLiveScreen(props: Props) {
                     confirmLeave: true,
                     turnOnCameraWhenJoining: false,
                     turnOnMicrophoneWhenJoining: false,
+                    onLiveStreamingEnded: () => {
+                        console.log('🎬 [Audience] Live streaming ended by Host');
+                        Alert.alert(t ? t('liveEnded') : 'Live Ended', t ? t('hostEndedSession') : 'The host has ended the live session.', [
+                            { text: 'OK', onPress: () => onClose() }
+                        ]);
+                    },
                     onLeaveLiveStreaming: () => {
                         console.log('🎬 Audience leaving live via SDK');
                         onClose();
