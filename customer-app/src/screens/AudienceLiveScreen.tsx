@@ -255,11 +255,11 @@ export default function AudienceLiveScreen(props: Props) {
             if (nextGift.isBig) {
                 const gift = GIFTS.find(g => g.name === nextGift.giftName);
                 if (gift?.url) showGiftAnimation(gift.url);
-                // Progress faster if no pill to show
+                // Progress after animation duration
                 setTimeout(() => {
                     setRecentGift(null);
                     recentGiftRef.current = null;
-                }, 1500);
+                }, 4500); // Increased duration for big animations to play fully
             }
         }
 
@@ -551,52 +551,21 @@ export default function AudienceLiveScreen(props: Props) {
         return () => clearInterval(interval);
     }, [pinEndTime]);
 
-    // Gift Animation Logic (Official Zego Virtual Gift Engine)
+    // Gift Animation Logic (Image/WebP Overlay)
     const showGiftAnimation = async (videoUrl?: string) => {
-        if (!ZegoExpressEngine || !ZegoMediaPlayerResource) return;
-        const url = videoUrl || 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/1.mp4';
-
+        // Since we have images/WebP and not MP4 videos, we don't need Zego Media Player.
+        // The UI overlay already handles rendering the animated gift based on recentGift.
         try {
-            if (!mediaPlayerRef.current) {
-                mediaPlayerRef.current = await ZegoExpressEngine.instance().createMediaPlayer();
+            setShowGiftVideo(true); // Mount the full-screen overlay
 
-                mediaPlayerRef.current.on('mediaPlayerStateUpdate', (player: any, state: any, errorCode: number) => {
-                    if (state === 3 || state === ZegoMediaPlayerState?.PlayEnded) { // 3 is PlayEnded in recent Zego SDKs
-                        console.log('🎬 Gift video finished');
-                        setShowGiftVideo(false);
-                    }
-                });
-            }
-
-            // Give a small delay for the View to render before setting the player view
+            // Auto-hide the animation after 4.5 seconds
+            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
             setTimeout(() => {
-                if (mediaViewRef.current && mediaPlayerRef.current) {
-                    mediaPlayerRef.current.setPlayerView({
-                        'reactTag': findNodeHandle(mediaViewRef.current),
-                        'viewMode': 0, // Match user snippet
-                        'backgroundColor': 'transparent', // Match user snippet
-                        'alphaBlend': true // Vital for transparency
-                    });
-
-                    let resource = new ZegoMediaPlayerResource();
-                    resource.loadType = ZegoMultimediaLoadType.FilePath;
-                    resource.alphaLayout = ZegoAlphaLayoutType.Left; // Assuming Left-Right alpha
-                    resource.filePath = url;
-
-                    mediaPlayerRef.current.loadResourceWithConfig(resource).then((ret: any) => {
-                        if (ret.errorCode === 0) {
-                            console.log('▶️ Audience: Playing gift video');
-                            mediaPlayerRef.current.start();
-                        } else {
-                            console.error('❌ Failed to load gift video:', ret.errorCode);
-                            setShowGiftVideo(false);
-                        }
-                    });
-                }
-            }, 100);
+                setShowGiftVideo(false);
+            }, 4500);
 
         } catch (error) {
-            console.error('Error playing gift animation:', error);
+            console.error('Error showing gift animation:', error);
             setShowGiftVideo(false);
         }
     };
@@ -665,14 +634,16 @@ export default function AudienceLiveScreen(props: Props) {
                     } else if (data.type === 'PK_BATTLE_STOP') {
                         setIsInPK(false);
                     } else if (data.type === 'gift') {
-                        setTotalLikes(prev => prev + (data.points || 1));
+                        setTotalLikes(prev => prev + (Number(data.points) || 1));
 
-                        const current = recentGiftRef.current;
-                        const senderId = data.senderId || data.userId || msgData.senderUserID;
+                        const senderId = data.senderId || data.userId;
                         const isHost = data.isHost === true;
                         const senderName = data.userName || 'Viewer';
+                        const giftNameStr = String(data.giftName || '');
 
-                        if (isSameGift(current, senderId, senderName, data.giftName)) {
+                        // COMBO LOGIC
+                        const current = recentGiftRef.current;
+                        if (isSameGift(current, senderId, senderName, giftNameStr)) {
                             setRecentGift(prev => {
                                 const updated = prev ? { ...prev, count: prev.count + 1 } : null;
                                 recentGiftRef.current = updated;
@@ -684,17 +655,17 @@ export default function AudienceLiveScreen(props: Props) {
                                 recentGiftRef.current = null;
                             }, 3000);
                         } else {
-                            const foundGift = GIFTS.find(g => g.name === data.giftName);
-                            const isBig = (foundGift && foundGift.points >= 500) || (data.points >= 500);
+                            const foundGift = GIFTS.find(g => g.name.toLowerCase() === giftNameStr.toLowerCase());
+                            const isBig = (foundGift && (foundGift.points || 0) >= 500) || (Number(data.points || 0) >= 500);
 
                             setGiftQueue(prev => {
                                 const last = prev[prev.length - 1];
-                                if (last && (last.senderId?.toLowerCase() === senderId?.toLowerCase() || last.senderName === (data.userName || 'Viewer')) && last.giftName === data.giftName) {
+                                if (last && (last.senderId?.toLowerCase() === senderId?.toLowerCase() || last.senderName === senderName) && last.giftName === giftNameStr) {
                                     return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
                                 }
                                 return [...prev.slice(-10), {
-                                    senderName: data.userName || 'Viewer',
-                                    giftName: data.giftName,
+                                    senderName: senderName,
+                                    giftName: giftNameStr,
                                     icon: foundGift ? foundGift.icon : data.icon,
                                     count: 1,
                                     senderId: senderId,
@@ -703,10 +674,6 @@ export default function AudienceLiveScreen(props: Props) {
                                     isBig: isBig
                                 }];
                             });
-
-                            if (isBig && foundGift?.url) {
-                                showGiftAnimation(foundGift.url);
-                            }
                         }
                     } else if (data.type === 'coupon_drop') {
                         setActiveCoupon(data);
@@ -1276,9 +1243,9 @@ export default function AudienceLiveScreen(props: Props) {
                     <View style={{ alignItems: 'center' }}>
                         {(() => {
                             const gift = GIFTS.find(g => g.name === recentGift?.giftName);
-                            // Case 1: Animated WebP (TikTok Style) or Generic Icon
+                            // Animated WebP (TikTok Style) or Generic Icon
                             const isBig = (gift?.points || 0) >= 500;
-                            const source = (gift?.url && gift.url.includes('.webp')) ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
+                            const source = gift?.url ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
 
                             if (source) {
                                 return (
@@ -1293,20 +1260,6 @@ export default function AudienceLiveScreen(props: Props) {
                                             maxHeight: 500
                                         }}
                                         resizeMode="contain"
-                                    />
-                                );
-                            }
-                            // Case 2: Standard Video (MP4 via Zego)
-                            if (ZegoTextureView) {
-                                return (
-                                    <ZegoTextureView
-                                        // @ts-ignore
-                                        ref={mediaViewRef}
-                                        collapsable={false}
-                                        style={{ width: '100%', height: '100%' }}
-                                        onLayout={() => {
-                                            showGiftAnimation(gift?.url);
-                                        }}
                                     />
                                 );
                             }
@@ -1350,17 +1303,11 @@ export default function AudienceLiveScreen(props: Props) {
                                         marginRight: 10,
                                         backgroundColor: '#333'
                                     }}>
-                                        {recentGift.senderAvatar ? (
-                                            <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
-                                        ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
-                                            <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
-                                        ) : (
-                                            <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
-                                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
-                                                </Text>
-                                            </LinearGradient>
-                                        )}
+                                        <Image
+                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                            style={{ width: '80%', height: '80%' }}
+                                            resizeMode="contain"
+                                        />
                                     </View>
                                     <Text
                                         style={{
@@ -1880,7 +1827,7 @@ export default function AudienceLiveScreen(props: Props) {
 
 
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
-            {(recentGift && !recentGift.isBig) && (
+            {recentGift && (
                 <View style={{
                     position: 'absolute',
                     top: 180, // Moved up slightly to avoid overlapping
@@ -1925,17 +1872,11 @@ export default function AudienceLiveScreen(props: Props) {
                                 shadowOpacity: 0.3,
                                 shadowRadius: 3
                             }}>
-                                {recentGift.senderAvatar ? (
-                                    <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
-                                ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
-                                    <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
-                                ) : (
-                                    <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
-                                            {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
-                                        </Text>
-                                    </LinearGradient>
-                                )}
+                                <Image
+                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                    style={{ width: '80%', height: '80%' }}
+                                    resizeMode="contain"
+                                />
                             </View>
 
                             <View style={{ marginLeft: 10, marginRight: 40 }}>
