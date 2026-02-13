@@ -63,11 +63,21 @@ export class CustomBuilder {
 
     static memberBuilder = (memberCount: number, requestCoHostCount: number) => {
         return (
-            <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Users size={14} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{memberCount}</Text>
+            <View style={{
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                borderRadius: 15,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)'
+            }}>
+                <Users size={12} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{memberCount}</Text>
                 {requestCoHostCount > 0 && (
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginLeft: 2 }} />
                 )}
             </View>
         );
@@ -76,33 +86,64 @@ export class CustomBuilder {
     static hostAvatarBuilder = (host: any) => {
         const avatarUrl = this.getUserAvatar(host.userID);
         return (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20 }}>
+            <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
+            }}>
                 {avatarUrl ? (
-                    <Image source={{ uri: avatarUrl }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                    <Image source={{ uri: avatarUrl }} style={{ width: 22, height: 22, borderRadius: 11 }} />
                 ) : (
-                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#666', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
                             {(host.userName || 'H').charAt(0).toUpperCase()}
                         </Text>
                     </View>
                 )}
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{host.userName}</Text>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }} numberOfLines={1}>{host.userName}</Text>
+                <TouchableOpacity style={{ backgroundColor: '#FF0066', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginLeft: 4 }}>
+                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>SUIVRE</Text>
+                </TouchableOpacity>
             </View>
         );
     };
 
     static enableChatBuilder = (enableChat: boolean) => {
         return (
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25, width: '100%', height: '100%' }}>
-                <MessageCircle size={20} color={enableChat ? '#fff' : '#888'} />
+            <View style={{
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 22,
+                width: 40,
+                height: 40,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
+            }}>
+                <MessageCircle size={18} color={enableChat ? '#fff' : '#888'} />
             </View>
         );
     };
 
     static chatBuilder = (isOn: boolean) => {
         return (
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25, width: '100%', height: '100%' }}>
-                <MessageCircle size={20} color="#fff" />
+            <View style={{
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 22,
+                width: 40,
+                height: 40,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
+            }}>
+                <MessageCircle size={18} color="#fff" />
             </View>
         );
     };
@@ -110,17 +151,19 @@ export class CustomBuilder {
     static giftBuilder = () => {
         return (
             <View style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'rgba(255, 0, 102, 0.8)', // TikTok Pink
+                width: 44,
+                height: 44,
+                backgroundColor: '#FF0066', // TikTok Pink
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 25,
+                borderRadius: 22,
                 shadowColor: '#FE2C55',
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.8,
                 shadowRadius: 10,
-                elevation: 5
+                elevation: 5,
+                borderWidth: 1.5,
+                borderColor: '#fff'
             }}>
                 <Gift size={20} color="#fff" strokeWidth={2.5} />
             </View>
@@ -130,16 +173,16 @@ export class CustomBuilder {
     static pkBattleBuilder = () => {
         return (
             <View style={{
-                width: '100%',
-                height: '100%',
+                width: 40,
+                height: 40,
                 backgroundColor: 'rgba(59, 130, 246, 0.8)', // Professional Blue
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 25,
+                borderRadius: 20,
                 borderWidth: 1.5,
-                borderColor: '#FF4D4D' // Red border for PK feel
+                borderColor: '#fff'
             }}>
-                <Swords size={20} color="#fff" />
+                <Swords size={18} color="#fff" />
             </View>
         );
     };

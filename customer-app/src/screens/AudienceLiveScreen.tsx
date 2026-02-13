@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions, Clipboard, StyleSheet, View, findNodeHandle } from 'react-native';
+import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions, Clipboard, StyleSheet, View, findNodeHandle, TextInput, KeyboardAvoidingView, Platform, FlatList, Share } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Gift, Share2, Heart, Flame, Ticket, X, Clock } from 'lucide-react-native';
+import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send } from 'lucide-react-native';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction } from 'firebase/firestore';
+import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
+import { db } from '../api/firebase';
+import { GIFTS, Gift } from '../config/gifts';
 
 
 // ✅ Expo Go detection
@@ -60,18 +64,28 @@ type Props = {
     userAvatar?: string;
     onClose: () => void;
     t?: (key: string) => string;
+    language?: 'fr' | 'ar';
+    profileData?: any;
 };
 
 export default function AudienceLiveScreen(props: Props) {
     const t = props.t || ((key: string) => key);
-    const { channelId, userId, userName, userAvatar, onClose } = props;
+    const { channelId, userId, userName, userAvatar, onClose, language, profileData } = props;
+
+    const getLocalizedName = (name: any) => {
+        if (typeof name === 'string') return name;
+        if (!name) return '';
+        return name[language === 'ar' ? 'ar-tn' : 'fr'] || name.fr || name.en || name.ar || Object.values(name)[0] || '';
+    };
     const prebuiltRef = useRef<any>(null);
     const mediaViewRef = useRef<any>(null);
     const mediaPlayerRef = useRef<any>(null);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
     const [showGifts, setShowGifts] = useState(false);
-    const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean }[]>([]);
-    const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean } | null>(null);
+    const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string }[]>([]);
+    const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string } | null>(null);
+    const recentGiftRef = useRef<any>(null);
+    const giftTimerRef = useRef<any>(null);
     const [streamHostId, setStreamHostId] = useState<string | null>(null);
     const [isInPK, setIsInPK] = useState(false);
     const [hostScore, setHostScore] = useState(0);
@@ -90,13 +104,93 @@ export default function AudienceLiveScreen(props: Props) {
     const [likeCount, setLikeCount] = useState(0);
     const [totalLikes, setTotalLikes] = useState(0);
     const [floatingHearts, setFloatingHearts] = useState<{ id: number, x: number }[]>([]);
-    const heartCounter = useRef(0);
+    const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+    const [pinnedProduct, setPinnedProduct] = useState<any | null>(null);
+    const [showProductSheet, setShowProductSheet] = useState(false);
+    const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState<any>(null);
+    const [selectedSize, setSelectedSize] = useState('');
+    const [selectedColor, setSelectedColor] = useState('');
+    const [address, setAddress] = useState('');
+    const [customerName, setCustomerName] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [purchaseNotification, setPurchaseNotification] = useState<{ user: string, product: string } | null>(null);
+    const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
+    const [giftCategory, setGiftCategory] = useState<'POPULAIRE' | 'SPÉCIAL' | 'LUXE'>('POPULAIRE');
+    const [userBalance, setUserBalance] = useState(0);
+
+
+    // Pinned Product Timer State
+    const [pinEndTime, setPinEndTime] = useState<number | null>(null);
+    const [pinTimeRemaining, setPinTimeRemaining] = useState(0);
+
+    useEffect(() => {
+        if (profileData) {
+            setCustomerName(prev => prev || profileData.fullName || '');
+            setPhoneNumber(prev => prev || profileData.phone || '');
+            setUserBalance(profileData.points || 0);
+
+            // For address, we might have multiple. Get the default or first one.
+            if (profileData.addresses && profileData.addresses.length > 0) {
+                const def = profileData.addresses.find((a: any) => a.isDefault) || profileData.addresses[0];
+                setAddress(prev => prev || def.text || '');
+            } else if (profileData.address) {
+                setAddress(prev => prev || profileData.address);
+            }
+        }
+    }, [profileData]);
+
+    const lastPurchaseTimeRef = useRef(0);
 
     const isInPKRef = useRef(false);
     const hostScoreRef = useRef(0);
     const guestScoreRef = useRef(0);
     const streamHostIdRef = useRef<string | null>(null);
+
+    // Initial load sync
+    useEffect(() => {
+        recentGiftRef.current = recentGift;
+    }, [recentGift]);
     const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
+    const heartCounter = useRef(0);
+
+    const handlePurchase = async () => {
+        if (!customerName.trim()) {
+            Alert.alert(t('error') || 'Error', t('nameRequired') || 'Please enter your full name');
+            return;
+        }
+        if (!phoneNumber.trim()) {
+            Alert.alert(t('error') || 'Error', t('phoneRequired') || 'Please enter your phone number');
+            return;
+        }
+        if (!address.trim()) {
+            Alert.alert(t('error') || 'Error', t('addressRequired') || 'Please enter a shipping address');
+            return;
+        }
+        if (!selectedProduct) return;
+        if (selectedProduct.colors && selectedProduct.colors.length > 0 && !selectedColor) {
+            Alert.alert(t('error') || 'Error', t('selectColor') || 'Please select a color');
+            return;
+        }
+        if (selectedProduct.sizes && selectedProduct.sizes.length > 0 && !selectedSize) {
+            Alert.alert(t('error') || 'Error', t('selectSize') || 'Please select a size');
+            return;
+        }
+
+        await LiveSessionService.broadcastPurchase(channelId, {
+            purchaserName: userName || 'Viewer',
+            productName: getLocalizedName(selectedProduct.name)
+        });
+
+        setShowPurchaseModal(false);
+        setAddress('');
+        setSelectedProduct(null);
+        Alert.alert('Success', 'Order Placed! 🎉');
+    };
+
+    // Sync Refs is handled below but let's keep the hook structure clean
+
+
 
     // ✅ Sync refs
     useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
@@ -111,16 +205,16 @@ export default function AudienceLiveScreen(props: Props) {
             setRecentGift(nextGift);
             setGiftQueue(prev => prev.slice(1));
 
-            // Trigger Video Sync
-            setShowGiftVideo(true);
-            // If already shown (view mounted), trigger animation manually
-            if (showGiftVideo) {
-                const gift = gifts.find(g => g.name === nextGift.giftName);
-                if (gift) {
+            // Trigger Video Sync if major gift
+            const gift = gifts.find(g => g.name === nextGift.giftName);
+            if (gift && gift.points >= 100) {
+                setShowGiftVideo(true);
+                // If already shown (view mounted), trigger animation manually
+                if (showGiftVideo) {
                     showGiftAnimation(gift.url);
-                } else {
-                    showGiftAnimation();
                 }
+            } else {
+                setShowGiftVideo(false);
             }
         }
     }, [giftQueue, recentGift, showGiftVideo]);
@@ -133,23 +227,34 @@ export default function AudienceLiveScreen(props: Props) {
         }
     }, [recentGift]);
 
-    const gifts = [
-        { id: '1', name: 'Rose', icon: '🌹', points: 1, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/1.mp4' },
-        { id: '2', name: 'Finger Heart', icon: '🫰', points: 5, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/2.mp4' },
-        { id: '3', name: 'Perfume', icon: '🧴', points: 99, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/3.mp4' },
-        { id: '4', name: 'Crown', icon: '👑', points: 299, url: 'https://storage.zego.im/sdk-doc/Pics/zegocloud/oss/4.mp4' },
-    ];
+    const gifts = GIFTS;
 
     const sendGift = (gift: any) => {
-        setShowGifts(false);
+        if (userBalance < gift.points) {
+            Alert.alert(t('error') || 'Erreur', t('insufficientBalance') || 'Solde insuffisant. Veuillez recharger.');
+            return;
+        }
 
-        // Show animation locally for the sender immediately via Queue
-        setGiftQueue(prev => [...prev, {
-            senderName: userName || 'You',
-            giftName: gift.name,
-            icon: gift.icon,
-            isHost: false // Audience is not host
-        }]);
+        // Deduct points locally
+        setUserBalance(prev => prev - gift.points);
+
+        // COMBO LOGIC: Local feedback
+        const current = recentGiftRef.current;
+        if (current && (current.senderId === userId || current.senderName === userName) && current.giftName === gift.name) {
+            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+            giftTimerRef.current = setTimeout(() => setRecentGift(null), 3000);
+        } else {
+            setGiftQueue(prev => [...prev, {
+                senderName: userName || 'You',
+                giftName: gift.name,
+                icon: gift.icon,
+                count: 1,
+                senderId: userId,
+                senderAvatar: userAvatar,
+                isHost: false
+            }]);
+        }
 
         // Optimistically update totalLikes with gift points
         setTotalLikes(prev => prev + (gift.points || 1));
@@ -157,29 +262,23 @@ export default function AudienceLiveScreen(props: Props) {
             setHostScore(prev => prev + (gift.points || 1));
         }
 
-        // 1. Send Command (for overlay logic on host side)
+        // Send Command via Signal (Zego)
         if (ZegoUIKit) {
-            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+            ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
                 type: 'gift',
+                senderId: userId,
+                senderAvatar: userAvatar,
+                userName: userName,
                 giftName: gift.name,
+                points: gift.points,
                 icon: gift.icon,
-                points: gift.points || 1, // New field
-                userName: userName
-            }), [], () => { });
-
-            // 2. Send Chat Message (so it appears in the chat list like a comment)
-            const chatMsg = `🎁 ${t ? t('sentA') || 'sent a' : 'sent a'} ${gift.name}! ${gift.icon}`;
-            ZegoUIKit.sendInRoomMessage(chatMsg);
+                timestamp: Date.now()
+            })).catch((e: any) => console.log('Gift Send Error:', e));
         }
 
-        // 3. Local Feedback via Console
-        console.log('Gift Sent:', gift.name);
-
-        // 4. Update Firestore for reliable Sync
+        // Sync with Firestore (Backup & Reliability)
         if (channelId) {
             LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
-
-            // 5. Broadcast Gift for Real-time Animation
             LiveSessionService.broadcastGift(channelId, {
                 giftName: gift.name,
                 icon: gift.icon,
@@ -188,6 +287,7 @@ export default function AudienceLiveScreen(props: Props) {
             }).catch(e => console.error('Gift Broadcast Error:', e));
         }
     };
+
 
     // Register user avatar & Handle Join/Leave Firestore
     useEffect(() => {
@@ -275,9 +375,53 @@ export default function AudienceLiveScreen(props: Props) {
                         senderName: session.lastGift!.senderName,
                         giftName: session.lastGift!.giftName,
                         icon: session.lastGift!.icon,
+                        count: 1,
                         isHost: false
                     }]);
                 }
+            }
+
+            // Sync Pinned Product
+            if (session.pinnedProduct) {
+                setPinEndTime(session.pinnedProduct.endTime || null);
+                if (!pinnedProduct || pinnedProduct.id !== session.pinnedProduct.productId) {
+                    getDoc(doc(db, 'products', session.pinnedProduct.productId)).then((snap: any) => {
+                        if (snap.exists()) setPinnedProduct({ id: snap.id, ...snap.data() });
+                    });
+                }
+            } else if (session.currentProductId) {
+                // Fallback for sessions using old structure
+                if (!pinnedProduct || pinnedProduct.id !== session.currentProductId) {
+                    getDoc(doc(db, 'products', session.currentProductId)).then((snap: any) => {
+                        if (snap.exists()) setPinnedProduct({ id: snap.id, ...snap.data() });
+                    });
+                }
+            } else {
+                setPinnedProduct(null);
+                setPinEndTime(null);
+            }
+
+            // Sync Featured Products
+            if (session.featuredProductIds && session.featuredProductIds.length > 0) {
+                if (featuredProducts.length !== session.featuredProductIds.length) {
+                    Promise.all(session.featuredProductIds.map((id: string) => getDoc(doc(db, 'products', id))))
+                        .then(snaps => {
+                            const list = snaps.map(s => ({ id: s.id, ...s.data() }) as any).filter((p: any) => p.name);
+                            setFeaturedProducts(list);
+                        });
+                }
+            } else {
+                setFeaturedProducts([]);
+            }
+
+            // Sync Purchase Animation
+            if (session.lastPurchase && session.lastPurchase.timestamp > lastPurchaseTimeRef.current) {
+                lastPurchaseTimeRef.current = session.lastPurchase.timestamp;
+                setPurchaseNotification({
+                    user: session.lastPurchase.purchaserName,
+                    product: getLocalizedName(session.lastPurchase.productName)
+                });
+                setTimeout(() => setPurchaseNotification(null), 5000);
             }
         });
 
@@ -316,13 +460,33 @@ export default function AudienceLiveScreen(props: Props) {
             setPkTimeRemaining(remaining);
 
             if (remaining === 0) {
-                // Timer ended - winner should be synced from Firestore
                 clearInterval(interval);
             }
         }, 1000);
 
         return () => clearInterval(interval);
     }, [isInPK, pkEndTime]);
+
+    // Pin Timer Countdown for Audience
+    useEffect(() => {
+        if (!pinEndTime) {
+            setPinTimeRemaining(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const remaining = Math.max(0, Math.floor((pinEndTime - now) / 1000));
+            setPinTimeRemaining(remaining);
+
+            if (remaining === 0) {
+                // No local unpin here, wait for Firestore sync from host
+                clearInterval(interval);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [pinEndTime]);
 
     // Gift Animation Logic (Official Zego Virtual Gift Engine)
     const showGiftAnimation = async (videoUrl?: string) => {
@@ -334,7 +498,7 @@ export default function AudienceLiveScreen(props: Props) {
                 mediaPlayerRef.current = await ZegoExpressEngine.instance().createMediaPlayer();
 
                 mediaPlayerRef.current.on('mediaPlayerStateUpdate', (player: any, state: any, errorCode: number) => {
-                    if (state === ZegoMediaPlayerState?.PlayEnded) {
+                    if (state === 3 || state === ZegoMediaPlayerState?.PlayEnded) { // 3 is PlayEnded in recent Zego SDKs
                         console.log('🎬 Gift video finished');
                         setShowGiftVideo(false);
                     }
@@ -438,13 +602,28 @@ export default function AudienceLiveScreen(props: Props) {
                     } else if (data.type === 'PK_BATTLE_STOP') {
                         setIsInPK(false);
                     } else if (data.type === 'gift') {
-                        setTotalLikes(prev => prev + (data.points || 1)); // ✅ Add gift points to Total Likes
-                        setGiftQueue(prev => [...prev, {
-                            senderName: data.userName || 'Viewer',
-                            giftName: data.giftName,
-                            icon: data.icon,
-                            isHost: (data.userName || '').includes('Host')
-                        }]);
+                        setTotalLikes(prev => prev + (data.points || 1));
+
+                        const current = recentGiftRef.current;
+                        const senderId = data.userId || msgData.senderUserID;
+                        const isHost = data.isHost === true;
+
+                        if (current && (current.senderId === senderId || current.senderName === (data.userName || 'Viewer')) && current.giftName === data.giftName) {
+                            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+                            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+                            giftTimerRef.current = setTimeout(() => setRecentGift(null), 3000);
+                        } else {
+                            const foundGift = gifts.find(g => g.name === data.giftName);
+                            setGiftQueue(prev => [...prev, {
+                                senderName: data.userName || 'Viewer',
+                                giftName: data.giftName,
+                                icon: foundGift ? foundGift.icon : data.icon,
+                                count: 1,
+                                senderId: senderId,
+                                senderAvatar: data.senderAvatar,
+                                isHost: isHost
+                            }]);
+                        }
                     } else if (data.type === 'coupon_drop') {
                         setActiveCoupon(data);
                         const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
@@ -911,21 +1090,22 @@ export default function AudienceLiveScreen(props: Props) {
                                 <View style={{
                                     flexDirection: 'row',
                                     alignItems: 'flex-start',
-                                    paddingVertical: 5,
-                                    paddingHorizontal: 12,
-                                    backgroundColor: isHostMsg ? 'rgba(239, 68, 68, 0.75)' : 'rgba(0,0,0,0.45)',
-                                    borderRadius: 15,
-                                    marginVertical: 2,
-                                    maxWidth: '85%',
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 14,
+                                    backgroundColor: isHostMsg ? 'rgba(239, 68, 68, 0.8)' : 'rgba(0,0,0,0.5)',
+                                    borderRadius: 18,
+                                    marginVertical: 4,
+                                    maxWidth: '90%',
                                     borderWidth: 1,
-                                    borderColor: isHostMsg ? 'rgba(255,255,255,0.3)' : 'transparent'
+                                    borderColor: isHostMsg ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)',
+                                    alignSelf: 'flex-start'
                                 }}>
                                     <View>
-                                        <Text style={{ fontSize: 13 }}>
-                                            <Text style={{ color: isHostMsg ? '#FFD700' : '#A5F3FC', fontWeight: '800' }}>
+                                        <Text style={{ fontSize: 13, lineHeight: 18 }}>
+                                            <Text style={{ color: isHostMsg ? '#FFD700' : '#A5F3FC', fontWeight: '900' }}>
                                                 {senderName}:
                                             </Text>
-                                            <Text style={{ color: '#fff', fontWeight: '600' }}> {message.message}</Text>
+                                            <Text style={{ color: '#fff', fontWeight: '500' }}> {message.message}</Text>
                                         </Text>
                                     </View>
                                 </View>
@@ -942,22 +1122,18 @@ export default function AudienceLiveScreen(props: Props) {
                         // Fallback: Check chat messages for gifts if command fails
                         messages.forEach((msg: any) => {
                             if (msg.message && msg.message.startsWith('🎁')) {
-                                const gifts = [
-                                    { id: 'rose', name: 'Rose', icon: '🌹', nameFr: 'Rose' },
-                                    { id: 'heart', name: 'Finger Heart', icon: '🫰', nameFr: 'Cœur' },
-                                    { id: 'perfume', name: 'Perfume', icon: '🧴', nameFr: 'Parfum' },
-                                    { id: 'crown', name: 'Crown', icon: '👑', nameFr: 'Couronne' },
-                                ];
+                                const gifts = GIFTS;
 
                                 // Ignore own chat messages in listener (already added to queue in sendGift)
                                 if (msg.sender?.userID === userId) return;
 
-                                const foundGift = gifts.find(g => msg.message.includes(g.name) || (g.nameFr && msg.message.includes(g.nameFr)));
+                                const foundGift = gifts.find(g => msg.message.includes(g.name));
                                 if (foundGift) {
                                     setGiftQueue(prev => [...prev, {
                                         senderName: msg.sender?.userName || 'User',
                                         giftName: foundGift.name,
                                         icon: foundGift.icon,
+                                        count: 1,
                                         isHost: msg.sender?.userName?.includes('Host')
                                     }]);
                                 }
@@ -977,12 +1153,334 @@ export default function AudienceLiveScreen(props: Props) {
                         collapsable={false}
                         style={{ width: '100%', height: '100%' }}
                         onLayout={() => {
-                            const gift = gifts.find(g => g.name === recentGift?.giftName);
+                            const gift = GIFTS.find(g => g.name === recentGift?.giftName);
                             showGiftAnimation(gift?.url);
                         }}
                     />
                 </View>
             )}
+
+            {/* 🛍️ PRODUCT OVERLAYS */}
+
+            {/* 1. Purchase Notification Banner */}
+            {purchaseNotification && (
+                <Animatable.View
+                    animation="slideInDown"
+                    duration={500}
+                    style={{
+                        position: 'absolute',
+                        top: 130, // Below score bar
+                        alignSelf: 'center',
+                        zIndex: 9999,
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 20,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: '#F59E0B'
+                    }}
+                >
+                    <Text style={{ color: '#fff', fontSize: 14 }}>
+                        🎉 <Text style={{ fontWeight: 'bold', color: '#F59E0B' }}>{purchaseNotification.user}</Text> bought <Text style={{ fontWeight: 'bold' }}>{purchaseNotification.product}</Text>
+                    </Text>
+                </Animatable.View>
+            )}
+
+            {/* 2. Pinned Product Card - Above Coupon */}
+            {pinnedProduct && (
+                <Animatable.View
+                    animation="fadeInLeft"
+                    duration={400}
+                    style={{
+                        position: 'absolute',
+                        bottom: 380, // Above coupon which is at 290
+                        left: 15,
+                        width: 240,
+                        zIndex: 3000
+                    }}
+                >
+                    <BlurView intensity={80} tint="dark" style={{
+                        borderRadius: 20,
+                        padding: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        overflow: 'hidden'
+                    }}>
+                        <Image
+                            source={{ uri: pinnedProduct.images?.[0] }}
+                            style={{ width: 54, height: 54, borderRadius: 12, backgroundColor: '#333' }}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                <LinearGradient
+                                    colors={['#EF4444', '#B91C1C']}
+                                    style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 6 }}
+                                >
+                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: 'bold' }}>{t('flashSale') || 'FLASH SALE'}</Text>
+                                </LinearGradient>
+                            </View>
+                            <Text numberOfLines={1} style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{getLocalizedName(pinnedProduct.name)}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>{pinnedProduct.price} TND</Text>
+                                {pinTimeRemaining > 0 && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Clock size={10} color="rgba(255,255,255,0.6)" style={{ marginRight: 4 }} />
+                                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 'bold' }}>
+                                            {Math.floor(pinTimeRemaining / 60)}:{(pinTimeRemaining % 60).toString().padStart(2, '0')}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setSelectedProduct(pinnedProduct);
+                                setShowPurchaseModal(true);
+                            }}
+                            style={{
+                                backgroundColor: '#F59E0B',
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                marginLeft: 8
+                            }}
+                        >
+                            <Text style={{ color: '#000', fontWeight: '900', fontSize: 11 }}>{t('buy') || 'BUY'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setPinnedProduct(null)}
+                            style={{
+                                position: 'absolute',
+                                top: 6,
+                                right: 6,
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                width: 18,
+                                height: 18,
+                                borderRadius: 9,
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            <X size={10} color="rgba(255,255,255,0.6)" />
+                        </TouchableOpacity>
+                    </BlurView>
+                </Animatable.View>
+            )}
+
+
+
+            {/* 4. Product Sheet Modal */}
+            <Modal
+                visible={showProductSheet}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowProductSheet(false)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                    activeOpacity={1}
+                    onPress={() => setShowProductSheet(false)}
+                >
+                    <View style={{ backgroundColor: '#1A1A24', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '60%', padding: 20 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Featured Products</Text>
+                            <TouchableOpacity onPress={() => setShowProductSheet(false)}>
+                                <X size={24} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView>
+                            {featuredProducts.length === 0 ? (
+                                <View style={{ alignItems: 'center', padding: 40 }}>
+                                    <ShoppingBag size={40} color="#444" />
+                                    <Text style={{ color: '#666', marginTop: 10 }}>No products featured yet.</Text>
+                                </View>
+                            ) : (
+                                featuredProducts.map(p => (
+                                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A2A35', borderRadius: 12, padding: 10, marginBottom: 10 }}>
+                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 70, height: 70, borderRadius: 8, backgroundColor: '#444' }} />
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
+                                            <Text style={{ color: '#ccc', fontSize: 13, marginTop: 4 }}>{p.price} TND</Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSelectedProduct(p);
+                                                setShowProductSheet(false);
+                                                setShowPurchaseModal(true);
+                                            }}
+                                            style={{
+                                                backgroundColor: '#3B82F6',
+                                                paddingHorizontal: 16,
+                                                paddingVertical: 8,
+                                                borderRadius: 8
+                                            }}
+                                        >
+                                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Buy</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))
+                            )}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* 5. Purchase Confirmation Modal */}
+            <Modal
+                visible={showPurchaseModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowPurchaseModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}
+                >
+                    <View style={{ backgroundColor: '#1A1A24', width: '90%', borderRadius: 20, padding: 20, maxWidth: 400 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Complete Purchase</Text>
+                            <TouchableOpacity onPress={() => setShowPurchaseModal(false)}>
+                                <X size={24} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {selectedProduct && (
+                            <View>
+                                <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+                                    <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#333' }} />
+                                    <View style={{ marginLeft: 15, flex: 1 }}>
+                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{getLocalizedName(selectedProduct.name)}</Text>
+                                        <Text style={{ color: '#F59E0B', fontSize: 16, fontWeight: 'bold', marginTop: 5 }}>{selectedProduct.price} TND</Text>
+                                    </View>
+                                </View>
+
+                                {/* Color Selector */}
+                                {selectedProduct.colors && selectedProduct.colors.length > 0 && (
+                                    <View style={{ marginBottom: 15 }}>
+                                        <Text style={{ color: '#888', marginBottom: 8, fontSize: 12, fontWeight: '600' }}>{t('color') || 'Color'}</Text>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                            {selectedProduct.colors.map((c: string) => {
+                                                const isHex = c.startsWith('#');
+                                                const isSelected = selectedColor === c;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={c}
+                                                        onPress={() => setSelectedColor(c)}
+                                                        style={{
+                                                            paddingHorizontal: 12,
+                                                            paddingVertical: 8,
+                                                            borderRadius: 8,
+                                                            backgroundColor: isSelected ? '#F59E0B' : '#2A2A35',
+                                                            borderWidth: 1.5,
+                                                            borderColor: isSelected ? '#fff' : '#444',
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            gap: 6
+                                                        }}
+                                                    >
+                                                        {isHex && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }} />}
+                                                        <Text style={{ color: isSelected ? '#000' : '#fff', fontWeight: 'bold', fontSize: 12 }}>{c.toUpperCase()}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* Size Selector */}
+                                {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                                    <View style={{ marginBottom: 15 }}>
+                                        <Text style={{ color: '#888', marginBottom: 8, fontSize: 12, fontWeight: '600' }}>{t('size') || 'Size'}</Text>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                            {selectedProduct.sizes.map((s: string) => {
+                                                const isSelected = selectedSize === s;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={s}
+                                                        onPress={() => setSelectedSize(s)}
+                                                        style={{
+                                                            width: 44,
+                                                            height: 44,
+                                                            borderRadius: 10,
+                                                            backgroundColor: isSelected ? '#F59E0B' : '#2A2A35',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderWidth: 1.5,
+                                                            borderColor: isSelected ? '#fff' : '#444'
+                                                        }}
+                                                    >
+                                                        <Text style={{ color: isSelected ? '#000' : '#fff', fontWeight: 'bold' }}>{s}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* Contact Info */}
+                                <View style={{ marginBottom: 12 }}>
+                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('fullName') || 'Full Name'}</Text>
+                                    <TextInput
+                                        placeholder={t('fullName') || 'Enter full name...'}
+                                        placeholderTextColor="#555"
+                                        value={customerName}
+                                        onChangeText={setCustomerName}
+                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14 }}
+                                    />
+                                </View>
+
+                                <View style={{ marginBottom: 12 }}>
+                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('contactNumber') || 'Phone Number'}</Text>
+                                    <TextInput
+                                        placeholder={t('contactNumber') || 'Enter phone number...'}
+                                        placeholderTextColor="#555"
+                                        value={phoneNumber}
+                                        onChangeText={setPhoneNumber}
+                                        keyboardType="phone-pad"
+                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14 }}
+                                    />
+                                </View>
+
+                                <View style={{ marginBottom: 20 }}>
+                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('shippingAddress') || 'Shipping Address'}</Text>
+                                    <TextInput
+                                        placeholder={t('deliveryAddress') || "Enter full address..."}
+                                        placeholderTextColor="#555"
+                                        value={address}
+                                        onChangeText={setAddress}
+                                        multiline
+                                        numberOfLines={2}
+                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14, minHeight: 60 }}
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={handlePurchase}
+                                    style={{
+                                        backgroundColor: '#EF4444',
+                                        paddingVertical: 14,
+                                        borderRadius: 12,
+                                        alignItems: 'center',
+                                        marginTop: 10,
+                                        shadowColor: '#EF4444',
+                                        shadowOffset: { width: 0, height: 4 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 8,
+                                        elevation: 5
+                                    }}
+                                >
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('confirmOrder') || 'CONFIRM ORDER'} • {selectedProduct.price} TND</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* TikTok Style Gift Modal */}
             <Modal
@@ -991,108 +1489,268 @@ export default function AudienceLiveScreen(props: Props) {
                 animationType="slide"
                 onRequestClose={() => setShowGifts(false)}
             >
-                <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-                    activeOpacity={1}
-                    onPress={() => setShowGifts(false)}
-                >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+                    <TouchableOpacity
+                        style={{ flex: 1 }}
+                        activeOpacity={1}
+                        onPress={() => setShowGifts(false)}
+                    />
                     <View style={{
                         backgroundColor: '#121218',
                         borderTopLeftRadius: 20,
                         borderTopRightRadius: 20,
-                        padding: 20,
-                        minHeight: 250
+                        height: Dimensions.get('window').height * 0.55,
+                        paddingBottom: Platform.OS === 'ios' ? 34 : 10
                     }}>
-                        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', marginBottom: 20, textAlign: 'center' }}>
-                            {t('sendAGift')}
-                        </Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {gifts.map(gift => (
+                        {/* Categories Bar */}
+                        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#222', paddingHorizontal: 10 }}>
+                            {['POPULAIRE', 'SPÉCIAL', 'LUXE'].map((cat: any) => (
                                 <TouchableOpacity
-                                    key={gift.id}
-                                    style={{ alignItems: 'center', marginRight: 25 }}
-                                    onPress={() => sendGift(gift)}
+                                    key={cat}
+                                    onPress={() => setGiftCategory(cat)}
+                                    style={{
+                                        paddingVertical: 15,
+                                        paddingHorizontal: 20,
+                                        borderBottomWidth: giftCategory === cat ? 2 : 0,
+                                        borderBottomColor: '#FF0066'
+                                    }}
                                 >
-                                    <View style={{
-                                        width: 70,
-                                        height: 70,
-                                        borderRadius: 35,
-                                        backgroundColor: '#1C1C26',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        marginBottom: 10,
-                                        borderWidth: 1,
-                                        borderColor: '#333'
+                                    <Text style={{
+                                        color: giftCategory === cat ? '#fff' : '#888',
+                                        fontWeight: 'bold',
+                                        fontSize: 13
                                     }}>
-                                        <Text style={{ fontSize: 32 }}>{gift.icon}</Text>
-                                    </View>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{gift.name}</Text>
-                                    <Text style={{ color: '#FF0066', fontSize: 10, fontWeight: '900' }}>{gift.points} 💎</Text>
+                                        {cat}
+                                    </Text>
                                 </TouchableOpacity>
                             ))}
-                        </ScrollView>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+                        </View>
 
-            {/* Audience Gift Alert Overlay (BIG & ANIMATED) */}
-            {recentGift && (
-                <Animatable.View
-                    animation="bounceIn"
-                    duration={800}
-                    style={{
-                        position: 'absolute',
-                        top: '40%',
-                        alignSelf: 'center',
-                        alignItems: 'center',
-                        zIndex: 2000,
-                    }}
-                >
-                    <Animatable.View
-                        animation="tada"
-                        iterationCount="infinite"
-                        duration={2000}
-                    >
-                        <Text style={{ fontSize: 120, textShadowColor: 'rgba(0, 0, 0, 0.5)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 10 }}>
-                            {recentGift.icon}
-                        </Text>
-                    </Animatable.View>
+                        {/* Gift Grid */}
+                        <FlatList
+                            key={giftCategory} // Force re-render when category changes for efficiency
+                            numColumns={4}
+                            data={gifts.filter(g => {
+                                if (giftCategory === 'POPULAIRE') return g.points < 100;
+                                if (giftCategory === 'SPÉCIAL') return g.points >= 100 && g.points < 500;
+                                if (giftCategory === 'LUXE') return g.points >= 500;
+                                return true;
+                            })}
+                            keyExtractor={(item: Gift) => item.id}
+                            contentContainerStyle={{ padding: 10 }}
+                            initialNumToRender={12}
+                            maxToRenderPerBatch={8}
+                            windowSize={3}
+                            renderItem={({ item: gift }: { item: Gift }) => {
+                                const isSelected = selectedGift?.id === gift.id;
+                                return (
+                                    <TouchableOpacity
+                                        onPress={() => setSelectedGift(gift)}
+                                        style={{
+                                            width: '25%',
+                                            aspectRatio: 0.85,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: 5,
+                                            marginVertical: 5,
+                                            borderRadius: 12,
+                                            backgroundColor: isSelected ? 'rgba(255, 0, 102, 0.15)' : 'transparent',
+                                            borderWidth: 1.5,
+                                            borderColor: isSelected ? '#FF0066' : 'transparent'
+                                        }}
+                                    >
+                                        <View style={{
+                                            width: 55,
+                                            height: 55,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginBottom: 6
+                                        }}>
+                                            {typeof gift.icon === 'number' ? (
+                                                <Image source={gift.icon} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                                            ) : typeof gift.icon === 'string' && gift.icon.startsWith('http') ? (
+                                                <Image source={{ uri: gift.icon }} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                                            ) : (
+                                                <Text style={{ fontSize: 24 }}>{gift.icon}</Text>
+                                            )}
+                                        </View>
+                                        <Text numberOfLines={1} style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{gift.name}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                            <Text style={{ color: isSelected ? '#fff' : '#FFD700', fontSize: 9, fontWeight: '900' }}>{gift.points}</Text>
+                                            <Text style={{ fontSize: 8, marginLeft: 2 }}>💎</Text>
+                                        </View>
 
-                    <Animatable.View
-                        animation="fadeInUp"
-                        delay={300}
-                        style={{
-                            backgroundColor: 'rgba(255, 0, 102, 0.95)',
-                            paddingHorizontal: 25,
-                            paddingVertical: 12,
-                            borderRadius: 30,
-                            marginTop: 20,
+                                        {isSelected && (
+                                            <Animatable.View
+                                                animation="bounceIn"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    width: 16,
+                                                    height: 16,
+                                                    borderRadius: 8,
+                                                    backgroundColor: '#FF0066',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                            >
+                                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>✓</Text>
+                                            </Animatable.View>
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+
+                        {/* Bottom Actions */}
+                        <BlurView intensity={90} tint="dark" style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 12,
-                            borderWidth: 2,
-                            borderColor: '#fff',
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 10 },
-                            shadowOpacity: 0.5,
-                            shadowRadius: 15,
-                            elevation: 10
-                        }}
-                    >
-                        <View style={{ alignItems: 'center' }}>
-                            <Text style={{ textAlign: 'center' }}>
-                                <Text style={{ color: recentGift.isHost ? '#FFD700' : '#fff', fontWeight: '900', fontSize: 18 }}>
-                                    {recentGift.senderName}
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 20,
+                            paddingVertical: 14,
+                            borderTopWidth: 1,
+                            borderTopColor: 'rgba(255,255,255,0.1)',
+                            backgroundColor: 'rgba(22, 22, 30, 0.7)'
+                        }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 15, flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{userBalance}</Text>
+                                    <Text style={{ fontSize: 12, marginLeft: 4 }}>💎</Text>
+                                    <TouchableOpacity style={{ marginLeft: 6 }}>
+                                        <PlusCircle size={16} color="#FF0066" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (selectedGift) {
+                                        sendGift(selectedGift);
+                                    }
+                                }}
+                                disabled={!selectedGift}
+                                style={{
+                                    backgroundColor: selectedGift ? '#FF0066' : 'rgba(255,255,255,0.1)',
+                                    paddingHorizontal: 28,
+                                    paddingVertical: 12,
+                                    borderRadius: 25,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    opacity: selectedGift ? 1 : 0.5,
+                                    shadowColor: '#FF0066',
+                                    shadowOpacity: selectedGift ? 0.4 : 0,
+                                    shadowRadius: 10,
+                                    shadowOffset: { width: 0, height: 4 }
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginRight: 8 }}>
+                                    {t('send') || 'ENVOYER'}
                                 </Text>
-                                {recentGift.targetName && (
-                                    <Text style={{ color: '#fff', fontSize: 16 }}> ➔ {recentGift.targetName}</Text>
-                                )}
+                                <Send size={18} color="#fff" />
+                            </TouchableOpacity>
+                        </BlurView>
+                    </View>
+                </View>
+            </Modal>
+
+
+            {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
+            {recentGift && (
+                <Animatable.View
+                    animation="slideInLeft"
+                    duration={400}
+                    style={{
+                        position: 'absolute',
+                        top: 200,
+                        left: 10,
+                        zIndex: 10000,
+                    }}
+                >
+                    <BlurView intensity={80} tint="dark" style={{
+                        borderRadius: 30,
+                        padding: 4,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        minWidth: 180,
+                    }}>
+                        {/* Avatar Circle */}
+                        <View style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#FF0066',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: '#fff',
+                            overflow: 'hidden'
+                        }}>
+                            {recentGift.senderAvatar ? (
+                                <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
+                            ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
+                                <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
+                            ) : (
+                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
+                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
+                                </Text>
+                            )}
+                        </View>
+
+                        <View style={{ marginLeft: 10, marginRight: 15 }}>
+                            <Text style={{ color: recentGift.isHost ? '#FFD700' : '#fff', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
+                                {recentGift.senderName}
                             </Text>
-                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700', textAlign: 'center', opacity: 0.9 }}>
-                                {t ? t('sentA') || 'sent a' : 'sent a'} {recentGift.giftName}!
+                            <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '700' }}>
+                                {t('sentA')} {recentGift.giftName}
                             </Text>
                         </View>
-                    </Animatable.View>
+
+                        {/* Gift Icon floating next to it */}
+                        <Animatable.View
+                            key={recentGift.count}
+                            animation="bounceIn"
+                            style={{ position: 'absolute', right: -45 }}
+                        >
+                            <Image
+                                source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                style={{ width: 50, height: 50 }}
+                                resizeMode="contain"
+                            />
+                        </Animatable.View>
+                    </BlurView>
+                </Animatable.View>
+            )}
+
+            {/* Combo Counter */}
+            {recentGift && recentGift.count > 1 && (
+                <Animatable.View
+                    key={`combo-${recentGift.count}`}
+                    animation="bounceIn"
+                    duration={300}
+                    style={{
+                        position: 'absolute',
+                        top: 200,
+                        left: 190,
+                        zIndex: 10001
+                    }}
+                >
+                    <Text
+                        style={{
+                            color: '#FBBF24',
+                            fontSize: 32,
+                            fontWeight: '900',
+                            fontStyle: 'italic',
+                            textShadowColor: 'rgba(0,0,0,0.8)',
+                            textShadowRadius: 4,
+                            textShadowOffset: { width: 2, height: 2 }
+                        }}
+                    >
+                        x{recentGift.count}
+                    </Text>
                 </Animatable.View>
             )}
 
@@ -1107,23 +1765,19 @@ export default function AudienceLiveScreen(props: Props) {
 
                 {/* Share Button */}
                 <TouchableOpacity
-                    onPress={() => Alert.alert("Share", "Sharing live stream...")}
+                    onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                     style={{
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderWidth: 1.5,
-                        borderColor: 'rgba(255,255,255,0.7)',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 5,
-                        elevation: 8
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)'
                     }}
                 >
+                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                     <Share2 size={20} color="#fff" />
                 </TouchableOpacity>
 
@@ -1131,22 +1785,21 @@ export default function AudienceLiveScreen(props: Props) {
                     onPress={handleSendLike}
                     activeOpacity={0.7}
                     style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: 25,
-                        backgroundColor: 'rgba(255,0,102,0.85)',
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: 'rgba(255,0,102,0.6)',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderWidth: 2,
+                        borderWidth: 1,
                         borderColor: '#fff',
                         shadowColor: '#FF0066',
-                        shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.4,
+                        shadowOpacity: 0.5,
                         shadowRadius: 10,
                         elevation: 10
                     }}
                 >
-                    <Heart size={24} color="#fff" fill="#fff" />
+                    <Heart size={20} color="#fff" fill="#fff" />
                 </TouchableOpacity>
 
                 {/* PINK GIFT BUTTON */}
@@ -1154,23 +1807,49 @@ export default function AudienceLiveScreen(props: Props) {
                     onPress={() => setShowGifts(true)}
                     activeOpacity={0.7}
                     style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: 25,
-                        backgroundColor: '#FFD700',
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: '#FF0066',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        shadowColor: '#FFD700',
-                        shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.4,
+                        borderWidth: 1.5,
+                        borderColor: '#fff',
+                        shadowColor: '#FE2C55',
+                        shadowOpacity: 0.5,
                         shadowRadius: 10,
-                        elevation: 10,
-                        borderWidth: 2,
-                        borderColor: '#fff'
+                        elevation: 10
                     }}
                 >
-                    <Gift size={24} color="#000" strokeWidth={2.5} />
+                    <GiftIcon size={20} color="#fff" strokeWidth={2.5} />
                 </TouchableOpacity>
+
+                {/* AMBER SHOPPING BAG BUTTON */}
+                {featuredProducts.length > 0 && (
+                    <TouchableOpacity
+                        onPress={() => setShowProductSheet(true)}
+                        activeOpacity={0.7}
+                        style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: '#F59E0B',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1.5,
+                            borderColor: '#fff',
+                            shadowColor: '#F59E0B',
+                            shadowOpacity: 0.5,
+                            shadowRadius: 10,
+                            elevation: 10
+                        }}
+                    >
+                        <ShoppingBag size={20} color="#fff" />
+                        <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{featuredProducts.length}</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* LIVE COUPON OVERLAY - Horizontal Ticket Style */}
@@ -1179,7 +1858,7 @@ export default function AudienceLiveScreen(props: Props) {
                     animation="bounceInLeft"
                     style={{
                         position: 'absolute',
-                        bottom: 290, // Positioned above comments (approx)
+                        bottom: 290,
                         left: 15,
                         width: 200,
                         zIndex: 3000
@@ -1189,7 +1868,7 @@ export default function AudienceLiveScreen(props: Props) {
                         colors={['#F59E0B', '#B45309']}
                         style={{
                             borderRadius: 10,
-                            padding: 1, // Border effect
+                            padding: 1,
                         }}
                     >
                         <View style={{
@@ -1200,13 +1879,11 @@ export default function AudienceLiveScreen(props: Props) {
                             overflow: 'hidden',
                             position: 'relative'
                         }}>
-                            {/* Coupon Notches */}
                             <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
                             <View style={{ position: 'absolute', bottom: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
 
-                            {/* Left Side: Info */}
                             <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer').toUpperCase()}</Text>
+                                <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer')?.toUpperCase() || 'OFFRE LIMITÉE'}</Text>
                                 <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
 
                                 {couponTimeRemaining > 0 && (
@@ -1219,10 +1896,8 @@ export default function AudienceLiveScreen(props: Props) {
                                 )}
                             </View>
 
-                            {/* Vertical Dashed Divider */}
                             <View style={{ width: 1, height: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', left: '50%', position: 'absolute' }} />
 
-                            {/* Right Side: Action */}
                             <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
                                 <View style={{
                                     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1243,9 +1918,9 @@ export default function AudienceLiveScreen(props: Props) {
                                     onPress={() => {
                                         if (Clipboard) {
                                             Clipboard.setString(activeCoupon.code);
-                                            Alert.alert(t('success'), t('couponCopied'));
+                                            Alert.alert(t('success') || 'Succès', t('couponCopied') || 'Coupon copié');
                                         } else {
-                                            Alert.alert(t('couponCode'), activeCoupon.code);
+                                            Alert.alert(t('couponCode') || 'Code Coupon', activeCoupon.code);
                                         }
                                     }}
                                     activeOpacity={0.8}
@@ -1255,12 +1930,11 @@ export default function AudienceLiveScreen(props: Props) {
                                         colors={['#F59E0B', '#D97706']}
                                         style={{ paddingVertical: 4, alignItems: 'center' }}
                                     >
-                                        <Text style={{ color: '#000', fontWeight: '900', fontSize: 8 }}>{t('claimCoupon').toUpperCase()}</Text>
+                                        <Text style={{ color: '#000', fontWeight: '900', fontSize: 8 }}>{t('claimCoupon')?.toUpperCase() || 'RÉCUPÉRER'}</Text>
                                     </LinearGradient>
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Close Button overlay */}
                             <TouchableOpacity
                                 onPress={() => setActiveCoupon(null)}
                                 style={{ position: 'absolute', top: 4, right: 4 }}
