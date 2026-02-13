@@ -101,6 +101,7 @@ export default function AudienceLiveScreen(props: Props) {
     const [activeCoupon, setActiveCoupon] = useState<any>(null);
     const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
     const couponTimerRef = useRef<any>(null);
+    const videoTimerRef = useRef<any>(null);
     const [likeCount, setLikeCount] = useState(0);
     const [totalLikes, setTotalLikes] = useState(0);
     const [floatingHearts, setFloatingHearts] = useState<{ id: number, x: number }[]>([]);
@@ -255,20 +256,22 @@ export default function AudienceLiveScreen(props: Props) {
             if (nextGift.isBig) {
                 const gift = GIFTS.find(g => g.name === nextGift.giftName);
                 if (gift?.url) showGiftAnimation(gift.url);
+
                 // Progress after animation duration
-                setTimeout(() => {
+                if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+                giftTimerRef.current = setTimeout(() => {
                     setRecentGift(null);
                     recentGiftRef.current = null;
-                }, 4500); // Increased duration for big animations to play fully
+                }, 4500); // Wait for big animation to finish
+            } else {
+                // Regular gift clear timer
+                if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+                giftTimerRef.current = setTimeout(() => {
+                    setRecentGift(null);
+                    recentGiftRef.current = null;
+                }, 3000);
             }
         }
-
-        // Start clear timer
-        if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-        giftTimerRef.current = setTimeout(() => {
-            setRecentGift(null);
-        }, 3000);
-
     }, [recentGift, giftQueue]);
 
     const gifts = GIFTS;
@@ -276,11 +279,19 @@ export default function AudienceLiveScreen(props: Props) {
     // Helper to check if a gift matches for combo
     const isSameGift = (g1: any, g2Id: string, g2Name: string, g2GiftName: string) => {
         if (!g1) return false;
-        if (g1.giftName !== g2GiftName) return false;
-        const id1 = g1.senderId?.toLowerCase();
-        const id2 = g2Id?.toLowerCase();
+        // Robust gift name check
+        if (String(g1.giftName || '').toLowerCase().trim() !== String(g2GiftName || '').toLowerCase().trim()) return false;
+
+        // Robust ID check
+        const id1 = String(g1.senderId || '').toLowerCase().trim();
+        const id2 = String(g2Id || '').toLowerCase().trim();
         if (id1 && id2 && id1 === id2) return true;
-        if (g1.senderName === g2Name) return true;
+
+        // Robust Name fallback
+        const n1 = String(g1.senderName || '').toLowerCase().trim();
+        const n2 = String(g2Name || '').toLowerCase().trim();
+        if (n1 && n2 && n1 === n2) return true;
+
         return false;
     };
 
@@ -289,9 +300,13 @@ export default function AudienceLiveScreen(props: Props) {
         const current = recentGiftRef.current;
         const finalAvatar = userAvatar || profileData?.avatar || CustomBuilder.getUserAvatar(userId);
 
+        const foundGift = GIFTS.find(g => g.name === gift.name);
+        const isBig = (foundGift?.points || 0) >= 500 || (gift.points || 0) >= 500;
+
         if (isSameGift(current, userId, userName, gift.name)) {
             setRecentGift(prev => {
-                const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                const base = prev || current;
+                const updated = base ? { ...base, count: base.count + 1 } : null;
                 recentGiftRef.current = updated;
                 return updated;
             });
@@ -299,11 +314,20 @@ export default function AudienceLiveScreen(props: Props) {
             giftTimerRef.current = setTimeout(() => {
                 setRecentGift(null);
                 recentGiftRef.current = null;
-            }, 3000);
+            }, isBig ? 4500 : 3000);
+
+            // If it's a big gift, ensure the overlay stays up
+            if (isBig) {
+                setShowGiftVideo(true);
+                if (videoTimerRef.current) clearTimeout(videoTimerRef.current);
+                videoTimerRef.current = setTimeout(() => {
+                    setShowGiftVideo(false);
+                }, 4500);
+            }
         } else {
             setGiftQueue(prev => {
                 const last = prev[prev.length - 1];
-                if (last && (last.senderId === userId || last.senderName === userName) && last.giftName === gift.name) {
+                if (isSameGift(last, userId, userName, gift.name)) {
                     return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
                 }
                 return [...prev, {
@@ -346,7 +370,8 @@ export default function AudienceLiveScreen(props: Props) {
                 giftName: gift.name,
                 icon: gift.icon,
                 points: gift.points || 1,
-                senderName: userName || 'Viewer'
+                senderName: userName || 'Viewer',
+                senderId: userId
             }).catch(e => console.error('Gift Broadcast Error:', e));
         }
     };
@@ -433,13 +458,18 @@ export default function AudienceLiveScreen(props: Props) {
             // Sync Gift Animations
             if (session.lastGift && session.lastGift.timestamp > lastGiftTimestampRef.current) {
                 lastGiftTimestampRef.current = session.lastGift.timestamp;
-                if (session.lastGift.senderName !== userName) {
+                const isOwnGift = session.lastGift.senderName === userName || session.lastGift.senderId === userId;
+                const isAlreadyRecent = isSameGift(recentGiftRef.current, session.lastGift.senderId, session.lastGift.senderName, session.lastGift.giftName);
+
+                if (!isOwnGift && !isAlreadyRecent) {
                     setGiftQueue(prev => [...prev, {
                         senderName: session.lastGift!.senderName,
                         giftName: session.lastGift!.giftName,
                         icon: session.lastGift!.icon,
                         count: 1,
-                        isHost: false
+                        senderId: session.lastGift!.senderId,
+                        isHost: false,
+                        isBig: (session.lastGift!.points || 0) >= 500 // ✅ Set isBig from Firestore sync
                     }]);
                 }
             }
@@ -559,8 +589,8 @@ export default function AudienceLiveScreen(props: Props) {
             setShowGiftVideo(true); // Mount the full-screen overlay
 
             // Auto-hide the animation after 4.5 seconds
-            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-            setTimeout(() => {
+            if (videoTimerRef.current) clearTimeout(videoTimerRef.current);
+            videoTimerRef.current = setTimeout(() => {
                 setShowGiftVideo(false);
             }, 4500);
 
@@ -641,11 +671,15 @@ export default function AudienceLiveScreen(props: Props) {
                         const senderName = data.userName || 'Viewer';
                         const giftNameStr = String(data.giftName || '');
 
+                        const foundGift = GIFTS.find(g => g.name.toLowerCase() === giftNameStr.toLowerCase());
+                        const isBig = (foundGift && (foundGift.points || 0) >= 500) || (Number(data.points || 0) >= 500);
+
                         // COMBO LOGIC
                         const current = recentGiftRef.current;
                         if (isSameGift(current, senderId, senderName, giftNameStr)) {
                             setRecentGift(prev => {
-                                const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                                const base = prev || current;
+                                const updated = base ? { ...base, count: (base.count || 0) + 1 } : null;
                                 recentGiftRef.current = updated;
                                 return updated;
                             });
@@ -653,14 +687,20 @@ export default function AudienceLiveScreen(props: Props) {
                             giftTimerRef.current = setTimeout(() => {
                                 setRecentGift(null);
                                 recentGiftRef.current = null;
-                            }, 3000);
-                        } else {
-                            const foundGift = GIFTS.find(g => g.name.toLowerCase() === giftNameStr.toLowerCase());
-                            const isBig = (foundGift && (foundGift.points || 0) >= 500) || (Number(data.points || 0) >= 500);
+                            }, isBig ? 4500 : 3000);
 
+                            // If it's a big gift combo, ensure the overlay stays up
+                            if (isBig) {
+                                setShowGiftVideo(true);
+                                if (videoTimerRef.current) clearTimeout(videoTimerRef.current);
+                                videoTimerRef.current = setTimeout(() => {
+                                    setShowGiftVideo(false);
+                                }, 4500);
+                            }
+                        } else {
                             setGiftQueue(prev => {
                                 const last = prev[prev.length - 1];
-                                if (last && (last.senderId?.toLowerCase() === senderId?.toLowerCase() || last.senderName === senderName) && last.giftName === giftNameStr) {
+                                if (isSameGift(last, senderId, senderName, giftNameStr)) {
                                     return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
                                 }
                                 return [...prev.slice(-10), {
@@ -1243,21 +1283,99 @@ export default function AudienceLiveScreen(props: Props) {
                     <View style={{ alignItems: 'center' }}>
                         {(() => {
                             const gift = GIFTS.find(g => g.name === recentGift?.giftName);
-                            // Animated WebP (TikTok Style) or Generic Icon
-                            const isBig = (gift?.points || 0) >= 500;
+                            // Reliability: Use isBig from state if available, fallback to point check
+                            const isBig = recentGift?.isBig || (gift?.points || 0) >= 500;
                             const source = gift?.url ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
 
                             if (source) {
+                                if (isBig) {
+                                    return (
+                                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                                            {/* Spotlight effect */}
+                                            <Animatable.View
+                                                animation="fadeIn"
+                                                duration={500}
+                                                style={{
+                                                    position: 'absolute',
+                                                    width: 600,
+                                                    height: 600,
+                                                    borderRadius: 300,
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <LinearGradient
+                                                    colors={['rgba(60, 30, 0, 0.4)', 'rgba(60, 30, 0, 0.2)', 'rgba(251, 191, 36, 0.05)', 'transparent']}
+                                                    style={{ flex: 1 }}
+                                                />
+                                            </Animatable.View>
+
+                                            <Animatable.View
+                                                animation="bounceIn"
+                                                duration={1000}
+                                                style={{ alignItems: 'center' }}
+                                            >
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                                                    <Text style={{
+                                                        color: '#fff',
+                                                        fontSize: 38,
+                                                        fontWeight: '900',
+                                                        textShadowColor: 'rgba(0,0,0,0.9)',
+                                                        textShadowRadius: 10,
+                                                        textShadowOffset: { width: 0, height: 2 }
+                                                    }}>
+                                                        {recentGift?.senderName}
+                                                    </Text>
+                                                    {recentGift && (
+                                                        <Animatable.Text
+                                                            key={`big-combo-${recentGift.count}`}
+                                                            animation="bounceIn"
+                                                            duration={400}
+                                                            style={{
+                                                                color: '#FBBF24',
+                                                                fontSize: 58,
+                                                                fontWeight: '900',
+                                                                fontStyle: 'italic',
+                                                                marginLeft: 15,
+                                                                textShadowColor: '#000',
+                                                                textShadowOffset: { width: 4, height: 4 },
+                                                                textShadowRadius: 2
+                                                            }}
+                                                        >
+                                                            x{recentGift.count}
+                                                        </Animatable.Text>
+                                                    )}
+                                                </View>
+
+                                                <Animatable.View
+                                                    animation="pulse"
+                                                    iterationCount="infinite"
+                                                    duration={2000}
+                                                    direction="alternate"
+                                                >
+                                                    <Image
+                                                        source={source}
+                                                        style={{
+                                                            width: 220,
+                                                            height: 220,
+                                                            maxWidth: 500,
+                                                            maxHeight: 500
+                                                        }}
+                                                        resizeMode="contain"
+                                                    />
+                                                </Animatable.View>
+                                            </Animatable.View>
+                                        </View>
+                                    );
+                                }
+
                                 return (
                                     <Animatable.Image
-                                        animation={isBig ? "zoomIn" : "tada"} // Cool animation
+                                        animation="tada"
                                         duration={1000}
                                         source={source}
                                         style={{
-                                            width: isBig ? '85%' : 200,
-                                            height: isBig ? '85%' : 200,
-                                            maxWidth: 500,
-                                            maxHeight: 500
+                                            width: 220,
+                                            height: 220,
                                         }}
                                         resizeMode="contain"
                                     />
@@ -1267,65 +1385,7 @@ export default function AudienceLiveScreen(props: Props) {
                         })()}
 
                         {/* Sender Avatar + Combo Count - Always show below gift for big gifts */}
-                        {recentGift && showGiftVideo && (
-                            <Animatable.View
-                                key={`combo-${recentGift.giftName}-${recentGift.count}`}
-                                animation="bounceIn"
-                                duration={400}
-                                style={{
-                                    marginTop: 20,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transform: [{ rotate: '-6deg' }]
-                                }}
-                            >
-                                <BlurView intensity={100} tint="dark" style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    paddingVertical: 8,
-                                    paddingHorizontal: 16,
-                                    borderRadius: 40,
-                                    borderWidth: 2,
-                                    borderColor: '#FBBF24',
-                                    backgroundColor: 'rgba(0,0,0,0.5)',
-                                    shadowColor: '#FBBF24',
-                                    shadowOffset: { width: 0, height: 0 },
-                                    shadowOpacity: 0.8,
-                                    shadowRadius: 15,
-                                }}>
-                                    <View style={{
-                                        width: 44,
-                                        height: 44,
-                                        borderRadius: 22,
-                                        borderWidth: 2,
-                                        borderColor: '#fff',
-                                        overflow: 'hidden',
-                                        marginRight: 10,
-                                        backgroundColor: '#333'
-                                    }}>
-                                        <Image
-                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                            style={{ width: '80%', height: '80%' }}
-                                            resizeMode="contain"
-                                        />
-                                    </View>
-                                    <Text
-                                        style={{
-                                            color: '#FBBF24',
-                                            fontSize: 38,
-                                            fontWeight: '900',
-                                            fontStyle: 'italic',
-                                            textShadowColor: 'rgba(0,0,0,0.8)',
-                                            textShadowRadius: 10,
-                                            textShadowOffset: { width: 2, height: 2 },
-                                            letterSpacing: 1
-                                        }}
-                                    >
-                                        x{recentGift.count}
-                                    </Text>
-                                </BlurView>
-                            </Animatable.View>
-                        )}
+
                     </View>
                 </View>
             )}
@@ -1827,7 +1887,7 @@ export default function AudienceLiveScreen(props: Props) {
 
 
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
-            {recentGift && (
+            {recentGift && !recentGift.isBig && (
                 <View style={{
                     position: 'absolute',
                     top: 180, // Moved up slightly to avoid overlapping
