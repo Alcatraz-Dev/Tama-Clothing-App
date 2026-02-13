@@ -2680,9 +2680,13 @@ export default function HostLiveScreen(props: Props) {
                                 shadowRadius: 3
                             }}>
                                 <Image
-                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                    style={{ width: '80%', height: '80%' }}
-                                    resizeMode="contain"
+                                    source={
+                                        recentGift.senderAvatar
+                                            ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
+                                            : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                    }
+                                    style={{ width: '100%', height: '100%' }}
+                                    resizeMode="cover"
                                 />
                             </View>
 

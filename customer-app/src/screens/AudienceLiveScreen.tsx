@@ -371,7 +371,9 @@ export default function AudienceLiveScreen(props: Props) {
                 icon: gift.icon,
                 points: gift.points || 1,
                 senderName: userName || 'Viewer',
-                senderId: userId
+                senderId: userId,
+                senderAvatar: finalAvatar, // ✅ Include avatar for Host display
+                targetName: 'Host' // Target is always Host in audience view
             }).catch(e => console.error('Gift Broadcast Error:', e));
         }
     };
@@ -461,16 +463,42 @@ export default function AudienceLiveScreen(props: Props) {
                 const isOwnGift = session.lastGift.senderName === userName || session.lastGift.senderId === userId;
                 const isAlreadyRecent = isSameGift(recentGiftRef.current, session.lastGift.senderId, session.lastGift.senderName, session.lastGift.giftName);
 
-                if (!isOwnGift && !isAlreadyRecent) {
-                    setGiftQueue(prev => [...prev, {
-                        senderName: session.lastGift!.senderName,
-                        giftName: session.lastGift!.giftName,
-                        icon: session.lastGift!.icon,
-                        count: 1,
-                        senderId: session.lastGift!.senderId,
-                        isHost: false,
-                        isBig: (session.lastGift!.points || 0) >= 500 // ✅ Set isBig from Firestore sync
-                    }]);
+                if (!isOwnGift) {
+                    if (isAlreadyRecent) {
+                        setRecentGift(prev => {
+                            const updated = prev ? { ...prev, count: (prev.count || 0) + 1 } : null;
+                            recentGiftRef.current = updated;
+                            return updated;
+                        });
+
+                        if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+                        const isBig = (session.lastGift!.points || 0) >= 500;
+                        giftTimerRef.current = setTimeout(() => {
+                            setRecentGift(null);
+                            recentGiftRef.current = null;
+                        }, isBig ? 4500 : 3000);
+                    } else {
+                        setGiftQueue(prev => {
+                            // Check if matches tail of queue for aggregation
+                            const last = prev[prev.length - 1];
+                            if (last && isSameGift(last, session.lastGift?.senderId || '', session.lastGift?.senderName || '', session.lastGift?.giftName || '')) {
+                                const updatedLast = { ...last, count: (last.count || 0) + 1 };
+                                return [...prev.slice(0, -1), updatedLast];
+                            }
+
+                            return [...prev, {
+                                senderName: session.lastGift!.senderName,
+                                giftName: session.lastGift!.giftName,
+                                icon: session.lastGift!.icon,
+                                count: 1,
+                                senderId: session.lastGift!.senderId,
+                                senderAvatar: session.lastGift!.senderAvatar,
+                                targetName: session.lastGift!.targetName,
+                                isHost: false,
+                                isBig: (session.lastGift!.points || 0) >= 500
+                            }];
+                        });
+                    }
                 }
             }
 
@@ -1933,9 +1961,13 @@ export default function AudienceLiveScreen(props: Props) {
                                 shadowRadius: 3
                             }}>
                                 <Image
-                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                    style={{ width: '80%', height: '80%' }}
-                                    resizeMode="contain"
+                                    source={
+                                        recentGift.senderAvatar
+                                            ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
+                                            : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                    }
+                                    style={{ width: '100%', height: '100%' }}
+                                    resizeMode="cover"
                                 />
                             </View>
 
