@@ -75,6 +75,16 @@ export interface LiveSession {
         senderName: string;
         timestamp: number;
     };
+    featuredProductIds?: string[]; // IDs of products selected by host for this stream
+    lastPurchase?: { // Real-time purchase animation sync
+        purchaserName: string;
+        productName: string;
+        timestamp: number;
+    };
+    pinnedProduct?: {
+        productId: string;
+        endTime?: number; // Timestamp when pin expires
+    };
 }
 
 export interface LiveEvent {
@@ -85,12 +95,37 @@ export interface LiveEvent {
     userAvatar?: string;
     content?: string; // For comments
     timestamp: any;
+    purchaseDetails?: {
+        productName: string;
+        price: number;
+        currency: string;
+    };
 }
 
 const SESSIONS_COLLECTION = 'Live_sessions';
 const EVENTS_SUBCOLLECTION = 'Live_events';
 
 export const LiveSessionService = {
+    // ... (existing methods startSession, endSession, etc.) ...
+    
+    // Update the list of featured products for the session
+    updateFeaturedProducts: async (channelId: string, productIds: string[]) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await updateDoc(sessionRef, {
+            featuredProductIds: productIds
+        });
+    },
+
+    // Broadcast a purchase event for animation
+    broadcastPurchase: async (channelId: string, purchase: { purchaserName: string; productName: string }) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await updateDoc(sessionRef, {
+            lastPurchase: {
+                ...purchase,
+                timestamp: Date.now()
+            }
+        });
+    },
     // Create or start a session (Broadcaster)
     startSession: async (channelId: string, hostName: string, brandId?: string, hostAvatar?: string, hostUserId?: string, collaboratorIds?: string[]) => {
         // 1. Cleanup old sessions for this host
@@ -199,7 +234,7 @@ export const LiveSessionService = {
     },
 
     // Admin: Pin a product and track it in timeline
-    pinProduct: async (channelId: string, productId: string) => {
+    pinProduct: async (channelId: string, productId: string, duration?: number) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         const sessionSnap = await getDoc(sessionRef);
         
@@ -211,7 +246,11 @@ export const LiveSessionService = {
 
             await updateDoc(sessionRef, {
                 currentProductId: productId,
-                pinnedTimeline: [...(data.pinnedTimeline || []), { productId, timestamp: offset }]
+                pinnedTimeline: [...(data.pinnedTimeline || []), { productId, timestamp: offset }],
+                pinnedProduct: {
+                    productId,
+                    endTime: duration ? Date.now() + (duration * 60 * 1000) : null
+                }
             });
         }
     },
@@ -220,7 +259,8 @@ export const LiveSessionService = {
     unpinProduct: async (channelId: string) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
-            currentProductId: null
+            currentProductId: null,
+            pinnedProduct: null
         });
     },
 

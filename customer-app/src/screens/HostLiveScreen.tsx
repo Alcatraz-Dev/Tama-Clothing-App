@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing, AppState, KeyboardAvoidingView, Dimensions, Clipboard, FlatList } from 'react-native';
+import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing, AppState, KeyboardAvoidingView, Dimensions, Clipboard, FlatList, Share } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gift as GiftIcon, Swords, Sparkles, MoreHorizontal, X, Share2, Flame, Radio, Ticket, Clock, ShoppingBag, PlusCircle, Send } from 'lucide-react-native';
@@ -94,8 +94,8 @@ export default function HostLiveScreen(props: Props) {
     const [blockedApplying, setBlockedApplying] = useState<string[]>([]);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
     // Gift Queue System
-    const [giftQueue, setGiftQueue] = React.useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string }[]>([]);
-    const [recentGift, setRecentGift] = React.useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string } | null>(null);
+    const [giftQueue, setGiftQueue] = React.useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean }[]>([]);
+    const [recentGift, setRecentGift] = React.useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean } | null>(null);
     const recentGiftRef = useRef<any>(null);
     const giftTimerRef = useRef<any>(null);
     const [showGifts, setShowGifts] = useState(false);
@@ -582,37 +582,54 @@ export default function HostLiveScreen(props: Props) {
         }
     }, [activeCoupon]);
 
-    const sendGift = (gift: any) => {
-        if (userBalance < gift.points) {
-            Alert.alert(t('error') || 'Erreur', t('insufficientBalance') || 'Solde insuffisant');
-            return;
-        }
+    // Helper to check if a gift matches for combo
+    const isSameGift = (g1: any, g2Id: string, g2Name: string, g2GiftName: string) => {
+        if (!g1) return false;
+        if (g1.giftName !== g2GiftName) return false;
+        const id1 = g1.senderId?.toLowerCase();
+        const id2 = g2Id?.toLowerCase();
+        if (id1 && id2 && id1 === id2) return true;
+        if (g1.senderName === g2Name) return true;
+        return false;
+    };
 
+    const sendGift = (gift: any) => {
         const targetName = selectedTargetUser?.userName || 'the Room';
         const targetUserId = selectedTargetUser?.userID || '';
 
-        // Deduct points locally
-        setUserBalance(prev => prev - gift.points);
-
         // COMBO LOGIC: Local feedback
         const current = recentGiftRef.current;
-        if (current && current.senderName === (userName || 'Host') && current.giftName === gift.name) {
-            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+        const finalAvatar = hostAvatar || CustomBuilder.getUserAvatar(userId);
+
+        if (isSameGift(current, userId, userName || 'Host', gift.name)) {
+            setRecentGift(prev => {
+                const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                recentGiftRef.current = updated;
+                return updated;
+            });
             if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
             giftTimerRef.current = setTimeout(() => {
                 setRecentGift(null);
+                recentGiftRef.current = null;
             }, 3000);
         } else {
-            setGiftQueue(prev => [...prev, {
-                senderName: userName || 'Host',
-                targetName: targetName,
-                giftName: gift.name,
-                icon: gift.icon,
-                count: 1,
-                senderId: userId,
-                senderAvatar: hostAvatar,
-                isHost: true
-            }]);
+            setGiftQueue(prev => {
+                const last = prev[prev.length - 1];
+                if (last && (last.senderId === userId || last.senderName === (userName || 'Host')) && last.giftName === gift.name) {
+                    return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                }
+                return [...prev, {
+                    senderName: userName || 'Host',
+                    targetName: targetName,
+                    giftName: gift.name,
+                    icon: gift.icon,
+                    count: 1,
+                    senderId: userId,
+                    senderAvatar: finalAvatar,
+                    isHost: true,
+                    isBig: gift.points >= 500
+                }];
+            });
         }
 
         // Send via Signaling
@@ -620,7 +637,7 @@ export default function HostLiveScreen(props: Props) {
             ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
                 type: 'gift',
                 senderId: userId,
-                senderAvatar: hostAvatar,
+                senderAvatar: finalAvatar,
                 userName: userName || 'Host',
                 giftName: gift.name,
                 points: gift.points,
@@ -656,25 +673,27 @@ export default function HostLiveScreen(props: Props) {
             const nextGift = giftQueue[0];
             setGiftQueue(prev => prev.slice(1));
             setRecentGift(nextGift);
+            recentGiftRef.current = nextGift; // Sync ref immediately for incoming matches
 
-            // Sync Video if major gift
-            const gift = GIFTS.find(g => g.name === nextGift.giftName);
-            if (gift && gift.points >= 100) {
-                setShowGiftVideo(true);
-                if (showGiftVideo) {
-                    showGiftAnimation(gift.url);
-                }
-            } else {
-                setShowGiftVideo(false);
+            // ✅ Only show pill if NOT isBig
+            if (nextGift.isBig) {
+                const gift = GIFTS.find(g => g.name === nextGift.giftName);
+                if (gift?.url) showGiftAnimation(gift.url);
+                // Progress faster if no pill to show
+                setTimeout(() => {
+                    setRecentGift(null);
+                    recentGiftRef.current = null;
+                }, 1500);
             }
-
-            // Start clear timer
-            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-            giftTimerRef.current = setTimeout(() => {
-                setRecentGift(null);
-            }, 3000);
         }
-    }, [recentGift, giftQueue, showGiftVideo]);
+
+        // Start clear timer
+        if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+        giftTimerRef.current = setTimeout(() => {
+            setRecentGift(null);
+        }, 3000);
+
+    }, [recentGift, giftQueue]);
 
     useEffect(() => {
         if (hostAvatar && userId) {
@@ -793,38 +812,46 @@ export default function HostLiveScreen(props: Props) {
 
 
     // Listen for In-Room Commands (Gifts) using ZegoUIKit core signaling plugin
-    // This serves as the primary or backup listener for the Host to receive gift commands
     useEffect(() => {
-        if (ZegoUIKit) {
-            const callbackID = 'HostGiftListener';
-            console.log('🎧 Registering HostGiftListener with ZegoUIKit');
+        if (!ZegoUIKit) return;
 
-            ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, (messageData: any) => {
-                const { roomID, message, senderUserID, timestamp } = messageData;
-                console.log(`📬 HostGiftListener: Command from ${senderUserID}: ${message}`);
+        const callbackID = 'HostGiftListener';
+        console.log('🎧 Registering HostGiftListener with ZegoUIKit');
 
-                try {
-                    const data = JSON.parse(message);
-                    if (data.type === 'gift') {
-                        console.log('🎁 Gift Received via HostGiftListener:', data.giftName);
+        // 1. Command Message Handler (Gifts, Likes, PK Updates)
+        ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, (messageData: any) => {
+            const { message, senderUserID } = messageData;
+            try {
+                const data = typeof message === 'string' ? JSON.parse(message) : message;
 
-                        // COMBO LOGIC: Check if it's the same gift from the same user
-                        const current = recentGiftRef.current;
-                        const senderId = data.userId || senderUserID;
-                        const isHost = data.isHost === true;
+                if (data.type === 'gift') {
+                    const senderId = data.senderId || senderUserID;
+                    const isHost = data.isHost === true;
+                    const senderName = data.userName || 'User';
 
-                        if (current && (current.senderId === senderId || current.senderName === (data.userName || 'User')) && current.giftName === data.giftName) {
-                            // Increment combo count
-                            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+                    // COMBO LOGIC
+                    const current = recentGiftRef.current;
+                    if (isSameGift(current, senderId, senderName, data.giftName)) {
+                        setRecentGift(prev => {
+                            const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                            recentGiftRef.current = updated;
+                            return updated;
+                        });
+                        if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+                        giftTimerRef.current = setTimeout(() => {
+                            setRecentGift(null);
+                            recentGiftRef.current = null;
+                        }, 3000);
+                    } else {
+                        const foundGift = GIFTS.find(g => g.name === data.giftName);
+                        const isBig = (foundGift && foundGift.points >= 500) || (data.points >= 500);
 
-                            // Reset timer
-                            if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-                            giftTimerRef.current = setTimeout(() => {
-                                setRecentGift(null);
-                            }, 3000);
-                        } else {
-                            const foundGift = GIFTS.find(g => g.name === data.giftName);
-                            setGiftQueue(prev => [...prev, {
+                        setGiftQueue(prev => {
+                            const last = prev[prev.length - 1];
+                            if (last && (last.senderId?.toLowerCase() === senderId?.toLowerCase() || last.senderName === (data.userName || 'User')) && last.giftName === data.giftName) {
+                                return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                            }
+                            return [...prev.slice(-10), {
                                 senderName: data.userName || 'User',
                                 targetName: data.targetName,
                                 giftName: data.giftName,
@@ -832,180 +859,107 @@ export default function HostLiveScreen(props: Props) {
                                 count: 1,
                                 senderId: senderId,
                                 senderAvatar: data.senderAvatar,
-                                isHost: isHost
-                            }]);
-                        }
+                                isHost: isHost,
+                                isBig: isBig
+                            }];
+                        });
 
-                        setShowGiftVideo(true);
-                        setTotalLikes(prev => prev + (data.points || 1));
-
-                        // IF ACTIVE PK: Host who receives gift updates their score
-                        if (isInPKRef.current) {
-                            updatePKScore(data.giftName);
+                        if (isBig && foundGift?.url) {
+                            showGiftAnimation(foundGift.url);
                         }
-                    } else if (data.type === 'PK_VOTE') {
-                        // Standardized score update
-                        if (data.hostId === userId) {
-                            setHostScore(prev => prev + (data.points || 0));
-                        } else {
-                            setGuestScore(prev => prev + (data.points || 0));
-                        }
-                    } else if (data.type === 'PK_LIKE') {
-                        console.log('👍 PK LIKE Received on Host');
-                        const likePoints = data.count || 1;
-                        setTotalLikes(prev => prev + likePoints);
-                        handleSendLike();
-
-                        if (data.hostId === userId) {
-                            setHostScore(prev => prev + likePoints);
-                        } else {
-                            console.log('⚠️ Like attributed to Guest (HostId mismatch)');
-                            setGuestScore(prev => prev + likePoints);
-                        }
-                    } else if (data.type === 'PK_SCORE_SYNC') {
-                        // Periodic absolute sync
-                        setHostScore(data.hostScore);
-                        setGuestScore(data.guestScore);
-                    } else if (data.type === 'PK_BATTLE_STOP') {
-                        setIsInPK(false);
-                        setPkBattleId(null);
-                        Alert.alert("PK Battle", "The opponent has stopped the battle.");
-                    } else if (data.type === 'coupon_drop') {
-                        // Host also sees the coupon they dropped (sync)
-                        setActiveCoupon(data);
-                        setCouponTimeRemaining(data.expiryMinutes * 60);
                     }
-                } catch (e) {
-                    console.error('HostGiftListener JSON Parse Error:', e);
+
+                    setTotalLikes(prev => prev + (data.points || 1));
+                    if (isInPKRef.current) updatePKScore(data.giftName);
+
+                } else if (data.type === 'PK_VOTE') {
+                    if (data.hostId === userId) setHostScore(prev => prev + (data.points || 0));
+                    else setGuestScore(prev => prev + (data.points || 0));
+
+                } else if (data.type === 'PK_LIKE') {
+                    const points = data.count || 1;
+                    setTotalLikes(prev => prev + points);
+                    handleSendLike();
+                    if (data.hostId === userId) setHostScore(prev => prev + points);
+                    else setGuestScore(prev => prev + points);
+
+                } else if (data.type === 'PK_SCORE_SYNC') {
+                    setHostScore(data.hostScore);
+                    setGuestScore(data.guestScore);
+
+                } else if (data.type === 'PK_BATTLE_STOP') {
+                    setIsInPK(false);
+                    setPkBattleId(null);
+                    Alert.alert("PK Battle", "The opponent has stopped the battle.");
+
+                } else if (data.type === 'coupon_drop') {
+                    setActiveCoupon(data);
+                    setCouponTimeRemaining(data.expiryMinutes * 60);
                 }
-            });
+            } catch (e) {
+                console.error('HostGiftListener Parse Error:', e);
+            }
+        });
 
-            // HANDLE PK INVITATIONS (Manual Implementation)
-            ZegoUIKit.getSignalingPlugin().onInvitationReceived(callbackID, ({ callID, type, inviter, data }: any) => {
-                if (type === 10) { // Custom PK Invitation Type
-                    const pkData = JSON.parse(data);
-                    console.log('⚔️ Incoming PK Request from:', pkData.inviterName);
-
-                    const duration = pkData.duration || 180; // Default 3 minutes
-                    const durationLabel = duration === 180 ? '3 minutes' :
-                        duration === 300 ? '5 minutes' :
-                            duration === 420 ? '7 minutes' :
-                                duration === 600 ? '10 minutes' : `${duration}s`;
-
-                    Alert.alert(
-                        "PK Battle Request",
-                        `${pkData.inviterName} wants to start a ${durationLabel} PK battle!`,
-                        [
-                            {
-                                text: "Reject",
-                                style: "cancel",
-                                onPress: () => {
-                                    ZegoUIKit.getSignalingPlugin().refuseInvitation(inviter.id);
-                                }
-                            },
-                            {
-                                text: "Accept",
-                                onPress: () => {
-                                    // Pass our name back to the inviter
-                                    ZegoUIKit.getSignalingPlugin().acceptInvitation(inviter.id, JSON.stringify({
-                                        accepterName: userName,
-                                        channelId: channelId, // Send my channel ID back
-                                        duration: duration,
-                                        endTime: pkData.endTime
-                                    }));
-
-                                    setIsInPK(true);
-                                    setOpponentName(pkData.inviterName || 'Opponent');
-                                    setHostScore(0);
-                                    setGuestScore(0);
-                                    setPkBattleId(callID);
-                                    setPkDuration(duration);
-                                    setPkEndTime(pkData.endTime || Date.now() + (duration * 1000));
-                                    setPkTimeRemaining(duration);
-                                    setOpponentChannelId(pkData.roomID); // Store inviter's channel ID
-
-                                    console.log(`⏱️ PK Battle Accepted! Duration: ${duration}s`);
-
-                                    // Notify current room that PK has started
-                                    ZegoUIKit.sendInRoomCommand(JSON.stringify({
-                                        type: 'PK_START',
-                                        opponentName: pkData.inviterName,
-                                        hostName: userName,
-                                        hostId: userId,
-                                        hostScore: 0,
-                                        guestScore: 0,
-                                        duration: duration,
-                                        endTime: pkData.endTime
-                                    }), [], () => { });
-                                }
+        // 2. PK Invitation Handler
+        ZegoUIKit.getSignalingPlugin().onInvitationReceived(callbackID, ({ callID, inviter, data }: any) => {
+            try {
+                const pkData = JSON.parse(data);
+                const duration = pkData.duration || 180;
+                Alert.alert(
+                    "PK Battle Request",
+                    `${pkData.inviterName} wants to start a PK battle!`,
+                    [
+                        { text: "Reject", onPress: () => ZegoUIKit.getSignalingPlugin().refuseInvitation(inviter.id) },
+                        {
+                            text: "Accept",
+                            onPress: () => {
+                                ZegoUIKit.getSignalingPlugin().acceptInvitation(inviter.id, JSON.stringify({
+                                    accepterName: userName,
+                                    channelId: channelId,
+                                    duration: duration,
+                                    endTime: pkData.endTime
+                                }));
+                                setIsInPK(true);
+                                setOpponentName(pkData.inviterName || 'Opponent');
+                                setPkBattleId(callID);
+                                setPkEndTime(pkData.endTime || Date.now() + (duration * 1000));
                             }
-                        ]
-                    );
+                        }
+                    ]
+                );
+            } catch (e) {
+                console.error('PK Invitation Parse Error:', e);
+            }
+        });
+
+        // 3. Invitation Accepted Handler
+        ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, ({ invitee, data }: any) => {
+            setIsInPK(true);
+            try {
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    if (parsed.accepterName) setOpponentName(parsed.accepterName);
+                    if (parsed.endTime) setPkEndTime(parsed.endTime);
                 }
-            });
+            } catch (e) {
+                console.error('PK Accept Parse Error:', e);
+            }
+            Alert.alert("Success", "PK Battle Started!");
+        });
 
-            ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, ({ invitee, data }: any) => {
-                // If we sent a PK request and it was accepted
-                setIsInPK(true);
+        ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, () => {
+            Alert.alert("Declined", "The host declined your PK challenge.");
+        });
 
-                let oppName = invitee?.userName || invitee?.name || 'Opponent';
-                let duration = pkDuration; // Use current selection as fallback
-                let endTime = Date.now() + (duration * 1000);
-
-                try {
-                    if (data) {
-                        const parsedData = JSON.parse(data);
-                        if (parsedData.accepterName) {
-                            oppName = parsedData.accepterName;
-                        }
-                        if (parsedData.channelId) {
-                            setOpponentChannelId(parsedData.channelId); // Store opponent channel ID for sync
-                        }
-                        // Extract timer info from original invitation (stored in acceptance)
-                        if (parsedData.duration) {
-                            duration = parsedData.duration;
-                            setPkDuration(duration);
-                        }
-                        if (parsedData.endTime) {
-                            endTime = parsedData.endTime;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error parsing invitation accept data:', e);
-                }
-
-                setOpponentName(oppName);
-                setHostScore(0);
-                setGuestScore(0);
-                setPkEndTime(endTime);
-                setPkTimeRemaining(duration);
-
-                console.log(`⏱️ PK Battle Started! Duration: ${duration}s, Ends at: ${new Date(endTime).toLocaleTimeString()}`);
-
-                // Broadcast to existing room
-                ZegoUIKit.sendInRoomCommand(JSON.stringify({
-                    type: 'PK_START',
-                    opponentName: oppName,
-                    hostName: userName,
-                    hostId: userId,
-                    hostScore: 0,
-                    guestScore: 0,
-                    duration: duration,
-                    endTime: endTime
-                }), [], () => { });
-                Alert.alert("Success", "PK Battle Started!");
-            });
-
-            ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, ({ invitee, data }: any) => {
-                Alert.alert("Declined", "The host declined your PK challenge.");
-            });
-
-            // Cleanup on unmount
-            return () => {
-                // Not strictly necessary as callbackID overwrites, but good practice if API supports removal
-            };
-        }
-    }, [userId]);
+        return () => {
+            // Signal cleanup if needed
+            ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, () => { });
+            ZegoUIKit.getSignalingPlugin().onInvitationReceived(callbackID, () => { });
+            ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, () => { });
+            ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, () => { });
+        };
+    }, [userId, channelId, userName]);
 
     const endFirestoreSession = async () => {
         // ✅ Prevent double-calling if session already ended
@@ -1055,46 +1009,6 @@ export default function HostLiveScreen(props: Props) {
         );
     }
 
-
-    useEffect(() => {
-        const callbackID = 'HostTextGiftFallback';
-
-        // Use the config prop callback style if possible, but since we are using core listener:
-        // Note: The signature usually provides an array of messages.
-        ZegoUIKit.getSignalingPlugin().onInRoomTextMessageReceived(callbackID, (messages: any[]) => {
-            // Handle array of messages
-            if (Array.isArray(messages)) {
-                messages.forEach((msg: any) => {
-                    if (msg.message && msg.message.startsWith('🎁')) {
-                        console.log('💬 Host Text fallback: Gift detected:', msg.message);
-                        setShowGiftVideo(true);
-
-                        // Also parse for queue
-                        const gifts = GIFTS;
-                        const foundGift = gifts.find(g => msg.message.includes(g.name));
-
-                        if (foundGift) {
-                            setGiftQueue(prev => [...prev, {
-                                senderName: msg.sender?.userName || 'Viewer',
-                                giftName: foundGift.name,
-                                icon: foundGift.icon,
-                                count: 1,
-                                isHost: msg.sender?.userName?.includes('Host')
-                            }]);
-                        }
-                    }
-                });
-            }
-        });
-
-        return () => {
-            ZegoUIKit.getSignalingPlugin().onInRoomTextMessageReceived(callbackID, () => { });
-            if (mediaPlayerRef.current && ZegoExpressEngine) {
-                ZegoExpressEngine.instance().destroyMediaPlayer(mediaPlayerRef.current);
-                mediaPlayerRef.current = null;
-            }
-        };
-    }, []);
     // Gift Animation Logic (Official Zego Virtual Gift Engine)
     const showGiftAnimation = async (videoUrl?: string) => {
         if (!ZegoExpressEngine || !ZegoMediaPlayerResource) return;
@@ -1206,7 +1120,10 @@ export default function HostLiveScreen(props: Props) {
     return (
         <View style={styles.container}>
             {/* Flame Counter */}
-            <FlameCounter count={totalLikes} top={isInPK ? 185 : 115} />
+            {/* Flame Counter - ONLY if reach 50 */}
+            {totalLikes >= 50 && (
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 110} />
+            )}
 
             {/* PK BATTLE SCORE BAR - Premium Look */}
             {isInPK && (
@@ -1544,7 +1461,19 @@ export default function HostLiveScreen(props: Props) {
                             leaveBuilder: CustomBuilder.leaveBuilder,
                             minimizingBuilder: CustomBuilder.minimizingBuilder,
                             memberBuilder: CustomBuilder.memberBuilder,
-                            hostAvatarBuilder: CustomBuilder.hostAvatarBuilder,
+                            hostAvatarBuilder: (host: any) => {
+                                return (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, paddingRight: 8, paddingVertical: 2, paddingLeft: 2 }}>
+                                        <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#fff' }}>
+                                            <Image source={{ uri: CustomBuilder.getUserAvatar(host.userID) }} style={{ width: '100%', height: '100%' }} />
+                                        </View>
+                                        <View style={{ marginLeft: 6, marginRight: 8 }}>
+                                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} numberOfLines={1}>{host.userName}</Text>
+                                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{totalLikes} likes</Text>
+                                        </View>
+                                    </View>
+                                );
+                            },
                         },
                     },
                     // Manual PK Logic: The Prebuilt Kit v2.8.3 does not have native pkConfig support.
@@ -1683,34 +1612,6 @@ export default function HostLiveScreen(props: Props) {
                             }
                         },
                     },
-                    onInRoomCommandReceived: (messageData: any) => {
-                        // Reliable redundancy: Catch commands here too (matching Audience)
-                        try {
-                            const data = typeof messageData.message === 'string' ? JSON.parse(messageData.message) : messageData.message;
-                            if (data.type === 'gift') {
-                                console.log('🎁 Host received gift command:', data.giftName);
-                                setGiftQueue(prev => [...prev, {
-                                    senderName: data.userName || 'User',
-                                    targetName: data.targetName,
-                                    giftName: data.giftName,
-                                    icon: data.icon,
-                                    count: 1,
-                                    isHost: (data.userName || '').trim().includes('Host')
-                                }]);
-
-                                // PK Score Update
-                                updatePKScore(data.giftName);
-                                // Coupon Drop Redundancy
-                                if (data.type === 'coupon_drop') {
-                                    setActiveCoupon(data);
-                                    const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
-                                    setCouponTimeRemaining(remaining);
-                                }
-                            }
-                        } catch (e) {
-                            console.log('Error parsing host command:', e);
-                        }
-                    },
                     onWindowMinimized: () => {
                         onClose();
                     },
@@ -1718,33 +1619,15 @@ export default function HostLiveScreen(props: Props) {
 
 
                     onInRoomTextMessageReceived: (messages: any[]) => {
+                        // ⚠️ DISABLED: Chat fallback causes duplicate gifts
+                        // The onInRoomCommandReceived handler above is the primary method
+                        // This fallback is only needed if commands fail completely
+
                         // Fallback: Check chat messages for gifts if command fails
                         messages.forEach((msg: any) => {
-                            if (msg.message && msg.message.startsWith('🎁')) {
-                                console.log('💬 Gift message text detected:', msg.message);
-                                const gifts = GIFTS;
-
-                                // Ignore own chat fallback
-                                if (msg.sender?.userID === userId) return;
-
-                                const foundGift = gifts.find(g => msg.message.includes(g.name));
-                                if (foundGift) {
-                                    // Push to Queue, avoid direct setRecentGift overwrite
-                                    setGiftQueue(prev => {
-                                        return [...prev, {
-                                            senderName: msg.sender?.userName || 'Viewer',
-                                            giftName: foundGift.name,
-                                            icon: foundGift.icon,
-                                            count: 1,
-                                            isHost: msg.sender?.userName?.includes('Host')
-                                        }];
-                                    });
-                                    // Trigger Video (Fallback in config)
-                                    setShowGiftVideo(true);
-
-                                    // PK Score Update
-                                    updatePKScore(foundGift.name);
-                                }
+                            // Only process non-gift messages to avoid duplicates
+                            if (msg.message && !msg.message.startsWith('🎁')) {
+                                // Handle other chat messages here if needed
                             }
                         });
                     }
@@ -1756,18 +1639,116 @@ export default function HostLiveScreen(props: Props) {
 
 
             {/* ALPHA VIDEO OVERLAY */}
-            {showGiftVideo && ZegoTextureView && (
+            {/* GIFT ANIMATIONS (Full Screen Overlay) */}
+            {showGiftVideo && (
                 <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
-                    <ZegoTextureView
-                        // @ts-ignore
-                        ref={mediaViewRef}
-                        collapsable={false}
-                        style={{ width: '100%', height: '100%' }}
-                        onLayout={() => {
+                    <View style={{ alignItems: 'center' }}>
+                        {(() => {
                             const gift = GIFTS.find(g => g.name === recentGift?.giftName);
-                            showGiftAnimation(gift?.url);
-                        }}
-                    />
+                            // Case 1: Animated WebP (TikTok Style) or Generic Icon
+                            const isBig = (gift?.points || 0) >= 500;
+                            const source = (gift?.url && gift.url.includes('.webp')) ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
+
+                            if (source) {
+                                return (
+                                    <Animatable.Image
+                                        animation={isBig ? "zoomIn" : "tada"} // Cool animation
+                                        duration={1000}
+                                        source={source}
+                                        style={{
+                                            width: isBig ? '85%' : 200,
+                                            height: isBig ? '85%' : 200,
+                                            maxWidth: 500,
+                                            maxHeight: 500
+                                        }}
+                                        resizeMode="contain"
+                                    />
+                                );
+                            }
+                            // Case 2: Standard Video (MP4 via Zego)
+                            if (ZegoTextureView) {
+                                return (
+                                    <ZegoTextureView
+                                        // @ts-ignore
+                                        ref={mediaViewRef}
+                                        collapsable={false}
+                                        style={{ width: '100%', height: '100%' }}
+                                        onLayout={() => {
+                                            showGiftAnimation(gift?.url);
+                                        }}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()}
+
+                        {/* Sender Avatar + Combo Count - Always show below gift for big gifts */}
+                        {recentGift && showGiftVideo && (
+                            <Animatable.View
+                                key={`combo-${recentGift.giftName}-${recentGift.count}`}
+                                animation="bounceIn"
+                                duration={400}
+                                style={{
+                                    marginTop: 20,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transform: [{ rotate: '-6deg' }]
+                                }}
+                            >
+                                <BlurView intensity={100} tint="dark" style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 16,
+                                    borderRadius: 40,
+                                    borderWidth: 2,
+                                    borderColor: '#FBBF24',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    shadowColor: '#FBBF24',
+                                    shadowOffset: { width: 0, height: 0 },
+                                    shadowOpacity: 0.8,
+                                    shadowRadius: 15,
+                                }}>
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        borderWidth: 2,
+                                        borderColor: '#fff',
+                                        overflow: 'hidden',
+                                        marginRight: 10,
+                                        backgroundColor: '#333'
+                                    }}>
+                                        {recentGift.senderAvatar ? (
+                                            <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
+                                        ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
+                                            <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
+                                        ) : (
+                                            <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
+                                                </Text>
+                                            </LinearGradient>
+                                        )}
+                                    </View>
+                                    <Text
+                                        style={{
+                                            color: '#FBBF24',
+                                            fontSize: 38,
+                                            fontWeight: '900',
+                                            fontStyle: 'italic',
+                                            textShadowColor: 'rgba(0,0,0,0.8)',
+                                            textShadowRadius: 10,
+                                            textShadowOffset: { width: 2, height: 2 },
+                                            letterSpacing: 1
+                                        }}
+                                    >
+                                        x{recentGift.count}
+                                    </Text>
+                                </BlurView>
+                            </Animatable.View>
+                        )}
+                    </View>
                 </View>
             )}
 
@@ -2056,11 +2037,11 @@ export default function HostLiveScreen(props: Props) {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.5)',
+                                backgroundColor: 'rgba(0,0,0,0.4)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: 'rgba(255,255,255,0.3)',
+                                borderColor: 'rgba(255,255,255,0.2)',
                                 overflow: 'hidden'
                             }}
                         >
@@ -2075,11 +2056,11 @@ export default function HostLiveScreen(props: Props) {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
-                                backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.5)',
+                                backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.4)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: isInPK ? '#fff' : 'rgba(255,255,255,0.3)',
+                                borderColor: isInPK ? '#fff' : 'rgba(255,255,255,0.2)',
                                 overflow: 'hidden'
                             }}
                         >
@@ -2111,14 +2092,15 @@ export default function HostLiveScreen(props: Props) {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
-                                backgroundColor: activeCoupon ? '#F59E0B' : 'rgba(0,0,0,0.5)',
+                                backgroundColor: activeCoupon ? '#F59E0B' : 'rgba(0,0,0,0.4)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: activeCoupon ? '#fff' : 'rgba(255,255,255,0.3)'
+                                borderColor: activeCoupon ? '#fff' : 'rgba(255,255,255,0.2)',
+                                overflow: 'hidden'
                             }}
                         >
-                            {!activeCoupon && <BlurView intensity={20} style={StyleSheet.absoluteFill} />}
+                            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                             <Ticket size={20} color="#fff" />
                         </TouchableOpacity>
 
@@ -2129,11 +2111,12 @@ export default function HostLiveScreen(props: Props) {
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.5)',
+                                backgroundColor: 'rgba(0,0,0,0.4)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: 'rgba(255,255,255,0.3)'
+                                borderColor: 'rgba(255,255,255,0.2)',
+                                overflow: 'hidden'
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
@@ -2143,16 +2126,17 @@ export default function HostLiveScreen(props: Props) {
 
                         {/* Share Button as requested */}
                         <TouchableOpacity
-                            onPress={() => Alert.alert("Share", "Sharing live stream...")}
+                            onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                             style={{
                                 width: 44,
                                 height: 44,
                                 borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.5)',
+                                backgroundColor: 'rgba(0,0,0,0.4)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
-                                borderColor: 'rgba(255,255,255,0.3)'
+                                borderColor: 'rgba(255,255,255,0.2)',
+                                overflow: 'hidden'
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
@@ -2654,101 +2638,128 @@ export default function HostLiveScreen(props: Props) {
                 </KeyboardAvoidingView>
             </Modal>
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
-            {recentGift && (
-                <Animatable.View
-                    animation="slideInLeft"
-                    duration={400}
-                    style={{
-                        position: 'absolute',
-                        top: 200,
-                        left: 10,
-                        zIndex: 10000,
-                    }}
-                >
-                    <BlurView intensity={80} tint="dark" style={{
-                        borderRadius: 30,
-                        padding: 4,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        minWidth: 180,
-                    }}>
-                        {/* Avatar Circle */}
-                        <View style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: '#FF0066',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1,
-                            borderColor: '#fff',
-                            overflow: 'hidden'
-                        }}>
-                            {recentGift.senderAvatar ? (
-                                <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
-                            ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
-                                <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
-                            ) : (
-                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
-                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
-                                </Text>
-                            )}
-                        </View>
-
-                        <View style={{ marginLeft: 10, marginRight: 15 }}>
-                            <Text style={{ color: recentGift.isHost ? '#FFD700' : '#fff', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
-                                {recentGift.senderName}
-                            </Text>
-                            <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '700' }}>
-                                {t('sentA')} {recentGift.giftName}
-                            </Text>
-                        </View>
-
-                        {/* Gift Icon floating next to it */}
-                        <Animatable.View
-                            key={recentGift.count}
-                            animation="bounceIn"
-                            style={{ position: 'absolute', right: -45 }}
-                        >
-                            <Image
-                                source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                style={{ width: 50, height: 50 }}
-                                resizeMode="contain"
-                            />
-                        </Animatable.View>
-                    </BlurView>
-                </Animatable.View>
-            )}
-
-            {/* Combo Counter */}
-            {recentGift && recentGift.count > 1 && (
-                <Animatable.View
-                    key={`combo-${recentGift.count}`}
-                    animation="bounceIn"
-                    duration={300}
-                    style={{
-                        position: 'absolute',
-                        top: 200,
-                        left: 190,
-                        zIndex: 10001
-                    }}
-                >
-                    <Text
+            {(recentGift && !recentGift.isBig) && (
+                <View style={{
+                    position: 'absolute',
+                    top: 180, // Moved up slightly to avoid overlapping
+                    left: 10,
+                    zIndex: 10000,
+                    flexDirection: 'row',
+                    alignItems: 'center'
+                }}>
+                    <Animatable.View
+                        animation="slideInLeft"
+                        duration={400}
                         style={{
-                            color: '#FBBF24',
-                            fontSize: 32,
-                            fontWeight: '900',
-                            fontStyle: 'italic',
-                            textShadowColor: 'rgba(0,0,0,0.8)',
-                            textShadowRadius: 4,
-                            textShadowOffset: { width: 2, height: 2 }
+                            flexDirection: 'row',
+                            alignItems: 'center'
                         }}
                     >
-                        x{recentGift.count}
-                    </Text>
-                </Animatable.View>
+                        <BlurView intensity={95} tint="dark" style={{
+                            borderRadius: 40,
+                            paddingVertical: 4,
+                            paddingHorizontal: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 255, 255, 0.3)',
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            minWidth: 250,
+                            overflow: 'hidden', // Fix rounded corners being hidden
+                        }}>
+                            {/* Avatar Circle */}
+                            <View style={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 20,
+                                backgroundColor: '#FF0066',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1.5,
+                                borderColor: 'rgba(255,255,255,0.8)',
+                                overflow: 'hidden',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 3
+                            }}>
+                                {recentGift.senderAvatar ? (
+                                    <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
+                                ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
+                                    <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
+                                ) : (
+                                    <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
+                                            {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
+                                        </Text>
+                                    </LinearGradient>
+                                )}
+                            </View>
+
+                            <View style={{ marginLeft: 10, marginRight: 40 }}>
+                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
+                                    {recentGift.senderName}
+                                </Text>
+                                <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
+                                    {t('sentA')} {recentGift.giftName}
+                                </Text>
+                            </View>
+
+                            {/* Gift Icon inside a bubble */}
+                            <View
+                                style={{
+                                    position: 'absolute',
+                                    right: 1, // Overlap the edge like TikTok
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 26,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 2,
+                                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 4, height: 4 },
+                                    shadowOpacity: 0.4,
+                                    shadowRadius: 6,
+                                    elevation: 8
+                                }}
+                            >
+                                <Animatable.Image
+                                    key={`gift-icon-${recentGift.count}`}
+                                    animation="tada"
+                                    duration={1000}
+                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                    style={{ width: 38, height: 38 }}
+                                    resizeMode="contain"
+                                />
+                            </View>
+                        </BlurView>
+
+                        {/* Combo Count UI */}
+                        {recentGift.count > 1 && (
+                            <Animatable.View
+                                key={`combo-${recentGift.count}`}
+                                animation="bounceIn"
+                                duration={500}
+                                style={{ marginLeft: 35 }}
+                            >
+                                <Text style={{
+                                    color: '#FBBF24',
+                                    fontSize: 32,
+                                    fontWeight: '900',
+                                    fontStyle: 'italic',
+                                    textShadowColor: '#000',
+                                    textShadowOffset: { width: 2, height: 2 },
+                                    textShadowRadius: 4
+                                }}>
+                                    x{recentGift.count}
+                                </Text>
+                            </Animatable.View>
+                        )}
+                    </Animatable.View>
+
+                </View>
             )}
 
             {/* Floating Heart Animations */}
@@ -2759,4 +2770,4 @@ export default function HostLiveScreen(props: Props) {
             </View>
         </View >
     );
-}
+} 1

@@ -16,7 +16,7 @@ export class CustomBuilder {
     static toggleCameraBuilder = (isOn: boolean) => {
         return (
             <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <Camera size={20} color={isOn ? '#fff' : '#888'} />
+                <Camera size={16} color={isOn ? '#fff' : '#888'} />
             </View>
         );
     };
@@ -24,7 +24,7 @@ export class CustomBuilder {
     static toggleMicrophoneBuilder = (isOn: boolean) => {
         return (
             <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                {isOn ? <Mic size={20} color="#fff" /> : <MicOff size={20} color="#888" />}
+                {isOn ? <Mic size={16} color="#fff" /> : <MicOff size={16} color="#888" />}
             </View>
         );
     };
@@ -32,7 +32,7 @@ export class CustomBuilder {
     static switchCameraBuilder = (isFront: boolean) => {
         return (
             <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <RefreshCw size={20} color="#fff" />
+                <RefreshCw size={16} color="#fff" />
             </View>
         );
     };
@@ -47,16 +47,30 @@ export class CustomBuilder {
 
     static leaveBuilder = () => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <X size={20} color="#fff" />
+            <View style={{
+                width: 32,
+                height: 32,
+                backgroundColor: '#EF4444',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 16
+            }}>
+                <X size={14} color="#fff" strokeWidth={3} />
             </View>
         );
     };
 
     static minimizingBuilder = () => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <Text style={{ color: '#fff', fontSize: 16 }}>−</Text>
+            <View style={{
+                width: 32,
+                height: 32,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 16
+            }}>
+                <Text style={{ color: '#fff', fontSize: 14 }}>−</Text>
             </View>
         );
     };
@@ -97,19 +111,18 @@ export class CustomBuilder {
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.2)'
             }}>
-                {avatarUrl ? (
-                    <Image source={{ uri: avatarUrl }} style={{ width: 22, height: 22, borderRadius: 11 }} />
-                ) : (
-                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
-                            {(host.userName || 'H').charAt(0).toUpperCase()}
-                        </Text>
-                    </View>
-                )}
+                <View style={{ width: 22, height: 22, borderRadius: 11, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                    {avatarUrl ? (
+                        <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />
+                    ) : (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
+                                {(host.userName || 'H').charAt(0).toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
+                </View>
                 <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }} numberOfLines={1}>{host.userName}</Text>
-                <TouchableOpacity style={{ backgroundColor: '#FF0066', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginLeft: 4 }}>
-                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>SUIVRE</Text>
-                </TouchableOpacity>
             </View>
         );
     };

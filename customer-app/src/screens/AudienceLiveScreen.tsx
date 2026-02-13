@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
 import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send } from 'lucide-react-native';
-import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
 import { db } from '../api/firebase';
@@ -82,8 +82,8 @@ export default function AudienceLiveScreen(props: Props) {
     const mediaPlayerRef = useRef<any>(null);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
     const [showGifts, setShowGifts] = useState(false);
-    const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string }[]>([]);
-    const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string } | null>(null);
+    const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean }[]>([]);
+    const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean } | null>(null);
     const recentGiftRef = useRef<any>(null);
     const giftTimerRef = useRef<any>(null);
     const [streamHostId, setStreamHostId] = useState<string | null>(null);
@@ -124,6 +124,9 @@ export default function AudienceLiveScreen(props: Props) {
     const [pinEndTime, setPinEndTime] = useState<number | null>(null);
     const [pinTimeRemaining, setPinTimeRemaining] = useState(0);
 
+    const [isFollowed, setIsFollowed] = useState(false);
+    const [collabType, setCollabType] = useState<string | null>(null);
+
     useEffect(() => {
         if (profileData) {
             setCustomerName(prev => prev || profileData.fullName || '');
@@ -139,6 +142,48 @@ export default function AudienceLiveScreen(props: Props) {
             }
         }
     }, [profileData]);
+
+    // Fetch Collab Info
+    useEffect(() => {
+        if (channelId) {
+            getDoc(doc(db, 'collaborations', channelId)).then(snap => {
+                if (snap.exists()) {
+                    setCollabType(snap.data().type);
+                }
+            });
+        }
+    }, [channelId]);
+
+    // Check if following
+    useEffect(() => {
+        if (userId && channelId) {
+            const q = query(collection(db, 'users', userId, 'followingCollabs'), where('collabId', '==', channelId));
+            const unsub = onSnapshot(q, (snap) => {
+                setIsFollowed(!snap.empty);
+            });
+            return () => unsub();
+        }
+    }, [userId, channelId]);
+
+    const toggleFollow = async () => {
+        if (!userId || !channelId) return;
+        try {
+            if (isFollowed) {
+                const q = query(collection(db, 'users', userId, 'followingCollabs'), where('collabId', '==', channelId));
+                const snap = await getDocs(q);
+                snap.forEach(async (d) => {
+                    await deleteDoc(d.ref);
+                });
+            } else {
+                await addDoc(collection(db, 'users', userId, 'followingCollabs'), {
+                    collabId: channelId,
+                    followedAt: serverTimestamp()
+                });
+            }
+        } catch (e) {
+            console.error('Follow Toggle Error:', e);
+        }
+    };
 
     const lastPurchaseTimeRef = useRef(0);
 
@@ -198,62 +243,80 @@ export default function AudienceLiveScreen(props: Props) {
     useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
     useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
 
-    // Sync Toast and Video via the Queue
+    // ✅ Process Gift Queue
     useEffect(() => {
-        if (giftQueue.length > 0 && !recentGift) {
+        if (!recentGift && giftQueue.length > 0) {
             const nextGift = giftQueue[0];
-            setRecentGift(nextGift);
             setGiftQueue(prev => prev.slice(1));
+            setRecentGift(nextGift);
+            recentGiftRef.current = nextGift; // Sync ref immediately for incoming matches
 
-            // Trigger Video Sync if major gift
-            const gift = gifts.find(g => g.name === nextGift.giftName);
-            if (gift && gift.points >= 100) {
-                setShowGiftVideo(true);
-                // If already shown (view mounted), trigger animation manually
-                if (showGiftVideo) {
-                    showGiftAnimation(gift.url);
-                }
-            } else {
-                setShowGiftVideo(false);
+            // ✅ Only show pill if NOT isBig
+            if (nextGift.isBig) {
+                const gift = GIFTS.find(g => g.name === nextGift.giftName);
+                if (gift?.url) showGiftAnimation(gift.url);
+                // Progress faster if no pill to show
+                setTimeout(() => {
+                    setRecentGift(null);
+                    recentGiftRef.current = null;
+                }, 1500);
             }
         }
-    }, [giftQueue, recentGift, showGiftVideo]);
 
-    // Auto-clear gift notification
-    useEffect(() => {
-        if (recentGift) {
-            const timer = setTimeout(() => setRecentGift(null), 4000);
-            return () => clearTimeout(timer);
-        }
-    }, [recentGift]);
+        // Start clear timer
+        if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+        giftTimerRef.current = setTimeout(() => {
+            setRecentGift(null);
+        }, 3000);
+
+    }, [recentGift, giftQueue]);
 
     const gifts = GIFTS;
 
+    // Helper to check if a gift matches for combo
+    const isSameGift = (g1: any, g2Id: string, g2Name: string, g2GiftName: string) => {
+        if (!g1) return false;
+        if (g1.giftName !== g2GiftName) return false;
+        const id1 = g1.senderId?.toLowerCase();
+        const id2 = g2Id?.toLowerCase();
+        if (id1 && id2 && id1 === id2) return true;
+        if (g1.senderName === g2Name) return true;
+        return false;
+    };
+
     const sendGift = (gift: any) => {
-        if (userBalance < gift.points) {
-            Alert.alert(t('error') || 'Erreur', t('insufficientBalance') || 'Solde insuffisant. Veuillez recharger.');
-            return;
-        }
-
-        // Deduct points locally
-        setUserBalance(prev => prev - gift.points);
-
         // COMBO LOGIC: Local feedback
         const current = recentGiftRef.current;
-        if (current && (current.senderId === userId || current.senderName === userName) && current.giftName === gift.name) {
-            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+        const finalAvatar = userAvatar || profileData?.avatar || CustomBuilder.getUserAvatar(userId);
+
+        if (isSameGift(current, userId, userName, gift.name)) {
+            setRecentGift(prev => {
+                const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                recentGiftRef.current = updated;
+                return updated;
+            });
             if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-            giftTimerRef.current = setTimeout(() => setRecentGift(null), 3000);
+            giftTimerRef.current = setTimeout(() => {
+                setRecentGift(null);
+                recentGiftRef.current = null;
+            }, 3000);
         } else {
-            setGiftQueue(prev => [...prev, {
-                senderName: userName || 'You',
-                giftName: gift.name,
-                icon: gift.icon,
-                count: 1,
-                senderId: userId,
-                senderAvatar: userAvatar,
-                isHost: false
-            }]);
+            setGiftQueue(prev => {
+                const last = prev[prev.length - 1];
+                if (last && (last.senderId === userId || last.senderName === userName) && last.giftName === gift.name) {
+                    return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                }
+                return [...prev, {
+                    senderName: userName || 'You',
+                    giftName: gift.name,
+                    icon: gift.icon,
+                    count: 1,
+                    senderId: userId,
+                    senderAvatar: finalAvatar,
+                    isHost: false,
+                    isBig: gift.points >= 500
+                }];
+            });
         }
 
         // Optimistically update totalLikes with gift points
@@ -267,7 +330,7 @@ export default function AudienceLiveScreen(props: Props) {
             ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
                 type: 'gift',
                 senderId: userId,
-                senderAvatar: userAvatar,
+                senderAvatar: finalAvatar, // ✅ Consistent avatar
                 userName: userName,
                 giftName: gift.name,
                 points: gift.points,
@@ -605,24 +668,45 @@ export default function AudienceLiveScreen(props: Props) {
                         setTotalLikes(prev => prev + (data.points || 1));
 
                         const current = recentGiftRef.current;
-                        const senderId = data.userId || msgData.senderUserID;
+                        const senderId = data.senderId || data.userId || msgData.senderUserID;
                         const isHost = data.isHost === true;
+                        const senderName = data.userName || 'Viewer';
 
-                        if (current && (current.senderId === senderId || current.senderName === (data.userName || 'Viewer')) && current.giftName === data.giftName) {
-                            setRecentGift(prev => prev ? { ...prev, count: prev.count + 1 } : null);
+                        if (isSameGift(current, senderId, senderName, data.giftName)) {
+                            setRecentGift(prev => {
+                                const updated = prev ? { ...prev, count: prev.count + 1 } : null;
+                                recentGiftRef.current = updated;
+                                return updated;
+                            });
                             if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-                            giftTimerRef.current = setTimeout(() => setRecentGift(null), 3000);
+                            giftTimerRef.current = setTimeout(() => {
+                                setRecentGift(null);
+                                recentGiftRef.current = null;
+                            }, 3000);
                         } else {
-                            const foundGift = gifts.find(g => g.name === data.giftName);
-                            setGiftQueue(prev => [...prev, {
-                                senderName: data.userName || 'Viewer',
-                                giftName: data.giftName,
-                                icon: foundGift ? foundGift.icon : data.icon,
-                                count: 1,
-                                senderId: senderId,
-                                senderAvatar: data.senderAvatar,
-                                isHost: isHost
-                            }]);
+                            const foundGift = GIFTS.find(g => g.name === data.giftName);
+                            const isBig = (foundGift && foundGift.points >= 500) || (data.points >= 500);
+
+                            setGiftQueue(prev => {
+                                const last = prev[prev.length - 1];
+                                if (last && (last.senderId?.toLowerCase() === senderId?.toLowerCase() || last.senderName === (data.userName || 'Viewer')) && last.giftName === data.giftName) {
+                                    return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                                }
+                                return [...prev.slice(-10), {
+                                    senderName: data.userName || 'Viewer',
+                                    giftName: data.giftName,
+                                    icon: foundGift ? foundGift.icon : data.icon,
+                                    count: 1,
+                                    senderId: senderId,
+                                    senderAvatar: data.senderAvatar,
+                                    isHost: isHost,
+                                    isBig: isBig
+                                }];
+                            });
+
+                            if (isBig && foundGift?.url) {
+                                showGiftAnimation(foundGift.url);
+                            }
                         }
                     } else if (data.type === 'coupon_drop') {
                         setActiveCoupon(data);
@@ -633,7 +717,9 @@ export default function AudienceLiveScreen(props: Props) {
                     console.error('Error parsing signaling command:', e);
                 }
             });
-            return () => { };
+            return () => {
+                ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(callbackID, () => { });
+            };
         }
     }, [ZegoUIKit]);
 
@@ -786,7 +872,10 @@ export default function AudienceLiveScreen(props: Props) {
     return (
         <View style={styles.container}>
             {/* Flame Counter */}
-            <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 175 : 102} />
+            {/* Flame Counter - ONLY if reach 50 */}
+            {totalLikes >= 50 && (
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 110} />
+            )}
 
             {/* PK BATTLE SCORE BAR - Premium Look */}
             {isInPK && (
@@ -1049,7 +1138,32 @@ export default function AudienceLiveScreen(props: Props) {
                             leaveBuilder: CustomBuilder.leaveBuilder,
                             minimizingBuilder: CustomBuilder.minimizingBuilder,
                             memberBuilder: CustomBuilder.memberBuilder,
-                            hostAvatarBuilder: CustomBuilder.hostAvatarBuilder,
+                            hostAvatarBuilder: (host: any) => {
+                                return (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, paddingRight: 8, paddingVertical: 2, paddingLeft: 2 }}>
+                                        <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#fff' }}>
+                                            <Image source={{ uri: CustomBuilder.getUserAvatar(host.userID) }} style={{ width: '100%', height: '100%' }} />
+                                        </View>
+                                        <View style={{ marginLeft: 6, marginRight: 8 }}>
+                                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} numberOfLines={1}>{host.userName}</Text>
+                                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{totalLikes} likes</Text>
+                                        </View>
+                                        {(!isFollowed && collabType !== 'Brand' && host.userID?.toLowerCase() !== userId?.toLowerCase()) && (
+                                            <TouchableOpacity
+                                                onPress={toggleFollow}
+                                                style={{
+                                                    backgroundColor: '#FF0055',
+                                                    paddingHorizontal: 10,
+                                                    paddingVertical: 5,
+                                                    borderRadius: 12
+                                                }}
+                                            >
+                                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{(t('follow') || 'FOLLOW').toUpperCase()}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                );
+                            },
                         },
                     },
                     bottomMenuBarConfig: {
@@ -1067,6 +1181,26 @@ export default function AudienceLiveScreen(props: Props) {
                             enableChatBuilder: CustomBuilder.enableChatBuilder,
                             chatBuilder: CustomBuilder.chatBuilder,
                             leaveBuilder: CustomBuilder.leaveBuilder,
+                            coHostControlButton: (status: any) => {
+                                return (
+                                    <View style={{
+                                        backgroundColor: 'rgba(0,0,0,0.4)',
+                                        paddingHorizontal: 16,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexDirection: 'row',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255,255,255,0.2)',
+                                        gap: 6
+                                    }}>
+                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+                                            {t ? t('coHost') : 'Go Live'}
+                                        </Text>
+                                    </View>
+                                )
+                            }
                         },
                     },
                     onInRoomCommandReceived: (messageData: any) => {
@@ -1119,24 +1253,15 @@ export default function AudienceLiveScreen(props: Props) {
                         onClose();
                     },
                     onInRoomTextMessageReceived: (messages: any[]) => {
+                        // ⚠️ DISABLED: Chat fallback causes duplicate gifts
+                        // The onInRoomCommandReceived handler (via useEffect) is the primary method
+                        // This fallback is only needed if commands fail completely
+
                         // Fallback: Check chat messages for gifts if command fails
                         messages.forEach((msg: any) => {
-                            if (msg.message && msg.message.startsWith('🎁')) {
-                                const gifts = GIFTS;
-
-                                // Ignore own chat messages in listener (already added to queue in sendGift)
-                                if (msg.sender?.userID === userId) return;
-
-                                const foundGift = gifts.find(g => msg.message.includes(g.name));
-                                if (foundGift) {
-                                    setGiftQueue(prev => [...prev, {
-                                        senderName: msg.sender?.userName || 'User',
-                                        giftName: foundGift.name,
-                                        icon: foundGift.icon,
-                                        count: 1,
-                                        isHost: msg.sender?.userName?.includes('Host')
-                                    }]);
-                                }
+                            // Only process non-gift messages to avoid duplicates
+                            if (msg.message && !msg.message.startsWith('🎁')) {
+                                // Handle other chat messages here if needed
                             }
                         });
                     }
@@ -1145,18 +1270,116 @@ export default function AudienceLiveScreen(props: Props) {
             />
 
             {/* FULL SCREEN GIFT VIDEO OVERLAY */}
-            {showGiftVideo && ZegoTextureView && (
+            {/* GIFT ANIMATIONS (Full Screen Overlay) */}
+            {showGiftVideo && (
                 <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
-                    <ZegoTextureView
-                        // @ts-ignore
-                        ref={mediaViewRef}
-                        collapsable={false}
-                        style={{ width: '100%', height: '100%' }}
-                        onLayout={() => {
+                    <View style={{ alignItems: 'center' }}>
+                        {(() => {
                             const gift = GIFTS.find(g => g.name === recentGift?.giftName);
-                            showGiftAnimation(gift?.url);
-                        }}
-                    />
+                            // Case 1: Animated WebP (TikTok Style) or Generic Icon
+                            const isBig = (gift?.points || 0) >= 500;
+                            const source = (gift?.url && gift.url.includes('.webp')) ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
+
+                            if (source) {
+                                return (
+                                    <Animatable.Image
+                                        animation={isBig ? "zoomIn" : "tada"} // Cool animation
+                                        duration={1000}
+                                        source={source}
+                                        style={{
+                                            width: isBig ? '85%' : 200,
+                                            height: isBig ? '85%' : 200,
+                                            maxWidth: 500,
+                                            maxHeight: 500
+                                        }}
+                                        resizeMode="contain"
+                                    />
+                                );
+                            }
+                            // Case 2: Standard Video (MP4 via Zego)
+                            if (ZegoTextureView) {
+                                return (
+                                    <ZegoTextureView
+                                        // @ts-ignore
+                                        ref={mediaViewRef}
+                                        collapsable={false}
+                                        style={{ width: '100%', height: '100%' }}
+                                        onLayout={() => {
+                                            showGiftAnimation(gift?.url);
+                                        }}
+                                    />
+                                );
+                            }
+                            return null;
+                        })()}
+
+                        {/* Sender Avatar + Combo Count - Always show below gift for big gifts */}
+                        {recentGift && showGiftVideo && (
+                            <Animatable.View
+                                key={`combo-${recentGift.giftName}-${recentGift.count}`}
+                                animation="bounceIn"
+                                duration={400}
+                                style={{
+                                    marginTop: 20,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transform: [{ rotate: '-6deg' }]
+                                }}
+                            >
+                                <BlurView intensity={100} tint="dark" style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 16,
+                                    borderRadius: 40,
+                                    borderWidth: 2,
+                                    borderColor: '#FBBF24',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    shadowColor: '#FBBF24',
+                                    shadowOffset: { width: 0, height: 0 },
+                                    shadowOpacity: 0.8,
+                                    shadowRadius: 15,
+                                }}>
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        borderWidth: 2,
+                                        borderColor: '#fff',
+                                        overflow: 'hidden',
+                                        marginRight: 10,
+                                        backgroundColor: '#333'
+                                    }}>
+                                        {recentGift.senderAvatar ? (
+                                            <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
+                                        ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
+                                            <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
+                                        ) : (
+                                            <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
+                                                </Text>
+                                            </LinearGradient>
+                                        )}
+                                    </View>
+                                    <Text
+                                        style={{
+                                            color: '#FBBF24',
+                                            fontSize: 38,
+                                            fontWeight: '900',
+                                            fontStyle: 'italic',
+                                            textShadowColor: 'rgba(0,0,0,0.8)',
+                                            textShadowRadius: 10,
+                                            textShadowOffset: { width: 2, height: 2 },
+                                            letterSpacing: 1
+                                        }}
+                                    >
+                                        x{recentGift.count}
+                                    </Text>
+                                </BlurView>
+                            </Animatable.View>
+                        )}
+                    </View>
                 </View>
             )}
 
@@ -1657,105 +1880,131 @@ export default function AudienceLiveScreen(props: Props) {
 
 
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
-            {recentGift && (
-                <Animatable.View
-                    animation="slideInLeft"
-                    duration={400}
-                    style={{
-                        position: 'absolute',
-                        top: 200,
-                        left: 10,
-                        zIndex: 10000,
-                    }}
-                >
-                    <BlurView intensity={80} tint="dark" style={{
-                        borderRadius: 30,
-                        padding: 4,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        minWidth: 180,
-                    }}>
-                        {/* Avatar Circle */}
-                        <View style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: '#FF0066',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1,
-                            borderColor: '#fff',
-                            overflow: 'hidden'
-                        }}>
-                            {recentGift.senderAvatar ? (
-                                <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
-                            ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
-                                <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
-                            ) : (
-                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
-                                    {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
-                                </Text>
-                            )}
-                        </View>
-
-                        <View style={{ marginLeft: 10, marginRight: 15 }}>
-                            <Text style={{ color: recentGift.isHost ? '#FFD700' : '#fff', fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
-                                {recentGift.senderName}
-                            </Text>
-                            <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '700' }}>
-                                {t('sentA')} {recentGift.giftName}
-                            </Text>
-                        </View>
-
-                        {/* Gift Icon floating next to it */}
-                        <Animatable.View
-                            key={recentGift.count}
-                            animation="bounceIn"
-                            style={{ position: 'absolute', right: -45 }}
-                        >
-                            <Image
-                                source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                style={{ width: 50, height: 50 }}
-                                resizeMode="contain"
-                            />
-                        </Animatable.View>
-                    </BlurView>
-                </Animatable.View>
-            )}
-
-            {/* Combo Counter */}
-            {recentGift && recentGift.count > 1 && (
-                <Animatable.View
-                    key={`combo-${recentGift.count}`}
-                    animation="bounceIn"
-                    duration={300}
-                    style={{
-                        position: 'absolute',
-                        top: 200,
-                        left: 190,
-                        zIndex: 10001
-                    }}
-                >
-                    <Text
+            {(recentGift && !recentGift.isBig) && (
+                <View style={{
+                    position: 'absolute',
+                    top: 180, // Moved up slightly to avoid overlapping
+                    left: 10,
+                    zIndex: 10000,
+                    flexDirection: 'row',
+                    alignItems: 'center'
+                }}>
+                    <Animatable.View
+                        animation="slideInLeft"
+                        duration={400}
                         style={{
-                            color: '#FBBF24',
-                            fontSize: 32,
-                            fontWeight: '900',
-                            fontStyle: 'italic',
-                            textShadowColor: 'rgba(0,0,0,0.8)',
-                            textShadowRadius: 4,
-                            textShadowOffset: { width: 2, height: 2 }
+                            flexDirection: 'row',
+                            alignItems: 'center'
                         }}
                     >
-                        x{recentGift.count}
-                    </Text>
-                </Animatable.View>
+                        <BlurView intensity={95} tint="dark" style={{
+                            borderRadius: 40,
+                            paddingVertical: 4,
+                            paddingHorizontal: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 255, 255, 0.3)',
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            minWidth: 250,
+                            overflow: 'hidden', // Fix rounded corners being hidden
+                        }}>
+                            {/* Avatar Circle */}
+                            <View style={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 20,
+                                backgroundColor: '#FF0066',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1.5,
+                                borderColor: 'rgba(255,255,255,0.8)',
+                                overflow: 'hidden',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 3
+                            }}>
+                                {recentGift.senderAvatar ? (
+                                    <Image source={{ uri: recentGift.senderAvatar }} style={{ width: '100%', height: '100%' }} />
+                                ) : recentGift.senderId && CustomBuilder.getUserAvatar(recentGift.senderId) ? (
+                                    <Image source={{ uri: CustomBuilder.getUserAvatar(recentGift.senderId) }} style={{ width: '100%', height: '100%' }} />
+                                ) : (
+                                    <LinearGradient colors={['#FF0066', '#FF6600']} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
+                                            {(recentGift.senderName || 'U').charAt(0).toUpperCase()}
+                                        </Text>
+                                    </LinearGradient>
+                                )}
+                            </View>
+
+                            <View style={{ marginLeft: 10, marginRight: 40 }}>
+                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
+                                    {recentGift.senderName}
+                                </Text>
+                                <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
+                                    {t('sentA')} {recentGift.giftName}
+                                </Text>
+                            </View>
+
+                            {/* Gift Icon inside a bubble */}
+                            <View
+                                style={{
+                                    position: 'absolute',
+                                    right: 1, // Overlap the edge like TikTok
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 26,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 2,
+                                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 4, height: 4 },
+                                    shadowOpacity: 0.4,
+                                    shadowRadius: 6,
+                                    elevation: 8
+                                }}
+                            >
+                                <Animatable.Image
+                                    key={`gift-icon-${recentGift.count}`}
+                                    animation="tada"
+                                    duration={1000}
+                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                    style={{ width: 38, height: 38 }}
+                                    resizeMode="contain"
+                                />
+                            </View>
+                        </BlurView>
+
+                        {/* Combo Count UI */}
+                        {recentGift.count > 1 && (
+                            <Animatable.View
+                                key={`combo-${recentGift.count}`}
+                                animation="bounceIn"
+                                duration={500}
+                                style={{ marginLeft: 35 }}
+                            >
+                                <Text style={{
+                                    color: '#FBBF24',
+                                    fontSize: 32,
+                                    fontWeight: '900',
+                                    fontStyle: 'italic',
+                                    textShadowColor: '#000',
+                                    textShadowOffset: { width: 2, height: 2 },
+                                    textShadowRadius: 4
+                                }}>
+                                    x{recentGift.count}
+                                </Text>
+                            </Animatable.View>
+                        )}
+                    </Animatable.View>
+                </View>
             )}
 
             {/* FLOATING ACTION BUTTONS */}
-            <View style={{ position: 'absolute', bottom: 120, right: 15, gap: 12, alignItems: 'center', zIndex: 1000 }}>
+            <View style={{ position: 'absolute', bottom: 120, right: 15, gap: 14, alignItems: 'center', zIndex: 1000 }}>
                 {/* Floating Heart Animations */}
                 <View style={{ position: 'absolute', bottom: 50, right: 0, width: 60, height: 400, pointerEvents: 'none' }}>
                     {floatingHearts.map(heart => (
@@ -1763,7 +2012,7 @@ export default function AudienceLiveScreen(props: Props) {
                     ))}
                 </View>
 
-                {/* Share Button */}
+                {/* Share Button - TikTok Style Glass */}
                 <TouchableOpacity
                     onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                     style={{
@@ -1774,13 +2023,15 @@ export default function AudienceLiveScreen(props: Props) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.2)'
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        overflow: 'hidden'
                     }}
                 >
                     <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                     <Share2 size={20} color="#fff" />
                 </TouchableOpacity>
 
+                {/* Like Button - TikTok Style Glass/Pink */}
                 <TouchableOpacity
                     onPress={handleSendLike}
                     activeOpacity={0.7}
@@ -1788,21 +2039,19 @@ export default function AudienceLiveScreen(props: Props) {
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor: 'rgba(255,0,102,0.6)',
+                        backgroundColor: 'rgba(0,0,0,0.4)', // Glass background for base state
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderWidth: 1,
-                        borderColor: '#fff',
-                        shadowColor: '#FF0066',
-                        shadowOpacity: 0.5,
-                        shadowRadius: 10,
-                        elevation: 10
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        overflow: 'hidden'
                     }}
                 >
-                    <Heart size={20} color="#fff" fill="#fff" />
+                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                    <Heart size={20} color="#FF0066" fill="#FF0066" />
                 </TouchableOpacity>
 
-                {/* PINK GIFT BUTTON */}
+                {/* PINK GIFT BUTTON - Prominent */}
                 <TouchableOpacity
                     onPress={() => setShowGifts(true)}
                     activeOpacity={0.7}
@@ -1833,20 +2082,18 @@ export default function AudienceLiveScreen(props: Props) {
                             width: 44,
                             height: 44,
                             borderRadius: 22,
-                            backgroundColor: '#F59E0B',
+                            backgroundColor: 'rgba(0,0,0,0.4)',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderWidth: 1.5,
-                            borderColor: '#fff',
-                            shadowColor: '#F59E0B',
-                            shadowOpacity: 0.5,
-                            shadowRadius: 10,
-                            elevation: 10
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.2)',
+                            overflow: 'hidden'
                         }}
                     >
+                        <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                         <ShoppingBag size={20} color="#fff" />
-                        <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{featuredProducts.length}</Text>
+                        <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>{featuredProducts.length}</Text>
                         </View>
                     </TouchableOpacity>
                 )}

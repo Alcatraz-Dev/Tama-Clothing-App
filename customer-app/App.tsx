@@ -537,6 +537,14 @@ const Translations: any = {
     limitedTimeOffer: 'OFFRE LIMITÉE',
     liveEnded: 'Fin du Live',
     hostEndedSession: 'L\'hôte a terminé la session live.',
+    phoneRequired: 'Le numéro de téléphone est requis',
+    addressRequired: 'L\'adresse de livraison est requise',
+    selectColor: 'Veuillez sélectionner une couleur',
+    selectSize: 'Veuillez sélectionner une taille',
+    pinDuration: 'DURÉE DE L\'ÉPINGLAGE :',
+    productPinned: 'Le produit est maintenant épinglé à l\'écran !',
+    timeRemaining: 'Temps restant',
+    mins: 'min',
   },
   ar: {
     success: 'تم بنجاح',
@@ -598,6 +606,11 @@ const Translations: any = {
     showResults: 'عرض النتائج', yourBag: 'الحقيبة', thankYou: 'شكراً لطلبك', preparingDelivery: 'نحن نجهز طلبك من TAMA.',
     createAccount: 'إنشاء حساب', searchCollections: 'ابحث...', all: 'الكل',
     signIn: 'دخول', getStarted: 'ابدأ الآن', shopByBrand: 'تسوق حسب العلامة', allBrands: 'كل العلامات',
+    pinDuration: 'مدة التثبيت:',
+    pinned: 'مثبت',
+    productPinned: 'تم تثبيت المنتج على الشاشة!',
+    timeRemaining: 'الوقت المتبقي',
+    mins: 'دقيقة',
     error: 'خطأ', save: 'حفظ', delete: 'حذف', areYouSure: 'هل أنت متأكد؟',
     noBrandsFound: 'لم يتم العثور على علامات', editBrand: 'تعديل العلامة', newBrand: 'علامة جديدة',
     editCategory: 'تعديل الفئة', newCategory: 'فئة جديدة',
@@ -704,7 +717,6 @@ const Translations: any = {
     retry: 'إعادة المحاولة',
     zegoFailed: 'فشل تحميل SDK. يرجى إعادة بناء التطبيق.',
     selectProductToPin: 'اختر منتجاً لتثبيته',
-    pinned: 'مُثبت',
     updateFailed: 'فشل التحديث',
     userNotFound: 'المستخدم غير موجود',
     video: 'فيديو',
@@ -1355,6 +1367,8 @@ export default function App() {
             userAvatar={profileData?.avatarUrl || user?.photoURL}
             onClose={() => setActiveTab('Home')}
             t={t}
+            language={language}
+            profileData={profileData}
           />
         )
       );
