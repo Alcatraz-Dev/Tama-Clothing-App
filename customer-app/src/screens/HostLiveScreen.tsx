@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing, AppState, KeyboardAvoidingView, Dimensions, Clipboard, FlatList, Share } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Gift as GiftIcon, Swords, Sparkles, MoreHorizontal, X, Share2, Flame, Radio, Ticket, Clock, ShoppingBag, PlusCircle, Send } from 'lucide-react-native';
+import { Gift as GiftIcon, Swords, Sparkles, MoreHorizontal, X, Share2, Flame, Radio, Ticket, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, ChessKingIcon } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
@@ -244,7 +244,8 @@ export default function HostLiveScreen(props: Props) {
         if (isInPK) {
             pkStartLikesRef.current = totalLikes;
             console.log('🏁 PK Started. Baseline Likes:', totalLikes);
-            setHostScore(0); // Visual reset immediately
+            // setHostScore(0); // ❌ Removed: Reset only on new invite
+            // setGuestScore(0); // ❌ Removed: Reset only on new invite
         }
     }, [isInPK]);
 
@@ -346,12 +347,7 @@ export default function HostLiveScreen(props: Props) {
         await LiveSessionService.unpinProduct(channelId);
     };
 
-    // Cross-Room Sync: Push My Score Updates
-    useEffect(() => {
-        if (isInPK && channelId) {
-            LiveSessionService.updatePKScore(channelId, hostScore);
-        }
-    }, [hostScore, isInPK, channelId]);
+
 
     // ✅ Reliable Sync: Listen to my OWN session for Total Likes (written by Audience via Firestore)
     useEffect(() => {
@@ -365,11 +361,36 @@ export default function HostLiveScreen(props: Props) {
 
                 if (session.totalLikes !== undefined) {
                     setTotalLikes(session.totalLikes);
-                    // If in PK, my score is derived from total engagement (likes + gifts points)
-                    // Subtract baseline to start from 0
-                    if (isInPKRef.current) {
-                        const currentScore = Math.max(0, session.totalLikes - pkStartLikesRef.current);
-                        setHostScore(currentScore);
+                }
+
+                // Sync PK State for Host too (to hear about opponent points)
+                if (session.pkState) {
+                    // Only update isInPK if it's actually changing to avoid re-triggering effects
+                    if (session.pkState.isActive !== isInPKRef.current) {
+                        setIsInPK(session.pkState.isActive);
+                    }
+
+                    // ALWAYS update guestScore from Firestore (opponent's score)
+                    if (session.pkState.guestScore !== undefined) {
+                        setGuestScore(session.pkState.guestScore);
+                    }
+
+                    // For hostScore, trust Firestore as the source of truth
+                    // This ensures consistency across all screens
+                    if (session.pkState.hostScore !== undefined) {
+                        console.log('🔄 Syncing hostScore from Firestore:', session.pkState.hostScore, 'Current:', hostScoreRef.current);
+                        setHostScore(session.pkState.hostScore);
+                    }
+
+                    if (session.pkState.hostName) {
+                        // For host, we don't usually need to sync our own name, but we can update if needed
+                    }
+                    if (session.pkState.opponentName) setOpponentName(session.pkState.opponentName);
+                    if (session.pkState.endTime && !pkEndTime) {
+                        setPkEndTime(session.pkState.endTime);
+                    }
+                    if (session.pkState.opponentChannelId && !opponentChannelId) {
+                        setOpponentChannelId(session.pkState.opponentChannelId);
                     }
                 }
 
@@ -453,13 +474,12 @@ export default function HostLiveScreen(props: Props) {
         return () => clearInterval(interval);
     }, [userId, userName, opponentName]);
 
-    // ✅ NEW: Persist Full PK State to Firestore for Audience Sync
+    // ✅ Persist PK State to Firestore for Audience Sync (WITHOUT scores - those use atomic increments)
     useEffect(() => {
         if (channelId) {
             const pkState: any = {
                 isActive: isInPK,
-                hostScore: hostScore,
-                guestScore: guestScore,
+                // ❌ DO NOT update scores here - they use atomic increments
                 opponentName: opponentName,
                 hostName: userName
             };
@@ -476,14 +496,35 @@ export default function HostLiveScreen(props: Props) {
                 pkState.startTime = pkEndTime - (pkDuration * 1000);
             }
 
-            // Include winner if battle ended
-            if (pkWinner) {
+            // Explicitly handle winner field to clear it during active PK
+            if (isInPK) {
+                pkState.winner = null;
+            } else if (pkWinner) {
                 pkState.winner = pkWinner;
             }
 
+            console.log('📦 Updating Firestore PK State (metadata only):', {
+                channelId,
+                isInPK,
+                opponentChannelId
+            });
             LiveSessionService.updatePKState(channelId, pkState).catch(e => console.error('PK State Sync Error:', e));
+
+            // ✅ Also update opponent's session if available (Cross-Room Sync)
+            if (opponentChannelId) {
+                const opponentPkState = {
+                    ...pkState,
+                    // Swap names for opponent's view
+                    opponentName: userName,
+                    hostName: opponentName,
+                    opponentChannelId: channelId
+                };
+                LiveSessionService.updatePKState(opponentChannelId, opponentPkState).catch(e =>
+                    console.error('Opponent PK State Sync Error:', e)
+                );
+            }
         }
-    }, [isInPK, hostScore, guestScore, opponentName, opponentChannelId, channelId, pkDuration, pkEndTime, pkWinner, userName]);
+    }, [isInPK, opponentName, opponentChannelId, channelId, pkDuration, pkEndTime, pkWinner, userName]);
 
     // Force Sync on PK Start
     useEffect(() => {
@@ -566,16 +607,21 @@ export default function HostLiveScreen(props: Props) {
 
     const gifts = GIFTS;
 
-    const updatePKScore = (giftName: string) => {
+    const updatePKScore = async (giftName: string) => {
         if (!isInPKRef.current) return;
         const gift = gifts.find(g => g.name === giftName);
         if (gift && gift.points) {
             const pointsToAdd = gift.points;
-            setHostScore(prev => prev + pointsToAdd);
-            console.log(`📈 PK Score Update: adding ${pointsToAdd} points for ${giftName}`);
+            console.log(`📈 PK Score Update (Gift): adding ${pointsToAdd} points for ${giftName}`);
 
+            // ✅ Increment in Firestore atomically (like totalLikes)
+            // This handles both local and cross-room sync automatically
+            await LiveSessionService.incrementPKHostScore(channelId, pointsToAdd, opponentChannelId || undefined).catch(e =>
+                console.error('PK Host Score Increment Error:', e)
+            );
+
+            // Broadcast for immediate feedback (optional, Firestore sync will handle it)
             if (ZegoUIKit) {
-                // Broadcast that I (the current host) got points
                 ZegoUIKit.sendInRoomCommand(JSON.stringify({
                     type: 'PK_VOTE',
                     points: pointsToAdd,
@@ -584,6 +630,26 @@ export default function HostLiveScreen(props: Props) {
             }
         }
     };
+
+    // ✅ Sync PK scores every 3 seconds to ensure real-time accuracy
+    useEffect(() => {
+        if (!isInPK || !ZegoUIKit) return;
+
+        const syncInterval = setInterval(() => {
+            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+                type: 'PK_SCORE_SYNC',
+                hostScore: hostScoreRef.current,
+                guestScore: guestScoreRef.current,
+                totalLikes: totalLikesRef.current,
+                hostId: userId,
+                hostName: userName,
+                opponentName: opponentName,
+                isInPK: true
+            }), [], () => { });
+        }, 3000);
+
+        return () => clearInterval(syncInterval);
+    }, [isInPK, userName, opponentName]);
 
     const openGiftModal = () => {
         if (ZegoUIKit) {
@@ -912,24 +978,12 @@ export default function HostLiveScreen(props: Props) {
                         combo: data.combo // ✅ Pass Combo
                     });
 
-                    setTotalLikes(prev => prev + (Number(data.points) || 1));
-                    if (isInPKRef.current) updatePKScore(giftNameStr);
-
                 } else if (data.type === 'PK_VOTE') {
-                    if (data.hostId === userId) setHostScore(prev => prev + (data.points || 0));
-                    else setGuestScore(prev => prev + (data.points || 0));
-
+                    // No-op: scores are synced via Firestore listener
                 } else if (data.type === 'PK_LIKE') {
-                    const points = data.count || 1;
-                    setTotalLikes(prev => prev + points);
-                    handleSendLike();
-                    if (data.hostId === userId) setHostScore(prev => prev + points);
-                    else setGuestScore(prev => prev + points);
-
+                    handleSendLike(); // Keep to trigger floating heart animation
                 } else if (data.type === 'PK_SCORE_SYNC') {
-                    setHostScore(data.hostScore);
-                    setGuestScore(data.guestScore);
-
+                    // No-op: scores are synced via Firestore listener
                 } else if (data.type === 'PK_BATTLE_STOP') {
                     setIsInPK(false);
                     setPkBattleId(null);
@@ -950,12 +1004,12 @@ export default function HostLiveScreen(props: Props) {
                 const pkData = JSON.parse(data);
                 const duration = pkData.duration || 180;
                 Alert.alert(
-                    "PK Battle Request",
-                    `${pkData.inviterName} wants to start a PK battle!`,
+                    t('pkBattleRequest') || "PK Battle Request",
+                    `${pkData.inviterName || 'Host'} ${t('wantsToStartPK') || 'wants to start a PK battle!'}`,
                     [
-                        { text: "Reject", onPress: () => ZegoUIKit.getSignalingPlugin().refuseInvitation(inviter.id) },
+                        { text: t('reject') || "Reject", onPress: () => ZegoUIKit.getSignalingPlugin().refuseInvitation(inviter.id) },
                         {
-                            text: "Accept",
+                            text: t('accept') || "Accept",
                             onPress: () => {
                                 ZegoUIKit.getSignalingPlugin().acceptInvitation(inviter.id, JSON.stringify({
                                     accepterName: userName,
@@ -964,7 +1018,10 @@ export default function HostLiveScreen(props: Props) {
                                     endTime: pkData.endTime
                                 }));
                                 setIsInPK(true);
+                                setHostScore(0); // ✅ Explicit reset for new battle
+                                setGuestScore(0); // ✅ Explicit reset for new battle
                                 setOpponentName(pkData.inviterName || 'Opponent');
+                                setOpponentChannelId(pkData.roomID || null); // ✅ Save opponent channel ID
                                 setPkBattleId(callID);
                                 setPkEndTime(pkData.endTime || Date.now() + (duration * 1000));
                             }
@@ -977,22 +1034,63 @@ export default function HostLiveScreen(props: Props) {
         });
 
         // 3. Invitation Accepted Handler
-        ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, ({ invitee, data }: any) => {
+        ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, async ({ invitee, data }: any) => {
             setIsInPK(true);
+            setHostScore(0);
+            setGuestScore(0);
+            setPkWinner(null);
+            setShowPKResult(false);
+
+            let opponentChanId = null;
+            let endTime = null;
+
             try {
                 if (data) {
                     const parsed = JSON.parse(data);
                     if (parsed.accepterName) setOpponentName(parsed.accepterName);
-                    if (parsed.endTime) setPkEndTime(parsed.endTime);
+                    if (parsed.endTime) {
+                        endTime = parsed.endTime;
+                        setPkEndTime(endTime);
+                    }
+                    if (parsed.channelId) {
+                        opponentChanId = parsed.channelId;
+                        setOpponentChannelId(opponentChanId);
+                    }
                 }
             } catch (e) {
                 console.error('PK Accept Parse Error:', e);
             }
-            Alert.alert("Success", "PK Battle Started!");
+
+            // ✅ Initialize scores to 0 in Firestore for both hosts
+            await LiveSessionService.updatePKState(channelId, {
+                isActive: true,
+                hostScore: 0,
+                guestScore: 0,
+                opponentName: opponentName,
+                hostName: userName,
+                opponentChannelId: opponentChanId,
+                endTime: endTime,
+                duration: pkDuration
+            }).catch(e => console.error('PK State Init Error:', e));
+
+            if (opponentChanId) {
+                await LiveSessionService.updatePKState(opponentChanId, {
+                    isActive: true,
+                    hostScore: 0,
+                    guestScore: 0,
+                    opponentName: userName,
+                    hostName: opponentName,
+                    opponentChannelId: channelId,
+                    endTime: endTime,
+                    duration: pkDuration
+                }).catch(e => console.error('Opponent PK State Init Error:', e));
+            }
+
+            Alert.alert(t('success') || "Success", t('pkBattleStarted') || "PK Battle Started!");
         });
 
         ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, () => {
-            Alert.alert("Declined", "The host declined your PK challenge.");
+            Alert.alert(t('declined') || "Declined", t('pkDeclinedDesc') || "The host declined your PK challenge.");
         });
 
         return () => {
@@ -1076,6 +1174,29 @@ export default function HostLiveScreen(props: Props) {
         const id = Date.now();
         setFloatingHearts(prev => [...prev.slice(-20), { id, x }]); // Max 20 hearts
 
+        // Increment total likes
+        setTotalLikes(prev => prev + 1);
+
+        // If in PK battle, update score and broadcast
+        if (isInPKRef.current) {
+            console.log(`💖 PK Like: +1 point`);
+
+            // ✅ Increment in Firestore atomically (like totalLikes)
+            // This handles both local and cross-room sync automatically
+            LiveSessionService.incrementPKHostScore(channelId, 1, opponentChannelId || undefined).catch(e =>
+                console.error('PK Host Score Increment Error:', e)
+            );
+
+            // Broadcast like to other participants (optional, for immediate feedback)
+            if (ZegoUIKit) {
+                ZegoUIKit.sendInRoomCommand(JSON.stringify({
+                    type: 'PK_LIKE',
+                    count: 1,
+                    hostId: userId
+                }), [], () => { });
+            }
+        }
+
         // Remove heart after animation
         setTimeout(() => {
             setFloatingHearts(prev => prev.filter(h => h.id !== id));
@@ -1130,85 +1251,225 @@ export default function HostLiveScreen(props: Props) {
             {/* Flame Counter */}
             {/* Flame Counter - ONLY if reach 50 */}
             {totalLikes >= 50 && (
-                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 110} />
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 120} />
             )}
 
-            {/* PK BATTLE SCORE BAR - Premium Look */}
+            {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
             {isInPK && (
                 <Animatable.View
                     animation="slideInDown"
                     duration={800}
                     style={{
                         position: 'absolute',
-                        top: 80,
+                        top: 80, // Slightly lower to clear the top profile bar better
                         width: '100%',
                         alignItems: 'center',
                         zIndex: 2000,
-                        paddingHorizontal: 20
+                        paddingHorizontal: 8
                     }}>
-                    {/* Timer Display */}
-                    {pkTimeRemaining > 0 && (
-                        <View style={{
-                            backgroundColor: 'rgba(0,0,0,0.7)',
-                            paddingHorizontal: 16,
-                            paddingVertical: 6,
-                            borderRadius: 20,
-                            marginBottom: 8,
-                            borderWidth: 2,
-                            borderColor: pkTimeRemaining <= 30 ? '#EF4444' : '#3B82F6'
-                        }}>
-                            <Text style={{
-                                color: pkTimeRemaining <= 30 ? '#EF4444' : '#fff',
-                                fontSize: 16,
-                                fontWeight: '900',
-                                letterSpacing: 1
+                    {/* Integrated Timer & VS Badge */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 20,
+                        marginBottom: 3, // Pushed 8px more to the top
+                    }}>
+                        {/* Timer Display */}
+                        {pkTimeRemaining > 0 && (
+                            <View style={{
+                                backgroundColor: '#121212',
+                                paddingHorizontal: 12,
+                                paddingVertical: 4,
+                                borderRadius: 20,
+                                borderWidth: 1.5,
+                                borderColor: pkTimeRemaining <= 30 ? '#FF0050' : '#00F2EA',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                shadowColor: pkTimeRemaining <= 30 ? '#FF0050' : '#00F2EA',
+                                shadowOpacity: 0.6,
+                                shadowRadius: 12,
+                                elevation: 10
                             }}>
-                                ⏱️ {Math.floor(pkTimeRemaining / 60)}:{(pkTimeRemaining % 60).toString().padStart(2, '0')}
-                            </Text>
-                        </View>
-                    )}
+                                <Timer size={14} color={pkTimeRemaining <= 30 ? '#FF0050' : '#FFF'} />
+                                <Text style={{
+                                    color: pkTimeRemaining <= 30 ? '#FF0050' : '#fff',
+                                    fontSize: 14,
+                                    fontWeight: '900',
+                                    fontVariant: ['tabular-nums'],
+                                    letterSpacing: 0.5
+                                }}>
+                                    {Math.floor(pkTimeRemaining / 60)}:{(pkTimeRemaining % 60).toString().padStart(2, '0')}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
 
-                    <View style={{ flexDirection: 'row', width: '100%', height: 28, borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    {/* Progress Bar Container */}
+                    <View style={{
+                        width: '100%',
+                        height: 36,
+                        borderRadius: 18,
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        borderWidth: 2,
+                        borderColor: 'rgba(255,255,255,0.15)',
+                        flexDirection: 'row',
+                        shadowColor: '#000',
+                        shadowOpacity: 0.5,
+                        shadowRadius: 15,
+                        elevation: 10,
+                        position: 'relative',
+
+                    }}>
+                        {/* Host Side (Pink/Red) */}
                         <LinearGradient
-                            colors={['#FF0055', '#FF4D80']}
-                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            colors={['#FF0050', '#FF4D80', '#FF0050']}
+                            start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
                             style={{
                                 flex: Math.max(hostScore, 1),
                                 justifyContent: 'center',
-                                paddingLeft: 12
+                                paddingLeft: 18,
+                                borderRadius: 18, // Added for iOS rounding
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{hostScore}</Text>
+                            <Animatable.Text
+                                animation={hostScore > 0 ? "pulse" : undefined}
+                                iterationCount="infinite"
+                                style={{
+                                    color: '#fff',
+                                    fontSize: 18,
+                                    fontWeight: '900',
+                                    textShadowColor: 'rgba(0,0,0,0.5)',
+                                    textShadowOffset: { width: 1, height: 1 },
+                                    textShadowRadius: 4
+                                }}
+                            >
+                                {hostScore}
+                            </Animatable.Text>
+                            {hostScore > guestScore && (
+                                <View style={{ position: 'absolute', top: 2, left: 16 }}>
+                                    <ChessKingIcon size={10} color="#FFD700" fill="#FFD700" />
+                                </View>
+                            )}
                         </LinearGradient>
+
+                        {/* VS Center Indicator */}
+                        <View style={{
+                            position: 'absolute',
+                            left: `${(Math.max(hostScore, 1) / (Math.max(hostScore, 1) + Math.max(guestScore, 1))) * 100}%`,
+                            top: 0,
+                            bottom: 0,
+                            width: 34,
+                            marginLeft: -17,
+                            zIndex: 15,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <LinearGradient
+                                colors={['#121212', '#262626']}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1.5,
+                                    borderColor: 'rgba(255,255,255,0.3)',
+                                    shadowColor: '#000',
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 5
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900', fontStyle: 'italic' }}>VS</Text>
+                            </LinearGradient>
+                        </View>
+
+                        {/* Guest Side (Blue/Cyan) */}
                         <LinearGradient
-                            colors={['#3B82F6', '#60A5FA']}
-                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            colors={['#00F2EA', '#3B82F6', '#00F2EA']}
+                            start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
                             style={{
                                 flex: Math.max(guestScore, 1),
                                 alignItems: 'flex-end',
                                 justifyContent: 'center',
-                                paddingRight: 12
+                                paddingRight: 18,
+                                borderRadius: 18, // Added for iOS rounding
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{guestScore}</Text>
+                            <Animatable.Text
+                                animation={guestScore > 0 ? "pulse" : undefined}
+                                iterationCount="infinite"
+                                style={{
+                                    color: '#fff',
+                                    fontSize: 18,
+                                    fontWeight: '900',
+                                    textShadowColor: 'rgba(0,0,0,0.5)',
+                                    textShadowOffset: { width: 1, height: 1 },
+                                    textShadowRadius: 4
+                                }}
+                            >
+                                {guestScore}
+                            </Animatable.Text>
+                            {guestScore > hostScore && (
+                                <View style={{ position: 'absolute', top: 2, right: 16 }}>
+                                    <Trophy size={10} color="#FFD700" fill="#FFD700" />
+                                </View>
+                            )}
                         </LinearGradient>
                     </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 8, paddingHorizontal: 2 }}>
-                        <View style={{ backgroundColor: '#FF0055', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{userName?.toUpperCase() || 'HOST'}</Text>
+
+                    {/* Bottom Label Badges */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 8, paddingHorizontal: 12 }}>
+                        {/* Me / Host Label */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: hostScore >= guestScore ? '#FF0050' : 'rgba(0,0,0,0.4)',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: hostScore >= guestScore ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                            gap: 4
+                        }}>
+                            <User size={10} color="#FFF" fill="#FFF" />
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>{userName?.toUpperCase() || (t('hostLabel') || 'YOU').toUpperCase()}</Text>
                         </View>
-                        <View style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{opponentName?.toUpperCase() || 'OPPONENT'}</Text>
+
+                        {/* Win Streak Indicator or Winning Message */}
+                        {hostScore !== guestScore && (
+                            <Animatable.View animation="fadeIn" style={{ backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, borderRadius: 20, justifyContent: 'center', height: 20 }}>
+                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                                    {hostScore > guestScore ? (t('hostIsLeading') || 'LEADING').toUpperCase() : (t('opponentLeading') || 'BEHIND').toUpperCase()}
+                                </Text>
+                            </Animatable.View>
+                        )}
+
+                        {/* Opponent Label */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: guestScore >= hostScore ? '#00F2EA' : 'rgba(0,0,0,0.4)',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: guestScore >= hostScore ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                            gap: 4
+                        }}>
+                            <Users size={10} color="#FFF" fill="#FFF" />
+                            <Text style={{ color: guestScore >= hostScore ? '#000' : '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>{opponentName?.toUpperCase() || (t('opponentLabel') || 'OPPONENT').toUpperCase()}</Text>
                         </View>
                     </View>
                 </Animatable.View>
             )}
 
-            {/* PK Winner Announcement - Modern UI */}
             {showPKResult && pkWinner && (
                 <Animatable.View
-                    animation="bounceIn"
-                    duration={800}
+                    animation="fadeIn"
+                    duration={400}
                     style={{
                         position: 'absolute',
                         top: 0,
@@ -1218,138 +1479,161 @@ export default function HostLiveScreen(props: Props) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         zIndex: 3000,
-                        backgroundColor: 'rgba(0,0,0,0.85)'
+                        backgroundColor: 'rgba(0,0,0,0.4)'
                     }}
                 >
-                    <LinearGradient
-                        colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B', '#D97706'] : ['#10B981', '#059669', '#047857']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{
-                            width: '85%',
-                            maxWidth: 350,
-                            borderRadius: 30,
-                            padding: 3,
-                            shadowColor: pkWinner === 'Draw' ? '#FCD34D' : '#10B981',
-                            shadowOffset: { width: 0, height: 20 },
-                            shadowOpacity: 0.6,
-                            shadowRadius: 30
-                        }}
+                    <Animatable.View
+                        animation="zoomIn"
+                        duration={600}
+                        style={{ width: '88%', maxWidth: 360 }}
                     >
-                        <View style={{
-                            backgroundColor: '#1A1A24',
-                            borderRadius: 27,
-                            paddingVertical: 40,
-                            paddingHorizontal: 30,
-                            alignItems: 'center'
-                        }}>
-                            {/* Confetti/Trophy Animation */}
-                            <View style={{
-                                flexDirection: 'row',
-                                marginBottom: 15,
-                                gap: 8
-                            }}>
-                                <Text style={{ fontSize: 32 }}>🎉</Text>
-                                <Text style={{ fontSize: 48 }}>
-                                    {pkWinner === 'Draw' ? '🤝' : '👑'}
-                                </Text>
-                                <Text style={{ fontSize: 32 }}>🎉</Text>
-                            </View>
-
-                            {/* Title */}
-                            <Text style={{
-                                color: '#fff',
-                                fontSize: 16,
-                                fontWeight: '600',
-                                marginBottom: 12,
-                                opacity: 0.7,
-                                letterSpacing: 2,
-                                textTransform: 'uppercase'
-                            }}>
-                                {pkWinner === 'Draw' ? 'Battle Ended' : 'PK Battle Winner'}
-                            </Text>
-
-                            {/* Winner Name */}
-                            <LinearGradient
-                                colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B'] : ['#10B981', '#34D399']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={{
-                                    paddingHorizontal: 24,
-                                    paddingVertical: 12,
-                                    borderRadius: 20,
-                                    marginBottom: 20
-                                }}
-                            >
-                                <Text style={{
-                                    color: '#000',
-                                    fontSize: 32,
-                                    fontWeight: '900',
-                                    textAlign: 'center',
-                                    textShadowColor: 'rgba(255,255,255,0.3)',
-                                    textShadowOffset: { width: 0, height: 1 },
-                                    textShadowRadius: 2
-                                }}>
-                                    {pkWinner === 'Draw' ? "It's a Draw!" : pkWinner}
-                                </Text>
-                            </LinearGradient>
-
-                            {/* Score Display */}
-                            <View style={{
-                                flexDirection: 'row',
+                        <LinearGradient
+                            colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B', '#D97706'] : ['#10B981', '#059669', '#047857']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                                borderRadius: 32,
+                                padding: 2,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 25 },
+                                shadowOpacity: 0.5,
+                                shadowRadius: 35
+                            }}
+                        >
+                            <BlurView intensity={95} tint="dark" style={{
+                                borderRadius: 30,
+                                paddingVertical: 45,
+                                paddingHorizontal: 25,
                                 alignItems: 'center',
-                                backgroundColor: 'rgba(255,255,255,0.05)',
-                                paddingHorizontal: 20,
-                                paddingVertical: 12,
-                                borderRadius: 15,
-                                gap: 15
+                                overflow: 'hidden'
                             }}>
-                                <View style={{ alignItems: 'center' }}>
-                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
-                                        {userName?.toUpperCase()}
-                                    </Text>
-                                    <Text style={{
-                                        color: '#FF0055',
-                                        fontSize: 28,
-                                        fontWeight: '900'
+                                {/* Confetti/Trophy Animation with Glow */}
+                                <Animatable.View
+                                    animation="pulse"
+                                    iterationCount="infinite"
+                                    style={{
+                                        flexDirection: 'row',
+                                        marginBottom: 20,
+                                        gap: 12,
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 36 }}>🎉</Text>
+                                    <View style={{
+                                        shadowColor: pkWinner === 'Draw' ? '#FBBF24' : '#10B981',
+                                        shadowOffset: { width: 0, height: 0 },
+                                        shadowOpacity: 1,
+                                        shadowRadius: 20
                                     }}>
-                                        {hostScore}
-                                    </Text>
-                                </View>
+                                        <Text style={{ fontSize: 56 }}>
+                                            {pkWinner === 'Draw' ? '🤝' : '👑'}
+                                        </Text>
+                                    </View>
+                                    <Text style={{ fontSize: 36 }}>🎉</Text>
+                                </Animatable.View>
 
-                                <Text style={{ color: '#666', fontSize: 20, fontWeight: '700' }}>VS</Text>
-
-                                <View style={{ alignItems: 'center' }}>
-                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
-                                        {opponentName?.toUpperCase()}
-                                    </Text>
-                                    <Text style={{
-                                        color: '#3B82F6',
-                                        fontSize: 28,
-                                        fontWeight: '900'
-                                    }}>
-                                        {guestScore}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Celebration Message */}
-                            {pkWinner !== 'Draw' && (
+                                {/* Title with Letter Spacing */}
                                 <Text style={{
-                                    color: '#888',
-                                    fontSize: 13,
-                                    marginTop: 20,
-                                    fontWeight: '600',
-                                    textAlign: 'center'
+                                    color: 'rgba(255,255,255,0.6)',
+                                    fontSize: 14,
+                                    fontWeight: '800',
+                                    marginBottom: 15,
+                                    letterSpacing: 4,
+                                    textTransform: 'uppercase'
                                 }}>
-                                    🎊 Congratulations! 🎊
+                                    {pkWinner === 'Draw' ? t('battleEnded') : t('pkWinnerTitle')}
                                 </Text>
-                            )}
-                        </View>
-                    </LinearGradient>
+
+                                {/* Modern Winner Card */}
+                                <LinearGradient
+                                    colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B'] : ['#10B981', '#34D399']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        width: '100%',
+                                        paddingVertical: 18,
+                                        borderRadius: 24,
+                                        marginBottom: 25,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 10 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 15
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: '#000',
+                                        fontSize: 28,
+                                        fontWeight: '900',
+                                        textAlign: 'center',
+                                        letterSpacing: 0.5
+                                    }}>
+                                        {pkWinner === 'Draw' ? t('itsADraw') : pkWinner}
+                                    </Text>
+                                </LinearGradient>
+
+                                {/* Score Comparison Table */}
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: 'rgba(255,255,255,0.08)',
+                                    paddingHorizontal: 25,
+                                    paddingVertical: 18,
+                                    borderRadius: 20,
+                                    width: '100%',
+                                    justifyContent: 'space-between',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.1)'
+                                }}>
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 6, fontWeight: '700', letterSpacing: 1 }}>
+                                            {userName?.toUpperCase() || (t('hostLabel') || 'YOU').toUpperCase()}
+                                        </Text>
+                                        <Text style={{
+                                            color: '#FF0055',
+                                            fontSize: 32,
+                                            fontWeight: '900'
+                                        }}>
+                                            {hostScore}
+                                        </Text>
+                                    </View>
+
+                                    <View style={{
+                                        width: 1,
+                                        height: 30,
+                                        backgroundColor: 'rgba(255,255,255,0.1)',
+                                        marginHorizontal: 15
+                                    }} />
+
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 6, fontWeight: '700', letterSpacing: 1 }}>
+                                            {opponentName?.toUpperCase() || (t('opponentLabel') || 'OPPONENT').toUpperCase()}
+                                        </Text>
+                                        <Text style={{
+                                            color: '#3B82F6',
+                                            fontSize: 32,
+                                            fontWeight: '900'
+                                        }}>
+                                            {guestScore}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Message Footer */}
+                                <View style={{ marginTop: 25 }}>
+                                    <Text style={{
+                                        color: 'rgba(255,255,255,0.4)',
+                                        fontSize: 12,
+                                        fontWeight: '600',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        {pkWinner === 'Draw' ? t ? t('goodMatch') : 'What a match!' : `🎉 ${t ? t('congratulations') : 'Congratulations!'} 🎉`}
+                                    </Text>
+                                </View>
+                            </BlurView>
+                        </LinearGradient>
+                    </Animatable.View>
                 </Animatable.View>
             )}
-
             <ZegoUIKitPrebuiltLiveStreaming
                 ref={prebuiltRef}
                 appID={ZEGO_APP_ID}
@@ -1648,143 +1932,147 @@ export default function HostLiveScreen(props: Props) {
 
             {/* ALPHA VIDEO OVERLAY */}
             {/* GIFT ANIMATIONS (Full Screen Overlay) */}
-            {showGiftVideo && (
-                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
-                    <View style={{ alignItems: 'center' }}>
-                        {(() => {
-                            const gift = GIFTS.find(g => g.name === recentGift?.giftName);
-                            // Reliability: Use isBig from state if available, fallback to point check
-                            const isBig = recentGift?.isBig || (gift?.points || 0) >= 500;
-                            const source = gift?.url ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
+            {
+                showGiftVideo && (
+                    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 9000 }}>
+                        <View style={{ alignItems: 'center' }}>
+                            {(() => {
+                                const gift = GIFTS.find(g => g.name === recentGift?.giftName);
+                                // Reliability: Use isBig from state if available, fallback to point check
+                                const isBig = recentGift?.isBig || (gift?.points || 0) >= 500;
+                                const source = gift?.url ? { uri: gift.url } : (gift?.icon ? (typeof gift.icon === 'number' ? gift.icon : { uri: gift.icon }) : null);
 
-                            if (source) {
-                                if (isBig) {
-                                    return (
-                                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                                            {/* Spotlight effect */}
-                                            <Animatable.View
-                                                animation="fadeIn"
-                                                duration={500}
-                                                style={{
-                                                    position: 'absolute',
-                                                    width: 600,
-                                                    height: 600,
-                                                    borderRadius: 300,
-                                                    overflow: 'hidden',
-                                                }}
-                                            >
-                                                <LinearGradient
-                                                    colors={['rgba(60, 30, 0, 0.4)', 'rgba(60, 30, 0, 0.2)', 'rgba(251, 191, 36, 0.05)', 'transparent']}
-                                                    style={{ flex: 1 }}
-                                                />
-                                            </Animatable.View>
-
-                                            <Animatable.View
-                                                animation="bounceIn"
-                                                duration={1000}
-                                                style={{ alignItems: 'center' }}
-                                            >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
-                                                    <Text style={{
-                                                        color: '#fff',
-                                                        fontSize: 38,
-                                                        fontWeight: '900',
-                                                        textShadowColor: 'rgba(0,0,0,0.9)',
-                                                        textShadowRadius: 10,
-                                                        textShadowOffset: { width: 0, height: 2 }
-                                                    }}>
-                                                        {recentGift?.senderName}
-                                                    </Text>
-                                                    {recentGift && (
-                                                        <Animatable.Text
-                                                            key={`big-combo-${recentGift.count}`}
-                                                            animation="bounceIn"
-                                                            duration={400}
-                                                            style={{
-                                                                color: '#FBBF24',
-                                                                fontSize: 58,
-                                                                fontWeight: '900',
-                                                                fontStyle: 'italic',
-                                                                marginLeft: 15,
-                                                                textShadowColor: '#000',
-                                                                textShadowOffset: { width: 4, height: 4 },
-                                                                textShadowRadius: 2
-                                                            }}
-                                                        >
-                                                            x{recentGift.count}
-                                                        </Animatable.Text>
-                                                    )}
-                                                </View>
-
+                                if (source) {
+                                    if (isBig) {
+                                        return (
+                                            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                                                {/* Spotlight effect */}
                                                 <Animatable.View
-                                                    animation="pulse"
-                                                    iterationCount="infinite"
-                                                    duration={2000}
-                                                    direction="alternate"
+                                                    animation="fadeIn"
+                                                    duration={500}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        width: 600,
+                                                        height: 600,
+                                                        borderRadius: 300,
+                                                        overflow: 'hidden',
+                                                    }}
                                                 >
-                                                    <Image
-                                                        source={source}
-                                                        style={{
-                                                            width: 220,
-                                                            height: 220,
-                                                            maxWidth: 500,
-                                                            maxHeight: 500
-                                                        }}
-                                                        resizeMode="contain"
+                                                    <LinearGradient
+                                                        colors={['rgba(60, 30, 0, 0.4)', 'rgba(60, 30, 0, 0.2)', 'rgba(251, 191, 36, 0.05)', 'transparent']}
+                                                        style={{ flex: 1 }}
                                                     />
                                                 </Animatable.View>
-                                            </Animatable.View>
-                                        </View>
+
+                                                <Animatable.View
+                                                    animation="bounceIn"
+                                                    duration={1000}
+                                                    style={{ alignItems: 'center' }}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                                                        <Text style={{
+                                                            color: '#fff',
+                                                            fontSize: 38,
+                                                            fontWeight: '900',
+                                                            textShadowColor: 'rgba(0,0,0,0.9)',
+                                                            textShadowRadius: 10,
+                                                            textShadowOffset: { width: 0, height: 2 }
+                                                        }}>
+                                                            {recentGift?.senderName}
+                                                        </Text>
+                                                        {recentGift && (
+                                                            <Animatable.Text
+                                                                key={`big-combo-${recentGift.count}`}
+                                                                animation="bounceIn"
+                                                                duration={400}
+                                                                style={{
+                                                                    color: '#FBBF24',
+                                                                    fontSize: 58,
+                                                                    fontWeight: '900',
+                                                                    fontStyle: 'italic',
+                                                                    marginLeft: 15,
+                                                                    textShadowColor: '#000',
+                                                                    textShadowOffset: { width: 4, height: 4 },
+                                                                    textShadowRadius: 2
+                                                                }}
+                                                            >
+                                                                x{recentGift.count}
+                                                            </Animatable.Text>
+                                                        )}
+                                                    </View>
+
+                                                    <Animatable.View
+                                                        animation="pulse"
+                                                        iterationCount="infinite"
+                                                        duration={2000}
+                                                        direction="alternate"
+                                                    >
+                                                        <Image
+                                                            source={source}
+                                                            style={{
+                                                                width: 220,
+                                                                height: 220,
+                                                                maxWidth: 500,
+                                                                maxHeight: 500
+                                                            }}
+                                                            resizeMode="contain"
+                                                        />
+                                                    </Animatable.View>
+                                                </Animatable.View>
+                                            </View>
+                                        );
+                                    }
+
+                                    return (
+                                        <Animatable.Image
+                                            animation="tada"
+                                            duration={1000}
+                                            source={source}
+                                            style={{
+                                                width: 220,
+                                                height: 220,
+                                            }}
+                                            resizeMode="contain"
+                                        />
                                     );
                                 }
+                                return null;
+                            })()}
 
-                                return (
-                                    <Animatable.Image
-                                        animation="tada"
-                                        duration={1000}
-                                        source={source}
-                                        style={{
-                                            width: 220,
-                                            height: 220,
-                                        }}
-                                        resizeMode="contain"
-                                    />
-                                );
-                            }
-                            return null;
-                        })()}
+                            {/* Sender Avatar + Combo Count - Always show below gift for big gifts */}
 
-                        {/* Sender Avatar + Combo Count - Always show below gift for big gifts */}
-
+                        </View>
                     </View>
-                </View>
-            )}
+                )
+            }
 
             {/* Purchase Notification Banner */}
-            {purchaseNotification && (
-                <Animatable.View
-                    animation="slideInDown"
-                    duration={500}
-                    style={{
-                        position: 'absolute',
-                        top: 130,
-                        alignSelf: 'center',
-                        zIndex: 9999,
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        paddingHorizontal: 20,
-                        paddingVertical: 10,
-                        borderRadius: 20,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: '#F59E0B'
-                    }}
-                >
-                    <Text style={{ color: '#fff', fontSize: 14 }}>
-                        🎉 <Text style={{ fontWeight: 'bold', color: '#F59E0B' }}>{purchaseNotification.user}</Text> bought <Text style={{ fontWeight: 'bold' }}>{purchaseNotification.product}</Text>
-                    </Text>
-                </Animatable.View>
-            )}
+            {
+                purchaseNotification && (
+                    <Animatable.View
+                        animation="slideInDown"
+                        duration={500}
+                        style={{
+                            position: 'absolute',
+                            top: 130,
+                            alignSelf: 'center',
+                            zIndex: 9999,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            paddingHorizontal: 20,
+                            paddingVertical: 10,
+                            borderRadius: 20,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: '#F59E0B'
+                        }}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 14 }}>
+                            🎉 <Text style={{ fontWeight: 'bold', color: '#F59E0B' }}>{purchaseNotification.user}</Text> bought <Text style={{ fontWeight: 'bold' }}>{purchaseNotification.product}</Text>
+                        </Text>
+                    </Animatable.View>
+                )
+            }
 
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
 
@@ -1975,28 +2263,71 @@ export default function HostLiveScreen(props: Props) {
                         duration={400}
                         style={{
                             position: 'absolute',
-                            bottom: 300,
+                            bottom: activeCoupon ? 385 : 290,
                             left: 15,
-                            width: 240,
+                            width: 280,
                             zIndex: 3000
                         }}
                     >
-                        <BlurView intensity={80} tint="dark" style={{
-                            borderRadius: 20,
-                            padding: 12,
+                        <BlurView intensity={90} tint="dark" style={{
+                            borderRadius: 22,
+                            padding: 10,
                             flexDirection: 'row',
                             alignItems: 'center',
-                            borderWidth: 1,
-                            borderColor: 'rgba(255, 255, 255, 0.2)',
-                            overflow: 'hidden'
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(255, 255, 255, 0.25)',
+                            overflow: 'hidden',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 15,
+                            elevation: 10
                         }}>
+                            <Image
+                                source={{ uri: pinnedProduct.images?.[0] }}
+                                style={{ width: 60, height: 60, borderRadius: 14, backgroundColor: '#333' }}
+                            />
+                            <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                    <LinearGradient
+                                        colors={['#EF4444', '#B91C1C']}
+                                        style={{ paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 5, marginRight: 6 }}
+                                    >
+                                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>{(pinnedProduct.discountPrice ? t('flashSale') : t('pinned')) || (pinnedProduct.discountPrice ? 'FLASH SALE' : 'PINNED')}</Text>
+                                    </LinearGradient>
+                                </View>
+                                <Text numberOfLines={1} style={{ color: '#fff', fontWeight: '800', fontSize: 13.5, marginBottom: 1 }}>{getLocalizedName(pinnedProduct.name)}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                                        {pinnedProduct.discountPrice ? (
+                                            <>
+                                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, textDecorationLine: 'line-through', marginRight: 5 }}>{pinnedProduct.price}</Text>
+                                                <Text style={{ color: '#F59E0B', fontWeight: '900', fontSize: 14 }}>{pinnedProduct.discountPrice} <Text style={{ fontSize: 9 }}>TND</Text></Text>
+                                            </>
+                                        ) : (
+                                            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 14 }}>{pinnedProduct.price} <Text style={{ fontSize: 9 }}>TND</Text></Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+
+                            <View style={{ alignItems: 'center', marginLeft: 8, minWidth: 60 }}>
+                                {pinTimeRemaining > 0 && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
+                                        <Clock size={8} color="rgba(255,255,255,0.8)" style={{ marginRight: 3 }} />
+                                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '900' }}>
+                                            {Math.floor(pinTimeRemaining / 60)}:{(pinTimeRemaining % 60).toString().padStart(2, '0')}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
                             <TouchableOpacity
                                 onPress={handleUnpin}
                                 style={{
                                     position: 'absolute',
-                                    top: 6,
-                                    right: 6,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                    top: 5,
+                                    right: 5,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
                                     width: 20,
                                     height: 20,
                                     borderRadius: 10,
@@ -2007,27 +2338,6 @@ export default function HostLiveScreen(props: Props) {
                             >
                                 <X size={10} color="#fff" />
                             </TouchableOpacity>
-
-                            <Image
-                                source={{ uri: pinnedProduct.images?.[0] }}
-                                style={{ width: 54, height: 54, borderRadius: 12, backgroundColor: '#333' }}
-                            />
-                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text style={{ color: '#F59E0B', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 2 }}>{t('pinned').toUpperCase()}</Text>
-                                <Text numberOfLines={1} style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{getLocalizedName(pinnedProduct.name)}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>{pinnedProduct.price} TND</Text>
-                                </View>
-
-                                {pinTimeRemaining > 0 && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                        <Clock size={10} color="rgba(255,255,255,0.6)" style={{ marginRight: 4 }} />
-                                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 'bold' }}>
-                                            {Math.floor(pinTimeRemaining / 60)}:{(pinTimeRemaining % 60).toString().padStart(2, '0')}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
                         </BlurView>
                     </Animatable.View>
                 )
@@ -2158,62 +2468,98 @@ export default function HostLiveScreen(props: Props) {
             <Modal
                 visible={showPKInviteModal}
                 transparent={true}
-                animationType="fade"
+                animationType="slide"
                 onRequestClose={() => setShowPKInviteModal(false)}
             >
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
-                    <View style={{ backgroundColor: '#1C1C26', borderRadius: 20, padding: 25, width: '85%', maxWidth: 400 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>⚔️ PK Battle</Text>
-                            <TouchableOpacity onPress={() => setShowPKInviteModal(false)}>
-                                <X size={24} color="#fff" />
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <BlurView intensity={90} tint="dark" style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, height: '70%', padding: 25, overflow: 'hidden', backgroundColor: 'rgba(18, 18, 24, 0.98)' }}>
+                        <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(245, 158, 11, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Swords size={20} color="#F59E0B" />
+                                </View>
+                                <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 0.5 }}>{t('pkBattle') || 'PK Battle'}</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowPKInviteModal(false)}
+                                style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 20 }}
+                            >
+                                <X size={20} color="#fff" />
                             </TouchableOpacity>
                         </View>
 
                         {isInPK ? (
-                            <View>
-                                <Text style={{ color: '#ccc', marginBottom: 20, textAlign: 'center' }}>Battle in progress...</Text>
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        // End PK Battle manually
-                                        setIsInPK(false);
-                                        setPkBattleId(null);
-                                        ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'PK_BATTLE_STOP' }), [], () => { });
-                                        setShowPKInviteModal(false);
-                                    }}
-                                    style={{ backgroundColor: '#EF4444', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
-                                >
-                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>STOP BATTLE</Text>
-                                </TouchableOpacity>
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 40 }}>
+                                <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 30, borderRadius: 25, alignItems: 'center', width: '100%' }}>
+                                    <Text style={{ color: '#EF4444', fontSize: 16, fontWeight: '800', marginBottom: 10 }}>{(t('battleInProgress') || 'BATTLE IN PROGRESS').toUpperCase()}</Text>
+                                    <Text style={{ color: '#888', marginBottom: 25, textAlign: 'center' }}>{t('battleInProgressDesc') || 'You are currently in a PK battle. You must stop the current challenge before starting a new one.'}</Text>
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            setIsInPK(false);
+                                            setPkBattleId(null);
+
+                                            // ✅ Stop PK in Firestore for both rooms
+                                            if (channelId) {
+                                                LiveSessionService.updatePKState(channelId, { isActive: false }).catch(e => console.error('Stop PK Error:', e));
+                                                if (opponentChannelId) {
+                                                    LiveSessionService.updatePKState(opponentChannelId, { isActive: false }).catch(e => console.error('Stop Opponent PK Error:', e));
+                                                }
+                                            }
+
+                                            ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'PK_BATTLE_STOP' }), [], () => { });
+                                            setShowPKInviteModal(false);
+                                        }}
+                                        activeOpacity={0.8}
+                                        style={{
+                                            backgroundColor: '#EF4444',
+                                            paddingVertical: 16,
+                                            width: '100%',
+                                            borderRadius: 14,
+                                            alignItems: 'center',
+                                            shadowColor: '#EF4444',
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 10,
+                                            shadowOffset: { width: 0, height: 4 }
+                                        }}
+                                    >
+                                        <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>{(t('stopBattle') || 'STOP BATTLE').toUpperCase()}</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         ) : (
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 {/* Duration Selector */}
-                                <Text style={{ color: '#888', marginBottom: 10, fontSize: 13, fontWeight: '600' }}>Battle Duration:</Text>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+                                <Text style={{ color: '#888', marginBottom: 12, fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }}>{(t('chooseBattleDuration') || 'CHOOSE BATTLE DURATION:').toUpperCase()}</Text>
+                                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 30 }}>
                                     {[
                                         { label: '3m', value: 180 },
                                         { label: '5m', value: 300 },
                                         { label: '7m', value: 420 },
-                                        { label: '10m', value: 600 }
+                                        { label: '10m', value: 600 },
+                                        { label: '15m', value: 900 },
+                                        { label: '20m', value: 1200 },
                                     ].map((option) => (
                                         <TouchableOpacity
                                             key={option.value}
                                             onPress={() => setPkDuration(option.value)}
                                             style={{
                                                 flex: 1,
-                                                marginHorizontal: 4,
-                                                paddingVertical: 10,
-                                                borderRadius: 10,
+                                                paddingVertical: 12,
+                                                borderRadius: 12,
                                                 backgroundColor: pkDuration === option.value ? '#3B82F6' : '#2A2A35',
-                                                borderWidth: 1,
-                                                borderColor: pkDuration === option.value ? '#60A5FA' : '#333',
-                                                alignItems: 'center'
+                                                borderWidth: 1.5,
+                                                borderColor: pkDuration === option.value ? '#60A5FA' : 'rgba(255,255,255,0.05)',
+                                                alignItems: 'center',
+                                                shadowColor: pkDuration === option.value ? '#3B82F6' : 'transparent',
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 5
                                             }}
                                         >
                                             <Text style={{
-                                                color: pkDuration === option.value ? '#fff' : '#888',
-                                                fontWeight: pkDuration === option.value ? 'bold' : '600',
+                                                color: pkDuration === option.value ? '#fff' : 'rgba(255,255,255,0.4)',
+                                                fontWeight: '900',
                                                 fontSize: 14
                                             }}>
                                                 {option.label}
@@ -2222,30 +2568,32 @@ export default function HostLiveScreen(props: Props) {
                                     ))}
                                 </View>
 
-                                <Text style={{ color: '#888', marginBottom: 15, fontSize: 13, fontWeight: '600' }}>Active Hosts:</Text>
+                                <Text style={{ color: '#888', marginBottom: 15, fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }}>{(t('activeHosts') || 'ACTIVE HOSTS:').toUpperCase()}</Text>
 
                                 {loadingSessions ? (
-                                    <ActivityIndicator color="#3B82F6" style={{ marginVertical: 20 }} />
-                                ) : liveSessions.length > 0 ? (
-                                    <ScrollView style={{ maxHeight: 300, marginBottom: 20 }}>
-                                        {liveSessions.map((session) => (
+                                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                                        <ActivityIndicator color="#3B82F6" />
+                                    </View>
+                                ) : liveSessions.filter(s => s.channelId !== channelId).length > 0 ? (
+                                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                                        {liveSessions.filter(s => s.channelId !== channelId).map((session) => (
                                             <TouchableOpacity
                                                 key={session.channelId}
+                                                activeOpacity={0.7}
                                                 style={{
                                                     flexDirection: 'row',
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
-                                                    backgroundColor: '#2A2A35',
-                                                    padding: 12,
-                                                    borderRadius: 15,
-                                                    marginBottom: 10,
+                                                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                                    padding: 14,
+                                                    borderRadius: 18,
+                                                    marginBottom: 12,
                                                     borderWidth: 1,
-                                                    borderColor: '#333'
+                                                    borderColor: 'rgba(255, 255, 255, 0.08)'
                                                 }}
                                                 onPress={() => {
                                                     const targetId = session.hostId || session.channelId;
                                                     if (ZegoUIKit && targetId) {
-                                                        console.log('⚔️ Sending PK Invitation to:', targetId);
                                                         const endTime = Date.now() + (pkDuration * 1000);
                                                         const invitationData = JSON.stringify({
                                                             inviterName: userName,
@@ -2254,48 +2602,64 @@ export default function HostLiveScreen(props: Props) {
                                                             duration: pkDuration,
                                                             endTime: endTime
                                                         });
-                                                        // Use type 10 for PK Request
                                                         ZegoUIKit.getSignalingPlugin().sendInvitation([targetId], 60, 10, invitationData)
                                                             .then(() => {
                                                                 setShowPKInviteModal(false);
-                                                                Alert.alert("Request Sent", `Challenging ${session.hostName}...`);
+                                                                Alert.alert(t('success') || "Request Sent", `${t('challenge')} ${session.hostName}...`);
                                                             })
                                                             .catch((err: any) => {
                                                                 console.log('PK Invitation Error:', err);
-                                                                Alert.alert("Error", "Could not send challenge. Make sure the host is online.");
+                                                                Alert.alert(t('error') || "Error", t('failedToSave') || "Could not send challenge.");
                                                             });
                                                     }
                                                 }}
                                             >
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                                    {session.hostAvatar ? (
-                                                        <Image source={{ uri: session.hostAvatar }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#444' }} />
-                                                    ) : (
-                                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
-                                                            <Text style={{ color: '#fff', fontSize: 14 }}>{session.hostName?.charAt(0)}</Text>
-                                                        </View>
-                                                    )}
+                                                    <View style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                        {session.hostAvatar ? (
+                                                            <Image source={{ uri: session.hostAvatar }} style={{ width: '100%', height: '100%' }} />
+                                                        ) : (
+                                                            <View style={{ width: '100%', height: '100%', backgroundColor: '#444', alignItems: 'center', justifyContent: 'center' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{session.hostName?.charAt(0)}</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
                                                     <View>
-                                                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{session.hostName || 'Host'}</Text>
-                                                        <Text style={{ color: '#888', fontSize: 11 }}>Live Now</Text>
+                                                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{session.hostName || 'Host'}</Text>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                                                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' }}>{t('liveNow') || 'Live Now'}</Text>
+                                                        </View>
                                                     </View>
                                                 </View>
-                                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(59, 130, 246, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Swords size={18} color="#3B82F6" />
+
+                                                <View style={{
+                                                    backgroundColor: '#3B82F6',
+                                                    paddingHorizontal: 12,
+                                                    paddingVertical: 8,
+                                                    borderRadius: 10,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 6
+                                                }}>
+                                                    <Swords size={14} color="#fff" />
+                                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{(t('challenge') || 'CHALLENGE').toUpperCase()}</Text>
                                                 </View>
                                             </TouchableOpacity>
                                         ))}
                                     </ScrollView>
                                 ) : (
-                                    <View style={{ alignItems: 'center', marginVertical: 30 }}>
-                                        <Text style={{ color: '#666', fontSize: 13 }}>No other hosts are live right now.</Text>
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: 0.5, paddingBottom: 50 }}>
+                                        <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: 20, borderRadius: 40, marginBottom: 15 }}>
+                                            <Swords size={40} color="#666" />
+                                        </View>
+                                        <Text style={{ color: '#666', fontSize: 15, fontWeight: '700' }}>{t('noOtherHostsLive') || 'No other hosts are live'}</Text>
+                                        <Text style={{ color: '#444', fontSize: 12, marginTop: 5 }}>{t('inviteJoinFirst') || 'Invite someone to join first!'}</Text>
                                     </View>
                                 )}
-
-                                {/* Manual Input Removed */}
                             </View>
                         )}
-                    </View>
+                    </BlurView>
                 </View>
             </Modal>
 
@@ -2307,11 +2671,15 @@ export default function HostLiveScreen(props: Props) {
                 onRequestClose={() => setShowProductModal(false)}
             >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#1A1A24', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '70%', padding: 20 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Live Shopping Bag</Text>
-                            <TouchableOpacity onPress={() => setShowProductModal(false)}>
-                                <X size={24} color="#fff" />
+                    <BlurView intensity={90} tint="dark" style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, height: '75%', padding: 25, overflow: 'hidden', backgroundColor: 'rgba(18, 18, 24, 0.98)' }}>
+                        <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}>
+                            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 0.5 }}>{t('liveShoppingBag') || 'Live Shopping Bag'}</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowProductModal(false)}
+                                style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 20 }}
+                            >
+                                <X size={20} color="#fff" />
                             </TouchableOpacity>
                         </View>
 
@@ -2358,48 +2726,59 @@ export default function HostLiveScreen(props: Props) {
                                     <View key={p.id} style={{
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        backgroundColor: '#2A2A35',
-                                        borderRadius: 12,
-                                        padding: 10,
-                                        marginBottom: 10,
-                                        borderWidth: isPinned ? 1 : 0,
-                                        borderColor: isPinned ? '#F59E0B' : 'transparent'
+                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: 16,
+                                        padding: 12,
+                                        marginBottom: 12,
+                                        borderWidth: isPinned ? 1.5 : 1,
+                                        borderColor: isPinned ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)'
                                     }}>
-                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: '#444' }} />
-                                        <View style={{ flex: 1, marginLeft: 12 }}>
-                                            <Text style={{ color: '#fff', fontWeight: 'bold' }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
-                                            <Text style={{ color: '#ccc', fontSize: 12 }}>{p.price} TND</Text>
+                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: '#333' }} />
+                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
+                                            {p.discountPrice ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textDecorationLine: 'line-through' }}>{p.price} TND</Text>
+                                                    <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '800' }}>{p.discountPrice} TND</Text>
+                                                </View>
+                                            ) : (
+                                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 4, fontWeight: '600' }}>{p.price} TND</Text>
+                                            )}
                                         </View>
 
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                             <TouchableOpacity
                                                 onPress={() => handlePinProduct(p.id)}
                                                 style={{
-                                                    backgroundColor: isPinned ? '#F59E0B' : 'rgba(255,255,255,0.1)',
-                                                    paddingHorizontal: 10,
-                                                    paddingVertical: 6,
-                                                    borderRadius: 6
+                                                    backgroundColor: isPinned ? '#F59E0B' : 'transparent',
+                                                    paddingHorizontal: 14,
+                                                    paddingVertical: 8,
+                                                    borderRadius: 10,
+                                                    borderWidth: isPinned ? 0 : 1,
+                                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                                    minWidth: 70,
+                                                    alignItems: 'center'
                                                 }}
                                             >
-                                                <Text style={{ color: isPinned ? '#000' : '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                                                    {isPinned ? 'PINNED' : 'PIN'}
+                                                <Text style={{ color: isPinned ? '#000' : '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>
+                                                    {isPinned ? (t('pinned') || 'PINNED') : (t('pin') || 'PIN')}
                                                 </Text>
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
                                                 onPress={() => toggleProductSelection(p.id)}
                                                 style={{
-                                                    width: 24,
-                                                    height: 24,
-                                                    borderRadius: 12,
+                                                    width: 28,
+                                                    height: 28,
+                                                    borderRadius: 14,
                                                     borderWidth: 2,
-                                                    borderColor: isSelected ? '#3B82F6' : '#666',
+                                                    borderColor: isSelected ? '#3B82F6' : 'rgba(255,255,255,0.3)',
                                                     backgroundColor: isSelected ? '#3B82F6' : 'transparent',
                                                     alignItems: 'center',
                                                     justifyContent: 'center'
                                                 }}
                                             >
-                                                {isSelected && <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
+                                                {isSelected && <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -2409,24 +2788,28 @@ export default function HostLiveScreen(props: Props) {
 
                         <TouchableOpacity
                             onPress={handleUpdateBag}
+                            activeOpacity={0.8}
                             style={{
                                 position: 'absolute',
-                                bottom: 30,
+                                bottom: 40,
                                 left: 20,
                                 right: 20,
                                 backgroundColor: '#3B82F6',
-                                paddingVertical: 14,
-                                borderRadius: 12,
+                                paddingVertical: 16,
+                                borderRadius: 14,
                                 alignItems: 'center',
                                 shadowColor: '#3B82F6',
-                                shadowOpacity: 0.3,
-                                shadowRadius: 10,
-                                shadowOffset: { width: 0, height: 4 }
+                                shadowOpacity: 0.4,
+                                shadowRadius: 12,
+                                shadowOffset: { width: 0, height: 6 },
+                                elevation: 8
                             }}
                         >
-                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Update Stream Bag ({selectedProductIds.length})</Text>
+                            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
+                                {(t('updateStreamBag') || 'UPDATE STREAM BAG').toUpperCase()} ({selectedProductIds.length})
+                            </Text>
                         </TouchableOpacity>
-                    </View>
+                    </BlurView>
                 </View>
             </Modal>
 
@@ -2646,160 +3029,162 @@ export default function HostLiveScreen(props: Props) {
                 </KeyboardAvoidingView>
             </Modal>
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
-            {recentGift && !recentGift.isBig && (
-                <View style={{
-                    position: 'absolute',
-                    top: 180, // Moved up slightly to avoid overlapping
-                    left: 10,
-                    zIndex: 10000,
-                    flexDirection: 'row',
-                    alignItems: 'center'
-                }}>
-                    <Animatable.View
-                        animation="slideInLeft"
-                        duration={400}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center'
-                        }}
-                    >
-                        {(() => {
-                            const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
-                            const points = giftObj?.points || 0;
-                            const isGradient = points >= 100 && points < 500;
+            {
+                recentGift && !recentGift.isBig && (
+                    <View style={{
+                        position: 'absolute',
+                        top: isInPK ? 220 : 180, // Moved up slightly to avoid overlapping
+                        left: 10,
+                        zIndex: 10000,
+                        flexDirection: 'row',
+                        alignItems: 'center'
+                    }}>
+                        <Animatable.View
+                            animation="slideInLeft"
+                            duration={400}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center'
+                            }}
+                        >
+                            {(() => {
+                                const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
+                                const points = giftObj?.points || 0;
+                                const isGradient = points >= 100 && points < 500;
 
-                            const content = (
-                                <>
-                                    {/* Avatar Circle */}
-                                    <View style={{
-                                        width: 40,
-                                        height: 40,
-                                        borderRadius: 20,
-                                        backgroundColor: '#FF0066',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        borderWidth: 1.5,
-                                        borderColor: 'rgba(255,255,255,0.8)',
-                                        overflow: 'hidden',
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.3,
-                                        shadowRadius: 3
-                                    }}>
-                                        <Image
-                                            source={
-                                                recentGift.senderAvatar
-                                                    ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
-                                                    : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
-                                            }
-                                            style={{ width: '100%', height: '100%' }}
-                                            resizeMode="cover"
-                                        />
-                                    </View>
-
-                                    <View style={{ marginLeft: 10, marginRight: 40 }}>
-                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
-                                            {recentGift.senderName}
-                                        </Text>
-                                        <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
-                                            {t('sentA')} {recentGift.giftName}
-                                        </Text>
-                                    </View>
-
-                                    {/* Gift Icon inside a bubble */}
-                                    <View
-                                        style={{
-                                            position: 'absolute',
-                                            right: 1, // Overlap the edge like TikTok
-                                            width: 48,
-                                            height: 48,
-                                            borderRadius: 26,
-                                            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                const content = (
+                                    <>
+                                        {/* Avatar Circle */}
+                                        <View style={{
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: 20,
+                                            backgroundColor: '#FF0066',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            borderWidth: 2,
-                                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                                            borderWidth: 1.5,
+                                            borderColor: 'rgba(255,255,255,0.8)',
+                                            overflow: 'hidden',
                                             shadowColor: '#000',
-                                            shadowOffset: { width: 4, height: 4 },
-                                            shadowOpacity: 0.4,
-                                            shadowRadius: 6,
-                                            elevation: 8
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 3
+                                        }}>
+                                            <Image
+                                                source={
+                                                    recentGift.senderAvatar
+                                                        ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
+                                                        : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                                }
+                                                style={{ width: '100%', height: '100%' }}
+                                                resizeMode="cover"
+                                            />
+                                        </View>
+
+                                        <View style={{ marginLeft: 10, marginRight: 40 }}>
+                                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
+                                                {recentGift.senderName}
+                                            </Text>
+                                            <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
+                                                {t('sentA')} {recentGift.giftName}
+                                            </Text>
+                                        </View>
+
+                                        {/* Gift Icon inside a bubble */}
+                                        <View
+                                            style={{
+                                                position: 'absolute',
+                                                right: 1, // Overlap the edge like TikTok
+                                                width: 48,
+                                                height: 48,
+                                                borderRadius: 26,
+                                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderWidth: 2,
+                                                borderColor: 'rgba(255, 255, 255, 0.5)',
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 4, height: 4 },
+                                                shadowOpacity: 0.4,
+                                                shadowRadius: 6,
+                                                elevation: 8
+                                            }}
+                                        >
+                                            <Animatable.Image
+                                                key={`gift-icon-${recentGift.count}`}
+                                                animation="tada"
+                                                duration={1000}
+                                                source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                                style={{ width: 38, height: 38 }}
+                                                resizeMode="contain"
+                                            />
+                                        </View>
+                                    </>
+                                );
+
+                                return isGradient ? (
+                                    <LinearGradient
+                                        colors={['#FF0066', '#A855F7']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={{
+                                            borderRadius: 40,
+                                            paddingVertical: 4,
+                                            paddingHorizontal: 6,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            borderWidth: 1,
+                                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                                            minWidth: 250,
+                                            overflow: 'hidden',
                                         }}
                                     >
-                                        <Animatable.Image
-                                            key={`gift-icon-${recentGift.count}`}
-                                            animation="tada"
-                                            duration={1000}
-                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                            style={{ width: 38, height: 38 }}
-                                            resizeMode="contain"
-                                        />
-                                    </View>
-                                </>
-                            );
-
-                            return isGradient ? (
-                                <LinearGradient
-                                    colors={['#FF0066', '#A855F7']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={{
+                                        {content}
+                                    </LinearGradient>
+                                ) : (
+                                    <BlurView intensity={95} tint="dark" style={{
                                         borderRadius: 40,
                                         paddingVertical: 4,
                                         paddingHorizontal: 6,
                                         flexDirection: 'row',
                                         alignItems: 'center',
                                         borderWidth: 1,
-                                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                                        backgroundColor: 'rgba(0,0,0,0.6)',
                                         minWidth: 250,
-                                        overflow: 'hidden',
-                                    }}
+                                        overflow: 'hidden', // Fix rounded corners being hidden
+                                    }}>
+                                        {content}
+                                    </BlurView>
+                                );
+                            })()}
+
+                            {/* Combo Count UI */}
+                            {recentGift.count > 1 && (
+                                <Animatable.View
+                                    key={`combo-${recentGift.count}`}
+                                    animation="bounceIn"
+                                    duration={500}
+                                    style={{ marginLeft: 35 }}
                                 >
-                                    {content}
-                                </LinearGradient>
-                            ) : (
-                                <BlurView intensity={95} tint="dark" style={{
-                                    borderRadius: 40,
-                                    paddingVertical: 4,
-                                    paddingHorizontal: 6,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    borderWidth: 1,
-                                    borderColor: 'rgba(255, 255, 255, 0.3)',
-                                    backgroundColor: 'rgba(0,0,0,0.6)',
-                                    minWidth: 250,
-                                    overflow: 'hidden', // Fix rounded corners being hidden
-                                }}>
-                                    {content}
-                                </BlurView>
-                            );
-                        })()}
+                                    <Text style={{
+                                        color: '#FBBF24',
+                                        fontSize: 32,
+                                        fontWeight: '900',
+                                        fontStyle: 'italic',
+                                        textShadowColor: '#000',
+                                        textShadowOffset: { width: 2, height: 2 },
+                                        textShadowRadius: 4
+                                    }}>
+                                        x{recentGift.count}
+                                    </Text>
+                                </Animatable.View>
+                            )}
+                        </Animatable.View>
 
-                        {/* Combo Count UI */}
-                        {recentGift.count > 1 && (
-                            <Animatable.View
-                                key={`combo-${recentGift.count}`}
-                                animation="bounceIn"
-                                duration={500}
-                                style={{ marginLeft: 35 }}
-                            >
-                                <Text style={{
-                                    color: '#FBBF24',
-                                    fontSize: 32,
-                                    fontWeight: '900',
-                                    fontStyle: 'italic',
-                                    textShadowColor: '#000',
-                                    textShadowOffset: { width: 2, height: 2 },
-                                    textShadowRadius: 4
-                                }}>
-                                    x{recentGift.count}
-                                </Text>
-                            </Animatable.View>
-                        )}
-                    </Animatable.View>
-
-                </View>
-            )}
+                    </View>
+                )
+            }
 
             {/* Floating Heart Animations */}
             <View style={{ position: 'absolute', bottom: 150, right: 15, width: 60, height: 400, pointerEvents: 'none', zIndex: 1000 }}>
@@ -2809,4 +3194,4 @@ export default function HostLiveScreen(props: Props) {
             </View>
         </View >
     );
-} 1
+}

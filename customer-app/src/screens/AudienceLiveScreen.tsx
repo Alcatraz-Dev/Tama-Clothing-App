@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send } from 'lucide-react-native';
+import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users } from 'lucide-react-native';
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
@@ -96,6 +96,7 @@ export default function AudienceLiveScreen(props: Props) {
     const [pkEndTime, setPkEndTime] = useState<number | null>(null);
     const [pkWinner, setPkWinner] = useState<string | null>(null);
     const [showPKResult, setShowPKResult] = useState(false);
+    const [opponentChannelId, setOpponentChannelId] = useState<string | null>(null);
 
     // Coupon State
     const [activeCoupon, setActiveCoupon] = useState<any>(null);
@@ -212,6 +213,9 @@ export default function AudienceLiveScreen(props: Props) {
     const hostScoreRef = useRef(0);
     const guestScoreRef = useRef(0);
     const streamHostIdRef = useRef<string | null>(null);
+    const totalLikesRef = useRef(0);
+    const pkStartLikesRef = useRef(0);
+    const opponentChannelIdRef = useRef<string | null>(null);
 
     // Initial load sync
     useEffect(() => {
@@ -278,10 +282,20 @@ export default function AudienceLiveScreen(props: Props) {
 
     // ✅ Sync refs
     useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
-    useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
+    useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
+    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
     useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
     useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
 
+    // Capture baseline likes when PK Starts
+    useEffect(() => {
+        if (isInPK) {
+            pkStartLikesRef.current = totalLikes;
+            console.log('🏁 PK Started. Baseline Likes:', totalLikes);
+            // setHostScore(0); // ❌ Removed: Follow Firestore sync for existing battles
+            // setGuestScore(0); // ❌ Removed: Follow Firestore sync for existing battles
+        }
+    }, [isInPK]);
     // ✅ Process Gift Queue
     useEffect(() => {
         if (!recentGift && giftQueue.length > 0) {
@@ -408,6 +422,14 @@ export default function AudienceLiveScreen(props: Props) {
         // Sync with Firestore (Backup & Reliability)
         if (channelId) {
             LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
+
+            // ✅ If in PK, also increment host's PK score atomically (Supports Cross-Room Sync)
+            if (isInPKRef.current && streamHostIdRef.current) {
+                LiveSessionService.incrementPKHostScore(channelId, gift.points || 1, opponentChannelIdRef.current || undefined).catch(e =>
+                    console.error('PK Host Score Increment Error:', e)
+                );
+            }
+
             LiveSessionService.broadcastGift(channelId, {
                 giftName: gift.name,
                 icon: gift.icon,
@@ -459,11 +481,22 @@ export default function AudienceLiveScreen(props: Props) {
 
             // Sync PK State
             if (session.pkState) {
-                setIsInPK(session.pkState.isActive);
-                setHostScore(session.pkState.hostScore);
-                setGuestScore(session.pkState.guestScore);
+                // Only update isInPK if it's actually changing to avoid re-triggering effects
+                if (session.pkState.isActive !== isInPKRef.current) {
+                    setIsInPK(session.pkState.isActive);
+                }
+
+                // Always trust Firestore for scores
+                if (session.pkState.hostScore !== undefined) {
+                    setHostScore(session.pkState.hostScore);
+                }
+                if (session.pkState.guestScore !== undefined) {
+                    setGuestScore(session.pkState.guestScore);
+                }
+
                 if (session.pkState.opponentName) setOpponentName(session.pkState.opponentName);
-                if (session.pkState.hostName) setPkHostName(session.pkState.hostName);
+                const hName = session.pkState.hostName || session.hostName;
+                if (hName) setPkHostName(hName);
 
                 if (session.pkState.endTime) {
                     setPkEndTime(session.pkState.endTime);
@@ -471,12 +504,16 @@ export default function AudienceLiveScreen(props: Props) {
                     setPkTimeRemaining(remaining);
                 }
 
-                if (session.pkState.winner) {
+                if (session.pkState.opponentChannelId) {
+                    setOpponentChannelId(session.pkState.opponentChannelId);
+                }
+
+                if (session.pkState.winner && !session.pkState.isActive) {
                     // Only show result if scores are not 0-0
                     const hScore = session.pkState.hostScore || 0;
                     const gScore = session.pkState.guestScore || 0;
 
-                    if (hScore > 0 || gScore > 0) {
+                    if ((hScore > 0 || gScore > 0) && !showPKResult) {
                         setPkWinner(session.pkState.winner);
                         setShowPKResult(true);
                         setTimeout(() => {
@@ -484,6 +521,10 @@ export default function AudienceLiveScreen(props: Props) {
                             setPkWinner(null);
                         }, 5000);
                     }
+                } else if (session.pkState.isActive && showPKResult) {
+                    // Hide result immediately if a new PK starts
+                    setShowPKResult(false);
+                    setPkWinner(null);
                 }
             }
 
@@ -719,23 +760,13 @@ export default function AudienceLiveScreen(props: Props) {
                         }
                     } else if (data.type === 'PK_VOTE') {
                         setIsInPK(true);
-                        if (data.hostId && streamHostIdRef.current && data.hostId === streamHostIdRef.current) {
-                            setHostScore(prev => prev + (data.points || 0));
-                        } else {
-                            setGuestScore(prev => prev + (data.points || 0));
-                        }
                     } else if (data.type === 'PK_LIKE') {
-                        const points = data.count || 1;
-                        setTotalLikes(prev => prev + points);
-                        if (data.hostId && streamHostIdRef.current && data.hostId === streamHostIdRef.current) {
-                            setHostScore(prev => prev + points);
-                        } else {
-                            setGuestScore(prev => prev + points);
-                        }
+                        handleSendLike(); // Trigger heart animation for all viewers
                     } else if (data.type === 'PK_BATTLE_STOP') {
                         setIsInPK(false);
                     } else if (data.type === 'gift') {
-                        setTotalLikes(prev => prev + (Number(data.points) || 1));
+                        // Animation and queue handling remains below...
+
 
                         const senderId = data.senderId || data.userId;
                         const isHost = data.isHost === true;
@@ -839,9 +870,6 @@ export default function AudienceLiveScreen(props: Props) {
         // Optimistic Updates
         setLikeCount(prev => prev + 1);
         setTotalLikes(prev => prev + 1);
-        if (streamHostIdRef.current) {
-            setHostScore(prev => prev + 1);
-        }
 
         // Batching Logic
         likeBatchRef.current += 1;
@@ -860,11 +888,18 @@ export default function AudienceLiveScreen(props: Props) {
                 type: 'PK_LIKE',
                 hostId: streamHostIdRef.current,
                 userName: userName,
-                count: countToSend // New field
+                count: countToSend
             }), [], (res: any) => { if (res?.errorCode) console.error('SendCmd Error:', res) });
 
             // 2. Update Firestore (Reliable, persistent)
             LiveSessionService.incrementLikes(channelId, countToSend).catch(e => console.error('Firestore Like Error:', e));
+
+            // 3. ✅ If in PK, also increment host's PK score atomically (Supports Cross-Room Sync)
+            if (isInPKRef.current && streamHostIdRef.current) {
+                LiveSessionService.incrementPKHostScore(channelId, countToSend, opponentChannelIdRef.current || undefined).catch(e =>
+                    console.error('PK Host Score Increment Error:', e)
+                );
+            }
         }
     };
 
@@ -952,85 +987,225 @@ export default function AudienceLiveScreen(props: Props) {
             {/* Flame Counter */}
             {/* Flame Counter - ONLY if reach 50 */}
             {totalLikes >= 50 && (
-                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 110} />
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 120} />
             )}
 
-            {/* PK BATTLE SCORE BAR - Premium Look */}
+            {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
             {isInPK && (
                 <Animatable.View
                     animation="slideInDown"
                     duration={800}
                     style={{
                         position: 'absolute',
-                        top: 70,
+                        top: 92, // Slightly lower to clear the top profile bar better
                         width: '100%',
                         alignItems: 'center',
                         zIndex: 2000,
-                        paddingHorizontal: 20
+                        paddingHorizontal: 8
                     }}>
-                    {/* Timer Display */}
-                    {pkTimeRemaining > 0 && (
-                        <View style={{
-                            backgroundColor: 'rgba(0,0,0,0.7)',
-                            paddingHorizontal: 16,
-                            paddingVertical: 6,
-                            borderRadius: 20,
-                            marginBottom: 8,
-                            borderWidth: 2,
-                            borderColor: pkTimeRemaining <= 30 ? '#EF4444' : '#3B82F6'
-                        }}>
-                            <Text style={{
-                                color: pkTimeRemaining <= 30 ? '#EF4444' : '#fff',
-                                fontSize: 16,
-                                fontWeight: '900',
-                                letterSpacing: 1
-                            }}>
-                                ⏱️ {Math.floor(pkTimeRemaining / 60)}:{(pkTimeRemaining % 60).toString().padStart(2, '0')}
-                            </Text>
-                        </View>
-                    )}
 
-                    <View style={{ flexDirection: 'row', width: '100%', height: 28, borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    {/* Integrated Timer & VS Badge */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 20,
+                        marginBottom: 3, // Pushed 8px more to the top
+                    }}>
+                        {/* Timer Display */}
+                        {pkTimeRemaining > 0 && (
+                            <View style={{
+                                backgroundColor: '#121212',
+                                paddingHorizontal: 12,
+                                paddingVertical: 4,
+                                borderRadius: 20,
+                                borderWidth: 1.5,
+                                borderColor: pkTimeRemaining <= 30 ? '#FF0050' : '#00F2EA',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                shadowColor: pkTimeRemaining <= 30 ? '#FF0050' : '#00F2EA',
+                                shadowOpacity: 0.6,
+                                shadowRadius: 12,
+                                elevation: 10
+                            }}>
+                                <Timer size={14} color={pkTimeRemaining <= 30 ? '#FF0050' : '#FFF'} />
+                                <Text style={{
+                                    color: pkTimeRemaining <= 30 ? '#FF0050' : '#fff',
+                                    fontSize: 14,
+                                    fontWeight: '900',
+                                    fontVariant: ['tabular-nums'],
+                                    letterSpacing: 0.5
+                                }}>
+                                    {Math.floor(pkTimeRemaining / 60)}:{(pkTimeRemaining % 60).toString().padStart(2, '0')}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Progress Bar Container */}
+                    <View style={{
+                        width: '100%',
+                        height: 36,
+                        borderRadius: 18,
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        borderWidth: 2,
+                        borderColor: 'rgba(255,255,255,0.15)',
+                        flexDirection: 'row',
+                        shadowColor: '#000',
+                        shadowOpacity: 0.5,
+                        shadowRadius: 15,
+                        elevation: 10,
+                        position: 'relative'
+                    }}>
+                        {/* Host Side (Pink/Red) */}
                         <LinearGradient
-                            colors={['#FF0055', '#FF4D80']}
-                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            colors={['#FF0050', '#FF4D80', '#FF0050']}
+                            start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
                             style={{
                                 flex: Math.max(hostScore, 1),
                                 justifyContent: 'center',
-                                paddingLeft: 12
+                                paddingLeft: 18,
+                                borderRadius: 18, // Added for iOS
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{hostScore}</Text>
+                            <Animatable.Text
+                                animation={hostScore > 0 ? "pulse" : undefined}
+                                iterationCount="infinite"
+                                style={{
+                                    color: '#fff',
+                                    fontSize: 18,
+                                    fontWeight: '900',
+                                    textShadowColor: 'rgba(0,0,0,0.5)',
+                                    textShadowOffset: { width: 1, height: 1 },
+                                    textShadowRadius: 4
+                                }}
+                            >
+                                {hostScore}
+                            </Animatable.Text>
+                            {hostScore > guestScore && (
+                                <View style={{ position: 'absolute', top: 2, left: 16 }}>
+                                    <Trophy size={10} color="#FFD700" fill="#FFD700" />
+                                </View>
+                            )}
                         </LinearGradient>
+
+                        {/* VS Center Indicator */}
+                        <View style={{
+                            position: 'absolute',
+                            left: `${(Math.max(hostScore, 1) / (Math.max(hostScore, 1) + Math.max(guestScore, 1))) * 100}%`,
+                            top: 0,
+                            bottom: 0,
+                            width: 34,
+                            marginLeft: -17,
+                            zIndex: 15,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <LinearGradient
+                                colors={['#121212', '#262626']}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1.5,
+                                    borderColor: 'rgba(255,255,255,0.3)',
+                                    shadowColor: '#000',
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 5
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900', fontStyle: 'italic' }}>VS</Text>
+                            </LinearGradient>
+                        </View>
+
+                        {/* Guest Side (Blue/Cyan) */}
                         <LinearGradient
-                            colors={['#3B82F6', '#60A5FA']}
-                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            colors={['#00F2EA', '#3B82F6', '#00F2EA']}
+                            start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
                             style={{
                                 flex: Math.max(guestScore, 1),
                                 alignItems: 'flex-end',
                                 justifyContent: 'center',
-                                paddingRight: 12
+                                paddingRight: 18,
+                                borderRadius: 18, // Added for iOS
                             }}
                         >
-                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }}>{guestScore}</Text>
+                            <Animatable.Text
+                                animation={guestScore > 0 ? "pulse" : undefined}
+                                iterationCount="infinite"
+                                style={{
+                                    color: '#fff',
+                                    fontSize: 18,
+                                    fontWeight: '900',
+                                    textShadowColor: 'rgba(0,0,0,0.5)',
+                                    textShadowOffset: { width: 1, height: 1 },
+                                    textShadowRadius: 4
+                                }}
+                            >
+                                {guestScore}
+                            </Animatable.Text>
+                            {guestScore > hostScore && (
+                                <View style={{ position: 'absolute', top: 2, right: 16 }}>
+                                    <Trophy size={10} color="#FFD700" fill="#FFD700" />
+                                </View>
+                            )}
                         </LinearGradient>
                     </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 8, paddingHorizontal: 2 }}>
-                        <View style={{ backgroundColor: '#FF0055', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pkHostName?.toUpperCase() || 'HOST'}</Text>
+
+                    {/* Bottom Label Badges */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 8, paddingHorizontal: 12 }}>
+                        {/* Me / Host Label */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: hostScore >= guestScore ? '#FF0050' : 'rgba(0,0,0,0.4)',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: hostScore >= guestScore ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                            gap: 4
+                        }}>
+                            <User size={10} color="#FFF" fill="#FFF" />
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>{pkHostName?.toUpperCase() || (t('hostLabel') || 'HOST').toUpperCase()}</Text>
                         </View>
-                        <View style={{ backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{opponentName?.toUpperCase() || 'OPPONENT'}</Text>
+
+                        {/* Win Streak Indicator or Winning Message */}
+                        {hostScore !== guestScore && (
+                            <Animatable.View animation="fadeIn" style={{ backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, borderRadius: 20, justifyContent: 'center', height: 20 }}>
+                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                                    {hostScore > guestScore ? (t('hostIsLeading') || 'LEADING').toUpperCase() : (t('opponentLeading') || 'BEHIND').toUpperCase()}
+                                </Text>
+                            </Animatable.View>
+                        )}
+
+                        {/* Opponent Label */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: guestScore >= hostScore ? '#00F2EA' : 'rgba(0,0,0,0.4)',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: guestScore >= hostScore ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                            gap: 4
+                        }}>
+                            <Users size={10} color="#FFF" fill="#FFF" />
+                            <Text style={{ color: guestScore >= hostScore ? '#000' : '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>{opponentName?.toUpperCase() || (t('opponentLabel') || 'OPPONENT').toUpperCase()}</Text>
                         </View>
                     </View>
                 </Animatable.View>
             )}
 
-            {/* PK Winner Announcement - Modern UI */}
             {showPKResult && pkWinner && (
                 <Animatable.View
-                    animation="bounceIn"
-                    duration={800}
+                    animation="fadeIn"
+                    duration={400}
                     style={{
                         position: 'absolute',
                         top: 0,
@@ -1040,135 +1215,159 @@ export default function AudienceLiveScreen(props: Props) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         zIndex: 3000,
-                        backgroundColor: 'rgba(0,0,0,0.85)'
+                        backgroundColor: 'rgba(0,0,0,0.4)'
                     }}
                 >
-                    <LinearGradient
-                        colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B', '#D97706'] : ['#10B981', '#059669', '#047857']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{
-                            width: '85%',
-                            maxWidth: 350,
-                            borderRadius: 30,
-                            padding: 3,
-                            shadowColor: pkWinner === 'Draw' ? '#FCD34D' : '#10B981',
-                            shadowOffset: { width: 0, height: 20 },
-                            shadowOpacity: 0.6,
-                            shadowRadius: 30
-                        }}
+                    <Animatable.View
+                        animation="zoomIn"
+                        duration={600}
+                        style={{ width: '88%', maxWidth: 360 }}
                     >
-                        <View style={{
-                            backgroundColor: '#1A1A24',
-                            borderRadius: 27,
-                            paddingVertical: 40,
-                            paddingHorizontal: 30,
-                            alignItems: 'center'
-                        }}>
-                            {/* Confetti/Trophy Animation */}
-                            <View style={{
-                                flexDirection: 'row',
-                                marginBottom: 15,
-                                gap: 8
-                            }}>
-                                <Text style={{ fontSize: 32 }}>🎉</Text>
-                                <Text style={{ fontSize: 48 }}>
-                                    {pkWinner === 'Draw' ? '🤝' : '👑'}
-                                </Text>
-                                <Text style={{ fontSize: 32 }}>🎉</Text>
-                            </View>
-
-                            {/* Title */}
-                            <Text style={{
-                                color: '#fff',
-                                fontSize: 16,
-                                fontWeight: '600',
-                                marginBottom: 12,
-                                opacity: 0.7,
-                                letterSpacing: 2,
-                                textTransform: 'uppercase'
-                            }}>
-                                {pkWinner === 'Draw' ? t('battleEnded') : t('pkWinnerTitle')}
-                            </Text>
-
-                            {/* Winner Name */}
-                            <LinearGradient
-                                colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B'] : ['#10B981', '#34D399']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={{
-                                    paddingHorizontal: 24,
-                                    paddingVertical: 12,
-                                    borderRadius: 20,
-                                    marginBottom: 20
-                                }}
-                            >
-                                <Text style={{
-                                    color: '#000',
-                                    fontSize: 32,
-                                    fontWeight: '900',
-                                    textAlign: 'center',
-                                    textShadowColor: 'rgba(255,255,255,0.3)',
-                                    textShadowOffset: { width: 0, height: 1 },
-                                    textShadowRadius: 2
-                                }}>
-                                    {pkWinner === 'Draw' ? t('itsADraw') : pkWinner}
-                                </Text>
-                            </LinearGradient>
-
-                            {/* Score Display */}
-                            <View style={{
-                                flexDirection: 'row',
+                        <LinearGradient
+                            colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B', '#D97706'] : ['#10B981', '#059669', '#047857']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                                borderRadius: 32,
+                                padding: 2,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 25 },
+                                shadowOpacity: 0.5,
+                                shadowRadius: 35
+                            }}
+                        >
+                            <BlurView intensity={95} tint="dark" style={{
+                                borderRadius: 30,
+                                paddingVertical: 45,
+                                paddingHorizontal: 25,
                                 alignItems: 'center',
-                                backgroundColor: 'rgba(255,255,255,0.05)',
-                                paddingHorizontal: 20,
-                                paddingVertical: 12,
-                                borderRadius: 15,
-                                gap: 15
+                                overflow: 'hidden'
                             }}>
-                                <View style={{ alignItems: 'center' }}>
-                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
-                                        {pkHostName?.toUpperCase()}
-                                    </Text>
-                                    <Text style={{
-                                        color: '#FF0055',
-                                        fontSize: 28,
-                                        fontWeight: '900'
+                                {/* Confetti/Trophy Animation with Glow */}
+                                <Animatable.View
+                                    animation="pulse"
+                                    iterationCount="infinite"
+                                    style={{
+                                        flexDirection: 'row',
+                                        marginBottom: 20,
+                                        gap: 12,
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 36 }}>🎉</Text>
+                                    <View style={{
+                                        shadowColor: pkWinner === 'Draw' ? '#FBBF24' : '#10B981',
+                                        shadowOffset: { width: 0, height: 0 },
+                                        shadowOpacity: 1,
+                                        shadowRadius: 20
                                     }}>
-                                        {hostScore}
-                                    </Text>
-                                </View>
+                                        <Text style={{ fontSize: 56 }}>
+                                            {pkWinner === 'Draw' ? '🤝' : '👑'}
+                                        </Text>
+                                    </View>
+                                    <Text style={{ fontSize: 36 }}>🎉</Text>
+                                </Animatable.View>
 
-                                <Text style={{ color: '#666', fontSize: 20, fontWeight: '700' }}>VS</Text>
-
-                                <View style={{ alignItems: 'center' }}>
-                                    <Text style={{ color: '#888', fontSize: 11, marginBottom: 4, fontWeight: '600' }}>
-                                        {opponentName?.toUpperCase()}
-                                    </Text>
-                                    <Text style={{
-                                        color: '#3B82F6',
-                                        fontSize: 28,
-                                        fontWeight: '900'
-                                    }}>
-                                        {guestScore}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Celebration Message */}
-                            {pkWinner !== 'Draw' && (
+                                {/* Title with Letter Spacing */}
                                 <Text style={{
-                                    color: '#888',
-                                    fontSize: 13,
-                                    marginTop: 20,
-                                    fontWeight: '600',
-                                    textAlign: 'center'
+                                    color: 'rgba(255,255,255,0.6)',
+                                    fontSize: 14,
+                                    fontWeight: '800',
+                                    marginBottom: 15,
+                                    letterSpacing: 4,
+                                    textTransform: 'uppercase'
                                 }}>
-                                    🎊 Congratulations! 🎊
+                                    {pkWinner === 'Draw' ? t('battleEnded') : t('pkWinnerTitle')}
                                 </Text>
-                            )}
-                        </View>
-                    </LinearGradient>
+
+                                {/* Modern Winner Card */}
+                                <LinearGradient
+                                    colors={pkWinner === 'Draw' ? ['#FCD34D', '#F59E0B'] : ['#10B981', '#34D399']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        width: '100%',
+                                        paddingVertical: 18,
+                                        borderRadius: 24,
+                                        marginBottom: 25,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 10 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 15
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: '#000',
+                                        fontSize: 28,
+                                        fontWeight: '900',
+                                        textAlign: 'center',
+                                        letterSpacing: 0.5
+                                    }}>
+                                        {pkWinner === 'Draw' ? t('itsADraw') : pkWinner}
+                                    </Text>
+                                </LinearGradient>
+
+                                {/* Score Comparison Table */}
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: 'rgba(255,255,255,0.08)',
+                                    paddingHorizontal: 25,
+                                    paddingVertical: 18,
+                                    borderRadius: 20,
+                                    width: '100%',
+                                    justifyContent: 'space-between',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.1)'
+                                }}>
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 6, fontWeight: '700', letterSpacing: 1 }}>
+                                            {pkHostName?.toUpperCase() || t('hostLabel').toUpperCase()}
+                                        </Text>
+                                        <Text style={{
+                                            color: '#FF0055',
+                                            fontSize: 32,
+                                            fontWeight: '900'
+                                        }}>
+                                            {hostScore}
+                                        </Text>
+                                    </View>
+
+                                    <View style={{
+                                        width: 1,
+                                        height: 30,
+                                        backgroundColor: 'rgba(255,255,255,0.1)',
+                                        marginHorizontal: 15
+                                    }} />
+
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 6, fontWeight: '700', letterSpacing: 1 }}>
+                                            {opponentName?.toUpperCase()}
+                                        </Text>
+                                        <Text style={{
+                                            color: '#3B82F6',
+                                            fontSize: 32,
+                                            fontWeight: '900'
+                                        }}>
+                                            {guestScore}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Message Footer */}
+                                <View style={{ marginTop: 25 }}>
+                                    <Text style={{
+                                        color: 'rgba(255,255,255,0.4)',
+                                        fontSize: 12,
+                                        fontWeight: '600',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        {pkWinner === 'Draw' ? t ? t('goodMatch') : 'What a match!' : `🎉 ${t ? t('congratulations') : 'Congratulations!'} 🎉`}
+                                    </Text>
+                                </View>
+                            </BlurView>
+                        </LinearGradient>
+                    </Animatable.View>
                 </Animatable.View>
             )}
 
@@ -1288,6 +1487,19 @@ export default function AudienceLiveScreen(props: Props) {
                                 setActiveCoupon(data);
                                 const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
                                 setCouponTimeRemaining(remaining);
+                            } else if (data.type === 'PK_SCORE_SYNC') {
+                                // 🛡️ ONLY accept score sync from the actual host of this stream
+                                // This prevents swapped scores/names from reaching the wrong audience
+                                const senderID = messageData.fromUser?.userID || messageData.senderUserID;
+                                if (senderID !== streamHostId) return;
+
+                                if (data.hostScore !== undefined) setHostScore(data.hostScore);
+                                if (data.guestScore !== undefined) setGuestScore(data.guestScore);
+                                if (data.hostName) setPkHostName(data.hostName);
+                                if (data.opponentName) setOpponentName(data.opponentName);
+                                if (data.isInPK !== undefined && data.isInPK !== isInPKRef.current) {
+                                    setIsInPK(data.isInPK);
+                                }
                             }
                         } catch (e) {
                             console.log('Error parsing audience command:', e);
@@ -1496,72 +1708,97 @@ export default function AudienceLiveScreen(props: Props) {
                     duration={400}
                     style={{
                         position: 'absolute',
-                        bottom: 380, // Above coupon which is at 290
+                        bottom: activeCoupon ? 385 : 290,
                         left: 15,
-                        width: 240,
+                        width: 280,
                         zIndex: 3000
                     }}
                 >
-                    <BlurView intensity={80} tint="dark" style={{
-                        borderRadius: 20,
-                        padding: 12,
+                    <BlurView intensity={90} tint="dark" style={{
+                        borderRadius: 22,
+                        padding: 10,
                         flexDirection: 'row',
                         alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        overflow: 'hidden'
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(255, 255, 255, 0.25)',
+                        overflow: 'hidden',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 15,
+                        elevation: 10
                     }}>
                         <Image
                             source={{ uri: pinnedProduct.images?.[0] }}
-                            style={{ width: 54, height: 54, borderRadius: 12, backgroundColor: '#333' }}
+                            style={{ width: 60, height: 60, borderRadius: 14, backgroundColor: '#333' }}
                         />
-                        <View style={{ flex: 1, marginLeft: 12 }}>
+                        <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
                                 <LinearGradient
                                     colors={['#EF4444', '#B91C1C']}
-                                    style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 6 }}
+                                    style={{ paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 5, marginRight: 6 }}
                                 >
-                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: 'bold' }}>{t('flashSale') || 'FLASH SALE'}</Text>
+                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>{(pinnedProduct.discountPrice ? t('flashSale') : t('pinned')) || (pinnedProduct.discountPrice ? 'FLASH SALE' : 'PINNED')}</Text>
                                 </LinearGradient>
                             </View>
-                            <Text numberOfLines={1} style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{getLocalizedName(pinnedProduct.name)}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>{pinnedProduct.price} TND</Text>
-                                {pinTimeRemaining > 0 && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Clock size={10} color="rgba(255,255,255,0.6)" style={{ marginRight: 4 }} />
-                                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 'bold' }}>
-                                            {Math.floor(pinTimeRemaining / 60)}:{(pinTimeRemaining % 60).toString().padStart(2, '0')}
-                                        </Text>
-                                    </View>
-                                )}
+                            <Text numberOfLines={1} style={{ color: '#fff', fontWeight: '800', fontSize: 13.5, marginBottom: 1 }}>{getLocalizedName(pinnedProduct.name)}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                                    {pinnedProduct.discountPrice ? (
+                                        <>
+                                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, textDecorationLine: 'line-through', marginRight: 5 }}>{pinnedProduct.price}</Text>
+                                            <Text style={{ color: '#F59E0B', fontWeight: '900', fontSize: 14 }}>{pinnedProduct.discountPrice} <Text style={{ fontSize: 9 }}>TND</Text></Text>
+                                        </>
+                                    ) : (
+                                        <Text style={{ color: '#fff', fontWeight: '900', fontSize: 14 }}>{pinnedProduct.price} <Text style={{ fontSize: 9 }}>TND</Text></Text>
+                                    )}
+                                </View>
                             </View>
                         </View>
-                        <TouchableOpacity
-                            onPress={() => {
-                                setSelectedProduct(pinnedProduct);
-                                setShowPurchaseModal(true);
-                            }}
-                            style={{
-                                backgroundColor: '#F59E0B',
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: 8,
-                                marginLeft: 8
-                            }}
-                        >
-                            <Text style={{ color: '#000', fontWeight: '900', fontSize: 11 }}>{t('buy') || 'BUY'}</Text>
-                        </TouchableOpacity>
+
+                        <View style={{ alignItems: 'center', marginLeft: 8 }}>
+                            {pinTimeRemaining > 0 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, marginBottom: 5 }}>
+                                    <Clock size={8} color="rgba(255,255,255,0.8)" style={{ marginRight: 3 }} />
+                                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '900' }}>
+                                        {Math.floor(pinTimeRemaining / 60)}:{(pinTimeRemaining % 60).toString().padStart(2, '0')}
+                                    </Text>
+                                </View>
+                            )}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setSelectedProduct(pinnedProduct);
+                                    setShowPurchaseModal(true);
+                                }}
+                                activeOpacity={0.8}
+                                style={{
+                                    backgroundColor: '#F59E0B',
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 7,
+                                    borderRadius: 10,
+                                    minWidth: 70,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    shadowColor: '#F59E0B',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.3,
+                                    shadowRadius: 5
+                                }}
+                            >
+                                <Text style={{ color: '#000', fontWeight: '900', fontSize: 10.5, letterSpacing: 0.3 }}>{(t('buy') || 'BUY').toUpperCase()}</Text>
+                            </TouchableOpacity>
+                        </View>
+
                         <TouchableOpacity
                             onPress={() => setPinnedProduct(null)}
                             style={{
                                 position: 'absolute',
-                                top: 6,
-                                right: 6,
-                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                width: 18,
-                                height: 18,
-                                borderRadius: 9,
+                                top: 5,
+                                right: 5,
+                                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                                width: 20,
+                                height: 20,
+                                borderRadius: 10,
                                 alignItems: 'center',
                                 justifyContent: 'center'
                             }}
@@ -2069,7 +2306,7 @@ export default function AudienceLiveScreen(props: Props) {
             {recentGift && !recentGift.isBig && (
                 <View style={{
                     position: 'absolute',
-                    top: 180, // Moved up slightly to avoid overlapping
+                    top: isInPK ? 220 : 180, // Moved up slightly to avoid overlapping
                     left: 10,
                     zIndex: 10000,
                     flexDirection: 'row',
@@ -2085,6 +2322,7 @@ export default function AudienceLiveScreen(props: Props) {
                     >
                         {(() => {
                             const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
+                            if (!giftObj) return null;
                             const points = giftObj?.points || 0;
                             const isGradient = points >= 100 && points < 500;
 
@@ -2196,28 +2434,30 @@ export default function AudienceLiveScreen(props: Props) {
                         })()}
 
                         {/* Combo Count UI */}
-                        {recentGift.count > 1 && (
-                            <Animatable.View
-                                key={`combo-${recentGift.count}`}
-                                animation="bounceIn"
-                                duration={500}
-                                style={{ marginLeft: 35 }}
-                            >
-                                <Text style={{
-                                    color: '#FBBF24',
-                                    fontSize: 32,
-                                    fontWeight: '900',
-                                    fontStyle: 'italic',
-                                    textShadowColor: '#000',
-                                    textShadowOffset: { width: 2, height: 2 },
-                                    textShadowRadius: 4
-                                }}>
-                                    x{recentGift.count}
-                                </Text>
-                            </Animatable.View>
-                        )}
-                    </Animatable.View>
-                </View>
+                        {
+                            recentGift.count > 1 && (
+                                <Animatable.View
+                                    key={`combo-${recentGift.count}`}
+                                    animation="bounceIn"
+                                    duration={500}
+                                    style={{ marginLeft: 35 }}
+                                >
+                                    <Text style={{
+                                        color: '#FBBF24',
+                                        fontSize: 32,
+                                        fontWeight: '900',
+                                        fontStyle: 'italic',
+                                        textShadowColor: '#000',
+                                        textShadowOffset: { width: 2, height: 2 },
+                                        textShadowRadius: 4
+                                    }}>
+                                        x{recentGift.count}
+                                    </Text>
+                                </Animatable.View>
+                            )
+                        }
+                    </Animatable.View >
+                </View >
             )}
 
             {/* FLOATING ACTION BUTTONS */}
@@ -2333,99 +2573,101 @@ export default function AudienceLiveScreen(props: Props) {
             </View>
 
             {/* LIVE COUPON OVERLAY - Horizontal Ticket Style */}
-            {activeCoupon && (
-                <Animatable.View
-                    animation="bounceInLeft"
-                    style={{
-                        position: 'absolute',
-                        bottom: 290,
-                        left: 15,
-                        width: 200,
-                        zIndex: 3000
-                    }}
-                >
-                    <LinearGradient
-                        colors={['#F59E0B', '#B45309']}
+            {
+                activeCoupon && (
+                    <Animatable.View
+                        animation="bounceInLeft"
                         style={{
-                            borderRadius: 10,
-                            padding: 1,
+                            position: 'absolute',
+                            bottom: 290,
+                            left: 15,
+                            width: 200,
+                            zIndex: 3000
                         }}
                     >
-                        <View style={{
-                            backgroundColor: '#121218',
-                            borderRadius: 9,
-                            flexDirection: 'row',
-                            height: 75,
-                            overflow: 'hidden',
-                            position: 'relative'
-                        }}>
-                            <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
-                            <View style={{ position: 'absolute', bottom: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+                        <LinearGradient
+                            colors={['#F59E0B', '#B45309']}
+                            style={{
+                                borderRadius: 10,
+                                padding: 1,
+                            }}
+                        >
+                            <View style={{
+                                backgroundColor: '#121218',
+                                borderRadius: 9,
+                                flexDirection: 'row',
+                                height: 75,
+                                overflow: 'hidden',
+                                position: 'relative'
+                            }}>
+                                <View style={{ position: 'absolute', top: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
+                                <View style={{ position: 'absolute', bottom: -5, left: '50%', marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: '#000', zIndex: 10, borderWidth: 1, borderColor: '#B45309' }} />
 
-                            <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
-                                <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer')?.toUpperCase() || 'OFFRE LIMITÉE'}</Text>
-                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
+                                <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
+                                    <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer')?.toUpperCase() || 'OFFRE LIMITÉE'}</Text>
+                                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
 
-                                {couponTimeRemaining > 0 && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                        <Clock size={8} color="#EF4444" style={{ marginRight: 3 }} />
-                                        <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '800' }}>
-                                            {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, '0')}
-                                        </Text>
+                                    {couponTimeRemaining > 0 && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                            <Clock size={8} color="#EF4444" style={{ marginRight: 3 }} />
+                                            <Text style={{ color: '#EF4444', fontSize: 9, fontWeight: '800' }}>
+                                                {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, '0')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <View style={{ width: 1, height: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', left: '50%', position: 'absolute' }} />
+
+                                <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
+                                    <View style={{
+                                        backgroundColor: 'rgba(255,255,255,0.05)',
+                                        paddingVertical: 3,
+                                        paddingHorizontal: 6,
+                                        borderRadius: 4,
+                                        borderStyle: 'dashed',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(245, 158, 11, 0.4)',
+                                        marginBottom: 6,
+                                        width: '100%',
+                                        alignItems: 'center'
+                                    }}>
+                                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
                                     </View>
-                                )}
-                            </View>
 
-                            <View style={{ width: 1, height: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', left: '50%', position: 'absolute' }} />
-
-                            <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
-                                <View style={{
-                                    backgroundColor: 'rgba(255,255,255,0.05)',
-                                    paddingVertical: 3,
-                                    paddingHorizontal: 6,
-                                    borderRadius: 4,
-                                    borderStyle: 'dashed',
-                                    borderWidth: 1,
-                                    borderColor: 'rgba(245, 158, 11, 0.4)',
-                                    marginBottom: 6,
-                                    width: '100%',
-                                    alignItems: 'center'
-                                }}>
-                                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (Clipboard) {
+                                                Clipboard.setString(activeCoupon.code);
+                                                Alert.alert(t('success') || 'Succès', t('couponCopied') || 'Coupon copié');
+                                            } else {
+                                                Alert.alert(t('couponCode') || 'Code Coupon', activeCoupon.code);
+                                            }
+                                        }}
+                                        activeOpacity={0.8}
+                                        style={{ width: '100%', borderRadius: 4, overflow: 'hidden' }}
+                                    >
+                                        <LinearGradient
+                                            colors={['#F59E0B', '#D97706']}
+                                            style={{ paddingVertical: 4, alignItems: 'center' }}
+                                        >
+                                            <Text style={{ color: '#000', fontWeight: '900', fontSize: 8 }}>{t('claimCoupon')?.toUpperCase() || 'RÉCUPÉRER'}</Text>
+                                        </LinearGradient>
+                                    </TouchableOpacity>
                                 </View>
 
                                 <TouchableOpacity
-                                    onPress={() => {
-                                        if (Clipboard) {
-                                            Clipboard.setString(activeCoupon.code);
-                                            Alert.alert(t('success') || 'Succès', t('couponCopied') || 'Coupon copié');
-                                        } else {
-                                            Alert.alert(t('couponCode') || 'Code Coupon', activeCoupon.code);
-                                        }
-                                    }}
-                                    activeOpacity={0.8}
-                                    style={{ width: '100%', borderRadius: 4, overflow: 'hidden' }}
+                                    onPress={() => setActiveCoupon(null)}
+                                    style={{ position: 'absolute', top: 4, right: 4 }}
                                 >
-                                    <LinearGradient
-                                        colors={['#F59E0B', '#D97706']}
-                                        style={{ paddingVertical: 4, alignItems: 'center' }}
-                                    >
-                                        <Text style={{ color: '#000', fontWeight: '900', fontSize: 8 }}>{t('claimCoupon')?.toUpperCase() || 'RÉCUPÉRER'}</Text>
-                                    </LinearGradient>
+                                    <X size={10} color="rgba(255,255,255,0.3)" />
                                 </TouchableOpacity>
                             </View>
-
-                            <TouchableOpacity
-                                onPress={() => setActiveCoupon(null)}
-                                style={{ position: 'absolute', top: 4, right: 4 }}
-                            >
-                                <X size={10} color="rgba(255,255,255,0.3)" />
-                            </TouchableOpacity>
-                        </View>
-                    </LinearGradient>
-                </Animatable.View>
-            )}
-        </View>
+                        </LinearGradient>
+                    </Animatable.View>
+                )
+            }
+        </View >
     );
 }
 

@@ -673,11 +673,43 @@ export const LiveSessionService = {
         }, { merge: true });
     },
 
+    // ✅ NEW: Increment PK Host Score (atomic, like totalLikes)
+    // Supports cross-room sync by updating the opponent's guestScore
+    incrementPKHostScore: async (channelId: string, amount: number, opponentChannelId?: string) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await updateDoc(sessionRef, {
+            'pkState.hostScore': increment(amount)
+        });
+
+        if (opponentChannelId) {
+            const opponentRef = doc(db, SESSIONS_COLLECTION, opponentChannelId);
+            await updateDoc(opponentRef, {
+                'pkState.guestScore': increment(amount)
+            }).catch(e => console.error('Opponent Guest Score Sync Error:', e));
+        }
+    },
+
+    // ✅ NEW: Increment PK Guest Score (atomic, like totalLikes)
+    // Supports cross-room sync by updating the opponent's hostScore
+    incrementPKGuestScore: async (channelId: string, amount: number, opponentChannelId?: string) => {
+        const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        await updateDoc(sessionRef, {
+            'pkState.guestScore': increment(amount)
+        });
+
+        if (opponentChannelId) {
+            const opponentRef = doc(db, SESSIONS_COLLECTION, opponentChannelId);
+            await updateDoc(opponentRef, {
+                'pkState.hostScore': increment(amount)
+            }).catch(e => console.error('Opponent Host Score Sync Error:', e));
+        }
+    },
+
     // Update comprehensive PK State for Audience Sync
     updatePKState: async (channelId: string, state: { 
         isActive: boolean; 
-        hostScore: number; 
-        guestScore: number; 
+        hostScore?: number; 
+        guestScore?: number; 
         opponentName?: string; 
         opponentChannelId?: string; 
         startTime?: number;
