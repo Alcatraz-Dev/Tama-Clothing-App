@@ -545,6 +545,10 @@ const Translations: any = {
     productPinned: 'Le produit est maintenant épinglé à l\'écran !',
     timeRemaining: 'Temps restant',
     mins: 'min',
+    featuredProducts: 'Produits en vedette',
+    buy: 'Acheter',
+    completePurchase: 'Finaliser l\'achat',
+    noProductsFeatured: 'Aucun produit en vedette pour le moment.',
   },
   ar: {
     success: 'تم بنجاح',
@@ -815,6 +819,10 @@ const Translations: any = {
     liveEnded: 'انتهى البث',
     hostEndedSession: 'أنهى المضيف البث المباشر.',
     limitedTimeOffer: 'عرض لفترة محدودة',
+    featuredProducts: 'المنتجات المميزة',
+    buy: 'شراء',
+    completePurchase: 'إتمام الشراء',
+    noProductsFeatured: 'لا توجد منتجات مميزة حالياً.',
   }
 };
 

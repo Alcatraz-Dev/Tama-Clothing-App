@@ -77,6 +77,7 @@ export interface LiveSession {
         timestamp: number;
         senderAvatar?: string;
         targetName?: string;
+        combo?: number; // ✅ Sync Combo Count
     };
     featuredProductIds?: string[]; // IDs of products selected by host for this stream
     lastPurchase?: { // Real-time purchase animation sync
@@ -120,7 +121,14 @@ export const LiveSessionService = {
     },
 
     // Broadcast a purchase event for animation
-    broadcastPurchase: async (channelId: string, purchase: { purchaserName: string; productName: string }) => {
+    broadcastPurchase: async (channelId: string, purchase: { 
+        purchaserName: string; 
+        productName: string;
+        price?: number;
+        couponCode?: string | null;
+        color?: string;
+        size?: string;
+    }) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
             lastPurchase: {
@@ -685,7 +693,7 @@ export const LiveSessionService = {
     },
 
     // Broadcast Gift for Real-time Animation Sync
-    broadcastGift: async (channelId: string, gift: { giftName: string; icon: string; points: number; senderName: string; senderId?: string; senderAvatar?: string; targetName?: string; }) => {
+    broadcastGift: async (channelId: string, gift: { giftName: string; icon: string; points: number; senderName: string; senderId?: string; senderAvatar?: string; targetName?: string; combo?: number; }) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await setDoc(sessionRef, {
             lastGift: {

@@ -182,8 +182,8 @@ export default function HostLiveScreen(props: Props) {
     };
 
     // Unified Gift Handler to manage counters and queuing centrally
-    const handleNewGift = (data: { senderName: string, senderId?: string, giftName: string, points: number, icon: any, senderAvatar?: string, targetName?: string, isHost: boolean }) => {
-        const { senderName, senderId, giftName, points, icon, senderAvatar, targetName, isHost } = data;
+    const handleNewGift = (data: { senderName: string, senderId?: string, giftName: string, points: number, icon: any, senderAvatar?: string, targetName?: string, isHost: boolean, combo?: number }) => {
+        const { senderName, senderId, giftName, points, icon, senderAvatar, targetName, isHost, combo } = data;
         const isBig = points >= 500;
         const current = recentGiftRef.current;
 
@@ -191,7 +191,7 @@ export default function HostLiveScreen(props: Props) {
         if (isSameGift(current, senderId || '', senderName, giftName)) {
             setRecentGift(prev => {
                 const base = prev || current;
-                const updated = base ? { ...base, count: (base.count || 0) + 1 } : null;
+                const updated = base ? { ...base, count: combo || (base.count || 0) + 1 } : null;
                 recentGiftRef.current = updated;
                 return updated;
             });
@@ -216,7 +216,7 @@ export default function HostLiveScreen(props: Props) {
         setGiftQueue(prev => {
             const last = prev[prev.length - 1];
             if (isSameGift(last, senderId || '', senderName, giftName)) {
-                const updatedLast = { ...last, count: (last.count || 0) + 1 };
+                const updatedLast = { ...last, count: combo || (last.count || 0) + 1 };
                 return [...prev.slice(0, -1), updatedLast];
             }
 
@@ -226,7 +226,7 @@ export default function HostLiveScreen(props: Props) {
                 senderId,
                 giftName,
                 icon,
-                count: 1,
+                count: combo || 1,
                 senderAvatar,
                 targetName,
                 isHost,
@@ -412,7 +412,8 @@ export default function HostLiveScreen(props: Props) {
                             icon: session.lastGift!.icon,
                             senderAvatar: session.lastGift!.senderAvatar,
                             targetName: session.lastGift!.targetName,
-                            isHost: false
+                            isHost: false,
+                            combo: session.lastGift!.combo // ✅ Pass Combo
                         });
                     }
                 }
@@ -670,6 +671,13 @@ export default function HostLiveScreen(props: Props) {
         const targetName = selectedTargetUser?.userName || 'the Room';
         const finalAvatar = hostAvatar || CustomBuilder.getUserAvatar(userId);
 
+        // Calculate new combo count locally
+        const current = recentGiftRef.current;
+        let newCount = 1;
+        if (isSameGift(current, userId, userName || 'Host', gift.name)) {
+            newCount = (current?.count || 0) + 1;
+        }
+
         handleNewGift({
             senderName: userName || 'Host',
             senderId: userId,
@@ -678,7 +686,8 @@ export default function HostLiveScreen(props: Props) {
             icon: gift.icon,
             senderAvatar: finalAvatar,
             targetName: targetName,
-            isHost: true
+            isHost: true,
+            combo: newCount // ✅ Pass Combo
         });
 
         // Send via Signaling
@@ -693,6 +702,7 @@ export default function HostLiveScreen(props: Props) {
                 icon: gift.icon,
                 targetName: targetName,
                 isHost: true,
+                combo: newCount, // ✅ Pass Combo
                 timestamp: Date.now()
             })).catch((e: any) => console.log('Host Gift Send Error:', e));
 
@@ -710,7 +720,8 @@ export default function HostLiveScreen(props: Props) {
                 senderName: userName || 'Host',
                 senderId: userId,
                 senderAvatar: finalAvatar,
-                targetName: targetName
+                targetName: targetName,
+                combo: newCount // ✅ Pass Combo
             }).catch(e => console.error('Gift Broadcast Error:', e));
             updatePKScore(gift.name);
         }
@@ -897,7 +908,8 @@ export default function HostLiveScreen(props: Props) {
                         icon: foundGift ? foundGift.icon : data.icon,
                         senderAvatar: data.senderAvatar,
                         targetName: data.targetName,
-                        isHost: isHost
+                        isHost: isHost,
+                        combo: data.combo // ✅ Pass Combo
                     });
 
                     setTotalLikes(prev => prev + (Number(data.points) || 1));
@@ -2651,84 +2663,117 @@ export default function HostLiveScreen(props: Props) {
                             alignItems: 'center'
                         }}
                     >
-                        <BlurView intensity={95} tint="dark" style={{
-                            borderRadius: 40,
-                            paddingVertical: 4,
-                            paddingHorizontal: 6,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            borderWidth: 1,
-                            borderColor: 'rgba(255, 255, 255, 0.3)',
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            minWidth: 250,
-                            overflow: 'hidden', // Fix rounded corners being hidden
-                        }}>
-                            {/* Avatar Circle */}
-                            <View style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 20,
-                                backgroundColor: '#FF0066',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: 1.5,
-                                borderColor: 'rgba(255,255,255,0.8)',
-                                overflow: 'hidden',
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 3
-                            }}>
-                                <Image
-                                    source={
-                                        recentGift.senderAvatar
-                                            ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
-                                            : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
-                                    }
-                                    style={{ width: '100%', height: '100%' }}
-                                    resizeMode="cover"
-                                />
-                            </View>
+                        {(() => {
+                            const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
+                            const points = giftObj?.points || 0;
+                            const isGradient = points >= 100 && points < 500;
 
-                            <View style={{ marginLeft: 10, marginRight: 40 }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
-                                    {recentGift.senderName}
-                                </Text>
-                                <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
-                                    {t('sentA')} {recentGift.giftName}
-                                </Text>
-                            </View>
+                            const content = (
+                                <>
+                                    {/* Avatar Circle */}
+                                    <View style={{
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: 20,
+                                        backgroundColor: '#FF0066',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderWidth: 1.5,
+                                        borderColor: 'rgba(255,255,255,0.8)',
+                                        overflow: 'hidden',
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 3
+                                    }}>
+                                        <Image
+                                            source={
+                                                recentGift.senderAvatar
+                                                    ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
+                                                    : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                            }
+                                            style={{ width: '100%', height: '100%' }}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
 
-                            {/* Gift Icon inside a bubble */}
-                            <View
-                                style={{
-                                    position: 'absolute',
-                                    right: 1, // Overlap the edge like TikTok
-                                    width: 48,
-                                    height: 48,
-                                    borderRadius: 26,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                    <View style={{ marginLeft: 10, marginRight: 40 }}>
+                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
+                                            {recentGift.senderName}
+                                        </Text>
+                                        <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
+                                            {t('sentA')} {recentGift.giftName}
+                                        </Text>
+                                    </View>
+
+                                    {/* Gift Icon inside a bubble */}
+                                    <View
+                                        style={{
+                                            position: 'absolute',
+                                            right: 1, // Overlap the edge like TikTok
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 26,
+                                            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderWidth: 2,
+                                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 4, height: 4 },
+                                            shadowOpacity: 0.4,
+                                            shadowRadius: 6,
+                                            elevation: 8
+                                        }}
+                                    >
+                                        <Animatable.Image
+                                            key={`gift-icon-${recentGift.count}`}
+                                            animation="tada"
+                                            duration={1000}
+                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                            style={{ width: 38, height: 38 }}
+                                            resizeMode="contain"
+                                        />
+                                    </View>
+                                </>
+                            );
+
+                            return isGradient ? (
+                                <LinearGradient
+                                    colors={['#FF0066', '#A855F7']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        borderRadius: 40,
+                                        paddingVertical: 4,
+                                        paddingHorizontal: 6,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                                        minWidth: 250,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {content}
+                                </LinearGradient>
+                            ) : (
+                                <BlurView intensity={95} tint="dark" style={{
+                                    borderRadius: 40,
+                                    paddingVertical: 4,
+                                    paddingHorizontal: 6,
+                                    flexDirection: 'row',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderWidth: 2,
-                                    borderColor: 'rgba(255, 255, 255, 0.5)',
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 4, height: 4 },
-                                    shadowOpacity: 0.4,
-                                    shadowRadius: 6,
-                                    elevation: 8
-                                }}
-                            >
-                                <Animatable.Image
-                                    key={`gift-icon-${recentGift.count}`}
-                                    animation="tada"
-                                    duration={1000}
-                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                    style={{ width: 38, height: 38 }}
-                                    resizeMode="contain"
-                                />
-                            </View>
-                        </BlurView>
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    minWidth: 250,
+                                    overflow: 'hidden', // Fix rounded corners being hidden
+                                }}>
+                                    {content}
+                                </BlurView>
+                            );
+                        })()}
 
                         {/* Combo Count UI */}
                         {recentGift.count > 1 && (

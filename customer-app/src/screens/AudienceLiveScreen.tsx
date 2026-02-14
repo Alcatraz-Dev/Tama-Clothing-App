@@ -115,7 +115,27 @@ export default function AudienceLiveScreen(props: Props) {
     const [address, setAddress] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [couponInput, setCouponInput] = useState(''); // User entered coupon
     const [purchaseNotification, setPurchaseNotification] = useState<{ user: string, product: string } | null>(null);
+
+    const COLOR_MAP: Record<string, string> = {
+        'RED': '#EF4444',
+        'BLACK': '#000000',
+        'WHITE': '#FFFFFF',
+        'BLUE': '#3B82F6',
+        'GREEN': '#22C55E',
+        'YELLOW': '#EAB308',
+        'PINK': '#EC4899',
+        'PURPLE': '#A855F7',
+        'ORANGE': '#F97316',
+        'GRAY': '#6B7280',
+        'OLIVE': '#808000',
+        'NAVY': '#1E3A8A',
+        'TEAL': '#14B8A6',
+        'MAROON': '#800000',
+        'BEIGE': '#F5F5DC',
+        'BROWN': '#92400E'
+    };
     const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
     const [giftCategory, setGiftCategory] = useState<'POPULAIRE' | 'SPÉCIAL' | 'LUXE'>('POPULAIRE');
     const [userBalance, setUserBalance] = useState(0);
@@ -223,15 +243,33 @@ export default function AudienceLiveScreen(props: Props) {
             return;
         }
 
+        const basePrice = selectedProduct.discountPrice || selectedProduct.price;
+        let finalPrice = basePrice;
+        let appliedCoupon = null;
+
+        if (activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
+            if (activeCoupon.type === 'percentage') {
+                finalPrice = basePrice * (1 - activeCoupon.discount / 100);
+            } else {
+                finalPrice = Math.max(0, basePrice - activeCoupon.discount);
+            }
+            appliedCoupon = activeCoupon.code;
+        }
+
         await LiveSessionService.broadcastPurchase(channelId, {
             purchaserName: userName || 'Viewer',
-            productName: getLocalizedName(selectedProduct.name)
+            productName: getLocalizedName(selectedProduct.name),
+            price: finalPrice,
+            couponCode: appliedCoupon,
+            color: selectedColor,
+            size: selectedSize
         });
 
+        setCouponInput('');
         setShowPurchaseModal(false);
         setAddress('');
         setSelectedProduct(null);
-        Alert.alert('Success', 'Order Placed! 🎉');
+        Alert.alert('Success', `Order Placed! Total: ${finalPrice.toFixed(2)} TND`);
     };
 
     // Sync Refs is handled below but let's keep the hook structure clean
@@ -303,10 +341,12 @@ export default function AudienceLiveScreen(props: Props) {
         const foundGift = GIFTS.find(g => g.name === gift.name);
         const isBig = (foundGift?.points || 0) >= 500 || (gift.points || 0) >= 500;
 
+        let newCount = 1;
         if (isSameGift(current, userId, userName, gift.name)) {
+            newCount = (current?.count || 0) + 1;
             setRecentGift(prev => {
                 const base = prev || current;
-                const updated = base ? { ...base, count: base.count + 1 } : null;
+                const updated = base ? { ...base, count: newCount } : null;
                 recentGiftRef.current = updated;
                 return updated;
             });
@@ -328,7 +368,8 @@ export default function AudienceLiveScreen(props: Props) {
             setGiftQueue(prev => {
                 const last = prev[prev.length - 1];
                 if (isSameGift(last, userId, userName, gift.name)) {
-                    return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                    newCount = (last.count || 0) + 1;
+                    return [...prev.slice(0, -1), { ...last, count: newCount }];
                 }
                 return [...prev, {
                     senderName: userName || 'You',
@@ -359,6 +400,7 @@ export default function AudienceLiveScreen(props: Props) {
                 giftName: gift.name,
                 points: gift.points,
                 icon: gift.icon,
+                combo: newCount, // ✅ Send Combo Count
                 timestamp: Date.now()
             })).catch((e: any) => console.log('Gift Send Error:', e));
         }
@@ -373,7 +415,8 @@ export default function AudienceLiveScreen(props: Props) {
                 senderName: userName || 'Viewer',
                 senderId: userId,
                 senderAvatar: finalAvatar, // ✅ Include avatar for Host display
-                targetName: 'Host' // Target is always Host in audience view
+                targetName: 'Host', // Target is always Host in audience view
+                combo: newCount // ✅ Send Combo Count
             }).catch(e => console.error('Gift Broadcast Error:', e));
         }
     };
@@ -466,7 +509,7 @@ export default function AudienceLiveScreen(props: Props) {
                 if (!isOwnGift) {
                     if (isAlreadyRecent) {
                         setRecentGift(prev => {
-                            const updated = prev ? { ...prev, count: (prev.count || 0) + 1 } : null;
+                            const updated = prev ? { ...prev, count: session.lastGift!.combo || (prev.count || 0) + 1 } : null;
                             recentGiftRef.current = updated;
                             return updated;
                         });
@@ -482,7 +525,7 @@ export default function AudienceLiveScreen(props: Props) {
                             // Check if matches tail of queue for aggregation
                             const last = prev[prev.length - 1];
                             if (last && isSameGift(last, session.lastGift?.senderId || '', session.lastGift?.senderName || '', session.lastGift?.giftName || '')) {
-                                const updatedLast = { ...last, count: (last.count || 0) + 1 };
+                                const updatedLast = { ...last, count: session.lastGift!.combo || (last.count || 0) + 1 };
                                 return [...prev.slice(0, -1), updatedLast];
                             }
 
@@ -490,7 +533,7 @@ export default function AudienceLiveScreen(props: Props) {
                                 senderName: session.lastGift!.senderName,
                                 giftName: session.lastGift!.giftName,
                                 icon: session.lastGift!.icon,
-                                count: 1,
+                                count: session.lastGift!.combo || 1,
                                 senderId: session.lastGift!.senderId,
                                 senderAvatar: session.lastGift!.senderAvatar,
                                 targetName: session.lastGift!.targetName,
@@ -707,7 +750,7 @@ export default function AudienceLiveScreen(props: Props) {
                         if (isSameGift(current, senderId, senderName, giftNameStr)) {
                             setRecentGift(prev => {
                                 const base = prev || current;
-                                const updated = base ? { ...base, count: (base.count || 0) + 1 } : null;
+                                const updated = base ? { ...base, count: data.combo || (base.count || 0) + 1 } : null;
                                 recentGiftRef.current = updated;
                                 return updated;
                             });
@@ -729,13 +772,13 @@ export default function AudienceLiveScreen(props: Props) {
                             setGiftQueue(prev => {
                                 const last = prev[prev.length - 1];
                                 if (isSameGift(last, senderId, senderName, giftNameStr)) {
-                                    return [...prev.slice(0, -1), { ...last, count: last.count + 1 }];
+                                    return [...prev.slice(0, -1), { ...last, count: data.combo || last.count + 1 }];
                                 }
                                 return [...prev.slice(-10), {
                                     senderName: senderName,
                                     giftName: giftNameStr,
                                     icon: foundGift ? foundGift.icon : data.icon,
-                                    count: 1,
+                                    count: data.combo || 1,
                                     senderId: senderId,
                                     senderAvatar: data.senderAvatar,
                                     isHost: isHost,
@@ -1539,31 +1582,38 @@ export default function AudienceLiveScreen(props: Props) {
                 onRequestClose={() => setShowProductSheet(false)}
             >
                 <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}
                     activeOpacity={1}
                     onPress={() => setShowProductSheet(false)}
                 >
-                    <View style={{ backgroundColor: '#1A1A24', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '60%', padding: 20 }}>
+                    <BlurView intensity={80} tint="dark" style={{ borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingTop: 20, paddingHorizontal: 20, paddingBottom: 30, overflow: 'hidden', backgroundColor: 'rgba(18, 18, 24, 0.95)' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Featured Products</Text>
-                            <TouchableOpacity onPress={() => setShowProductSheet(false)}>
-                                <X size={24} color="#fff" />
+                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: 0.3 }}>{t('featuredProducts') || 'Featured Products'}</Text>
+                            <TouchableOpacity onPress={() => setShowProductSheet(false)} style={{ padding: 4 }}>
+                                <X size={22} color="#fff" />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView>
+                        <ScrollView showsVerticalScrollIndicator={false}>
                             {featuredProducts.length === 0 ? (
-                                <View style={{ alignItems: 'center', padding: 40 }}>
-                                    <ShoppingBag size={40} color="#444" />
-                                    <Text style={{ color: '#666', marginTop: 10 }}>No products featured yet.</Text>
+                                <View style={{ alignItems: 'center', padding: 50 }}>
+                                    <ShoppingBag size={48} color="#555" />
+                                    <Text style={{ color: '#888', marginTop: 12, fontSize: 14 }}>{t('noProductsFeatured') || 'No products featured yet.'}</Text>
                                 </View>
                             ) : (
                                 featuredProducts.map(p => (
-                                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A2A35', borderRadius: 12, padding: 10, marginBottom: 10 }}>
-                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 70, height: 70, borderRadius: 8, backgroundColor: '#444' }} />
+                                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(30, 30, 40, 0.8)', borderRadius: 12, padding: 10, marginBottom: 10 }}>
+                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 70, height: 70, borderRadius: 10, backgroundColor: '#333' }} />
                                         <View style={{ flex: 1, marginLeft: 12 }}>
-                                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
-                                            <Text style={{ color: '#ccc', fontSize: 13, marginTop: 4 }}>{p.price} TND</Text>
+                                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }} numberOfLines={2}>{getLocalizedName(p.name)}</Text>
+                                            {p.discountPrice ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                                                    <Text style={{ color: '#888', fontSize: 13, textDecorationLine: 'line-through', marginRight: 6 }}>{p.price} TND</Text>
+                                                    <Text style={{ color: '#F59E0B', fontSize: 16, fontWeight: '800' }}>{p.discountPrice} TND</Text>
+                                                </View>
+                                            ) : (
+                                                <Text style={{ color: '#F59E0B', fontSize: 16, marginTop: 3, fontWeight: '800' }}>{p.price} TND</Text>
+                                            )}
                                         </View>
                                         <TouchableOpacity
                                             onPress={() => {
@@ -1573,18 +1623,25 @@ export default function AudienceLiveScreen(props: Props) {
                                             }}
                                             style={{
                                                 backgroundColor: '#3B82F6',
-                                                paddingHorizontal: 16,
-                                                paddingVertical: 8,
-                                                borderRadius: 8
+                                                paddingHorizontal: 18,
+                                                paddingVertical: 10,
+                                                borderRadius: 10,
+                                                minWidth: 65,
+                                                alignItems: 'center',
+                                                shadowColor: '#3B82F6',
+                                                shadowOffset: { width: 0, height: 3 },
+                                                shadowOpacity: 0.3,
+                                                shadowRadius: 6,
+                                                elevation: 4
                                             }}
                                         >
-                                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Buy</Text>
+                                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('buy') || 'Buy'}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 ))
                             )}
                         </ScrollView>
-                    </View>
+                    </BlurView>
                 </TouchableOpacity>
             </Modal>
 
@@ -1597,146 +1654,240 @@ export default function AudienceLiveScreen(props: Props) {
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
                 >
-                    <View style={{ backgroundColor: '#1A1A24', width: '90%', borderRadius: 20, padding: 20, maxWidth: 400 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Complete Purchase</Text>
-                            <TouchableOpacity onPress={() => setShowPurchaseModal(false)}>
-                                <X size={24} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {selectedProduct && (
-                            <View>
-                                <View style={{ flexDirection: 'row', marginBottom: 20 }}>
-                                    <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#333' }} />
-                                    <View style={{ marginLeft: 15, flex: 1 }}>
-                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{getLocalizedName(selectedProduct.name)}</Text>
-                                        <Text style={{ color: '#F59E0B', fontSize: 16, fontWeight: 'bold', marginTop: 5 }}>{selectedProduct.price} TND</Text>
-                                    </View>
-                                </View>
-
-                                {/* Color Selector */}
-                                {selectedProduct.colors && selectedProduct.colors.length > 0 && (
-                                    <View style={{ marginBottom: 15 }}>
-                                        <Text style={{ color: '#888', marginBottom: 8, fontSize: 12, fontWeight: '600' }}>{t('color') || 'Color'}</Text>
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                            {selectedProduct.colors.map((c: string) => {
-                                                const isHex = c.startsWith('#');
-                                                const isSelected = selectedColor === c;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={c}
-                                                        onPress={() => setSelectedColor(c)}
-                                                        style={{
-                                                            paddingHorizontal: 12,
-                                                            paddingVertical: 8,
-                                                            borderRadius: 8,
-                                                            backgroundColor: isSelected ? '#F59E0B' : '#2A2A35',
-                                                            borderWidth: 1.5,
-                                                            borderColor: isSelected ? '#fff' : '#444',
-                                                            flexDirection: 'row',
-                                                            alignItems: 'center',
-                                                            gap: 6
-                                                        }}
-                                                    >
-                                                        {isHex && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }} />}
-                                                        <Text style={{ color: isSelected ? '#000' : '#fff', fontWeight: 'bold', fontSize: 12 }}>{c.toUpperCase()}</Text>
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
-                                        </View>
-                                    </View>
-                                )}
-
-                                {/* Size Selector */}
-                                {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                                    <View style={{ marginBottom: 15 }}>
-                                        <Text style={{ color: '#888', marginBottom: 8, fontSize: 12, fontWeight: '600' }}>{t('size') || 'Size'}</Text>
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                            {selectedProduct.sizes.map((s: string) => {
-                                                const isSelected = selectedSize === s;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={s}
-                                                        onPress={() => setSelectedSize(s)}
-                                                        style={{
-                                                            width: 44,
-                                                            height: 44,
-                                                            borderRadius: 10,
-                                                            backgroundColor: isSelected ? '#F59E0B' : '#2A2A35',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            borderWidth: 1.5,
-                                                            borderColor: isSelected ? '#fff' : '#444'
-                                                        }}
-                                                    >
-                                                        <Text style={{ color: isSelected ? '#000' : '#fff', fontWeight: 'bold' }}>{s}</Text>
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
-                                        </View>
-                                    </View>
-                                )}
-
-                                {/* Contact Info */}
-                                <View style={{ marginBottom: 12 }}>
-                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('fullName') || 'Full Name'}</Text>
-                                    <TextInput
-                                        placeholder={t('fullName') || 'Enter full name...'}
-                                        placeholderTextColor="#555"
-                                        value={customerName}
-                                        onChangeText={setCustomerName}
-                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14 }}
-                                    />
-                                </View>
-
-                                <View style={{ marginBottom: 12 }}>
-                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('contactNumber') || 'Phone Number'}</Text>
-                                    <TextInput
-                                        placeholder={t('contactNumber') || 'Enter phone number...'}
-                                        placeholderTextColor="#555"
-                                        value={phoneNumber}
-                                        onChangeText={setPhoneNumber}
-                                        keyboardType="phone-pad"
-                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14 }}
-                                    />
-                                </View>
-
-                                <View style={{ marginBottom: 20 }}>
-                                    <Text style={{ color: '#888', marginBottom: 6, fontSize: 12, fontWeight: '600' }}>{t('shippingAddress') || 'Shipping Address'}</Text>
-                                    <TextInput
-                                        placeholder={t('deliveryAddress') || "Enter full address..."}
-                                        placeholderTextColor="#555"
-                                        value={address}
-                                        onChangeText={setAddress}
-                                        multiline
-                                        numberOfLines={2}
-                                        style={{ backgroundColor: '#121218', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', fontSize: 14, minHeight: 60 }}
-                                    />
-                                </View>
-
-                                <TouchableOpacity
-                                    onPress={handlePurchase}
-                                    style={{
-                                        backgroundColor: '#EF4444',
-                                        paddingVertical: 14,
-                                        borderRadius: 12,
-                                        alignItems: 'center',
-                                        marginTop: 10,
-                                        shadowColor: '#EF4444',
-                                        shadowOffset: { width: 0, height: 4 },
-                                        shadowOpacity: 0.3,
-                                        shadowRadius: 8,
-                                        elevation: 5
-                                    }}
-                                >
-                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('confirmOrder') || 'CONFIRM ORDER'} • {selectedProduct.price} TND</Text>
+                    <BlurView intensity={80} tint="dark" style={{ width: '100%', maxWidth: 420, borderRadius: 24, overflow: 'hidden', backgroundColor: 'rgba(18, 18, 24, 0.95)' }}>
+                        <View style={{ padding: 24 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: 0.3 }}>{t('completePurchase') || 'Complete Purchase'}</Text>
+                                <TouchableOpacity onPress={() => setShowPurchaseModal(false)} style={{ padding: 4 }}>
+                                    <X size={22} color="#fff" />
                                 </TouchableOpacity>
                             </View>
-                        )}
-                    </View>
+
+                            {selectedProduct && (
+                                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
+                                    {/* Product Info */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 24, backgroundColor: 'rgba(42, 42, 53, 0.6)', padding: 12, borderRadius: 16 }}>
+                                        <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 90, height: 90, borderRadius: 14, backgroundColor: '#333' }} />
+                                        <View style={{ marginLeft: 14, flex: 1 }}>
+                                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 17, marginBottom: 6 }} numberOfLines={2}>{getLocalizedName(selectedProduct.name)}</Text>
+
+                                            {/* Price Section with Coupon logic */}
+                                            {(() => {
+                                                // Use discount price if available, otherwise use regular price
+                                                const basePrice = selectedProduct.discountPrice || selectedProduct.price;
+                                                let finalPrice = basePrice;
+                                                const isActiveCoupon = activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase();
+
+                                                if (isActiveCoupon) {
+                                                    if (activeCoupon.type === 'percentage') {
+                                                        finalPrice = basePrice * (1 - activeCoupon.discount / 100);
+                                                    } else {
+                                                        finalPrice = Math.max(0, basePrice - activeCoupon.discount);
+                                                    }
+                                                }
+
+                                                return (
+                                                    <View>
+                                                        {/* Show original price if product has discount */}
+                                                        {selectedProduct.discountPrice && !isActiveCoupon && (
+                                                            <Text style={{ color: '#888', fontSize: 14, textDecorationLine: 'line-through', marginBottom: 4 }}>{selectedProduct.price} TND</Text>
+                                                        )}
+
+                                                        {isActiveCoupon ? (
+                                                            <View>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                    <Text style={{ color: '#888', fontSize: 15, textDecorationLine: 'line-through', marginRight: 8 }}>{basePrice} TND</Text>
+                                                                    <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{finalPrice.toFixed(2)} TND</Text>
+                                                                </View>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                                                    <Ticket size={12} color="#10B981" />
+                                                                    <Text style={{ color: '#10B981', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }}>
+                                                                        {t('couponApplied') || 'Coupon Applied!'}
+                                                                    </Text>
+                                                                </View>
+                                                            </View>
+                                                        ) : (
+                                                            <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{basePrice} TND</Text>
+                                                        )}
+                                                    </View>
+                                                );
+                                            })()}
+                                        </View>
+                                    </View>
+
+                                    {/* Color Selector with Real Colors */}
+                                    {selectedProduct.colors && selectedProduct.colors.length > 0 && (
+                                        <View style={{ marginBottom: 20 }}>
+                                            <Text style={{ color: '#ccc', marginBottom: 10, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('color') || 'COULEUR'}</Text>
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                                {selectedProduct.colors.map((c: string) => {
+                                                    const colorHex = c.startsWith('#') ? c : COLOR_MAP[c.toUpperCase()] || '#CCCCCC';
+                                                    const isSelected = selectedColor === c;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={c}
+                                                            onPress={() => setSelectedColor(c)}
+                                                            style={{
+                                                                padding: 3,
+                                                                borderRadius: 24,
+                                                                borderWidth: 2.5,
+                                                                borderColor: isSelected ? '#F59E0B' : 'transparent',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                        >
+                                                            <View style={{
+                                                                width: 40,
+                                                                height: 40,
+                                                                borderRadius: 20,
+                                                                backgroundColor: colorHex,
+                                                                borderWidth: 1.5,
+                                                                borderColor: 'rgba(255,255,255,0.3)'
+                                                            }} />
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* Size Selector */}
+                                    {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                                        <View style={{ marginBottom: 20 }}>
+                                            <Text style={{ color: '#ccc', marginBottom: 10, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('size') || 'TAILLE'}</Text>
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                                {selectedProduct.sizes.map((s: string) => {
+                                                    const isSelected = selectedSize === s;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={s}
+                                                            onPress={() => setSelectedSize(s)}
+                                                            style={{
+                                                                minWidth: 52,
+                                                                height: 52,
+                                                                paddingHorizontal: 12,
+                                                                borderRadius: 12,
+                                                                backgroundColor: isSelected ? '#F59E0B' : 'rgba(42, 42, 53, 0.8)',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                borderWidth: 2,
+                                                                borderColor: isSelected ? '#fff' : 'rgba(255,255,255,0.1)'
+                                                            }}
+                                                        >
+                                                            <Text style={{ color: isSelected ? '#000' : '#fff', fontWeight: '900', fontSize: 15 }}>{s}</Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* Inputs */}
+                                    <View style={{ marginBottom: 14 }}>
+                                        <Text style={{ color: '#ccc', marginBottom: 8, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('fullName') || 'NOM COMPLET'}</Text>
+                                        <TextInput
+                                            placeholder={t('fullName') || 'Alcatraz Dev'}
+                                            placeholderTextColor="#555"
+                                            value={customerName}
+                                            onChangeText={setCustomerName}
+                                            style={{ backgroundColor: 'rgba(18, 18, 24, 0.9)', color: '#fff', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#2A2A35', fontSize: 15 }}
+                                        />
+                                    </View>
+
+                                    <View style={{ marginBottom: 14 }}>
+                                        <Text style={{ color: '#ccc', marginBottom: 8, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('contactNumber') || 'NUMÉRO DE CONTACT'}</Text>
+                                        <TextInput
+                                            placeholder={t('contactNumber') || '20037875'}
+                                            placeholderTextColor="#555"
+                                            value={phoneNumber}
+                                            onChangeText={setPhoneNumber}
+                                            keyboardType="phone-pad"
+                                            style={{ backgroundColor: 'rgba(18, 18, 24, 0.9)', color: '#fff', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#2A2A35', fontSize: 15 }}
+                                        />
+                                    </View>
+
+                                    <View style={{ marginBottom: 14 }}>
+                                        <Text style={{ color: '#ccc', marginBottom: 8, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('shippingAddress') || 'ADRESSE DE LIVRAISON'}</Text>
+                                        <TextInput
+                                            placeholder={t('deliveryAddress') || "Chatt mariem, sousse"}
+                                            placeholderTextColor="#555"
+                                            value={address}
+                                            onChangeText={setAddress}
+                                            multiline
+                                            numberOfLines={2}
+                                            style={{ backgroundColor: 'rgba(18, 18, 24, 0.9)', color: '#fff', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#2A2A35', fontSize: 15, minHeight: 70, textAlignVertical: 'top' }}
+                                        />
+                                    </View>
+
+                                    {/* COUPON INPUT */}
+                                    <View style={{ marginBottom: 24 }}>
+                                        <Text style={{ color: '#ccc', marginBottom: 8, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('couponCode') || 'CODE PROMO'}</Text>
+                                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                                            <TextInput
+                                                placeholder={t('enterCoupon') || "SAVE20"}
+                                                placeholderTextColor="#555"
+                                                value={couponInput}
+                                                onChangeText={setCouponInput}
+                                                autoCapitalize="characters"
+                                                style={{
+                                                    flex: 1,
+                                                    backgroundColor: 'rgba(18, 18, 24, 0.9)',
+                                                    color: '#F59E0B',
+                                                    fontWeight: '900',
+                                                    padding: 14,
+                                                    borderRadius: 12,
+                                                    borderWidth: 2,
+                                                    borderColor: activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code ? '#F59E0B' : '#2A2A35',
+                                                    fontSize: 15
+                                                }}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Confirm Button */}
+                                    <TouchableOpacity
+                                        onPress={handlePurchase}
+                                        style={{
+                                            backgroundColor: '#EF4444',
+                                            paddingVertical: 16,
+                                            paddingHorizontal: 16,
+                                            borderRadius: 14,
+                                            alignItems: 'center',
+                                            shadowColor: '#EF4444',
+                                            shadowOffset: { width: 0, height: 6 },
+                                            shadowOpacity: 0.4,
+                                            shadowRadius: 12,
+                                            elevation: 8
+                                        }}
+                                    >
+                                        {(() => {
+                                            const basePrice = selectedProduct.discountPrice || selectedProduct.price;
+                                            let finalPrice = basePrice;
+                                            if (activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
+                                                if (activeCoupon.type === 'percentage') {
+                                                    finalPrice = basePrice * (1 - activeCoupon.discount / 100);
+                                                } else {
+                                                    finalPrice = Math.max(0, basePrice - activeCoupon.discount);
+                                                }
+                                            }
+                                            return (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
+                                                        {t('confirmOrder') || 'CONFIRMER LA COMMANDE'}
+                                                    </Text>
+                                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13, marginLeft: 6 }}>
+                                                        • {finalPrice.toFixed(2)} TND
+                                                    </Text>
+                                                </View>
+                                            );
+                                        })()}
+                                    </TouchableOpacity>
+                                </ScrollView>
+                            )}
+                        </View>
+                    </BlurView>
                 </KeyboardAvoidingView>
             </Modal>
 
@@ -1932,84 +2083,117 @@ export default function AudienceLiveScreen(props: Props) {
                             alignItems: 'center'
                         }}
                     >
-                        <BlurView intensity={95} tint="dark" style={{
-                            borderRadius: 40,
-                            paddingVertical: 4,
-                            paddingHorizontal: 6,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            borderWidth: 1,
-                            borderColor: 'rgba(255, 255, 255, 0.3)',
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            minWidth: 250,
-                            overflow: 'hidden', // Fix rounded corners being hidden
-                        }}>
-                            {/* Avatar Circle */}
-                            <View style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 20,
-                                backgroundColor: '#FF0066',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: 1.5,
-                                borderColor: 'rgba(255,255,255,0.8)',
-                                overflow: 'hidden',
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 3
-                            }}>
-                                <Image
-                                    source={
-                                        recentGift.senderAvatar
-                                            ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
-                                            : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
-                                    }
-                                    style={{ width: '100%', height: '100%' }}
-                                    resizeMode="cover"
-                                />
-                            </View>
+                        {(() => {
+                            const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
+                            const points = giftObj?.points || 0;
+                            const isGradient = points >= 100 && points < 500;
 
-                            <View style={{ marginLeft: 10, marginRight: 40 }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
-                                    {recentGift.senderName}
-                                </Text>
-                                <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
-                                    {t('sentA')} {recentGift.giftName}
-                                </Text>
-                            </View>
+                            const content = (
+                                <>
+                                    {/* Avatar Circle */}
+                                    <View style={{
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: 20,
+                                        backgroundColor: '#FF0066',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderWidth: 1.5,
+                                        borderColor: 'rgba(255,255,255,0.8)',
+                                        overflow: 'hidden',
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 3
+                                    }}>
+                                        <Image
+                                            source={
+                                                recentGift.senderAvatar
+                                                    ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
+                                                    : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                            }
+                                            style={{ width: '100%', height: '100%' }}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
 
-                            {/* Gift Icon inside a bubble */}
-                            <View
-                                style={{
-                                    position: 'absolute',
-                                    right: 1, // Overlap the edge like TikTok
-                                    width: 48,
-                                    height: 48,
-                                    borderRadius: 26,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                    <View style={{ marginLeft: 10, marginRight: 40 }}>
+                                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
+                                            {recentGift.senderName}
+                                        </Text>
+                                        <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
+                                            {t('sentA')} {recentGift.giftName}
+                                        </Text>
+                                    </View>
+
+                                    {/* Gift Icon inside a bubble */}
+                                    <View
+                                        style={{
+                                            position: 'absolute',
+                                            right: 1, // Overlap the edge like TikTok
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 26,
+                                            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderWidth: 2,
+                                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 4, height: 4 },
+                                            shadowOpacity: 0.4,
+                                            shadowRadius: 6,
+                                            elevation: 8
+                                        }}
+                                    >
+                                        <Animatable.Image
+                                            key={`gift-icon-${recentGift.count}`}
+                                            animation="tada"
+                                            duration={1000}
+                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                            style={{ width: 38, height: 38 }}
+                                            resizeMode="contain"
+                                        />
+                                    </View>
+                                </>
+                            );
+
+                            return isGradient ? (
+                                <LinearGradient
+                                    colors={['#FF0066', '#A855F7']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        borderRadius: 40,
+                                        paddingVertical: 4,
+                                        paddingHorizontal: 6,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                                        minWidth: 250,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {content}
+                                </LinearGradient>
+                            ) : (
+                                <BlurView intensity={95} tint="dark" style={{
+                                    borderRadius: 40,
+                                    paddingVertical: 4,
+                                    paddingHorizontal: 6,
+                                    flexDirection: 'row',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderWidth: 2,
-                                    borderColor: 'rgba(255, 255, 255, 0.5)',
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 4, height: 4 },
-                                    shadowOpacity: 0.4,
-                                    shadowRadius: 6,
-                                    elevation: 8
-                                }}
-                            >
-                                <Animatable.Image
-                                    key={`gift-icon-${recentGift.count}`}
-                                    animation="tada"
-                                    duration={1000}
-                                    source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
-                                    style={{ width: 38, height: 38 }}
-                                    resizeMode="contain"
-                                />
-                            </View>
-                        </BlurView>
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    minWidth: 250,
+                                    overflow: 'hidden', // Fix rounded corners being hidden
+                                }}>
+                                    {content}
+                                </BlurView>
+                            );
+                        })()}
 
                         {/* Combo Count UI */}
                         {recentGift.count > 1 && (
@@ -2108,27 +2292,43 @@ export default function AudienceLiveScreen(props: Props) {
 
                 {/* AMBER SHOPPING BAG BUTTON */}
                 {featuredProducts.length > 0 && (
-                    <TouchableOpacity
-                        onPress={() => setShowProductSheet(true)}
-                        activeOpacity={0.7}
-                        style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            backgroundColor: 'rgba(0,0,0,0.4)',
+                    <View style={{ width: 44, height: 44 }}>
+                        <TouchableOpacity
+                            onPress={() => setShowProductSheet(true)}
+                            activeOpacity={0.7}
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                borderColor: 'rgba(255,255,255,0.2)',
+                                overflow: 'hidden'
+                            }}
+                        >
+                            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                            <ShoppingBag size={20} color="#fff" />
+                        </TouchableOpacity>
+                        <View style={{
+                            position: 'absolute',
+                            top: -2,
+                            right: -2,
+                            backgroundColor: '#EF4444',
+                            borderWidth: 1.5,
+                            borderColor: '#fff',
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 9,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderWidth: 1,
-                            borderColor: 'rgba(255,255,255,0.2)',
-                            overflow: 'hidden'
-                        }}
-                    >
-                        <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                        <ShoppingBag size={20} color="#fff" />
-                        <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff', width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>{featuredProducts.length}</Text>
+                            paddingHorizontal: 4,
+                            zIndex: 10
+                        }}>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{featuredProducts.length}</Text>
                         </View>
-                    </TouchableOpacity>
+                    </View>
                 )}
             </View>
 
