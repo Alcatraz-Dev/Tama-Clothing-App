@@ -113,6 +113,8 @@ export default function HostLiveScreen(props: Props) {
     const [guestScore, setGuestScore] = useState(0);
     const guestScoreRef = useRef(0);
     const [opponentName, setOpponentName] = useState('Opponent');
+    const opponentNameRef = useRef('Opponent');
+    const opponentChannelIdRef = useRef<string | null>(null);
     const [pkBattleId, setPkBattleId] = useState<string | null>(null);
     const [showPKInviteModal, setShowPKInviteModal] = useState(false);
     const [targetHostId, setTargetHostId] = useState('');
@@ -392,6 +394,23 @@ export default function HostLiveScreen(props: Props) {
                     if (session.pkState.opponentChannelId && !opponentChannelId) {
                         setOpponentChannelId(session.pkState.opponentChannelId);
                     }
+
+                    // Sync Winner if battle ended on another device/room
+                    if (session.pkState.winner && !session.pkState.isActive) {
+                        if (!showPKResult && session.pkState.winner !== pkWinner) {
+                            setPkWinner(session.pkState.winner);
+                            setShowPKResult(true);
+                            setTimeout(() => {
+                                setShowPKResult(false);
+                                setPkWinner(null);
+                            }, 5000);
+                        }
+                    }
+                    // Hide result if a new PK starts
+                    if (session.pkState.isActive && showPKResult) {
+                        setShowPKResult(false);
+                        setPkWinner(null);
+                    }
                 }
 
                 if (session.lastPurchase && session.lastPurchase.timestamp > lastPurchaseTimeRef.current) {
@@ -452,13 +471,15 @@ export default function HostLiveScreen(props: Props) {
     }, [channelId]);
 
     useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
+    useEffect(() => { opponentNameRef.current = opponentName; }, [opponentName]);
+    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
     useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
     useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
     useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
 
     // Periodically broadcast state to keep audience in sync (Zego backup)
     useEffect(() => {
-        if (!ZegoUIKit) return;
+        if (!ZegoUIKit || !isLiveStarted) return;
         const interval = setInterval(() => {
             ZegoUIKit.sendInRoomCommand(JSON.stringify({
                 type: 'PK_SCORE_SYNC',
@@ -496,11 +517,13 @@ export default function HostLiveScreen(props: Props) {
                 pkState.startTime = pkEndTime - (pkDuration * 1000);
             }
 
-            // Explicitly handle winner field to clear it during active PK
-            if (isInPK) {
-                pkState.winner = null;
-            } else if (pkWinner) {
-                pkState.winner = pkWinner;
+            // Explicitly handle winner field
+            pkState.winner = isInPK ? null : (pkWinner || null);
+
+            // If we have no winner and no active PK, wipe most metadata to prevent stale state syncs
+            if (!isInPK && !pkWinner) {
+                pkState.endTime = null;
+                pkState.duration = null;
             }
 
             console.log('📦 Updating Firestore PK State (metadata only):', {
@@ -528,7 +551,7 @@ export default function HostLiveScreen(props: Props) {
 
     // Force Sync on PK Start
     useEffect(() => {
-        if (isInPK && ZegoUIKit) {
+        if (isInPK && ZegoUIKit && isLiveStarted) {
             console.log('⚡ Force Syncing PK State Start');
             ZegoUIKit.sendInRoomCommand(JSON.stringify({
                 type: 'PK_SCORE_SYNC',
@@ -621,7 +644,7 @@ export default function HostLiveScreen(props: Props) {
             );
 
             // Broadcast for immediate feedback (optional, Firestore sync will handle it)
-            if (ZegoUIKit) {
+            if (ZegoUIKit && isLiveStarted) {
                 ZegoUIKit.sendInRoomCommand(JSON.stringify({
                     type: 'PK_VOTE',
                     points: pointsToAdd,
@@ -633,7 +656,7 @@ export default function HostLiveScreen(props: Props) {
 
     // ✅ Sync PK scores every 3 seconds to ensure real-time accuracy
     useEffect(() => {
-        if (!isInPK || !ZegoUIKit) return;
+        if (!isInPK || !ZegoUIKit || !isLiveStarted) return;
 
         const syncInterval = setInterval(() => {
             ZegoUIKit.sendInRoomCommand(JSON.stringify({
@@ -690,7 +713,7 @@ export default function HostLiveScreen(props: Props) {
             });
 
             // 2. Send signaling command
-            if (ZegoUIKit) {
+            if (ZegoUIKit && isLiveStarted) {
                 ZegoUIKit.sendInRoomCommand(JSON.stringify(couponData), [], () => { });
             }
 
@@ -987,7 +1010,15 @@ export default function HostLiveScreen(props: Props) {
                 } else if (data.type === 'PK_BATTLE_STOP') {
                     setIsInPK(false);
                     setPkBattleId(null);
-                    Alert.alert("PK Battle", "The opponent has stopped the battle.");
+                    if (data.winner) {
+                        setPkWinner(data.winner);
+                        setShowPKResult(true);
+                        setTimeout(() => {
+                            setShowPKResult(false);
+                            setPkWinner(null);
+                        }, 5000);
+                    }
+                    Alert.alert("PK Battle", data.message || "The opponent has ended the battle.");
 
                 } else if (data.type === 'coupon_drop') {
                     setActiveCoupon(data);
@@ -1110,6 +1141,46 @@ export default function HostLiveScreen(props: Props) {
         }
 
         try {
+            // ✅ PK Forfeit Logic: If host leaves during PK, they lose.
+            if (isInPKRef.current && channelId) {
+                console.log('🏁 PK Active during exit. Declaring loser...');
+                const winner = opponentNameRef.current || 'Opponent';
+                const finalPkState: any = {
+                    isActive: false,
+                    winner: winner,
+                    endTime: Date.now()
+                };
+
+                // Update my room
+                await LiveSessionService.updatePKState(channelId, finalPkState).catch(e => console.error('Exit PK Update Error:', e));
+
+                // Update opponent's room
+                if (opponentChannelIdRef.current) {
+                    const opponentState = {
+                        ...finalPkState,
+                        hostName: opponentNameRef.current,
+                        opponentName: userName,
+                        hostScore: guestScoreRef.current, // Opponent's score becomes their hostScore
+                        guestScore: hostScoreRef.current   // Our score remains guestScore for them
+                    };
+                    await LiveSessionService.updatePKState(opponentChannelIdRef.current, opponentState).catch(e => console.error('Exit Opponent PK Update Error:', e));
+                }
+
+                // Send signaling command (Optional, Firestore handles the truth)
+                if (isLiveStarted && ZegoUIKit) {
+                    try {
+                        ZegoUIKit.sendInRoomCommand(JSON.stringify({
+                            type: 'PK_BATTLE_STOP',
+                            winner: winner,
+                            message: `${userName} has left the live streaming. You win!`
+                        }), [], () => { });
+                    } catch (e) {
+                        console.log('🔇 Could not send forfeit signaling (Room already closed):', e);
+                    }
+                }
+            }
+
+            setIsLiveStarted(false);
             sessionEndedRef.current = true; // Mark as ended immediately
             await LiveSessionService.endSession(channelId);
             console.log('🎬 Firestore session ended successfully');
@@ -1188,7 +1259,7 @@ export default function HostLiveScreen(props: Props) {
             );
 
             // Broadcast like to other participants (optional, for immediate feedback)
-            if (ZegoUIKit) {
+            if (ZegoUIKit && isLiveStarted) {
                 ZegoUIKit.sendInRoomCommand(JSON.stringify({
                     type: 'PK_LIKE',
                     count: 1,
@@ -1251,7 +1322,7 @@ export default function HostLiveScreen(props: Props) {
             {/* Flame Counter */}
             {/* Flame Counter - ONLY if reach 50 */}
             {totalLikes >= 50 && (
-                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 120} />
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />
             )}
 
             {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
@@ -1261,7 +1332,7 @@ export default function HostLiveScreen(props: Props) {
                     duration={800}
                     style={{
                         position: 'absolute',
-                        top: 80, // Slightly lower to clear the top profile bar better
+                        top: 110, // Slightly lower to clear the top profile bar better
                         width: '100%',
                         alignItems: 'center',
                         zIndex: 2000,
@@ -1864,7 +1935,7 @@ export default function HostLiveScreen(props: Props) {
                                             .catch(() => Alert.alert("Info", t('sendingInvitation') || `Sending invitation...`));
                                     }
                                 } else if (selectedText.includes(t('stopCoHosting'))) {
-                                    if (ZegoUIKit) {
+                                    if (ZegoUIKit && isLiveStarted) {
                                         ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'stop_cohosting', target: item.userID }), [item.userID], () => { });
                                         Alert.alert(t('success') || "Success", `${t('stoppedCoHostingFor') || 'Stopped co-hosting for'} ${targetName}`);
                                     }
@@ -2497,19 +2568,46 @@ export default function HostLiveScreen(props: Props) {
                                     <Text style={{ color: '#888', marginBottom: 25, textAlign: 'center' }}>{t('battleInProgressDesc') || 'You are currently in a PK battle. You must stop the current challenge before starting a new one.'}</Text>
                                     <TouchableOpacity
                                         onPress={async () => {
+                                            // Determine winner (Opponent wins if host stops manually)
+                                            const winner = opponentName || 'Opponent';
                                             setIsInPK(false);
+                                            setPkWinner(winner);
+                                            setShowPKResult(true);
                                             setPkBattleId(null);
 
-                                            // ✅ Stop PK in Firestore for both rooms
+                                            // Stop PK in Firestore for both rooms
                                             if (channelId) {
-                                                LiveSessionService.updatePKState(channelId, { isActive: false }).catch(e => console.error('Stop PK Error:', e));
+                                                const finalState = {
+                                                    isActive: false,
+                                                    winner: winner,
+                                                    endTime: Date.now()
+                                                };
+                                                LiveSessionService.updatePKState(channelId, finalState).catch(e => console.error('Stop PK Error:', e));
                                                 if (opponentChannelId) {
-                                                    LiveSessionService.updatePKState(opponentChannelId, { isActive: false }).catch(e => console.error('Stop Opponent PK Error:', e));
+                                                    LiveSessionService.updatePKState(opponentChannelId, {
+                                                        ...finalState,
+                                                        hostName: opponentName,
+                                                        opponentName: userName,
+                                                        hostScore: guestScore,
+                                                        guestScore: hostScore
+                                                    }).catch(e => console.error('Stop Opponent PK Error:', e));
                                                 }
                                             }
 
-                                            ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'PK_BATTLE_STOP' }), [], () => { });
+                                            if (isLiveStarted && ZegoUIKit) {
+                                                ZegoUIKit.sendInRoomCommand(JSON.stringify({
+                                                    type: 'PK_BATTLE_STOP',
+                                                    winner: winner,
+                                                    message: `${userName} has ended the battle.`
+                                                }), [], () => { });
+                                            }
                                             setShowPKInviteModal(false);
+
+                                            // Hide result after 5s
+                                            setTimeout(() => {
+                                                setShowPKResult(false);
+                                                setPkWinner(null);
+                                            }, 5000);
                                         }}
                                         activeOpacity={0.8}
                                         style={{

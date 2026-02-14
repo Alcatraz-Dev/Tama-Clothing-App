@@ -216,6 +216,15 @@ export default function AudienceLiveScreen(props: Props) {
     const totalLikesRef = useRef(0);
     const pkStartLikesRef = useRef(0);
     const opponentChannelIdRef = useRef<string | null>(null);
+    const handledPKEndTimeRef = useRef<number | null>(null);
+
+    // State to Ref Sync
+    useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
+    useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
+    useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
+    useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
+    useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
+    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
 
     // Initial load sync
     useEffect(() => {
@@ -508,12 +517,14 @@ export default function AudienceLiveScreen(props: Props) {
                     setOpponentChannelId(session.pkState.opponentChannelId);
                 }
 
-                if (session.pkState.winner && !session.pkState.isActive) {
-                    // Only show result if scores are not 0-0
+                if (session.pkState.winner && !session.pkState.isActive && session.pkState.endTime) {
+                    // Only show result if scores are not 0-0 and we haven't shown THIS result yet
                     const hScore = session.pkState.hostScore || 0;
                     const gScore = session.pkState.guestScore || 0;
+                    const pkEndTimeVal = session.pkState.endTime || 0;
 
-                    if ((hScore > 0 || gScore > 0) && !showPKResult) {
+                    if ((hScore > 0 || gScore > 0) && !showPKResult && handledPKEndTimeRef.current !== pkEndTimeVal) {
+                        handledPKEndTimeRef.current = pkEndTimeVal;
                         setPkWinner(session.pkState.winner);
                         setShowPKResult(true);
                         setTimeout(() => {
@@ -521,10 +532,13 @@ export default function AudienceLiveScreen(props: Props) {
                             setPkWinner(null);
                         }, 5000);
                     }
-                } else if (session.pkState.isActive && showPKResult) {
-                    // Hide result immediately if a new PK starts
-                    setShowPKResult(false);
-                    setPkWinner(null);
+                } else if (session.pkState.isActive) {
+                    // Reset the handled flag when a new PK is active
+                    handledPKEndTimeRef.current = null;
+                    if (showPKResult) {
+                        setShowPKResult(false);
+                        setPkWinner(null);
+                    }
                 }
             }
 
@@ -987,7 +1001,7 @@ export default function AudienceLiveScreen(props: Props) {
             {/* Flame Counter */}
             {/* Flame Counter - ONLY if reach 50 */}
             {totalLikes >= 50 && (
-                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 180 : 120} />
+                <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />
             )}
 
             {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
@@ -997,7 +1011,7 @@ export default function AudienceLiveScreen(props: Props) {
                     duration={800}
                     style={{
                         position: 'absolute',
-                        top: 92, // Slightly lower to clear the top profile bar better
+                        top: 110, // Slightly lower to clear the top profile bar better
                         width: '100%',
                         alignItems: 'center',
                         zIndex: 2000,
@@ -1202,7 +1216,7 @@ export default function AudienceLiveScreen(props: Props) {
                 </Animatable.View>
             )}
 
-            {showPKResult && pkWinner && (
+            {showPKResult && pkWinner && !isInPK && (
                 <Animatable.View
                     animation="fadeIn"
                     duration={400}
@@ -2063,7 +2077,7 @@ export default function AudienceLiveScreen(props: Props) {
                                         <Text style={{ color: '#ccc', marginBottom: 8, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('couponCode') || 'CODE PROMO'}</Text>
                                         <View style={{ flexDirection: 'row', gap: 10 }}>
                                             <TextInput
-                                                placeholder={t('enterCoupon') || "SAVE20"}
+                                                placeholder={t('enterCouponCode') || "SAVE20"}
                                                 placeholderTextColor="#555"
                                                 value={couponInput}
                                                 onChangeText={setCouponInput}
