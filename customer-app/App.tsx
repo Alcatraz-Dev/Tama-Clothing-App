@@ -3759,6 +3759,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                     theme={theme}
                     colors={colors}
                     t={t}
+                    tr={tr}
                     onSelectChat={async (chat: any, otherId: string) => {
                       const userDoc = await getDoc(doc(db, 'users', otherId));
                       if (userDoc.exists()) {
@@ -11738,20 +11739,29 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     const unsubscribe = onSnapshot(q,
-      (snapshot) => {
+      async (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setMessages(msgs);
         setLoading(false);
 
         // Mark unread messages as read
+        let hasUnread = false;
         snapshot.docs.forEach(async (mDoc) => {
           const data = mDoc.data();
           if (data.senderId !== user.uid && !data.read) {
+            hasUnread = true;
             try {
               await updateDoc(doc(db, 'direct_chats', chatId, 'messages', mDoc.id), { read: true });
             } catch (e) { }
           }
         });
+
+        // Reset unread count on the chat document
+        try {
+          await setDoc(doc(db, 'direct_chats', chatId), {
+            [`unreadCount_${user.uid}`]: 0
+          }, { merge: true });
+        } catch (e) { }
 
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
       },
@@ -11855,7 +11865,11 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
   };
 
   return (
-    <View style={{ height: 500, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      style={{ height: 500, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}
+    >
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
@@ -11875,29 +11889,60 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
           const isOwn = m.senderId === user.uid;
           return (
             <View key={m.id} style={{
-              alignSelf: isOwn ? 'flex-end' : 'flex-start',
-              backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              borderRadius: 20,
-              maxWidth: '85%',
-              marginBottom: 8,
-              borderBottomRightRadius: isOwn ? 4 : 20,
-              borderBottomLeftRadius: isOwn ? 20 : 4,
-              borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
-              borderColor: '#F2F2F7',
+              flexDirection: 'row',
+              justifyContent: isOwn ? 'flex-end' : 'flex-start',
+              marginBottom: 15,
+              paddingHorizontal: 0
             }}>
-              {m.imageUrl ? (
-                <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
-                  <Image source={{ uri: m.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
-                </TouchableOpacity>
-              ) : m.videoUrl ? (
-                <View style={{ width: 200, height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
-                  <Video source={{ uri: m.videoUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
+              {!isOwn && (
+                <View style={{ marginRight: 8, alignSelf: 'flex-end' }}>
+                  {targetUser.avatarUrl || targetUser.photoURL ? (
+                    <Image source={{ uri: targetUser.avatarUrl || targetUser.photoURL }} style={{ width: 28, height: 28, borderRadius: 14 }} />
+                  ) : (
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted }}>
+                        {(targetUser.fullName || targetUser.displayName || 'A')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              ) : (
-                <Text style={{ color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 14 }}>{m.text}</Text>
               )}
+
+              <View style={{ maxWidth: '75%' }}>
+                <View style={{
+                  backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 20,
+                  borderBottomRightRadius: isOwn ? 4 : 20,
+                  borderBottomLeftRadius: isOwn ? 20 : 4,
+                  borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
+                  borderColor: '#F2F2F7',
+                }}>
+                  {m.imageUrl ? (
+                    <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
+                      <Image source={{ uri: m.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ) : m.videoUrl ? (
+                    <View style={{ width: 200, height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
+                      <Video source={{ uri: m.videoUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
+                    </View>
+                  ) : (
+                    <Text style={{ color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 14, lineHeight: 20 }}>{m.text}</Text>
+                  )}
+                </View>
+                <Text style={{
+                  fontSize: 9,
+                  color: colors.textMuted,
+                  marginTop: 4,
+                  textAlign: isOwn ? 'right' : 'left',
+                  marginLeft: isOwn ? 0 : 4,
+                  marginRight: isOwn ? 4 : 0,
+                  opacity: 0.7
+                }}>
+                  {m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </Text>
+              </View>
             </View>
           );
         })}
@@ -11938,25 +11983,77 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
           {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-function DirectInboxView({ user, theme, colors, t, onSelectChat }: any) {
+function DirectInboxView({ user, theme, colors, t, tr, onSelectChat }: any) {
   const [chats, setChats] = useState<any[]>([]);
+  const [friends, setFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usersCache, setUsersCache] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!user?.uid) return;
+
+    // Fetch Friends List
+    const fetchFriends = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const friendIds = userDoc.data().friends || [];
+          if (friendIds.length > 0) {
+            const friendsData: any[] = [];
+            // Fetch each friend's details (limited to 10 for performance in preview, can be adjusted)
+            for (const fid of friendIds.slice(0, 10)) {
+              const fDoc = await getDoc(doc(db, 'users', fid));
+              if (fDoc.exists()) {
+                friendsData.push({ uid: fid, ...fDoc.data() });
+              }
+            }
+            setFriends(friendsData);
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching friends:", e);
+      }
+    };
+
+    fetchFriends();
+
     // Removing server-side orderBy to fix indexing blocker, sorting client-side instead
     const q = query(
       collection(db, 'direct_chats'),
       where('participants', 'array-contains', user.uid)
     );
     const unsubscribe = onSnapshot(q,
-      (snapshot) => {
+      async (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Fetch missing participant data
+        const newCache: Record<string, any> = {};
+        const missingUserIds = new Set<string>();
+
+        msgs.forEach((chat: any) => {
+          const otherId = chat.participants.find((id: string) => id !== user.uid);
+          if (otherId && !chat.participantData?.[otherId] && !usersCache[otherId]) {
+            missingUserIds.add(otherId);
+          }
+        });
+
+        if (missingUserIds.size > 0) {
+          await Promise.all(Array.from(missingUserIds).map(async (uid) => {
+            try {
+              const uDoc = await getDoc(doc(db, 'users', uid));
+              if (uDoc.exists()) {
+                newCache[uid] = uDoc.data();
+              }
+            } catch (e) { console.error('Error fetching user for chat', uid, e) }
+          }));
+          setUsersCache(prev => ({ ...prev, ...newCache }));
+        }
+
         // Client-side sort to ensure immediate functionality
         const sorted = msgs.sort((a: any, b: any) => {
           const timeA = a.lastMessageTime?.toMillis?.() || a.lastMessageTime || 0;
@@ -11993,39 +12090,116 @@ function DirectInboxView({ user, theme, colors, t, onSelectChat }: any) {
     </View>
   );
 
-  if (chats.length === 0) return (
-    <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
-      <MessageCircle size={50} color={colors.textMuted} strokeWidth={1} />
-      <Text style={{ color: colors.textMuted, marginTop: 15, fontWeight: '600' }}>Aucun message pour l'instant</Text>
-    </View>
-  );
-
   return (
     <View style={{ marginTop: 10 }}>
-      {chats.map(chat => {
-        const otherId = chat.participants.find((id: string) => id !== user.uid);
-        const otherData = chat.participantData?.[otherId] || { name: 'Ami' };
-        return (
-          <TouchableOpacity
-            key={chat.id}
-            onPress={() => onSelectChat(chat, otherId)}
-            style={{ flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : '#FFF', borderRadius: 18, marginBottom: 10, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7' }}
-          >
-            <View style={{ width: 45, height: 45, borderRadius: 22.5, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#FFF', fontWeight: '800' }}>{otherData.name[0]?.toUpperCase()}</Text>
-            </View>
-            <View style={{ flex: 1, marginLeft: 15 }}>
-              <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{otherData.name}</Text>
-              <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{chat.lastMessage}</Text>
-            </View>
-            {chat[`unreadCount_${user.uid}`] > 0 && (
-              <View style={{ backgroundColor: colors.accent, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{chat[`unreadCount_${user.uid}`]}</Text>
-              </View>
+      {/* Horizontal Friends List */}
+      {friends.length > 0 && (
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '900', marginLeft: 5, marginBottom: 12, letterSpacing: 0.5 }}>
+            {tr('AMIS', 'الأصدقاء', 'FRIENDS')}
+          </Text>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={friends}
+            keyExtractor={(item) => item.uid}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => onSelectChat(null, item.uid)}
+                style={{ alignItems: 'center', marginRight: 20, width: 60 }}
+              >
+                <View style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: colors.accent,
+                  borderWidth: 2,
+                  borderColor: theme === 'dark' ? '#1c1c1e' : '#F2F2F7',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  marginBottom: 6
+                }}>
+                  {item.avatarUrl ? (
+                    <Image source={{ uri: item.avatarUrl }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 18 }}>
+                      {(item.fullName || item.displayName || 'A')[0].toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 10, fontWeight: '700', textAlign: 'center' }}>
+                  {(item.fullName || item.displayName || 'Ami').split(' ')[0]}
+                </Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
-        );
-      })}
+            contentContainerStyle={{ paddingLeft: 5 }}
+          />
+        </View>
+      )}
+
+      {chats.length === 0 ? (
+        <View style={{ alignItems: 'center', marginTop: friends.length > 0 ? 30 : 60, opacity: 0.5 }}>
+          <MessageCircle size={50} color={colors.textMuted} strokeWidth={1} />
+          <Text style={{ color: colors.textMuted, marginTop: 15, fontWeight: '600' }}>Aucun message pour l'instant</Text>
+        </View>
+      ) : (
+        chats.map(chat => {
+          const otherId = chat.participants.find((id: string) => id !== user.uid);
+          const cachedUser = usersCache[otherId] || {};
+          const fallbackData = chat.participantData?.[otherId] || { name: 'Ami' };
+          const otherData = { ...fallbackData, ...cachedUser };
+
+          return (
+            <TouchableOpacity
+              key={chat.id}
+              onPress={() => onSelectChat(chat, otherId)}
+              style={{ flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : '#FFF', borderRadius: 18, marginBottom: 10, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7' }}
+            >
+              <View style={{ width: 45, height: 45, borderRadius: 22.5, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {(otherData.photo || otherData.avatarUrl || otherData.photoURL) ? (
+                  <Image source={{ uri: otherData.photo || otherData.avatarUrl || otherData.photoURL }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <Text style={{ color: '#FFF', fontWeight: '800' }}>{(otherData.name || otherData.fullName || otherData.displayName || 'A')[0]?.toUpperCase()}</Text>
+                )}
+              </View>
+              <View style={{ flex: 1, marginLeft: 15 }}>
+                <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{otherData.name || otherData.fullName || otherData.displayName}</Text>
+                <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{chat.lastMessage}</Text>
+              </View>
+              {chat[`unreadCount_${user.uid}`] > 0 && (
+                <View style={{ backgroundColor: colors.accent, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{chat[`unreadCount_${user.uid}`]}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    tr('SUPPRIMER_CONVERSATION', 'حذف المحادثة', 'DELETE CONVERSATION'),
+                    tr('Etes-vous sûr de vouloir supprimer cette conversation ?', 'هل أنت متأكد أنك تريد حذف هذه المحادثة؟', 'Are you sure you want to delete this conversation?'),
+                    [
+                      { text: tr('ANNULER', 'إلغاء', 'CANCEL'), style: 'cancel' },
+                      {
+                        text: tr('SUPPRIMER', 'حذف', 'DELETE'),
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await deleteDoc(doc(db, 'direct_chats', chat.id));
+                          } catch (e) {
+                            console.error('Error deleting chat:', e);
+                          }
+                        }
+                      }
+                    ]
+                  );
+                }}
+                style={{ padding: 5 }}
+              >
+                <X size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          );
+        }))}
     </View>
   );
 }
