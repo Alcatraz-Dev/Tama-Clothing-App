@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Alert, Image, Modal, TextInput, Animated } from 'react-native';
-import { ChevronLeft, Coins, CreditCard, ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, History, Gem, Repeat, ArrowRight, X, RefreshCw } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Alert, Image, Modal, TextInput, Animated, ActivityIndicator } from 'react-native';
+import { ChevronLeft, Coins, CreditCard, ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, History, Gem, Repeat, ArrowRight, X, RefreshCw, Search, Users, User, Send, Check, ChevronRight } from 'lucide-react-native';
+import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Theme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, setDoc, increment, serverTimestamp, collection, query, orderBy, limit, onSnapshot, addDoc, getDocs } from 'firebase/firestore';
+import { doc, setDoc, increment, serverTimestamp, collection, query, orderBy, limit, onSnapshot, addDoc, getDocs, where, runTransaction, arrayUnion, arrayRemove, deleteDoc, documentId } from 'firebase/firestore';
 import { db } from '../api/firebase';
 
 const RECHARGE_PACKAGES = [
@@ -41,6 +42,18 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
     const [exchangeAmount, setExchangeAmount] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const rotation = React.useRef(new Animated.Value(0)).current;
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [transferSearchQuery, setTransferSearchQuery] = useState('');
+    const [transferSearchResults, setTransferSearchResults] = useState<any[]>([]);
+    const [selectedUserForTransfer, setSelectedUserForTransfer] = useState<any | null>(null);
+    const [transferAmount, setTransferAmount] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [transferType, setTransferType] = useState<'coins' | 'diamonds'>('coins');
+    const [showTargetProfile, setShowTargetProfile] = useState(false);
+    const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+    const [sentRequests, setSentRequests] = useState<any[]>([]);
+    const [friendsList, setFriendsList] = useState<any[]>([]);
+    const [transferModalTab, setTransferModalTab] = useState<'search' | 'friends' | 'requests'>('search');
 
     const fetchTransactions = async () => {
         if (!user?.uid) return;
@@ -78,8 +91,41 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             setTransactions(txData);
         });
 
-        return () => unsubscribe();
-    }, [user?.uid]);
+        // Listen for Friend Requests (Incoming)
+        const incomingQ = query(collection(db, 'users', user.uid, 'friendRequests'), where('status', '==', 'pending'));
+        const unsubscribeIncoming = onSnapshot(incomingQ, (snapshot) => {
+            setIncomingRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        // Listen for Sent Requests (Outgoing)
+        const outgoingQ = query(collection(db, 'friendRequests'), where('senderId', '==', user.uid), where('status', '==', 'pending'));
+        const unsubscribeOutgoing = onSnapshot(outgoingQ, (snapshot) => {
+            setSentRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        // Fetch Friends List (Simplified: using the UID list already in profileData.friends)
+        const fetchFriends = async () => {
+            if (!profileData?.friends || profileData.friends.length === 0) {
+                setFriendsList([]);
+                return;
+            }
+            try {
+                // Use documentId() because the friends array contains the document IDs (UIDs)
+                const friendsQ = query(collection(db, 'users'), where(documentId(), 'in', profileData.friends.slice(0, 10)));
+                const snapshot = await getDocs(friendsQ);
+                setFriendsList(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
+            } catch (err) {
+                console.error("Fetch Friends Error:", err);
+            }
+        };
+        fetchFriends();
+
+        return () => {
+            unsubscribe();
+            unsubscribeIncoming();
+            unsubscribeOutgoing();
+        };
+    }, [user?.uid, profileData?.friends]);
 
     // Translations helper
     const tr = (en: string, fr: string, ar: string) => {
@@ -204,6 +250,210 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
         }
     };
 
+    const handleSearchUsers = async (text: string) => {
+        setTransferSearchQuery(text);
+        if (text.length < 2) {
+            setTransferSearchResults([]);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const q = query(
+                collection(db, 'users'),
+                where('fullName', '>=', text),
+                where('fullName', '<=', text + '\uf8ff'),
+                limit(10)
+            );
+            const snapshot = await getDocs(q);
+            const results = snapshot.docs
+                .map(doc => ({ uid: doc.id, ...doc.data() }))
+                .filter((u: any) => u.uid !== user?.uid); // Don't show myself
+            setTransferSearchResults(results);
+        } catch (error) {
+            console.error("Search Error:", error);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleTransfer = async () => {
+        if (!user?.uid || !selectedUserForTransfer || !transferAmount) return;
+
+        // Check if mutual friends
+        const isFriend = profileData?.friends?.includes(selectedUserForTransfer.uid);
+        if (!isFriend) {
+            Alert.alert(
+                tr('Restriction', 'Restriction', 'قيود'),
+                tr(
+                    'You can only transfer funds to confirmed friends.',
+                    'Vous ne pouvez transférer des fonds qu\'à des amis confirmés.',
+                    'يمكنك فقط تحويل الأموال للأصدقاء المؤكدين.'
+                )
+            );
+            return;
+        }
+
+        const amount = parseInt(transferAmount);
+        if (isNaN(amount) || amount <= 0) {
+            Alert.alert('Error', tr('Invalid amount', 'Montant invalide', 'مبلغ غير صحيح'));
+            return;
+        }
+
+        const maxBalance = transferType === 'coins' ? coinBalance : diamondBalance;
+        if (amount > maxBalance) {
+            Alert.alert(tr('Insufficient Balance', 'Solde Insuffisant', 'رصيد غير كافي'), tr('Insufficient balance for this transfer.', 'Solde insuffisant pour ce transfert.', 'رصيد غير كافي لهذا التحويل.'));
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const meRef = doc(db, 'users', user.uid);
+                const themRef = doc(db, 'users', selectedUserForTransfer.uid);
+
+                // Check balances again inside transaction
+                const meDoc = await transaction.get(meRef);
+                const currentBalance = meDoc.data()?.wallet?.[transferType] || 0;
+
+                if (currentBalance < amount) {
+                    throw new Error("Insufficient balance");
+                }
+
+                // Update my wallet
+                transaction.update(meRef, {
+                    [`wallet.${transferType}`]: increment(-amount)
+                });
+
+                // Update their wallet
+                transaction.update(themRef, {
+                    [`wallet.${transferType}`]: increment(amount)
+                });
+
+                // Record transaction for ME
+                const myTxRef = doc(collection(db, 'users', user.uid, 'transactions'));
+                transaction.set(myTxRef, {
+                    type: 'transfer_sent',
+                    amount: amount,
+                    currency: transferType,
+                    amountCoins: transferType === 'coins' ? amount : 0,
+                    amountDiamonds: transferType === 'diamonds' ? amount : 0,
+                    recipientId: selectedUserForTransfer.uid,
+                    recipientName: selectedUserForTransfer.fullName,
+                    recipientAvatar: selectedUserForTransfer.avatarUrl || '',
+                    description: `Transfer to ${selectedUserForTransfer.fullName}`,
+                    timestamp: serverTimestamp(),
+                    status: 'completed'
+                });
+
+                // Record transaction for THEM
+                const theirTxRef = doc(collection(db, 'users', selectedUserForTransfer.uid, 'transactions'));
+                transaction.set(theirTxRef, {
+                    type: 'transfer_received',
+                    amount: amount,
+                    currency: transferType,
+                    amountCoins: transferType === 'coins' ? amount : 0,
+                    amountDiamonds: transferType === 'diamonds' ? amount : 0,
+                    senderId: user.uid,
+                    senderName: profileData?.fullName || 'Anonymous',
+                    senderAvatar: profileData?.avatarUrl || '',
+                    description: `Transfer from ${profileData?.fullName || 'User'}`,
+                    timestamp: serverTimestamp(),
+                    status: 'completed'
+                });
+            });
+
+            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Transfer completed successfully!', 'Transfert réussi !', 'تم التحويل بنجاح!'));
+            setShowTransferModal(false);
+            setTransferAmount('');
+            setSelectedUserForTransfer(null);
+            setTransferSearchQuery('');
+            setTransferSearchResults([]);
+        } catch (error) {
+            console.error("Transfer Error:", error);
+            Alert.alert('Error', 'Transfer failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSendFriendRequest = async (targetUser: any) => {
+        if (!user?.uid) return;
+
+        // Already friends?
+        if (profileData?.friends?.includes(targetUser.uid)) return;
+
+        // Already sent?
+        if (sentRequests.some(r => r.receiverId === targetUser.uid)) {
+            Alert.alert(tr('Info', 'Info', 'معلومات'), tr('Request already sent.', 'Demande déjà envoyée.', 'تم إرسال الطلب بالفعل.'));
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Create request in global collection
+            const requestRef = doc(collection(db, 'friendRequests'));
+            const requestData = {
+                senderId: user.uid,
+                senderName: profileData?.fullName || 'User',
+                senderAvatar: profileData?.avatarUrl || '',
+                receiverId: targetUser.uid,
+                receiverName: targetUser.fullName,
+                receiverAvatar: targetUser.avatarUrl || '',
+                status: 'pending',
+                timestamp: serverTimestamp()
+            };
+            await setDoc(requestRef, requestData);
+
+            // Also add to receiver's incoming sub-collection for easier notifications/UI
+            await setDoc(doc(db, 'users', targetUser.uid, 'friendRequests', requestRef.id), requestData);
+
+            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend request sent!', 'Demande d\'ami envoyée !', 'تم إرسال طلب الصداقة!'));
+        } catch (error) {
+            console.error("Friend Request Error:", error);
+            Alert.alert('Error', 'Failed to send request');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAcceptFriendRequest = async (request: any) => {
+        if (!user?.uid) return;
+        setLoading(true);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const meRef = doc(db, 'users', user.uid);
+                const themRef = doc(db, 'users', request.senderId);
+                const globalRequestRef = doc(db, 'friendRequests', request.id);
+                const myRequestRef = doc(db, 'users', user.uid, 'friendRequests', request.id);
+
+                // Add to both friends arrays
+                transaction.update(meRef, { friends: arrayUnion(request.senderId) });
+                transaction.update(themRef, { friends: arrayUnion(user.uid) });
+
+                // Update status of requests
+                transaction.update(globalRequestRef, { status: 'accepted' });
+                transaction.delete(myRequestRef);
+            });
+            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend request accepted!', 'Demande d\'ami acceptée !', 'تم قبول طلب الصداقة!'));
+        } catch (error) {
+            console.error("Accept Friend Error:", error);
+            Alert.alert('Error', 'Failed to accept request');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRejectFriendRequest = async (request: any) => {
+        if (!user?.uid) return;
+        try {
+            await deleteDoc(doc(db, 'users', user.uid, 'friendRequests', request.id));
+            await setDoc(doc(db, 'friendRequests', request.id), { status: 'rejected' }, { merge: true });
+        } catch (error) {
+            console.error("Reject Friend Error:", error);
+        }
+    };
+
     const renderHeader = () => (
         <View style={styles.headerContainer}>
             <LinearGradient
@@ -319,7 +569,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         {pack.bonus > 0 && (
                             <Text style={styles.bonusText}>+{pack.bonus} {tr('Bonus', 'Bonus', 'إضافي')}</Text>
                         )}
-                        <View style={styles.priceButton}>
+                        <View style={[styles.priceButton, { backgroundColor: '#F59E0B' }]}>
                             <Text style={styles.priceText}>{pack.priceDisplay}</Text>
                         </View>
                     </TouchableOpacity>
@@ -339,9 +589,14 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     </Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 20, marginBottom: 20 }}>
                     <TouchableOpacity
-                        style={[styles.actionBtn, { flex: 1, backgroundColor: colors.card, borderColor: colors.border }]}
+                        style={[styles.actionBtn, {
+                            flex: 1,
+                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)',
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(16, 185, 129, 0.3)'
+                        }]}
                         onPress={() => Alert.alert(
                             tr('Confirm Withdrawal', 'Confirmer le Retrait', 'تأكيد السحب'),
                             tr(
@@ -357,14 +612,10 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         setLoading(true);
                                         try {
                                             const userRef = doc(db, 'users', user.uid);
-                                            // Atomically decrease diamonds
                                             await setDoc(userRef, {
-                                                wallet: {
-                                                    diamonds: 0 // In real app, subtract requested amount
-                                                }
+                                                wallet: { diamonds: 0 }
                                             }, { merge: true });
 
-                                            // Record Transaction
                                             await addDoc(collection(db, 'users', user.uid, 'transactions'), {
                                                 type: 'withdrawal',
                                                 amountTND: parseFloat(tndValue),
@@ -374,14 +625,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                 status: 'pending'
                                             });
 
-                                            Alert.alert(
-                                                tr('Withdraw', 'Retirer', 'سحب'),
-                                                tr(
-                                                    `Withdrawal request for ${tndValue} TND has been received. Please contact support to complete the process.`,
-                                                    `La demande de retrait de ${tndValue} TND a été reçue. Veuillez contacter le support pour terminer le processus.`,
-                                                    `تم استلام طلب سحب بقيمة ${tndValue} دينار. يرجى الاتصال بالدعم لإكمال العملية.`
-                                                )
-                                            );
+                                            Alert.alert(tr('Success', 'Succès', 'نجاح'), tr('Withdrawal request sent', 'Demande de retrait envoyée', 'تم إرسال طلب السحب'));
                                         } catch (error) {
                                             Alert.alert('Error', 'Withdrawal request failed');
                                         } finally {
@@ -392,28 +636,54 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             ]
                         )}
                     >
-                        <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                            <ArrowUpRight size={20} color={Theme.light.colors.success} />
+                        <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.2)', marginBottom: 8 }]}>
+                            <ArrowUpRight size={22} color="#10B981" />
                         </View>
-                        <View>
-                            <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Withdraw', 'Retirer', 'سحب')}</Text>
-                            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{tndValue} TND</Text>
-                        </View>
+                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Withdraw', 'Retirer', 'سحب')}</Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted }}>{tndValue} TND</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.actionBtn, { flex: 1, backgroundColor: colors.card, borderColor: colors.border }]}
+                        style={[styles.actionBtn, {
+                            flex: 1,
+                            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.08)',
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(245, 158, 11, 0.3)'
+                        }]}
                         onPress={() => setShowExchangeModal(true)}
                     >
-                        <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                            <Repeat size={20} color="#F59E0B" />
+                        <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.2)', marginBottom: 8 }]}>
+                            <Repeat size={22} color="#F59E0B" />
                         </View>
-                        <View>
-                            <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Exchange', 'Échanger', 'تبادل')}</Text>
-                            <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2 }}>{tr('To Coins / Diamonds', 'En Pièces / Diamants', 'إلى عملات / ماس')}</Text>
-                        </View>
+                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Exchange', 'Échanger', 'تبادل')}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{tr('Coins/Diamonds', 'Pièces/Diamants', 'عملات/ماس')}</Text>
                     </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity
+                    style={[styles.transferBanner, {
+                        backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#3B82F6',
+                        borderWidth: 2,
+                        elevation: 4,
+                        shadowColor: '#3B82F6',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 10
+                    }]}
+                    onPress={() => setShowTransferModal(true)}
+                >
+                    <View style={styles.transferBannerLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: '#3B82F6', marginBottom: 0, width: 40, height: 40, borderRadius: 20 }]}>
+                            <Send size={18} color="#FFF" />
+                        </View>
+                        <View style={{ marginLeft: 12, flex: 1 }}>
+                            <Text style={[styles.transferBannerTitle, { color: colors.foreground, fontSize: 15 }]}>{tr('Transfer to Friend', 'Transférer à un ami', 'تحويل لصديق')}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 1 }}>{tr('Send Coins or Diamonds instantly', 'Envoyer des pièces ou diamants instantanément', 'أرسل عملات أو ماس فوراً')}</Text>
+                        </View>
+                        <ArrowRight size={20} color={colors.textMuted} />
+                    </View>
+                </TouchableOpacity>
 
                 <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 30 }]}>{tr('Recent Transaction', 'Trans. Récentes', 'المعاملات الأخيرة')}</Text>
                 <View style={{ marginTop: 10 }}>
@@ -423,39 +693,42 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No recent transactions', 'Pas de transactions récentes', 'لا توجد معاملات حديثة')}</Text>
                         </View>
                     ) : (
-                        transactions.map((tx) => (
+                        transactions.map((tx: any) => (
                             <View key={tx.id} style={[styles.transactionItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 16, marginBottom: 10, paddingHorizontal: 12 }]}>
                                 <View style={[styles.iconCircle, {
                                     backgroundColor:
                                         tx.type === 'recharge' ? 'rgba(245, 158, 11, 0.15)' :
-                                            tx.type === 'withdrawal' ? 'rgba(239, 68, 68, 0.15)' :
-                                                tx.type === 'exchange' ? 'rgba(16, 185, 129, 0.15)' :
+                                            tx.type === 'withdrawal' || tx.type === 'transfer_sent' ? 'rgba(239, 68, 68, 0.15)' :
+                                                tx.type === 'exchange' || tx.type === 'transfer_received' ? 'rgba(16, 185, 129, 0.15)' :
                                                     tx.type === 'gift_received' ? 'rgba(139, 92, 246, 0.15)' :
                                                         'rgba(107, 114, 128, 0.15)'
-                                }]}>
+                                }]} >
                                     {tx.type === 'recharge' && <Coins size={20} color="#F59E0B" fill="#F59E0B" />}
-                                    {tx.type === 'withdrawal' && <ArrowUpRight size={20} color="#EF4444" />}
+                                    {(tx.type === 'withdrawal' || tx.type === 'transfer_sent' || tx.type === 'gift_sent') && <ArrowUpRight size={20} color="#EF4444" />}
                                     {tx.type === 'exchange' && <Repeat size={20} color="#10B981" />}
                                     {tx.type === 'gift_received' && <Gem size={20} color="#8B5CF6" fill="#8B5CF6" />}
-                                    {tx.type === 'gift_sent' && <ArrowUpRight size={20} color="#6B7280" />}
+                                    {tx.type === 'transfer_received' && <ArrowDownLeft size={20} color="#10B981" />}
                                 </View>
                                 <View style={styles.transactionInfo}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <Text style={[styles.transactionTitle, { color: colors.foreground }]}>
                                             {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'إعادة شحن') :
                                                 tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'سحب') :
-                                                    tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
-                                                        tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
-                                                            tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
-                                                                tr('Transaction', 'Transaction', 'معاملة')}
+                                                    tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل مرسل') :
+                                                        tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'تحويل مستلم') :
+                                                            tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
+                                                                tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
+                                                                    tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
+                                                                        tr('Transaction', 'Transaction', 'معاملة')}
                                         </Text>
-                                        <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent') ? '#EF4444' : '#10B981' }]}>
-                                            {(tx.type === 'withdrawal' || tx.type === 'gift_sent') ? '-' : '+'}
+                                        <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '#EF4444' : '#10B981' }]}>
+                                            {(tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '-' : '+'}
                                             {tx.type === 'recharge' ? `${tx.amountCoins || tx.amount || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                                 tx.type === 'withdrawal' ? `${(tx.amountTND || 0).toFixed(2)} TND` :
                                                     tx.type === 'exchange' ? `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                                         tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'ماس')}` :
-                                                            `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
+                                                            tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'ماس')}` :
+                                                                `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
                                         </Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
@@ -484,39 +757,42 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No transactions yet', 'Aucune transaction', 'لا توجد معاملات بعد')}</Text>
                 </View>
             ) : (
-                transactions.map((tx) => (
+                transactions.map((tx: any) => (
                     <View key={tx.id} style={[styles.transactionItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 16, marginBottom: 10, paddingHorizontal: 12 }]}>
                         <View style={[styles.iconCircle, {
                             backgroundColor:
                                 tx.type === 'recharge' ? 'rgba(245, 158, 11, 0.15)' :
-                                    tx.type === 'withdrawal' ? 'rgba(239, 68, 68, 0.15)' :
-                                        tx.type === 'exchange' ? 'rgba(16, 185, 129, 0.15)' :
+                                    tx.type === 'withdrawal' || tx.type === 'transfer_sent' ? 'rgba(239, 68, 68, 0.15)' :
+                                        tx.type === 'exchange' || tx.type === 'transfer_received' ? 'rgba(16, 185, 129, 0.15)' :
                                             tx.type === 'gift_received' ? 'rgba(139, 92, 246, 0.15)' :
                                                 'rgba(107, 114, 128, 0.15)'
                         }]}>
                             {tx.type === 'recharge' && <Coins size={20} color="#F59E0B" fill="#F59E0B" />}
-                            {tx.type === 'withdrawal' && <ArrowUpRight size={20} color="#EF4444" />}
+                            {(tx.type === 'withdrawal' || tx.type === 'transfer_sent' || tx.type === 'gift_sent') && <ArrowUpRight size={20} color="#EF4444" />}
                             {tx.type === 'exchange' && <Repeat size={20} color="#10B981" />}
                             {tx.type === 'gift_received' && <Gem size={20} color="#8B5CF6" fill="#8B5CF6" />}
-                            {tx.type === 'gift_sent' && <ArrowUpRight size={20} color="#6B7280" />}
+                            {tx.type === 'transfer_received' && <ArrowDownLeft size={20} color="#10B981" />}
                         </View>
                         <View style={styles.transactionInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Text style={[styles.transactionTitle, { color: colors.foreground }]}>
                                     {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'إعادة شحن') :
                                         tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'سحب') :
-                                            tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
-                                                tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
-                                                    tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
-                                                        tr('Transaction', 'Transaction', 'معاملة')}
+                                            tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل مرسل') :
+                                                tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'تحويل مستلم') :
+                                                    tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
+                                                        tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
+                                                            tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
+                                                                tr('Transaction', 'Transaction', 'معاملة')}
                                 </Text>
-                                <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent') ? '#EF4444' : '#10B981' }]}>
-                                    {(tx.type === 'withdrawal' || tx.type === 'gift_sent') ? '-' : '+'}
+                                <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '#EF4444' : '#10B981' }]}>
+                                    {(tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '-' : '+'}
                                     {tx.type === 'recharge' ? `${tx.amountCoins || tx.amount || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                         tx.type === 'withdrawal' ? `${(tx.amountTND || 0).toFixed(2)} TND` :
                                             tx.type === 'exchange' ? `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                                 tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'ماس')}` :
-                                                    `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
+                                                    tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'ماس')}` :
+                                                        `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
@@ -623,7 +899,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                     placeholderTextColor={colors.textMuted}
                                 />
                                 <TouchableOpacity onPress={() => setExchangeAmount((exchangeType === 'diamondsToCoins' ? diamondBalance : coinBalance).toString())}>
-                                    <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 13 }}>MAX</Text>
+                                    <Text style={{ color: colors.info, fontWeight: 'bold', fontSize: 13 }}>MAX</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -665,6 +941,326 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         >
                             <Text style={[styles.confirmBtnText, { fontSize: 15 }]}>{loading ? tr('Processing...', 'Traitement...', 'جاري التحميل...') : tr('Confirm Exchange', 'Confirmer l\'Échange', 'تأكيد التبادل')}</Text>
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Transfer Modal */}
+            <Modal
+                visible={showTransferModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowTransferModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', height: '85%' }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Transfer Sold', 'Transférer Solde', 'تحويل الرصيد')}</Text>
+                            <TouchableOpacity onPress={() => {
+                                setShowTransferModal(false);
+                                setSelectedUserForTransfer(null);
+                                setTransferSearchQuery('');
+                                setTransferSearchResults([]);
+                                setTransferAmount('');
+                                setShowTargetProfile(false);
+                            }}>
+                                <X size={24} color={colors.foreground} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {!selectedUserForTransfer ? (
+                            <>
+                                <View style={[styles.tabContainer, { marginHorizontal: 24, marginTop: 10, padding: 3, height: 44, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
+                                    <TouchableOpacity
+                                        style={[styles.tab, { height: '100%' }, transferModalTab === 'search' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
+                                        onPress={() => setTransferModalTab('search')}
+                                    >
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'search' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Search', 'Chercher', 'بحث')}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.tab, { height: '100%' }, transferModalTab === 'friends' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
+                                        onPress={() => setTransferModalTab('friends')}
+                                    >
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'friends' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Friends', 'Amis', 'أصدقاء')}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.tab, { height: '100%' }, transferModalTab === 'requests' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
+                                        onPress={() => setTransferModalTab('requests')}
+                                    >
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'requests' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Requests', 'Demandes', 'طلبات')}</Text>
+                                        {incomingRequests.length > 0 && (
+                                            <View style={{ position: 'absolute', top: 8, right: 12, backgroundColor: '#EF4444', width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: isDark ? '#1C1C1E' : '#FFF' }} />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+
+                                {transferModalTab === 'search' ? (
+                                    <>
+                                        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginTop: 15 }]}>
+                                            <Search size={20} color={colors.textMuted} />
+                                            <TextInput
+                                                style={[styles.searchInput, { color: colors.foreground }]}
+                                                placeholder={tr('Search user by name...', 'Rechercher par nom...', 'بحث عن طريق الاسم...')}
+                                                placeholderTextColor={colors.textMuted}
+                                                value={transferSearchQuery}
+                                                onChangeText={handleSearchUsers}
+                                            />
+                                            {isSearching && <ActivityIndicator size="small" color={colors.info} />}
+                                        </View>
+
+                                        <ScrollView style={{ marginTop: 10 }}>
+                                            {transferSearchResults.length === 0 && transferSearchQuery.length >= 2 && !isSearching ? (
+                                                <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 20 }}>{tr('No users found', 'Aucun utilisateur trouvé', 'لم يتم العثور على مستخدمين')}</Text>
+                                            ) : (
+                                                transferSearchResults.map((u) => (
+                                                    <TouchableOpacity
+                                                        key={u.uid}
+                                                        style={[styles.userListItem, { borderBottomColor: colors.border }]}
+                                                        onPress={() => setSelectedUserForTransfer(u)}
+                                                    >
+                                                        <View style={styles.userListItemLeft}>
+                                                            <View style={[styles.userAvatar, { backgroundColor: isDark ? '#333' : '#EEE' }]}>
+                                                                {u.avatarUrl ? (
+                                                                    <Image source={{ uri: u.avatarUrl }} style={styles.userAvatarImg} />
+                                                                ) : (
+                                                                    <User size={20} color={colors.textMuted} />
+                                                                )}
+                                                            </View>
+                                                            <View style={{ marginLeft: 12 }}>
+                                                                <Text style={[styles.userNameText, { color: colors.foreground }]}>{u.fullName}</Text>
+                                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{u.email}</Text>
+                                                            </View>
+                                                        </View>
+                                                        <ChevronRight size={18} color={colors.textMuted} />
+                                                    </TouchableOpacity>
+                                                ))
+                                            )}
+                                        </ScrollView>
+                                    </>
+                                ) : transferModalTab === 'friends' ? (
+                                    <ScrollView style={{ marginTop: 15 }}>
+                                        {friendsList.length === 0 ? (
+                                            <View style={{ alignItems: 'center', marginTop: 40 }}>
+                                                <Users size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
+                                                <Text style={{ color: colors.textMuted }}>{tr('No friends yet', 'Aucun ami pour le moment', 'لا يوجد أصدقاء بعد')}</Text>
+                                            </View>
+                                        ) : (
+                                            friendsList.map((u) => (
+                                                <TouchableOpacity
+                                                    key={u.uid}
+                                                    style={[styles.userListItem, { borderBottomColor: colors.border }]}
+                                                    onPress={() => setSelectedUserForTransfer(u)}
+                                                >
+                                                    <View style={styles.userListItemLeft}>
+                                                        <View style={[styles.userAvatar, { backgroundColor: isDark ? '#333' : '#EEE' }]}>
+                                                            {u.avatarUrl ? (
+                                                                <Image source={{ uri: u.avatarUrl }} style={styles.userAvatarImg} />
+                                                            ) : (
+                                                                <User size={20} color={colors.textMuted} />
+                                                            )}
+                                                        </View>
+                                                        <View style={{ marginLeft: 12 }}>
+                                                            <Text style={[styles.userNameText, { color: colors.foreground }]}>{u.fullName}</Text>
+                                                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{u.email}</Text>
+                                                        </View>
+                                                    </View>
+                                                    <ChevronRight size={18} color={colors.textMuted} />
+                                                </TouchableOpacity>
+                                            ))
+                                        )}
+                                    </ScrollView>
+                                ) : (
+                                    <ScrollView style={{ marginTop: 15 }}>
+                                        {incomingRequests.length === 0 ? (
+                                            <View style={{ alignItems: 'center', marginTop: 40 }}>
+                                                <User size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
+                                                <Text style={{ color: colors.textMuted }}>{tr('No pending requests', 'Aucune demande en attente', 'لا توجد طلبات معلقة')}</Text>
+                                            </View>
+                                        ) : (
+                                            incomingRequests.map((req) => (
+                                                <View key={req.id} style={[styles.userListItem, { borderBottomColor: colors.border }]}>
+                                                    <View style={styles.userListItemLeft}>
+                                                        <View style={[styles.userAvatar, { backgroundColor: isDark ? '#333' : '#EEE' }]}>
+                                                            {req.senderAvatar ? (
+                                                                <Image source={{ uri: req.senderAvatar }} style={styles.userAvatarImg} />
+                                                            ) : (
+                                                                <User size={20} color={colors.textMuted} />
+                                                            )}
+                                                        </View>
+                                                        <View style={{ marginLeft: 12 }}>
+                                                            <Text style={[styles.userNameText, { color: colors.foreground }]}>{req.senderName}</Text>
+                                                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{tr('Wants to be your friend', 'Veut être votre ami', 'يريد أن يكون صديقك')}</Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleRejectFriendRequest(req)}
+                                                            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)', alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <X size={16} color="#EF4444" />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleAcceptFriendRequest(req)}
+                                                            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <Check size={16} color="#10B981" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </View>
+                                            ))
+                                        )}
+                                    </ScrollView>
+                                )}
+                            </>
+                        ) : (
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={styles.selectedUserCard}>
+                                    <View style={[styles.userAvatarLarge, { backgroundColor: isDark ? '#333' : '#EEE', marginBottom: 15 }]}>
+                                        {selectedUserForTransfer.avatarUrl ? (
+                                            <Image source={{ uri: selectedUserForTransfer.avatarUrl }} style={styles.userAvatarLargeImg} />
+                                        ) : (
+                                            <User size={40} color={colors.textMuted} />
+                                        )}
+                                    </View>
+                                    <Text style={[styles.selectedUserName, { color: colors.foreground }]}>{selectedUserForTransfer.fullName}</Text>
+                                    <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>{selectedUserForTransfer.email}</Text>
+
+                                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 30 }}>
+                                        <TouchableOpacity
+                                            style={[styles.profileActionBtn, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.05)' }]}
+                                            onPress={() => setShowTargetProfile(!showTargetProfile)}
+                                        >
+                                            <User size={18} color="#3B82F6" />
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6', marginLeft: 8 }}>
+                                                {showTargetProfile ? tr('Hide Profile', 'Masquer Profil', 'إخفاء الملف') : tr('Show Profile', 'Voir Profil', 'عرض الملف')}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[styles.profileActionBtn, {
+                                                backgroundColor: profileData?.friends?.includes(selectedUserForTransfer.uid)
+                                                    ? 'rgba(16, 185, 129, 0.1)'
+                                                    : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid)
+                                                        ? 'rgba(100, 100, 100, 0.1)'
+                                                        : 'rgba(245, 158, 11, 0.1)'
+                                            }]}
+                                            onPress={() => !profileData?.friends?.includes(selectedUserForTransfer.uid) && handleSendFriendRequest(selectedUserForTransfer)}
+                                            disabled={sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) || profileData?.friends?.includes(selectedUserForTransfer.uid)}
+                                        >
+                                            {profileData?.friends?.includes(selectedUserForTransfer.uid) ? (
+                                                <>
+                                                    <Check size={18} color="#10B981" />
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981', marginLeft: 8 }}>{tr('Friend ✓', 'Ami ✓', 'صديق ✓')}</Text>
+                                                </>
+                                            ) : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) ? (
+                                                <>
+                                                    <RefreshCw size={18} color={colors.textMuted} />
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>{tr('Requested', 'Demandé', 'تم الطلب')}</Text>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Users size={18} color="#F59E0B" />
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 8 }}>{tr('Add Friend', 'Ajouter Ami', 'إضافة صديق')}</Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {showTargetProfile && (
+                                        <Animatable.View animation="fadeIn" style={[styles.profileDetailsBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                                            <Text style={[styles.profileDetailsTitle, { color: colors.foreground }]}>{tr('User Info', 'Infos Utilisateur', 'معلومات المستخدم')}</Text>
+                                            <View style={styles.profileDetailRow}>
+                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{tr('Member Since', 'Membre depuis', 'عضو منذ')}</Text>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.foreground }}>
+                                                    {selectedUserForTransfer.createdAt ? new Date(selectedUserForTransfer.createdAt.seconds * 1000).toLocaleDateString() : '---'}
+                                                </Text>
+                                            </View>
+                                            {selectedUserForTransfer.bio && (
+                                                <View style={{ marginTop: 10 }}>
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>Bio</Text>
+                                                    <Text style={{ fontSize: 12, color: colors.foreground }}>{selectedUserForTransfer.bio}</Text>
+                                                </View>
+                                            )}
+                                        </Animatable.View>
+                                    )}
+
+                                    <View style={{ width: '100%', marginTop: 20 }}>
+                                        <View style={styles.exchangeSelector}>
+                                            <TouchableOpacity
+                                                style={[styles.exchangeTypeBtn, transferType === 'coins' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}
+                                                onPress={() => setTransferType('coins')}
+                                            >
+                                                <Coins size={18} color={transferType === 'coins' ? '#FFF' : '#F59E0B'} fill={transferType === 'coins' ? '#FFF' : 'transparent'} />
+                                                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: '700', color: transferType === 'coins' ? '#FFF' : '#F59E0B' }}>{tr('Coins', 'Pièces', 'عملات')}</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.exchangeTypeBtn, transferType === 'diamonds' && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }]}
+                                                onPress={() => setTransferType('diamonds')}
+                                            >
+                                                <Gem size={18} color={transferType === 'diamonds' ? '#FFF' : '#8B5CF6'} fill={transferType === 'diamonds' ? '#FFF' : 'transparent'} />
+                                                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: '700', color: transferType === 'diamonds' ? '#FFF' : '#8B5CF6' }}>{tr('Diamonds', 'Diamants', 'ماس')}</Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        <Text style={[styles.inputLabel, { color: colors.textMuted, marginTop: 25 }]}>
+                                            {tr('Amount to Transfer', 'Montant à Transférer', 'المبلغ المراد تحويله')}
+                                        </Text>
+                                        <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginTop: 8 }]}>
+                                            <TextInput
+                                                style={[styles.modalInput, { color: colors.foreground }]}
+                                                keyboardType="numeric"
+                                                value={transferAmount}
+                                                onChangeText={setTransferAmount}
+                                                placeholder="0"
+                                                placeholderTextColor={colors.textMuted}
+                                            />
+                                            <TouchableOpacity onPress={() => setTransferAmount((transferType === 'coins' ? coinBalance : diamondBalance).toString())}>
+                                                <Text style={{ color: colors.info, fontWeight: 'bold', fontSize: 13 }}>MAX</Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.confirmBtn,
+                                                {
+                                                    backgroundColor: loading || !transferAmount || !profileData?.friends?.includes(selectedUserForTransfer.uid)
+                                                        ? (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)')
+                                                        : colors.info,
+                                                    marginTop: 30,
+                                                    height: 56
+                                                }
+                                            ]}
+                                            onPress={handleTransfer}
+                                            disabled={loading || !transferAmount || !profileData?.friends?.includes(selectedUserForTransfer.uid)}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                {loading ? (
+                                                    <ActivityIndicator size="small" color="#FFF" />
+                                                ) : (
+                                                    <>
+                                                        <Send size={18} color="#FFF" style={{ marginRight: 10 }} />
+                                                        <Text style={[styles.confirmBtnText, { color: loading || !transferAmount || !profileData?.friends?.includes(selectedUserForTransfer.uid) ? colors.textMuted : '#FFF' }]}>
+                                                            {!profileData?.friends?.includes(selectedUserForTransfer.uid)
+                                                                ? tr('Friends Only', 'Amis Uniquement', 'للأصدقاء فقط')
+                                                                : tr('Confirm Transfer', 'Confirmer Transfert', 'تأكيد التحويل')
+                                                            }
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={{ alignSelf: 'center', marginTop: 20 }}
+                                            onPress={() => setSelectedUserForTransfer(null)}
+                                        >
+                                            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{tr('Back to Search', 'Retour à la recherche', 'العودة للبحث')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </ScrollView>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -784,123 +1380,232 @@ const styles = StyleSheet.create({
     },
     packageCard: {
         width: '48%',
-        padding: 12,
-        borderRadius: 20,
+        padding: 16,
+        borderRadius: 24,
         alignItems: 'center',
-        borderWidth: 1,
-        marginBottom: 10,
+        borderWidth: 1.5,
+        marginBottom: 12,
         justifyContent: 'space-between',
-        minHeight: 140,
+        minHeight: 160,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
     },
     coinIconWrapper: {
-        marginBottom: 12,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 12,
     },
     coinAmount: {
         fontSize: 18,
-        fontWeight: '800',
-        marginBottom: 4,
+        fontWeight: '900',
     },
     bonusText: {
-        fontSize: 10,
-        color: '#10B981',
+        fontSize: 12,
         fontWeight: '700',
-        marginBottom: 8,
+        color: '#10B981',
+        marginTop: 4,
     },
     priceButton: {
-        backgroundColor: '#F59E0B',
-        paddingHorizontal: 8,
-        paddingVertical: 8,
-        borderRadius: 12,
         width: '100%',
+        paddingVertical: 10,
+        borderRadius: 14,
         alignItems: 'center',
+        marginTop: 14,
     },
     priceText: {
         color: '#FFF',
-        fontSize: 11,
+        fontSize: 14,
+        fontWeight: '800',
+    },
+    infoBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 20,
+        marginBottom: 20,
+    },
+    actionBtn: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 100,
+    },
+    iconCircle: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    actionBtnTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+    },
+    transferBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginHorizontal: 20,
+        padding: 16,
+        borderRadius: 24,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(59, 130, 246, 0.2)',
+    },
+    transferBannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    transferBannerTitle: {
+        fontSize: 15,
         fontWeight: '800',
     },
     transactionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        marginVertical: 4,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(100,100,100,0.1)',
     },
     transactionInfo: {
         flex: 1,
         marginLeft: 15,
     },
     transactionTitle: {
-        fontSize: 13,
+        fontSize: 15,
         fontWeight: '700',
-        marginBottom: 2,
+        marginBottom: 4,
     },
     transactionDate: {
-        fontSize: 10.5,
+        fontSize: 12,
     },
     transactionAmount: {
-        fontSize: 13.5,
-        fontWeight: '800',
-    },
-    infoBox: {
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 20,
-    },
-    actionBtn: {
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    iconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    actionBtnTitle: {
-        fontSize: 14,
-        fontWeight: '700',
+        alignItems: 'flex-end',
     },
     modalOverlay: {
         flex: 1,
-        justifyContent: 'center',
-        padding: 20,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'flex-end',
     },
     modalContent: {
-        borderRadius: 24,
-        padding: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 10,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        paddingBottom: 40,
+        maxHeight: '90%',
     },
     modalHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(100,100,100,0.05)',
     },
     modalTitle: {
         fontSize: 18,
         fontWeight: 'bold',
     },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: 24,
+        marginTop: 20,
+        paddingHorizontal: 15,
+        height: 50,
+        borderRadius: 12,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 10,
+        fontSize: 15,
+    },
+    userListItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+    },
+    userListItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    userAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userAvatarImg: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    userNameText: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    selectedUserCard: {
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        paddingTop: 30,
+    },
+    userAvatarLarge: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userAvatarLargeImg: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+    },
+    selectedUserName: {
+        fontSize: 20,
+        fontWeight: '800',
+        marginBottom: 4,
+    },
+    profileActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 12,
+    },
+    profileDetailsBox: {
+        width: '100%',
+        padding: 15,
+        borderRadius: 16,
+        marginTop: 10,
+    },
+    profileDetailsTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        marginBottom: 10,
+    },
+    profileDetailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
     exchangeSelector: {
         flexDirection: 'row',
         gap: 12,
-        marginBottom: 24,
+        marginBottom: 12,
     },
     exchangeTypeBtn: {
         flex: 1,
@@ -912,10 +1617,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(100,100,100,0.1)',
         borderWidth: 1,
         borderColor: 'transparent',
-    },
-    activeExchangeType: {
-        backgroundColor: '#3B82F6',
-        borderColor: '#3B82F6',
     },
     inputLabel: {
         fontSize: 13,
@@ -934,6 +1635,18 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    confirmBtn: {
+        width: '100%',
+        height: 56,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmBtnText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
     exchangeReview: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -942,20 +1655,5 @@ const styles = StyleSheet.create({
         padding: 20,
         borderRadius: 16,
         marginBottom: 20,
-    },
-    confirmBtn: {
-        height: 56,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: "#3B82F6",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
-    confirmBtnText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
     },
 });
