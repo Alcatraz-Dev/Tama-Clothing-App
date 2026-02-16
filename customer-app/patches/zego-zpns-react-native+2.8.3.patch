@@ -1,0 +1,583 @@
+diff --git a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h b/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h
+index cc71a29..a41fecc 100644
+--- a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h
++++ b/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h
+@@ -1,20 +1,19 @@
+ #import <Foundation/Foundation.h>
+-#import <ZPNs/ZPNs.h>
+-#import "ZPNsUtils.h"
+ 
+ #define ZPNS_NOTIFICATION_ARRIVED_EVENT @"ZPNS_NOTIFICATION_ARRIVED_EVENT"
+ #define ZPNS_NOTIFICATION_CLICKED_EVENT @"ZPNS_NOTIFICATION_CLICKED_EVENT"
+-#define ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT @"ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT"
++#define ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT                                    \
++  @"ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT"
+ #define ZPNS_REGISTERED_SUCCESS_EVENT @"ZPNS_REGISTERED_SUCCESS_EVENT"
+ #define ZPNS_REGISTERED_FAILED_EVENT @"ZPNS_REGISTERED_FAILED_EVENT"
+ 
+ @interface RCTZPNsEventManager : NSObject
+ 
+-@property (nonatomic, assign) BOOL isWillPresentBadge;
++@property(nonatomic, assign) BOOL isWillPresentBadge;
+ 
+-@property (nonatomic, assign) BOOL isWillPresentSound;
++@property(nonatomic, assign) BOOL isWillPresentSound;
+ 
+-@property (nonatomic, assign) BOOL isWillPresentAlert;
++@property(nonatomic, assign) BOOL isWillPresentAlert;
+ 
+ + (instancetype)sharedInstance;
+ 
+@@ -26,11 +25,17 @@
+ 
+ - (void)registerDeviceToken:(NSData *)deviceToken;
+ 
+-- (void)handleNotificationClickEvent:(NSDictionary *)userInfo title:(NSString *)title content:(NSString *)content;
++- (void)handleNotificationClickEvent:(NSDictionary *)userInfo
++                               title:(NSString *)title
++                             content:(NSString *)content;
+ 
+-- (void)handleNotificationArriveEvent:(NSDictionary *)userInfo title:(NSString *)title content:(NSString *)content;
++- (void)handleNotificationArriveEvent:(NSDictionary *)userInfo
++                                title:(NSString *)title
++                              content:(NSString *)content;
+ 
+-- (void)handleThroughMessageReceivedEvent:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler;
++- (void)handleThroughMessageReceivedEvent:(NSDictionary *)userInfo
++                   fetchCompletionHandler:
++                       (void (^)(NSUInteger))completionHandler;
+ 
+ - (void)handleZPNsRegisterSuccessEvent:(NSString *)pushID;
+ 
+@@ -47,4 +52,3 @@
+ - (void)throughMessageReceivedCompletion:(NSString *)seq;
+ 
+ @end
+-
+diff --git a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.m b/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.m
+index f30aca7..0a302b8 100644
+--- a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.m
++++ b/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.m
+@@ -4,11 +4,14 @@
+ #import "internal/NSMutableArray+safeInvoke.h"
+ #import "internal/NSMutableDictionary+safeInvoke.h"
+ #import "internal/NSObject+safeInvoke.h"
++#import <UIKit/UIKit.h>
++#import <ZPNs/ZPNs.h>
+ 
+ @interface RCTZPNsEventManager () <ZPNsNotificationCenterDelegate,
+                                    UNUserNotificationCenterDelegate> {
+   API_AVAILABLE(ios(10), macosx(10.14))
+-  __weak id<UNUserNotificationCenterDelegate> _originalNotificationCenterDelegate;
++  __weak id<UNUserNotificationCenterDelegate>
++      _originalNotificationCenterDelegate;
+   API_AVAILABLE(ios(10), macosx(10.14))
+   struct {
+     unsigned int willPresentNotification : 1;
+@@ -19,7 +22,8 @@ @interface RCTZPNsEventManager () <ZPNsNotificationCenterDelegate,
+ 
+ @property(nonatomic, assign) BOOL isDebug;
+ 
+-@property(nonatomic, strong) NSDictionary *clickedNotificationMap;  // 改为 notificationMap
++@property(nonatomic, strong)
++    NSDictionary *clickedNotificationMap; // 改为 notificationMap
+ 
+ @end
+ 
+@@ -29,7 +33,8 @@ @interface RCTZPNsEventManager () <ZPNsNotificationCenterDelegate,
+ @implementation RCTZPNsEventManager
+ 
+ + (void)load {
+-  [[RCTZPNsEventManager sharedInstance] listenAppDidFinishLaunchingNotification];
++  [[RCTZPNsEventManager sharedInstance]
++      listenAppDidFinishLaunchingNotification];
+ }
+ 
+ + (instancetype)sharedInstance {
+@@ -71,8 +76,9 @@ - (void)listenAppDidFinishLaunchingNotification {
+ - (void)registerDeviceToken:(NSData *)deviceToken {
+   NSString *dataStr = [self getHexStringForData:deviceToken];
+   [[ZPNsUtils getInstance]
+-      writeCustomLog:[NSString stringWithFormat:@"isProduct: %d, device token: %@", !self.isDebug,
+-                                                dataStr]
++      writeCustomLog:[NSString
++                         stringWithFormat:@"isProduct: %d, device token: %@",
++                                          !self.isDebug, dataStr]
+           moduleName:@""];
+   [[ZPNs shared] setDeviceToken:deviceToken isProduct:!self.isDebug];
+ }
+@@ -88,19 +94,20 @@ - (void)handleNotificationClickEvent:(NSDictionary *)userInfo
+   NSMutableDictionary *notificationMap = [NSMutableDictionary dictionary];
+ 
+   NSString *payload = @"";
+-  if(userInfo != nil){
+-      NSDictionary *aps = [userInfo objectForKey:@"aps"];
+-      if(aps != nil){
+-          payload = [aps objectForKey:@"payload"];
+-      }
++  if (userInfo != nil) {
++    NSDictionary *aps = [userInfo objectForKey:@"aps"];
++    if (aps != nil) {
++      payload = [aps objectForKey:@"payload"];
++    }
+   }
+   [notificationMap safeSetObject:payload forKey:@"payload"];
+   [notificationMap safeSetObject:userInfo forKey:@"userInfo"];
+   [notificationMap safeSetObject:title forKey:@"title"];
+   [notificationMap safeSetObject:content forKey:@"content"];
+   self.clickedNotificationMap = notificationMap;
+-  [[NSNotificationCenter defaultCenter] postNotificationName:ZPNS_NOTIFICATION_CLICKED_EVENT
+-                                                      object:notificationMap];
++  [[NSNotificationCenter defaultCenter]
++      postNotificationName:ZPNS_NOTIFICATION_CLICKED_EVENT
++                    object:notificationMap];
+ }
+ 
+ - (void)handleNotificationArriveEvent:(NSDictionary *)userInfo
+@@ -110,28 +117,34 @@ - (void)handleNotificationArriveEvent:(NSDictionary *)userInfo
+   [notificationMap safeSetObject:userInfo forKey:@"userInfo"];
+   [notificationMap safeSetObject:title forKey:@"title"];
+   [notificationMap safeSetObject:content forKey:@"content"];
+-  [[NSNotificationCenter defaultCenter] postNotificationName:ZPNS_NOTIFICATION_ARRIVED_EVENT
+-                                                      object:notificationMap];
++  [[NSNotificationCenter defaultCenter]
++      postNotificationName:ZPNS_NOTIFICATION_ARRIVED_EVENT
++                    object:notificationMap];
+ }
+ 
+ - (void)handleThroughMessageReceivedEvent:(NSDictionary *)userInfo
+-                   fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
++                   fetchCompletionHandler:
++                       (void (^)(NSUInteger))completionHandler {
+   NSString *seq = [self generateSeqStr];
+-  NSMutableDictionary *mutableDic = [[NSMutableDictionary alloc] initWithDictionary:userInfo];
++  NSMutableDictionary *mutableDic =
++      [[NSMutableDictionary alloc] initWithDictionary:userInfo];
+   [mutableDic setValue:seq forKey:@"seq"];
+-  [_completionSeqMap safeSetObject:completionHandler forKey:seq];
+-  [[NSNotificationCenter defaultCenter] postNotificationName:ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT
+-                                                      object:mutableDic];
++  [_completionSeqMap setValue:completionHandler forKey:seq];
++  [[NSNotificationCenter defaultCenter]
++      postNotificationName:ZPNS_THROUGH_MESSAGE_RECEIVED_EVENT
++                    object:mutableDic];
+ }
+ 
+ - (void)handleZPNsRegisterSuccessEvent:(NSString *)pushID {
+-  [[NSNotificationCenter defaultCenter] postNotificationName:ZPNS_REGISTERED_SUCCESS_EVENT
+-                                                      object:pushID];
++  [[NSNotificationCenter defaultCenter]
++      postNotificationName:ZPNS_REGISTERED_SUCCESS_EVENT
++                    object:pushID];
+ }
+ 
+ - (void)handleZPNsRegisterFailEvent:(NSError *)error {
+-  [[NSNotificationCenter defaultCenter] postNotificationName:ZPNS_REGISTERED_FAILED_EVENT
+-                                                      object:error];
++  [[NSNotificationCenter defaultCenter]
++      postNotificationName:ZPNS_REGISTERED_FAILED_EVENT
++                    object:error];
+ }
+ 
+ - (nullable NSDictionary *)getNotificationMapFromClickedNotification {
+@@ -149,8 +162,10 @@ - (void)clearBuffer {
+ }
+ 
+ - (void)throughMessageReceivedCompletion:(NSString *)seq {
+-  id completion = [_completionSeqMap safeObjectForKey:seq];
+-  ((void (^)(UIBackgroundFetchResult))completion)(0);
++  id completion = [_completionSeqMap valueForKey:seq];
++  if (completion) {
++    ((void (^)(NSUInteger))completion)(0);
++  }
+ }
+ 
+ - (NSString *)getHexStringForData:(NSData *)data {
+@@ -167,8 +182,10 @@ - (NSString *)getHexStringForData:(NSData *)data {
+     return hexString;
+   } else {
+     NSString *myToken = [[data description]
+-        stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+-    myToken = [myToken stringByReplacingOccurrencesOfString:@" " withString:@""];
++        stringByTrimmingCharactersInSet:
++            [NSCharacterSet characterSetWithCharactersInString:@"<>"]];
++    myToken = [myToken stringByReplacingOccurrencesOfString:@" "
++                                                 withString:@""];
+     return myToken;
+   }
+ }
+@@ -179,27 +196,31 @@ - (NSString *)getUserInfoJson:(NSDictionary *)userInfo {
+   }
+ 
+   NSError *error;
+-  NSData *jsonData = [NSJSONSerialization dataWithJSONObject:userInfo
+-                                                     options:NSJSONWritingPrettyPrinted
+-                                                       error:&error];
++  NSData *jsonData =
++      [NSJSONSerialization dataWithJSONObject:userInfo
++                                      options:NSJSONWritingPrettyPrinted
++                                        error:&error];
+ 
+   if (!jsonData) {
+     return @"null";
+   }
+ 
+-  NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
++  NSString *jsonString = [[NSString alloc] initWithData:jsonData
++                                               encoding:NSUTF8StringEncoding];
+   return jsonString;
+ }
+ 
+ #pragma mark - Observe App
+ 
+-- (void)application_onDidFinishLaunchingNotification:(nonnull NSNotification *)notification {
++- (void)application_onDidFinishLaunchingNotification:
++    (nonnull NSNotification *)notification {
+   NSDictionary *remoteNotification =
+       notification.userInfo[UIApplicationLaunchOptionsRemoteNotificationKey];
+   if (remoteNotification != nil) {
+     NSString *jsonData = [self getUserInfoJson:remoteNotification];
+     [[ZPNsUtils getInstance]
+-        writeCustomLog:[NSString stringWithFormat:@"get init notification: %@", jsonData]
++        writeCustomLog:[NSString stringWithFormat:@"get init notification: %@",
++                                                  jsonData]
+             moduleName:@""];
+   }
+ 
+@@ -209,31 +230,40 @@ - (void)application_onDidFinishLaunchingNotification:(nonnull NSNotification *)n
+ 
+     if (notificationCenter.delegate != nil) {
+       _originalNotificationCenterDelegate = notificationCenter.delegate;
+-      _originalNotificationCenterDelegateRespondsTo.openSettingsForNotification =
++      _originalNotificationCenterDelegateRespondsTo
++          .openSettingsForNotification =
+           (unsigned int)[_originalNotificationCenterDelegate
+-              respondsToSelector:@selector(userNotificationCenter:openSettingsForNotification:)];
++              respondsToSelector:@selector(userNotificationCenter:
++                                      openSettingsForNotification:)];
+       _originalNotificationCenterDelegateRespondsTo.willPresentNotification =
+           (unsigned int)[_originalNotificationCenterDelegate
+-              respondsToSelector:@selector(userNotificationCenter:
+-                                          willPresentNotification:withCompletionHandler:)];
+-      _originalNotificationCenterDelegateRespondsTo.didReceiveNotificationResponse =
++              respondsToSelector:@selector
++              (userNotificationCenter:
++                  willPresentNotification:withCompletionHandler:)];
++      _originalNotificationCenterDelegateRespondsTo
++          .didReceiveNotificationResponse =
+           (unsigned int)[_originalNotificationCenterDelegate
+-              respondsToSelector:@selector(userNotificationCenter:
+-                                     didReceiveNotificationResponse:withCompletionHandler:)];
++              respondsToSelector:@selector
++              (userNotificationCenter:
++                  didReceiveNotificationResponse:withCompletionHandler:)];
+ 
+       [[ZPNsUtils getInstance]
+           writeCustomLog:
+               [NSString
+-                  stringWithFormat:
+-                      @"we should save the original delegate to call them. will present: %u, did "
+-                      @"response: %u, open settings: %u",
+-                      _originalNotificationCenterDelegateRespondsTo.willPresentNotification,
+-                      _originalNotificationCenterDelegateRespondsTo.didReceiveNotificationResponse,
+-                      _originalNotificationCenterDelegateRespondsTo.openSettingsForNotification]
++                  stringWithFormat:@"we should save the original delegate to "
++                                   @"call them. will present: %u, did "
++                                   @"response: %u, open settings: %u",
++                                   _originalNotificationCenterDelegateRespondsTo
++                                       .willPresentNotification,
++                                   _originalNotificationCenterDelegateRespondsTo
++                                       .didReceiveNotificationResponse,
++                                   _originalNotificationCenterDelegateRespondsTo
++                                       .openSettingsForNotification]
+               moduleName:@""];
+     }
+ 
+-    __strong RCTZPNsEventManager<UNUserNotificationCenterDelegate> *strongSelf = self;
++    __strong RCTZPNsEventManager<UNUserNotificationCenterDelegate> *strongSelf =
++        self;
+     notificationCenter.delegate = strongSelf;
+   }
+ }
+@@ -242,21 +272,24 @@ - (void)application_onDidFinishLaunchingNotification:(nonnull NSNotification *)n
+ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+        willPresentNotification:(UNNotification *)notification
+          withCompletionHandler:
+-             (void (^)(UNNotificationPresentationOptions options))completionHandler
+-    API_AVAILABLE(macos(10.14), ios(10.0)) {
++             (void (^)(UNNotificationPresentationOptions options))
++                 completionHandler API_AVAILABLE(macos(10.14), ios(10.0)) {
+   [self ZPNsNotificationCenter:center
+        willPresentNotification:notification
+                       userInfo:notification.request.content.userInfo
+          withCompletionHandler:completionHandler];
+ 
+-  // Forward on to any other delegates amd allow them to control presentation behavior.
++  // Forward on to any other delegates amd allow them to control presentation
++  // behavior.
+   if (_originalNotificationCenterDelegate != nil &&
+       _originalNotificationCenterDelegateRespondsTo.willPresentNotification) {
+-    [_originalNotificationCenterDelegate userNotificationCenter:center
+-                                        willPresentNotification:notification
+-                                          withCompletionHandler:completionHandler];
++    [_originalNotificationCenterDelegate
++         userNotificationCenter:center
++        willPresentNotification:notification
++          withCompletionHandler:completionHandler];
+   } else {
+-    UNNotificationPresentationOptions presentationOptions = UNNotificationPresentationOptionNone;
++    UNNotificationPresentationOptions presentationOptions =
++        UNNotificationPresentationOptionNone;
+     if (self.isWillPresentBadge) {
+       presentationOptions |= UNNotificationPresentationOptionBadge;
+     }
+@@ -273,9 +306,13 @@ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+   }
+ 
+   [[ZPNsUtils getInstance]
+-      writeCustomLog:[NSString stringWithFormat:
+-                                   @"onUserNotificationCenterWillPresentNotification. userInfo: %@",
+-                                   [self getUserInfoJson:notification.request.content.userInfo]]
++      writeCustomLog:[NSString
++                         stringWithFormat:@"onUserNotificationCenterWillPresent"
++                                          @"Notification. userInfo: %@",
++                                          [self getUserInfoJson:notification
++                                                                    .request
++                                                                    .content
++                                                                    .userInfo]]
+           moduleName:@""];
+ }
+ 
+@@ -286,35 +323,41 @@ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+     API_AVAILABLE(macos(10.14), ios(10.0)) {
+   [self ZPNsNotificationCenter:center
+       didReceiveNotificationResponse:response
+-                            userInfo:response.notification.request.content.userInfo
++                            userInfo:response.notification.request.content
++                                         .userInfo
+                withCompletionHandler:completionHandler];
+ 
+   // Forward on to any other delegates.
+   if (_originalNotificationCenterDelegate != nil &&
+-      _originalNotificationCenterDelegateRespondsTo.didReceiveNotificationResponse) {
+-    [_originalNotificationCenterDelegate userNotificationCenter:center
+-                                 didReceiveNotificationResponse:response
+-                                          withCompletionHandler:completionHandler];
++      _originalNotificationCenterDelegateRespondsTo
++          .didReceiveNotificationResponse) {
++    [_originalNotificationCenterDelegate
++                userNotificationCenter:center
++        didReceiveNotificationResponse:response
++                 withCompletionHandler:completionHandler];
+   } else {
+     completionHandler();
+   }
+ 
+   [[ZPNsUtils getInstance]
+-      writeCustomLog:
+-          [NSString stringWithFormat:
+-                        @"onUserNotificationCenterDidReceiveNotificationResponse. userInfo: %@",
+-                        [self getUserInfoJson:response.notification.request.content.userInfo]]
++      writeCustomLog:[NSString
++                         stringWithFormat:
++                             @"onUserNotificationCenterDidReceiveNotificationRe"
++                             @"sponse. userInfo: %@",
++                             [self getUserInfoJson:response.notification.request
++                                                       .content.userInfo]]
+           moduleName:@""];
+ }
+ 
+-// We don't use this for ZPNs, but for the purpose of forwarding to any original delegates we
+-// implement this.
++// We don't use this for ZPNs, but for the purpose of forwarding to any original
++// delegates we implement this.
+ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+     openSettingsForNotification:(nullable UNNotification *)notification
+     API_AVAILABLE(macos(10.14), ios(10.0)) {
+   // Forward on to any other delegates.
+   if (_originalNotificationCenterDelegate != nil &&
+-      _originalNotificationCenterDelegateRespondsTo.openSettingsForNotification) {
++      _originalNotificationCenterDelegateRespondsTo
++          .openSettingsForNotification) {
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wunguarded-availability-new"
+     [_originalNotificationCenterDelegate userNotificationCenter:center
+@@ -332,7 +375,8 @@ - (void)onRegistered:(NSString *)pushID {
+ - (void)ZPNsNotificationCenter:(UNUserNotificationCenter *)center
+        willPresentNotification:(UNNotification *)notification
+                       userInfo:(NSDictionary *)userInfo
+-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
++         withCompletionHandler:
++             (void (^)(UNNotificationPresentationOptions))completionHandler {
+   [self handleNotificationArriveEvent:userInfo
+                                 title:notification.request.content.title
+                               content:notification.request.content.body];
+@@ -343,9 +387,10 @@ - (void)ZPNsNotificationCenter:(UNUserNotificationCenter *)center
+                           userInfo:(NSDictionary *)userInfo
+              withCompletionHandler:(void (^)(void))completionHandler
+     API_AVAILABLE(macos(10.14), ios(10.0)) {
+-  [self handleNotificationClickEvent:userInfo
+-                               title:response.notification.request.content.title
+-                             content:response.notification.request.content.body];
++  [self
++      handleNotificationClickEvent:userInfo
++                             title:response.notification.request.content.title
++                           content:response.notification.request.content.body];
+ }
+ 
+ @end
+diff --git a/node_modules/zego-zpns-react-native/ios/RCTZPNsSwizzler.m b/node_modules/zego-zpns-react-native/ios/RCTZPNsSwizzler.m
+index f243662..5de5fde 100644
+--- a/node_modules/zego-zpns-react-native/ios/RCTZPNsSwizzler.m
++++ b/node_modules/zego-zpns-react-native/ios/RCTZPNsSwizzler.m
+@@ -6,8 +6,10 @@
+ //
+ 
+ #import "RCTZPNsSwizzler.h"
+-#import <objc/runtime.h>
+ #import "RCTZPNsEventManager.h"
++#import "ZPNsUtils.h"
++#import <UIKit/UIKit.h>
++#import <objc/runtime.h>
+ 
+ @implementation RCTZPNsSwizzler
+ 
+@@ -15,20 +17,27 @@ + (void)load {
+   static dispatch_once_t onceToken;
+   dispatch_once(&onceToken, ^{
+     [self hookMethod:@selector(application:didFinishLaunchingWithOptions:)
+-              andDef:@selector(defaultApplication:didFinishLaunchingWithOptions:)
+-              andNew:@selector(zpnsHookedApplication:didFinishLaunchingWithOptions:)];
++              andDef:@selector(defaultApplication:
++                         didFinishLaunchingWithOptions:)
++              andNew:@selector(zpnsHookedApplication:
++                         didFinishLaunchingWithOptions:)];
+ 
+-    [self hookMethod:@selector(application:didRegisterForRemoteNotificationsWithDeviceToken:)
+-              andDef:@selector(defaultApplication:didRegisterForRemoteNotificationsWithDeviceToken:)
++    [self hookMethod:@selector(application:
++                         didRegisterForRemoteNotificationsWithDeviceToken:)
++              andDef:@selector(defaultApplication:
++                         didRegisterForRemoteNotificationsWithDeviceToken:)
+               andNew:@selector(zpnsHookedApplication:
+                          didRegisterForRemoteNotificationsWithDeviceToken:)];
+ 
+-    [self hookMethod:@selector(application:didFailToRegisterForRemoteNotificationsWithError:)
+-              andDef:@selector(defaultApplication:didFailToRegisterForRemoteNotificationsWithError:)
++    [self hookMethod:@selector(application:
++                         didFailToRegisterForRemoteNotificationsWithError:)
++              andDef:@selector(defaultApplication:
++                         didFailToRegisterForRemoteNotificationsWithError:)
+               andNew:@selector(zpnsHookedApplication:
+                          didFailToRegisterForRemoteNotificationsWithError:)];
+ 
+-    [self hookMethod:@selector(application:didReceiveRemoteNotification:fetchCompletionHandler:)
++    [self hookMethod:@selector(application:
++                         didReceiveRemoteNotification:fetchCompletionHandler:)
+               andDef:@selector(defaultApplication:
+                          didReceiveRemoteNotification:fetchCompletionHandler:)
+               andNew:@selector(zpnsHookedApplication:
+@@ -38,22 +47,38 @@ + (void)load {
+ 
+ + (void)hookMethod:(SEL)oldSEL andDef:(SEL)defaultSEL andNew:(SEL)newSEL {
+   Class oldClass = objc_getClass([@"AppDelegate" UTF8String]);
++  if (!oldClass) {
++    // In some Expo/Swift projects, the class name might be different.
++    // Fallback or just return to avoid crash.
++    return;
++  }
++
++  id proxyEnabled = [[NSBundle mainBundle]
++      objectForInfoDictionaryKey:@"ZPNsAppDelegateProxyEnabled"];
++  if (proxyEnabled && ![proxyEnabled boolValue]) {
++    return;
++  }
++
+   Class newClass = [self class];
+ 
+-  class_addMethod(oldClass, newSEL, class_getMethodImplementation(newClass, newSEL), nil);
+-  class_addMethod(oldClass, oldSEL, class_getMethodImplementation(newClass, defaultSEL), nil);
++  class_addMethod(oldClass, newSEL,
++                  class_getMethodImplementation(newClass, newSEL), nil);
++  class_addMethod(oldClass, oldSEL,
++                  class_getMethodImplementation(newClass, defaultSEL), nil);
+ 
+   Method oldMethod = class_getInstanceMethod(oldClass, oldSEL);
+-  assert(oldMethod);
+   Method newMethod = class_getInstanceMethod(oldClass, newSEL);
+-  assert(newMethod);
+-  method_exchangeImplementations(oldMethod, newMethod);
++
++  if (oldMethod && newMethod) {
++    method_exchangeImplementations(oldMethod, newMethod);
++  }
+ }
+ 
+ - (BOOL)zpnsHookedApplication:(UIApplication *)application
+     didFinishLaunchingWithOptions:(NSDictionary *)dic {
+   [[ZPNsUtils getInstance]
+-      writeCustomLog:@"calling zpnsHookedApplicationDidFinishLaunchingWithOptions"
++      writeCustomLog:
++          @"calling zpnsHookedApplicationDidFinishLaunchingWithOptions"
+           moduleName:@""];
+   [[RCTZPNsEventManager sharedInstance] registerZPNsEventDelegate];
+   [self zpnsHookedApplication:application didFinishLaunchingWithOptions:dic];
+@@ -62,10 +87,10 @@ - (BOOL)zpnsHookedApplication:(UIApplication *)application
+ 
+ - (void)zpnsHookedApplication:(UIApplication *)application
+     didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+-  [[ZPNsUtils getInstance]
+-      writeCustomLog:
+-          @"calling zpnsHookedApplicationDidRegisterForRemoteNotificationsWithDeviceToken"
+-          moduleName:@""];
++  [[ZPNsUtils getInstance] writeCustomLog:@"calling "
++                                          @"zpnsHookedApplicationDidRegisterFor"
++                                          @"RemoteNotificationsWithDeviceToken"
++                               moduleName:@""];
+   [[RCTZPNsEventManager sharedInstance] registerDeviceToken:deviceToken];
+   [self zpnsHookedApplication:application
+       didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
+@@ -73,22 +98,25 @@ - (void)zpnsHookedApplication:(UIApplication *)application
+ 
+ - (void)zpnsHookedApplication:(UIApplication *)application
+     didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+-  [[ZPNsUtils getInstance]
+-      writeCustomLog:
+-          @"calling zpnsHookedApplicationDidFailToRegisterForRemoteNotificationsWithError"
+-          moduleName:@""];
++  [[ZPNsUtils getInstance] writeCustomLog:@"calling "
++                                          @"zpnsHookedApplicationDidFailToRegis"
++                                          @"terForRemoteNotificationsWithError"
++                               moduleName:@""];
+   [[RCTZPNsEventManager sharedInstance] handleZPNsRegisterFailEvent:error];
+-  [self zpnsHookedApplication:application didFailToRegisterForRemoteNotificationsWithError:error];
++  [self zpnsHookedApplication:application
++      didFailToRegisterForRemoteNotificationsWithError:error];
+ }
+ 
+ - (void)zpnsHookedApplication:(UIApplication *)application
+     didReceiveRemoteNotification:(NSDictionary *)userInfo
+-          fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
++          fetchCompletionHandler:(void (^)(NSUInteger))completionHandler {
+   [[ZPNsUtils getInstance]
+-      writeCustomLog:@"calling zpnsHookedApplicationDidReceiveRemoteNotification"
++      writeCustomLog:
++          @"calling zpnsHookedApplicationDidReceiveRemoteNotification"
+           moduleName:@""];
+-  [[RCTZPNsEventManager sharedInstance] handleThroughMessageReceivedEvent:userInfo
+-                                                   fetchCompletionHandler:completionHandler];
++  [[RCTZPNsEventManager sharedInstance]
++      handleThroughMessageReceivedEvent:userInfo
++                 fetchCompletionHandler:completionHandler];
+   [self zpnsHookedApplication:application
+       didReceiveRemoteNotification:userInfo
+             fetchCompletionHandler:completionHandler];
+@@ -106,7 +134,7 @@ - (void)defaultApplication:(UIApplication *)application
+ }
+ - (void)defaultApplication:(UIApplication *)application
+     didReceiveRemoteNotification:(NSDictionary *)userInfo
+-          fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
++          fetchCompletionHandler:(void (^)(NSUInteger))completionHandler {
+ }
+ 
+ @end
