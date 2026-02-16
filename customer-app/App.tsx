@@ -92,7 +92,8 @@ import {
   Ghost,
   ThumbsDown,
   Meh,
-  Sparkles
+  Sparkles,
+  ImagePlay
 } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 import * as Notifications from 'expo-notifications';
@@ -2632,6 +2633,23 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
+  const [totalUnread, setTotalUnread] = useState(0);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db, 'direct_chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(doc => {
+        count += (doc.data()[`unreadCount_${user.uid}`] || 0);
+      });
+      setTotalUnread(count);
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   const handleReact = async (work: any, type: string) => {
     if (!user) return;
@@ -3142,6 +3160,23 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
               }}>
                 {tr('MESSAGES', 'الرسائل', 'MESSAGES')}
               </Text>
+              {totalUnread > 0 && (
+                <View style={{
+                  position: 'absolute',
+                  top: -5,
+                  right: 5,
+                  backgroundColor: colors.accent,
+                  borderRadius: 8,
+                  width: 16,
+                  height: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: theme === 'dark' ? '#000' : '#FFF'
+                }}>
+                  <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -3751,7 +3786,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                       <ChevronLeft size={18} color={colors.accent} />
                       <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>{tr('RETOUR', 'رجوع', 'BACK')}</Text>
                     </TouchableOpacity>
-                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} />
+                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} currentUserData={profileData} />
                   </View>
                 ) : (
                   <DirectInboxView
@@ -11721,7 +11756,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
 }
 
 
-function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
+function DirectChatView({ user, targetUser, theme, colors, t, language, currentUserData }: any) {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -11782,10 +11817,12 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
 
     try {
       const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
+      const senderName = currentUserData?.fullName || currentUserData?.displayName || user.displayName || 'User';
+
       await addDoc(messagesRef, {
         text: text,
         senderId: user.uid,
-        senderName: user.displayName || 'User',
+        senderName: senderName,
         timestamp: serverTimestamp(),
         read: false
       });
@@ -11796,8 +11833,8 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
         lastMessageTime: serverTimestamp(),
         participants: [user.uid, targetUser.uid],
         participantData: {
-          [user.uid]: { name: user.displayName || 'User', photo: user.photoURL || null },
-          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || null }
+          [user.uid]: { name: senderName, photo: currentUserData?.photoURL || currentUserData?.avatarUrl || user.photoURL || null },
+          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || targetUser.avatarUrl || null }
         },
         [`unreadCount_${targetUser.uid}`]: increment(1)
       }, { merge: true });
@@ -11806,7 +11843,7 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
       if (targetUser.expoPushToken) {
         sendPushNotification(
           targetUser.expoPushToken,
-          `Message de ${user.displayName || 'User'}`,
+          `Message de ${senderName}`,
           text
         );
       }
@@ -11836,9 +11873,10 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
       const cloudinaryUrl = await uploadImageToCloudinary(uri);
 
       const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
+      const senderName = currentUserData?.fullName || currentUserData?.displayName || user.displayName || 'User';
       const messageData: any = {
         senderId: user.uid,
-        senderName: user.displayName || 'User',
+        senderName: senderName,
         timestamp: serverTimestamp(),
         read: false
       };
@@ -11853,8 +11891,21 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
         lastMessage: isVideo ? 'Vidéo 📹' : 'Image 📸',
         lastMessageTime: serverTimestamp(),
         participants: [user.uid, targetUser.uid],
+        participantData: {
+          [user.uid]: { name: senderName, photo: currentUserData?.photoURL || currentUserData?.avatarUrl || user.photoURL || null },
+          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || targetUser.avatarUrl || null }
+        },
         [`unreadCount_${targetUser.uid}`]: increment(1)
       }, { merge: true });
+
+      // Notify target user
+      if (targetUser.expoPushToken) {
+        sendPushNotification(
+          targetUser.expoPushToken,
+          `Message de ${senderName}`,
+          isVideo ? 'Vidéo 📹' : 'Image 📸'
+        );
+      }
 
     } catch (error) {
       console.error('DM media upload error:', error);
@@ -11866,8 +11917,8 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       style={{ height: 500, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}
     >
       <ScrollView
@@ -11958,7 +12009,13 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
         borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
       }}>
         <TouchableOpacity onPress={pickMedia} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-          {uploading ? <ActivityIndicator size="small" color={colors.accent} /> : <ImageIcon size={18} color={colors.textMuted} />}
+          {uploading ? (
+            <ActivityIndicator size="small" color={colors.accent} />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <ImagePlay size={20} color={colors.textMuted} />
+            </View>
+          )}
         </TouchableOpacity>
         <TextInput
           style={{ flex: 1, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, color: colors.foreground, fontSize: 14, maxHeight: 80 }}
@@ -11966,6 +12023,11 @@ function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
+          onFocus={() => {
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 300);
+          }}
           multiline
         />
         <TouchableOpacity
@@ -12168,7 +12230,7 @@ function DirectInboxView({ user, theme, colors, t, tr, onSelectChat }: any) {
                 <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{chat.lastMessage}</Text>
               </View>
               {chat[`unreadCount_${user.uid}`] > 0 && (
-                <View style={{ backgroundColor: colors.accent, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <View style={{ backgroundColor: '#FF3B30', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
                   <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{chat[`unreadCount_${user.uid}`]}</Text>
                 </View>
               )}

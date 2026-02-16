@@ -11,7 +11,7 @@ import {
     StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, ChevronLeft, User, MessageCircle, Image as ImageIcon, Camera, X } from 'lucide-react-native';
+import { Send, ChevronLeft, User, MessageCircle, Image as ImageIcon, Camera, X, Video as VideoIcon, ImagePlay } from 'lucide-react-native';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { Image, Modal } from 'react-native';
@@ -395,7 +395,9 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                         {uploading ? (
                             <ActivityIndicator size="small" color={colors.accent} />
                         ) : (
-                            <ImageIcon size={20} color={colors.textMuted} />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                <ImagePlay size={20} color={colors.textMuted} />
+                            </View>
                         )}
                     </TouchableOpacity>
 
