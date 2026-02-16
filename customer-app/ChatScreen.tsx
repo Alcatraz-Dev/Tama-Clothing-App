@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image, Modal } from 'react-native';
 import { db } from './src/api/firebase';
 import { getDocs, where, getDoc, doc } from 'firebase/firestore';
+import { Video, ResizeMode } from 'expo-av';
 
 async function sendPushNotification(expoPushToken: string, title: string, body: string, data = {}) {
     if (!expoPushToken) return;
@@ -50,6 +51,7 @@ interface Message {
     id: string;
     text?: string;
     imageUrl?: string;
+    videoUrl?: string;
     senderId: string;
     senderName: string;
     senderRole: 'customer' | 'support';
@@ -81,18 +83,24 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
         const messagesRef = collection(db, 'chats', chatId, 'messages');
         const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Message));
-            setMessages(msgs);
-            setLoading(false);
+        const unsubscribe = onSnapshot(q,
+            (snapshot) => {
+                const msgs = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as Message));
+                setMessages(msgs);
+                setLoading(false);
 
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        });
+                setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+            },
+            (err) => {
+                console.error("ChatScreen onSnapshot error:", err);
+                setLoading(false);
+            }
+        );
 
         return () => unsubscribe();
     }, [user?.uid, chatId]);
@@ -180,45 +188,55 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
         }
     };
 
-    const pickImage = async () => {
+    const pickMedia = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ImagePicker.MediaTypeOptions.All,
             allowsEditing: true,
             quality: 0.7,
         });
 
         if (!result.canceled && result.assets && result.assets[0].uri) {
-            handleImageUpload(result.assets[0].uri);
+            handleMediaUpload(result.assets[0].uri);
         }
     };
 
-    const handleImageUpload = async (uri: string) => {
+    const handleMediaUpload = async (uri: string) => {
         setUploading(true);
         try {
+            const fileType = uri.split('.').pop()?.toLowerCase();
+            const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
             const cloudinaryUrl = await uploadImageToCloudinary(uri);
+
             const messagesRef = collection(db, 'chats', chatId, 'messages');
-            await addDoc(messagesRef, {
-                imageUrl: cloudinaryUrl,
+            const messageData: any = {
                 senderId: user.uid,
                 senderName: user.displayName || user.email || 'Customer',
                 senderRole: 'customer',
                 timestamp: serverTimestamp(),
                 read: false
-            });
+            };
+
+            if (isVideo) {
+                messageData.videoUrl = cloudinaryUrl;
+            } else {
+                messageData.imageUrl = cloudinaryUrl;
+            }
+
+            await addDoc(messagesRef, messageData);
 
             const { setDoc, doc, increment } = await import('firebase/firestore');
             const chatDocRef = doc(db, 'chats', chatId);
             await setDoc(chatDocRef, {
-                lastMessage: 'Sent an image',
+                lastMessage: isVideo ? 'Sent a video 📹' : 'Sent an image 📸',
                 lastMessageTime: serverTimestamp(),
                 unreadCount: increment(1)
             }, { merge: true });
 
-            await notifyAdmins('Sent an image 📸');
+            await notifyAdmins(isVideo ? 'Sent a video 📹' : 'Sent an image 📸');
 
         } catch (error) {
-            console.error('Error uploading image:', error);
-            alert('Failed to upload image');
+            console.error('Error uploading media:', error);
+            alert('Failed to upload media');
         } finally {
             setUploading(false);
         }
@@ -257,6 +275,16 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                         <TouchableOpacity onPress={() => setFullScreenImage(message.imageUrl || null)} activeOpacity={0.9}>
                             <Image source={{ uri: message.imageUrl }} style={styles.messageImage} />
                         </TouchableOpacity>
+                    ) : message.videoUrl ? (
+                        <View style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, overflow: 'hidden', backgroundColor: '#000' }}>
+                            <Video
+                                source={{ uri: message.videoUrl }}
+                                style={{ width: '100%', height: '100%' }}
+                                useNativeControls
+                                resizeMode={ResizeMode.COVER}
+                                isLooping
+                            />
+                        </View>
                     ) : (
                         <Text
                             style={[
@@ -361,7 +389,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                 }]}>
                     <TouchableOpacity
                         style={[styles.uploadButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', width: 44, height: 44, borderRadius: 22 }]}
-                        onPress={pickImage}
+                        onPress={pickMedia}
                         disabled={uploading}
                     >
                         {uploading ? (
@@ -416,7 +444,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                         {sending ? (
                             <ActivityIndicator size="small" color="white" />
                         ) : (
-                            <Send size={18} color="white" />
+                            <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />
                         )}
                     </TouchableOpacity>
                 </View>

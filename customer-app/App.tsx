@@ -2627,10 +2627,11 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [followedList, setFollowedList] = useState<any[]>([]);
   const [showEmail, setShowEmail] = useState(false);
   const [liveChannels, setLiveChannels] = useState<string[]>([]);
-  const [profileTab, setProfileTab] = useState('Menu'); // 'Menu' or 'Works'
+  const [profileTab, setProfileTab] = useState('Menu'); // 'Menu', 'Works' or 'Messages'
   const [works, setWorks] = useState<any[]>([]);
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
+  const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
 
   const handleReact = async (work: any, type: string) => {
     if (!user) return;
@@ -3051,7 +3052,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{displayName.toUpperCase()}</Text>
               {profileData?.kycStatus === 'approved' && (
-                <ShieldCheck size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} />
+                <ShieldCheck style={{ marginBottom: 20 }} size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} />
               )}
             </View>
             <TouchableOpacity onPress={() => setShowEmail(!showEmail)}>
@@ -3119,13 +3120,36 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                 {t('works').toUpperCase()}
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setProfileTab('Messages')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: profileTab === 'Messages' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
+              }}
+            >
+              <MessageCircle size={16} color={profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
+                letterSpacing: 0.5
+              }}>
+                {tr('MESSAGES', 'الرسائل', 'MESSAGES')}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Tab Content Section (Child Index 3) */}
         <Animatable.View animation="fadeInUp" duration={800} delay={200} style={{ paddingHorizontal: 15 }}>
 
-          {profileTab === 'Menu' ? (
+          {profileTab === 'Menu' && (
             <View>
               {isOwnProfile && followedList.length > 0 && (
                 <View style={{ marginTop: 10, marginBottom: 25 }}>
@@ -3497,7 +3521,9 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                 </View>
               )}
             </View>
-          ) : (
+          )}
+
+          {profileTab === 'Works' && (
             <View style={{ marginTop: 20, paddingHorizontal: 15, paddingBottom: 100 }}>
               {isOwnProfile && (
                 <View style={{ marginBottom: 25 }}>
@@ -3582,7 +3608,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                       activeOpacity={0.9}
                       onPress={() => setSelectedWork(work)}
                       style={{
-                        width: (width - 50) / 3,
+                        width: (width - 70) / 2,
                         aspectRatio: 3 / 4,
                         backgroundColor: colors.border,
                         borderRadius: 16,
@@ -3702,6 +3728,47 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                     </TouchableOpacity>
                   ))}
                 </View>
+              )}
+            </View>
+          )}
+
+          {profileTab === 'Messages' && (
+            <View style={{ marginBottom: 20 }}>
+              {isOwnProfile ? (
+                selectedChatUser ? (
+                  <View>
+                    <TouchableOpacity
+                      onPress={() => setSelectedChatUser(null)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 15,
+                        gap: 8,
+                        paddingHorizontal: 5,
+                        marginTop: 5
+                      }}
+                    >
+                      <ChevronLeft size={18} color={colors.accent} />
+                      <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>{tr('RETOUR', 'رجوع', 'BACK')}</Text>
+                    </TouchableOpacity>
+                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} />
+                  </View>
+                ) : (
+                  <DirectInboxView
+                    user={user}
+                    theme={theme}
+                    colors={colors}
+                    t={t}
+                    onSelectChat={async (chat: any, otherId: string) => {
+                      const userDoc = await getDoc(doc(db, 'users', otherId));
+                      if (userDoc.exists()) {
+                        setSelectedChatUser({ uid: otherId, ...userDoc.data() });
+                      }
+                    }}
+                  />
+                )
+              ) : (
+                <DirectChatView user={user} targetUser={profileData} theme={theme} colors={colors} t={t} language={language} />
               )}
             </View>
           )}
@@ -11280,22 +11347,28 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
     const messagesRef = collection(db, 'chats', chatId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs);
-      setLoading(false);
+    const unsubscribe = onSnapshot(q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMessages(msgs);
+        setLoading(false);
 
-      snapshot.docs.forEach(async (mDoc) => {
-        const data = mDoc.data();
-        if (data.senderRole === 'customer' && !data.read) {
-          try {
-            await updateDoc(doc(db, 'chats', chatId, 'messages', mDoc.id), { read: true });
-          } catch (e) { }
-        }
-      });
+        snapshot.docs.forEach(async (mDoc) => {
+          const data = mDoc.data();
+          if (data.senderRole === 'customer' && !data.read) {
+            try {
+              await updateDoc(doc(db, 'chats', chatId, 'messages', mDoc.id), { read: true });
+            } catch (e) { }
+          }
+        });
 
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-    });
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      },
+      (err) => {
+        console.error("AdminSupportChat Error:", err);
+        setLoading(false);
+      }
+    );
 
     return () => {
       unsubscribe();
@@ -11351,34 +11424,44 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
     }
   };
 
-  const pickImage = async () => {
+  const pickMedia = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       quality: 0.7,
     });
     if (!result.canceled && result.assets && result.assets[0].uri) {
-      handleImageUpload(result.assets[0].uri);
+      handleMediaUpload(result.assets[0].uri);
     }
   };
 
-  const handleImageUpload = async (uri: string) => {
+  const handleMediaUpload = async (uri: string) => {
     setUploading(true);
     try {
+      const fileType = uri.split('.').pop()?.toLowerCase();
+      const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
       const cloudinaryUrl = await uploadImageToCloudinary(uri);
+
       const messagesRef = collection(db, 'chats', chatId, 'messages');
-      await addDoc(messagesRef, {
-        imageUrl: cloudinaryUrl,
+      const messageData: any = {
         senderId: user.uid,
         senderName: 'Support',
         senderRole: 'support',
         timestamp: serverTimestamp(),
         read: false
-      });
+      };
+
+      if (isVideo) {
+        messageData.videoUrl = cloudinaryUrl;
+      } else {
+        messageData.imageUrl = cloudinaryUrl;
+      }
+
+      await addDoc(messagesRef, messageData);
 
       const chatDocRef = doc(db, 'chats', chatId);
       await updateDoc(chatDocRef, {
-        lastMessage: 'Sent an image',
+        lastMessage: isVideo ? 'Sent a video 📹' : 'Sent an image 📸',
         lastMessageTime: serverTimestamp(),
         unreadCount: 0,
         status: 'open'
@@ -11389,14 +11472,14 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
         if (userDoc.exists() && userDoc.data().expoPushToken) {
           sendPushNotification(
             userDoc.data().expoPushToken,
-            'Support sent an image',
-            'View the message in support chat'
+            'New message from Support',
+            isVideo ? 'Support sent a video' : 'Support sent an image'
           );
         }
       }
     } catch (error) {
-      console.error('Admin image upload error:', error);
-      alert('Failed to upload image');
+      console.error('Admin media upload error:', error);
+      alert('Failed to upload media');
     } finally {
       setUploading(false);
     }
@@ -11508,8 +11591,18 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
 
                 {m.imageUrl ? (
                   <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
-                    <Image source={{ uri: m.imageUrl }} style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2 }} resizeMode="cover" />
+                    <Image source={{ uri: m.imageUrl }} style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} resizeMode="cover" />
                   </TouchableOpacity>
+                ) : m.videoUrl ? (
+                  <View style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, overflow: 'hidden', backgroundColor: '#000' }}>
+                    <Video
+                      source={{ uri: m.videoUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      useNativeControls
+                      resizeMode={ResizeMode.COVER}
+                      isLooping
+                    />
+                  </View>
                 ) : (
                   <Text style={{
                     color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground,
@@ -11557,7 +11650,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
           alignItems: 'center'
         }}>
           <TouchableOpacity
-            onPress={pickImage}
+            onPress={pickMedia}
             disabled={uploading}
             activeOpacity={0.7}
             style={{
@@ -11618,7 +11711,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
               elevation: inputText.trim() ? 4 : 0
             }}
           >
-            {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color="white" />}
+            {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -11626,3 +11719,313 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
   );
 }
 
+
+function DirectChatView({ user, targetUser, theme, colors, t, language }: any) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const chatId = [user?.uid, targetUser?.uid].sort().join('_');
+
+  useEffect(() => {
+    if (!chatId || !user?.uid) return;
+
+    const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+
+    const unsubscribe = onSnapshot(q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMessages(msgs);
+        setLoading(false);
+
+        // Mark unread messages as read
+        snapshot.docs.forEach(async (mDoc) => {
+          const data = mDoc.data();
+          if (data.senderId !== user.uid && !data.read) {
+            try {
+              await updateDoc(doc(db, 'direct_chats', chatId, 'messages', mDoc.id), { read: true });
+            } catch (e) { }
+          }
+        });
+
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      },
+      (err) => {
+        console.error("DirectChatView Error:", err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [chatId, user?.uid]);
+
+  const sendMessage = async () => {
+    if (!inputText.trim() || !user?.uid || !targetUser?.uid) return;
+    setSending(true);
+    const text = inputText.trim();
+    setInputText('');
+
+    try {
+      const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
+      await addDoc(messagesRef, {
+        text: text,
+        senderId: user.uid,
+        senderName: user.displayName || 'User',
+        timestamp: serverTimestamp(),
+        read: false
+      });
+
+      const chatDocRef = doc(db, 'direct_chats', chatId);
+      await setDoc(chatDocRef, {
+        lastMessage: text,
+        lastMessageTime: serverTimestamp(),
+        participants: [user.uid, targetUser.uid],
+        participantData: {
+          [user.uid]: { name: user.displayName || 'User', photo: user.photoURL || null },
+          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || null }
+        },
+        [`unreadCount_${targetUser.uid}`]: increment(1)
+      }, { merge: true });
+
+      // Notify target user
+      if (targetUser.expoPushToken) {
+        sendPushNotification(
+          targetUser.expoPushToken,
+          `Message de ${user.displayName || 'User'}`,
+          text
+        );
+      }
+    } catch (e) {
+      console.error('Error sending DM:', e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const pickMedia = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets && result.assets[0].uri) {
+      handleMediaUpload(result.assets[0].uri);
+    }
+  };
+
+  const handleMediaUpload = async (uri: string) => {
+    setUploading(true);
+    try {
+      const fileType = uri.split('.').pop()?.toLowerCase();
+      const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
+      const cloudinaryUrl = await uploadImageToCloudinary(uri);
+
+      const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
+      const messageData: any = {
+        senderId: user.uid,
+        senderName: user.displayName || 'User',
+        timestamp: serverTimestamp(),
+        read: false
+      };
+
+      if (isVideo) messageData.videoUrl = cloudinaryUrl;
+      else messageData.imageUrl = cloudinaryUrl;
+
+      await addDoc(messagesRef, messageData);
+
+      const chatDocRef = doc(db, 'direct_chats', chatId);
+      await setDoc(chatDocRef, {
+        lastMessage: isVideo ? 'Vidéo 📹' : 'Image 📸',
+        lastMessageTime: serverTimestamp(),
+        participants: [user.uid, targetUser.uid],
+        [`unreadCount_${targetUser.uid}`]: increment(1)
+      }, { merge: true });
+
+    } catch (error) {
+      console.error('DM media upload error:', error);
+      alert('Failed to upload media');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <View style={{ height: 500, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}>
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
+        ) : messages.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 100, paddingHorizontal: 40 }}>
+            <MessageCircle size={40} color={colors.textMuted} strokeWidth={1.5} />
+            <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 15, fontSize: 13, fontWeight: '600' }}>
+              Dites bonjour à {targetUser.fullName || targetUser.displayName || 'votre ami'} !
+            </Text>
+          </View>
+        ) : messages.map((m: any) => {
+          const isOwn = m.senderId === user.uid;
+          return (
+            <View key={m.id} style={{
+              alignSelf: isOwn ? 'flex-end' : 'flex-start',
+              backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderRadius: 20,
+              maxWidth: '85%',
+              marginBottom: 8,
+              borderBottomRightRadius: isOwn ? 4 : 20,
+              borderBottomLeftRadius: isOwn ? 20 : 4,
+              borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
+              borderColor: '#F2F2F7',
+            }}>
+              {m.imageUrl ? (
+                <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
+                  <Image source={{ uri: m.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
+                </TouchableOpacity>
+              ) : m.videoUrl ? (
+                <View style={{ width: 200, height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
+                  <Video source={{ uri: m.videoUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
+                </View>
+              ) : (
+                <Text style={{ color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 14 }}>{m.text}</Text>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      <View style={{
+        flexDirection: 'row',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: theme === 'dark' ? '#121218' : '#FFF',
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
+      }}>
+        <TouchableOpacity onPress={pickMedia} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+          {uploading ? <ActivityIndicator size="small" color={colors.accent} /> : <ImageIcon size={18} color={colors.textMuted} />}
+        </TouchableOpacity>
+        <TextInput
+          style={{ flex: 1, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, color: colors.foreground, fontSize: 14, maxHeight: 80 }}
+          placeholder="Écrire..."
+          placeholderTextColor={colors.textMuted}
+          value={inputText}
+          onChangeText={setInputText}
+          multiline
+        />
+        <TouchableOpacity
+          onPress={sendMessage}
+          disabled={!inputText.trim() || sending}
+          style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'), alignItems: 'center', justifyContent: 'center' }}
+        >
+          {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={16} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={!!fullScreenImage} transparent onRequestClose={() => setFullScreenImage(null)}>
+        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
+          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setFullScreenImage(null)}><X size={30} color="white" /></TouchableOpacity>
+          {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function DirectInboxView({ user, theme, colors, t, onSelectChat }: any) {
+  const [chats, setChats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    // Removing server-side orderBy to fix indexing blocker, sorting client-side instead
+    const q = query(
+      collection(db, 'direct_chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+    const unsubscribe = onSnapshot(q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Client-side sort to ensure immediate functionality
+        const sorted = msgs.sort((a: any, b: any) => {
+          const timeA = a.lastMessageTime?.toMillis?.() || a.lastMessageTime || 0;
+          const timeB = b.lastMessageTime?.toMillis?.() || b.lastMessageTime || 0;
+          return timeB - timeA;
+        });
+        setChats(sorted);
+        setLoading(false);
+        setError(null);
+      },
+      (error) => {
+        console.error("DirectInboxView Firestore Error:", error);
+        setError(error.message);
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  if (loading) return (
+    <View style={{ marginTop: 40, alignItems: 'center' }}>
+      <ActivityIndicator color={colors.accent} />
+      <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 10 }}>Chargement des messages...</Text>
+    </View>
+  );
+
+  if (error) return (
+    <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 40 }}>
+      <Shield size={40} color={colors.error} strokeWidth={1.5} />
+      <Text style={{ color: colors.foreground, marginTop: 15, fontWeight: '800', textAlign: 'center' }}>Configuration requise</Text>
+      <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 12, textAlign: 'center' }}>
+        L'index Firestore est en cours de création. Cela peut prendre 2 à 5 minutes.
+      </Text>
+    </View>
+  );
+
+  if (chats.length === 0) return (
+    <View style={{ alignItems: 'center', marginTop: 60, opacity: 0.5 }}>
+      <MessageCircle size={50} color={colors.textMuted} strokeWidth={1} />
+      <Text style={{ color: colors.textMuted, marginTop: 15, fontWeight: '600' }}>Aucun message pour l'instant</Text>
+    </View>
+  );
+
+  return (
+    <View style={{ marginTop: 10 }}>
+      {chats.map(chat => {
+        const otherId = chat.participants.find((id: string) => id !== user.uid);
+        const otherData = chat.participantData?.[otherId] || { name: 'Ami' };
+        return (
+          <TouchableOpacity
+            key={chat.id}
+            onPress={() => onSelectChat(chat, otherId)}
+            style={{ flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : '#FFF', borderRadius: 18, marginBottom: 10, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7' }}
+          >
+            <View style={{ width: 45, height: 45, borderRadius: 22.5, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#FFF', fontWeight: '800' }}>{otherData.name[0]?.toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1, marginLeft: 15 }}>
+              <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{otherData.name}</Text>
+              <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{chat.lastMessage}</Text>
+            </View>
+            {chat[`unreadCount_${user.uid}`] > 0 && (
+              <View style={{ backgroundColor: colors.accent, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{chat[`unreadCount_${user.uid}`]}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
