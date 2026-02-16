@@ -28,9 +28,10 @@ interface WalletScreenProps {
     profileData: any;
     user: any;
     language: string;
+    onNavigate?: (screen: string, params?: any) => void;
 }
 
-export default function WalletScreen({ onBack, theme, t, profileData, user, language }: WalletScreenProps) {
+export default function WalletScreen({ onBack, theme, t, profileData, user, language, onNavigate }: WalletScreenProps) {
     const isDark = theme === 'dark';
     const colors = isDark ? Theme.dark.colors : Theme.light.colors;
     const insets = useSafeAreaInsets();
@@ -1143,11 +1144,18 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 30 }}>
                                         <TouchableOpacity
                                             style={[styles.profileActionBtn, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.05)' }]}
-                                            onPress={() => setShowTargetProfile(!showTargetProfile)}
+                                            onPress={() => {
+                                                if (onNavigate) {
+                                                    onNavigate('PublicProfile', selectedUserForTransfer);
+                                                    setShowTransferModal(false);
+                                                } else {
+                                                    setShowTargetProfile(!showTargetProfile);
+                                                }
+                                            }}
                                         >
                                             <User size={18} color="#3B82F6" />
                                             <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6', marginLeft: 8 }}>
-                                                {showTargetProfile ? tr('Hide Profile', 'Masquer Profil', 'إخفاء الملف') : tr('Show Profile', 'Voir Profil', 'عرض الملف')}
+                                                {tr('View Profile', 'Voir Profil', 'عرض الملف')}
                                             </Text>
                                         </TouchableOpacity>
 

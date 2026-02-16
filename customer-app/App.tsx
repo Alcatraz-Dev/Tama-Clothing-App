@@ -58,18 +58,21 @@ import {
   TrendingUp,
   Camera,
   CheckCircle2,
+  LayoutGrid,
+  Play,
+  Zap,
+  Globe,
+  Instagram,
+  Facebook,
+  MessageCircle,
+  Video as VideoIcon,
   Star,
   Mail,
   Phone,
   Calendar,
-  Zap,
   Clock,
   Ticket,
   Handshake,
-  Facebook,
-  Instagram,
-  MessageCircle,
-  Globe,
   Edit,
   Bell,
   Sliders,
@@ -81,7 +84,15 @@ import {
   ScanFace,
   Lock,
   Wallet,
-  Coins
+  Coins,
+  Trash,
+  Flame,
+  Laugh,
+  Frown,
+  Ghost,
+  ThumbsDown,
+  Meh,
+  Sparkles
 } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 import * as Notifications from 'expo-notifications';
@@ -234,18 +245,22 @@ const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing'; // Using the user's custom pre
 const uploadImageToCloudinary = async (uri: string) => {
   if (!uri || uri.startsWith('http')) return uri;
 
+  const fileType = uri.split('.').pop()?.toLowerCase();
+  const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
+  const resourceType = isVideo ? 'video' : 'image';
+
   try {
     const formData = new FormData();
     // @ts-ignore - React Native FormData require uri, type, name
     formData.append('file', {
       uri: uri,
-      type: 'image/jpeg',
-      name: 'upload.jpg',
+      type: isVideo ? 'video/mp4' : 'image/jpeg',
+      name: isVideo ? 'upload.mp4' : 'upload.jpg',
     });
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
       {
         method: 'POST',
         body: formData,
@@ -299,6 +314,7 @@ const Translations: any = {
     trendingNow: 'TENDANCES', exploreTrends: 'EXPLORER TENDANCES', ourSelection: 'NOTRE SÉLECTION',
     filtersSort: 'Filtres & Tri', sortBy: 'Trier par', newest: 'Nouveautés',
     priceLowHigh: 'Prix croissant', priceHighLow: 'Prix décroissant',
+    uploadComplete: 'Téléchargement réussi !', uploadFailed: 'Échec du téléchargement',
     colors: 'Couleurs', sizes: 'Tailles',
     checkout: 'COMMANDER', subtotal: 'Sous-total', total: 'Total', promoPlaceholder: 'Code Promo',
     apply: 'Appliquer', delivery: 'Livraison', orderDetails: 'Détails Commande', noOrders: 'AUCUNE COMMANDE',
@@ -890,6 +906,8 @@ const Translations: any = {
     dropCoupon: 'إرسال كوبون',
     discountAmount: 'قيمة الخصم',
     expiryMinutes: 'الدقائق الصالحة',
+    uploadComplete: 'تم التحميل بنجاح!',
+    uploadFailed: 'فشل التحميل',
     claimCoupon: 'احصل عليه',
     couponDropped: 'تم تفعيل الكوبون!',
     couponEnded: 'انتهت صلاحية الكوبون',
@@ -963,6 +981,7 @@ export default function App() {
   const [isLiveHost, setIsLiveHost] = useState(false);
   const [isLiveReplay, setIsLiveReplay] = useState(false);
   const [replayUrl, setReplayUrl] = useState('');
+  const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
 
   // Sync global legacy Colors with state
   Colors = getAppColors(theme);
@@ -1464,12 +1483,20 @@ export default function App() {
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
       case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} />;
+      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
       case 'Settings': return <SettingsScreen onBack={() => setActiveTab('Profile')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(screen: string) => setActiveTab(screen)} t={t} user={user} />;
       case 'KYC': return <KYCScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} updateProfile={updateProfileData} theme={theme} t={t} language={language} />;
-      case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} />;
+      case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} onNavigate={(screen, params) => {
+        if (screen === 'PublicProfile') {
+          setTargetUserProfile(params);
+          setActiveTab('PublicProfile');
+        } else {
+          setActiveTab(screen);
+        }
+      }} />;
       case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} />;
       case 'PrivacyPolicy': return <PrivacyPolicyScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'TermsOfService': return <TermsOfServiceScreen onBack={() => setActiveTab('Settings')} t={t} />;
@@ -2585,6 +2612,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const displayName = profileData?.fullName || user?.displayName || 'USER';
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  const tr = (fr: string, ar: string, en: string) => {
+    return language === 'ar' ? ar : (language === 'fr' ? fr : en);
+  };
+
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 50],
     outputRange: [0, 1],
@@ -2596,6 +2627,51 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [followedList, setFollowedList] = useState<any[]>([]);
   const [showEmail, setShowEmail] = useState(false);
   const [liveChannels, setLiveChannels] = useState<string[]>([]);
+  const [profileTab, setProfileTab] = useState('Menu'); // 'Menu' or 'Works'
+  const [works, setWorks] = useState<any[]>([]);
+  const [uploadingWork, setUploadingWork] = useState(false);
+  const [selectedWork, setSelectedWork] = useState<any>(null);
+
+  const handleReact = async (work: any, type: string) => {
+    if (!user) return;
+    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!targetUid) return;
+
+    const workRef = doc(db, 'users', targetUid, 'works', work.id);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const docSnap = await transaction.get(workRef);
+        if (!docSnap.exists()) return;
+
+        const data = docSnap.data();
+        const currentReactions = data.reactions || {};
+        const userReactions = data.userReactions || {};
+
+        const prevType = userReactions[user.uid];
+
+        if (prevType === type) {
+          delete userReactions[user.uid];
+          currentReactions[type] = Math.max(0, (currentReactions[type] || 0) - 1);
+        } else {
+          if (prevType) {
+            currentReactions[prevType] = Math.max(0, (currentReactions[prevType] || 0) - 1);
+          }
+          userReactions[user.uid] = type;
+          currentReactions[type] = (currentReactions[type] || 0) + 1;
+        }
+
+        transaction.update(workRef, {
+          reactions: currentReactions,
+          userReactions: userReactions
+        });
+      });
+    } catch (e) {
+      console.error('Reaction Error', e);
+    }
+  };
+
+  const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
   const isBrandOwner = profileData?.role === 'brand_owner' || (profileData?.role === 'admin' && profileData?.brandId);
 
   useEffect(() => {
@@ -2604,6 +2680,66 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
       fetchBrandInfo();
     }
   }, [profileData]);
+
+  useEffect(() => {
+    // Determine the target UID: try profileData.uid, profileData.id, or fallback to auth user if it's our own profile
+    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!targetUid) return;
+
+    const q = query(collection(db, 'users', targetUid, 'works'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setWorks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error('Error listening to works', err);
+    });
+
+    return () => unsubscribe();
+  }, [profileData, isOwnProfile, user?.uid]);
+
+  useEffect(() => {
+    if (selectedWork) {
+      const updated = works.find(w => w.id === selectedWork.id);
+      if (updated) setSelectedWork(updated);
+    }
+  }, [works, selectedWork]);
+
+  const getTotalReactions = (work: any) => {
+    if (!work.reactions) return 0;
+    return Object.values(work.reactions).reduce((a: any, b: any) => a + b, 0);
+  };
+
+  const handleUploadWork = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setUploadingWork(true);
+        const asset = result.assets[0];
+        const isVid = asset.type === 'video';
+        const url = await uploadImageToCloudinary(asset.uri);
+
+        await addDoc(collection(db, 'users', user.uid, 'works'), {
+          type: isVid ? 'video' : 'image',
+          url,
+          createdAt: serverTimestamp(),
+        });
+
+        Alert.alert(
+          tr('SUCCÈS', 'نجاح', 'SUCCESS'),
+          tr('Téléchargement réussi !', 'تم التحميل بنجاح!', 'Upload completed successfully!')
+        );
+      }
+    } catch (e) {
+      console.error('Upload Error', e);
+      Alert.alert(t('error'), t('uploadFailed') || 'Upload failed');
+    } finally {
+      setUploadingWork(false);
+    }
+  };
 
   useEffect(() => {
     fetchFollowedCollabs();
@@ -2784,6 +2920,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
+        stickyHeaderIndices={[2]}
       >
         <View style={{ height: height * 0.55, width: '100%' }}>
           {profileData?.avatarUrl ? (
@@ -2908,12 +3045,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
           )}
         </View>
 
-        <Animatable.View animation="fadeInUp" duration={800} style={[styles.campaignContent, { marginTop: -40, borderTopLeftRadius: 40, borderTopRightRadius: 40, backgroundColor: colors.background, paddingTop: 40 }]}>
+        {/* Profile Info Section (Child Index 1) */}
+        <Animatable.View animation="fadeInUp" duration={800} style={[styles.campaignContent, { marginTop: -40, borderTopLeftRadius: 40, borderTopRightRadius: 40, backgroundColor: colors.background, paddingTop: 40, paddingBottom: 0, minHeight: 0 }]}>
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{displayName.toUpperCase()}</Text>
               {profileData?.kycStatus === 'approved' && (
-                <ShieldCheck size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} style={{ marginBottom: 16 }} />
+                <ShieldCheck size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} />
               )}
             </View>
             <TouchableOpacity onPress={() => setShowEmail(!showEmail)}>
@@ -2922,379 +3060,779 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
               </Text>
             </TouchableOpacity>
           </View>
+        </Animatable.View>
 
-          {followedList.length > 0 && (
-            <View style={{ marginTop: 10, marginBottom: 25 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 5, marginBottom: 15 }}>
-                <Text style={[styles.menuSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>{t('follow').toUpperCase()}</Text>
-                <TouchableOpacity onPress={() => setActiveTab('FollowManagement')}>
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: colors.accent, letterSpacing: 0.5 }}>{t('viewAll').toUpperCase()}</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12, paddingHorizontal: 5 }}
-              >
-                {followedList.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => {
-                      setSelectedCollab(item);
-                      setActiveTab('CollabDetail');
-                    }}
-                    style={{ alignItems: 'center', width: 70 }}
-                  >
-                    <View style={{ position: 'relative' }}>
-                      <Animatable.View
-                        animation={(liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) ? "pulse" : undefined}
-                        iterationCount="infinite"
-                        style={{
-                          width: 58,
-                          height: 58,
-                          borderRadius: 29,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderWidth: 2,
-                          borderColor: (liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) ? '#EF4444' : 'transparent'
-                        }}
-                      >
-                        <Image
-                          source={item.imageUrl ? { uri: item.imageUrl } : APP_ICON}
-                          style={{
-                            width: 50,
-                            height: 50,
-                            borderRadius: 25,
-                            backgroundColor: colors.border,
-                            borderWidth: 1.5,
-                            borderColor: colors.background
-                          }}
-                        />
-                      </Animatable.View>
-                      {(liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) && (
-                        <Animatable.View
-                          animation="bounceIn"
-                          style={{
-                            position: 'absolute',
-                            bottom: -4,
-                            alignSelf: 'center',
-                            backgroundColor: '#EF4444',
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 6,
-                            borderWidth: 1.5,
-                            borderColor: colors.background,
-                            shadowColor: '#EF4444',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 4,
-                            zIndex: 10
-                          }}
-                        >
-                          <Text style={{ fontSize: 7, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 }}>{t('enDirect') || 'EN DIRECT'}</Text>
-                        </Animatable.View>
-                      )}
-                      <View style={{
-                        position: 'absolute',
-                        top: -2,
-                        right: 2,
-                        backgroundColor: item.type === 'Brand' ? '#FFD700' : item.type === 'Person' ? '#A855F7' : item.type === 'Company' ? '#3B82F6' : '#22C55E',
-                        borderRadius: 10,
-                        width: 18,
-                        height: 18,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 2,
-                        borderColor: colors.background
-                      }}>
-                        <CheckCircle2 size={10} color={theme === 'dark' ? '#000' : '#FFF'} />
-                      </View>
-                    </View>
-                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '800', color: colors.foreground, marginTop: 8, textAlign: 'center' }}>
-                      {getName(item.name)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          <View style={[styles.campaignDivider, { marginTop: 10, marginBottom: 25, backgroundColor: colors.border, height: 1, width: '100%' }]} />
-
-          {/* Start Live Floating Card - Premium UI */}
-          {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
+        {/* Sticky Tab Switcher (Child Index 2) */}
+        <View style={{ backgroundColor: colors.background }}>
+          <View style={{
+            flexDirection: 'row',
+            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+            borderRadius: 16,
+            padding: 4,
+            marginTop: 10,
+            marginHorizontal: 15,
+            marginBottom: 10
+          }}>
             <TouchableOpacity
-              onPress={() => onStartLive && onStartLive(brandInfo)}
-              activeOpacity={0.9}
+              onPress={() => setProfileTab('Menu')}
               style={{
-                marginHorizontal: 0,
-                marginTop: 0,
-                marginBottom: 35,
-                borderRadius: 24,
-                overflow: 'hidden',
-                elevation: 10,
-                shadowColor: '#EF4444',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.3,
-                shadowRadius: 15,
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: profileTab === 'Menu' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
               }}
             >
-              <LinearGradient
-                colors={['#EF4444', '#DC2626', '#B91C1C']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  padding: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  <View style={{
-                    width: 48,
-                    height: 48,
+              <LayoutGrid size={16} color={profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
+                letterSpacing: 0.5
+              }}>
+                {tr('MENU', 'القائمة', 'MENU')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setProfileTab('Works')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: profileTab === 'Works' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
+              }}
+            >
+              <Camera size={16} color={profileTab === 'Works' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: profileTab === 'Works' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
+                letterSpacing: 0.5
+              }}>
+                {t('works').toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Tab Content Section (Child Index 3) */}
+        <Animatable.View animation="fadeInUp" duration={800} delay={200} style={{ paddingHorizontal: 15 }}>
+
+          {profileTab === 'Menu' ? (
+            <View>
+              {isOwnProfile && followedList.length > 0 && (
+                <View style={{ marginTop: 10, marginBottom: 25 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 5, marginBottom: 15 }}>
+                    <Text style={[styles.menuSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>{t('follow').toUpperCase()}</Text>
+                    <TouchableOpacity onPress={() => setActiveTab('FollowManagement')}>
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: colors.accent, letterSpacing: 0.5 }}>{t('viewAll').toUpperCase()}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 12, paddingHorizontal: 5 }}
+                  >
+                    {followedList.map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => {
+                          setSelectedCollab(item);
+                          setActiveTab('CollabDetail');
+                        }}
+                        style={{ alignItems: 'center', width: 70 }}
+                      >
+                        <View style={{ position: 'relative' }}>
+                          <Animatable.View
+                            animation={(liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) ? "pulse" : undefined}
+                            iterationCount="infinite"
+                            style={{
+                              width: 58,
+                              height: 58,
+                              borderRadius: 29,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: 2,
+                              borderColor: (liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) ? '#EF4444' : 'transparent'
+                            }}
+                          >
+                            <Image
+                              source={item.imageUrl ? { uri: item.imageUrl } : APP_ICON}
+                              style={{
+                                width: 50,
+                                height: 50,
+                                borderRadius: 25,
+                                backgroundColor: colors.border,
+                                borderWidth: 1.5,
+                                borderColor: colors.background
+                              }}
+                            />
+                          </Animatable.View>
+                          {(liveChannels.includes(item.id) || (item.brandId && liveChannels.includes(item.brandId))) && (
+                            <Animatable.View
+                              animation="bounceIn"
+                              style={{
+                                position: 'absolute',
+                                bottom: -4,
+                                alignSelf: 'center',
+                                backgroundColor: '#EF4444',
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                borderWidth: 1.5,
+                                borderColor: colors.background,
+                                shadowColor: '#EF4444',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 4,
+                                zIndex: 10
+                              }}
+                            >
+                              <Text style={{ fontSize: 7, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 }}>{t('enDirect') || 'EN DIRECT'}</Text>
+                            </Animatable.View>
+                          )}
+                          <View style={{
+                            position: 'absolute',
+                            top: -2,
+                            right: 2,
+                            backgroundColor: item.type === 'Brand' ? '#FFD700' : item.type === 'Person' ? '#A855F7' : item.type === 'Company' ? '#3B82F6' : '#22C55E',
+                            borderRadius: 10,
+                            width: 18,
+                            height: 18,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 2,
+                            borderColor: colors.background
+                          }}>
+                            <CheckCircle2 size={10} color={theme === 'dark' ? '#000' : '#FFF'} />
+                          </View>
+                        </View>
+                        <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '800', color: colors.foreground, marginTop: 8, textAlign: 'center' }}>
+                          {getName(item.name)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              <View style={[styles.campaignDivider, { marginTop: 10, marginBottom: 25, backgroundColor: colors.border, height: 1, width: '100%' }]} />
+
+              {/* Start Live Floating Card - Premium UI */}
+              {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
+                <TouchableOpacity
+                  onPress={() => onStartLive && onStartLive(brandInfo)}
+                  activeOpacity={0.9}
+                  style={{
+                    marginHorizontal: 0,
+                    marginTop: 0,
+                    marginBottom: 35,
                     borderRadius: 24,
-                    backgroundColor: 'rgba(255,255,255,0.2)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.3)'
-                  }}>
-                    <Camera size={22} color="#FFF" strokeWidth={2.5} />
-                  </View>
-                  <View>
-                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 2 }}>
-                      {t('broadcastCenter')}
-                    </Text>
-                    <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
-                      {t('startLiveSession')}
-                    </Text>
-                  </View>
-                </View>
-                <View style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: 'rgba(0,0,0,0.15)',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <ChevronRight size={18} color="#FFF" strokeWidth={3} />
-                </View>
-
-                {/* Subtle Decorative Glow */}
-                <View style={{
-                  position: 'absolute',
-                  top: -20,
-                  right: -20,
-                  width: 100,
-                  height: 100,
-                  borderRadius: 50,
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                }} />
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-
-          <View style={{ gap: 8 }}>
-            <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
-            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Package size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('orderHistory')}</Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-
-            {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
-              <TouchableOpacity
-                style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
-                onPress={() => setActiveTab('LiveAnalytics')}
-              >
-                <View style={styles.menuRowLeft}>
-                  <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                    <TrendingUp size={20} color={colors.foreground} strokeWidth={2} />
-                  </View>
-                  <Text style={[styles.menuRowText, { color: colors.foreground }]}>
-                    {t('liveAnalytics')}
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Wishlist')}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Heart size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('savedItems')}</Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-
-            <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
-              {language === 'ar' ? 'المالية' : (language === 'fr' ? 'FINANCE' : 'FINANCE')}
-            </Text>
-
-            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Wallet')}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Wallet size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>
-                  {language === 'ar' ? 'المحفظة' : (language === 'fr' ? 'Portefeuille' : 'My Wallet')}
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '600' }}>
-                  {profileData?.wallet?.coins ? profileData.wallet.coins.toLocaleString() : 0}
-                </Text>
-                <Coins size={14} color="#F59E0B" fill="#F59E0B" />
-                <ChevronRight size={18} color={colors.textMuted} />
-              </View>
-            </TouchableOpacity>
-
-
-            <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
-              {language === 'ar' ? 'الأمان' : (language === 'fr' ? 'SÉCURITÉ' : 'SECURITY')}
-            </Text>
-
-            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('KYC')}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                  <ShieldCheck size={20} color={profileData?.kycStatus === 'approved' ? colors.success : (profileData?.kycStatus === 'pending' ? colors.warning : colors.foreground)} strokeWidth={2} />
-                </View>
-                <View>
-                  <Text style={[styles.menuRowText, { color: colors.foreground }]}>
-                    {language === 'ar' ? 'تأكيد الهوية' : (language === 'fr' ? "Vérification d'identité" : 'Identity Verification')}
-                  </Text>
-                  {profileData?.kycStatus && (
-                    <Text style={{ fontSize: 10, color: profileData.kycStatus === 'approved' ? colors.success : colors.warning, fontWeight: '700', marginTop: 2 }}>
-                      {profileData.kycStatus === 'approved' ? (language === 'ar' ? 'تم التحقق' : 'VERIFIED') : (language === 'ar' ? 'قيد المراجعة' : 'PENDING')}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-
-            <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('preferences')}</Text>
-
-            <View style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Globe size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('language')}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {(['fr', 'ar'] as const).map((l: 'fr' | 'ar') => (
-                  <TouchableOpacity
-                    key={l}
-                    onPress={() => {
-                      setLanguage(l);
-                      Alert.alert(t('languageSelect') || 'Language Changed', l === 'fr' ? 'Français sélectionné' : 'تم اختيار اللغة العربية');
-                    }}
+                    overflow: 'hidden',
+                    elevation: 10,
+                    shadowColor: '#EF4444',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 15,
+                  }}
+                >
+                  <LinearGradient
+                    colors={['#EF4444', '#DC2626', '#B91C1C']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 12,
-                      backgroundColor: language === l ? colors.foreground : (theme === 'dark' ? '#000' : '#F2F2F7')
+                      padding: 20,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
                     }}
                   >
-                    <Text style={{
-                      fontSize: 11,
-                      fontWeight: '900',
-                      color: language === l ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                      <View style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.3)'
+                      }}>
+                        <Camera size={22} color="#FFF" strokeWidth={2.5} />
+                      </View>
+                      <View>
+                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 2 }}>
+                          {t('broadcastCenter')}
+                        </Text>
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
+                          {t('startLiveSession')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: 'rgba(0,0,0,0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}>
-                      {l === 'ar' ? 'TN' : l.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                      <ChevronRight size={18} color="#FFF" strokeWidth={3} />
+                    </View>
 
-            {/* Dark Mode Toggle */}
-            <View style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Zap size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('darkMode')}</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                style={[styles.customSwitch, theme === 'dark' && { backgroundColor: colors.foreground }]}
-              >
-                <View style={[styles.switchDot, theme === 'dark' && [styles.switchDotActive, { backgroundColor: theme === 'dark' ? '#000' : '#FFF' }]]} />
-              </TouchableOpacity>
-            </View>
+                    {/* Subtle Decorative Glow */}
+                    <View style={{
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                    }} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
 
-            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Settings')}>
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Settings size={20} color={colors.foreground} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('settings')}</Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-
-            {['admin', 'editor', 'viewer'].includes(profileData?.role) && (
-              <>
-                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('access')}</Text>
-                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('AdminMenu')}>
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
                   <View style={styles.menuRowLeft}>
-                    <View style={[styles.iconCircle, { backgroundColor: colors.foreground }]}><Shield size={20} color={theme === 'dark' ? '#000' : '#FFF'} strokeWidth={2} /></View>
-                    <Text style={[styles.menuRowText, { fontWeight: '900', color: colors.foreground }]}>{t('adminDash')}</Text>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Package size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('orderHistory')}</Text>
                   </View>
                   <ChevronRight size={18} color={colors.textMuted} />
                 </TouchableOpacity>
-              </>
-            )}
 
-            <TouchableOpacity
-              style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, marginTop: 5 }]}
-              onPress={onLogout}
-            >
-              <View style={styles.menuRowLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? 'rgba(255,69,58,0.15)' : '#FFE0E0' }]}><LogOut size={20} color={colors.error} strokeWidth={2} /></View>
-                <Text style={[styles.menuRowText, { color: colors.error, fontWeight: '800' }]}>{t('logout')}</Text>
-              </View>
-              {/* <ChevronRight size={18} color={colors.textMuted} /> */}
-            </TouchableOpacity>
-          </View>
+                {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
+                  <TouchableOpacity
+                    style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                    onPress={() => setActiveTab('LiveAnalytics')}
+                  >
+                    <View style={styles.menuRowLeft}>
+                      <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                        <TrendingUp size={20} color={colors.foreground} strokeWidth={2} />
+                      </View>
+                      <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                        {t('liveAnalytics')}
+                      </Text>
+                    </View>
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
 
-          {socialLinks && (
-            <View style={{ marginTop: 20, alignItems: 'center', paddingBottom: 80 }}>
-              <Text style={[styles.menuSectionLabel, { marginBottom: 25, textAlign: 'center', color: colors.textMuted }]}>{t('community')}</Text>
-              <View style={{ flexDirection: 'row', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
-                {Object.entries(socialLinks).map(([key, url]: any) => {
-                  // Only show if URL exists, is a string, and is not empty. Also ignore website here.
-                  if (!url || typeof url !== 'string' || url.trim() === '' || key === 'website' || key === 'updatedAt') return null;
-
-                  let Icon = Globe;
-                  if (key === 'instagram') Icon = Instagram;
-                  if (key === 'facebook') Icon = Facebook;
-                  if (key === 'whatsapp') Icon = MessageCircle;
-                  if (key === 'tiktok') Icon = Globe; // Fallback for TikTok as standard Lucide lacks it
-                  if (key === 'youtube') Icon = TrendingUp; // Using TrendingUp as a decent fallback for YouTube
-
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      style={[styles.socialCircle, { backgroundColor: theme === 'dark' ? '#1c1c1e' : 'white', elevation: 2, shadowOpacity: 0.1, borderColor: colors.border }]}
-                      onPress={() => Linking.openURL(key === 'whatsapp' ? `https://wa.me/${url.replace(/[^0-9]/g, '')}` : url)}
-                    >
-                      <Icon size={22} color={colors.foreground} strokeWidth={1.5} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {socialLinks.website && typeof socialLinks.website === 'string' && socialLinks.website.trim() !== '' && (
-                <TouchableOpacity onPress={() => Linking.openURL(socialLinks.website)} style={{ marginTop: 30 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.5 }}>
-                    {socialLinks.website.replace('https://', '').replace('http://', '').toUpperCase()}
-                  </Text>
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Wishlist')}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Heart size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('savedItems')}</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
                 </TouchableOpacity>
+
+                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+                  {language === 'ar' ? 'المالية' : (language === 'fr' ? 'FINANCE' : 'FINANCE')}
+                </Text>
+
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Wallet')}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Wallet size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                      {language === 'ar' ? 'المحفظة' : (language === 'fr' ? 'Portefeuille' : 'My Wallet')}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '600' }}>
+                      {profileData?.wallet?.coins ? profileData.wallet.coins.toLocaleString() : 0}
+                    </Text>
+                    <Coins size={14} color="#F59E0B" fill="#F59E0B" />
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </View>
+                </TouchableOpacity>
+
+
+                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+                  {language === 'ar' ? 'الأمان' : (language === 'fr' ? 'SÉCURITÉ' : 'SECURITY')}
+                </Text>
+
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('KYC')}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                      <ShieldCheck size={20} color={profileData?.kycStatus === 'approved' ? colors.success : (profileData?.kycStatus === 'pending' ? colors.warning : colors.foreground)} strokeWidth={2} />
+                    </View>
+                    <View>
+                      <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                        {language === 'ar' ? 'تأكيد الهوية' : (language === 'fr' ? "Vérification d'identité" : 'Identity Verification')}
+                      </Text>
+                      {profileData?.kycStatus && (
+                        <Text style={{ fontSize: 10, color: profileData.kycStatus === 'approved' ? colors.success : colors.warning, fontWeight: '700', marginTop: 2 }}>
+                          {profileData.kycStatus === 'approved' ? (language === 'ar' ? 'تم التحقق' : 'VERIFIED') : (language === 'ar' ? 'قيد المراجعة' : 'PENDING')}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
+                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('preferences')}</Text>
+
+                <View style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Globe size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('language')}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['fr', 'ar'] as const).map((l: 'fr' | 'ar') => (
+                      <TouchableOpacity
+                        key={l}
+                        onPress={() => {
+                          setLanguage(l);
+                          Alert.alert(t('languageSelect') || 'Language Changed', l === 'fr' ? 'Français sélectionné' : 'تم اختيار اللغة العربية');
+                        }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 12,
+                          backgroundColor: language === l ? colors.foreground : (theme === 'dark' ? '#000' : '#F2F2F7')
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '900',
+                          color: language === l ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted
+                        }}>
+                          {l === 'ar' ? 'TN' : l.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Dark Mode Toggle */}
+                <View style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Zap size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('darkMode')}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                    style={[styles.customSwitch, theme === 'dark' && { backgroundColor: colors.foreground }]}
+                  >
+                    <View style={[styles.switchDot, theme === 'dark' && [styles.switchDotActive, { backgroundColor: theme === 'dark' ? '#000' : '#FFF' }]]} />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Settings')}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Settings size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('settings')}</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
+                {['admin', 'editor', 'viewer'].includes(profileData?.role) && (
+                  <>
+                    <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('access')}</Text>
+                    <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('AdminMenu')}>
+                      <View style={styles.menuRowLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: colors.foreground }]}><Shield size={20} color={theme === 'dark' ? '#000' : '#FFF'} strokeWidth={2} /></View>
+                        <Text style={[styles.menuRowText, { fontWeight: '900', color: colors.foreground }]}>{t('adminDash')}</Text>
+                      </View>
+                      <ChevronRight size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border, marginTop: 5 }]}
+                  onPress={onLogout}
+                >
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? 'rgba(255,69,58,0.15)' : '#FFE0E0' }]}><LogOut size={20} color={colors.error} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.error, fontWeight: '800' }]}>{t('logout')}</Text>
+                  </View>
+                  {/* <ChevronRight size={18} color={colors.textMuted} /> */}
+                </TouchableOpacity>
+              </View>
+
+              {socialLinks && (
+                <View style={{ marginTop: 20, alignItems: 'center', paddingBottom: 80 }}>
+                  <Text style={[styles.menuSectionLabel, { marginBottom: 25, textAlign: 'center', color: colors.textMuted }]}>{t('community')}</Text>
+                  <View style={{ flexDirection: 'row', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    {Object.entries(socialLinks).map(([key, url]: any) => {
+                      if (!url || typeof url !== 'string' || url.trim() === '' || key === 'website' || key === 'updatedAt') return null;
+
+                      let Icon = Globe;
+                      if (key === 'instagram') Icon = Instagram;
+                      if (key === 'facebook') Icon = Facebook;
+                      if (key === 'whatsapp') Icon = MessageCircle;
+                      if (key === 'tiktok') Icon = Globe;
+                      if (key === 'youtube') Icon = TrendingUp;
+
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.socialCircle, { backgroundColor: theme === 'dark' ? '#1c1c1e' : 'white', elevation: 2, shadowOpacity: 0.1, borderColor: colors.border }]}
+                          onPress={() => Linking.openURL(key === 'whatsapp' ? `https://wa.me/${url.replace(/[^0-9]/g, '')}` : url)}
+                        >
+                          <Icon size={22} color={colors.foreground} strokeWidth={1.5} />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {socialLinks.website && typeof socialLinks.website === 'string' && socialLinks.website.trim() !== '' && (
+                    <TouchableOpacity onPress={() => Linking.openURL(socialLinks.website)} style={{ marginTop: 30 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 1.5 }}>
+                        {socialLinks.website.replace('https://', '').replace('http://', '').toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={{ marginTop: 20, paddingHorizontal: 15, paddingBottom: 100 }}>
+              {isOwnProfile && (
+                <View style={{ marginBottom: 25 }}>
+                  <TouchableOpacity
+                    onPress={handleUploadWork}
+                    disabled={uploadingWork}
+                    activeOpacity={0.8}
+                    style={{
+                      height: 160,
+                      borderRadius: 24,
+                      backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 2,
+                      borderStyle: 'dashed',
+                      borderColor: colors.border,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {uploadingWork ? (
+                      <View style={{ alignItems: 'center' }}>
+                        <ActivityIndicator color={colors.foreground} size="large" />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted, marginTop: 15 }}>
+                          {tr('Envoi en cours...', 'جاري التحميل...', 'Uploading your work...')}
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        <View style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 28,
+                          backgroundColor: colors.background,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: 15,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 8,
+                          elevation: 4
+                        }}>
+                          <Plus size={28} color={colors.foreground} strokeWidth={2.5} />
+                        </View>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: colors.foreground, marginBottom: 4 }}>
+                          {tr('Ajouter un travail', 'إضافة عمل جديد', 'Add New Work')}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+                          {tr('Vidéo ou Photo', 'فيديو أو صورة', 'Upload Video or Photo')}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {works.length === 0 ? (
+                <View style={{ alignItems: 'center', marginTop: 30 }}>
+                  <View style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 20
+                  }}>
+                    <ImageIcon size={32} color={colors.border} strokeWidth={1.5} />
+                  </View>
+                  <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>
+                    {tr('Aucun travail partagé pour le moment', 'لا توجد أعمال مشاركة بعد', 'No works shared yet')}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 }}>
+                    {tr('Partagez votre parcours créatif avec la communauté', 'شارك رحلتك الإبداعية مع المجتمع', 'Share your creative journey with the community')}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {works.map((work) => (
+                    <TouchableOpacity
+                      key={work.id}
+                      activeOpacity={0.9}
+                      onPress={() => setSelectedWork(work)}
+                      style={{
+                        width: (width - 50) / 3,
+                        aspectRatio: 3 / 4,
+                        backgroundColor: colors.border,
+                        borderRadius: 16,
+                        overflow: 'hidden',
+                        elevation: 3,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 4
+                      }}
+                    >
+                      {work.type === 'video' ? (
+                        <View style={{ flex: 1 }}>
+                          <Video
+                            source={{ uri: work.url }}
+                            style={{ flex: 1 }}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={false}
+                          />
+                          <View style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            padding: 4,
+                            borderRadius: 8
+                          }}>
+                            <VideoIcon size={12} color="white" />
+                          </View>
+                          <View style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -12, marginTop: -12 }}>
+                            <Play size={24} color="rgba(255,255,255,0.8)" fill="rgba(255,255,255,0.5)" />
+                          </View>
+                        </View>
+                      ) : (
+                        <Image source={{ uri: work.url }} style={{ flex: 1 }} />
+                      )}
+
+                      {isOwnProfile && (
+                        <TouchableOpacity
+                          onPress={async () => {
+                            Alert.alert(
+                              tr('Supprimer le travail', 'حذف العمل', 'Delete Work'),
+                              tr('Voulez-vous vraiment supprimer ce travail ?', 'هل أنت متأكد أنك تريد حذف هذا العمل؟', 'Are you sure you want to delete this work?'),
+                              [
+                                { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' },
+                                {
+                                  text: tr('Supprimer', 'حذف', 'Delete'),
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    try {
+                                      await deleteDoc(doc(db, 'users', user.uid, 'works', work.id));
+                                    } catch (e) {
+                                      console.error('Error deleting work', e);
+                                    }
+                                  }
+                                }
+                              ]
+                            );
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: 'rgba(255,255,255,0.9)',
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 10
+                          }}
+                        >
+                          <Trash size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Reaction Counts on Thumbnail */}
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 6,
+                        left: 6,
+                        right: 6,
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        gap: 4
+                      }}>
+                        {[
+                          { type: 'love', Icon: Heart, color: '#FF4D67' },
+                          { type: 'fire', Icon: Flame, color: '#FF8A00' },
+                          { type: 'haha', Icon: Laugh, color: '#FFD600' },
+                          { type: 'bad', Icon: ThumbsDown, color: '#94A3B8' },
+                          { type: 'ugly', Icon: Ghost, color: '#818CF8' },
+                          { type: 'interesting', Icon: Sparkles, color: '#A855F7' }
+                        ].map((r) => {
+                          const count = work.reactions?.[r.type] || 0;
+                          if (count === 0) return null;
+                          return (
+                            <View key={r.type} style={{
+                              backgroundColor: 'rgba(0,0,0,0.6)',
+                              paddingHorizontal: 6,
+                              paddingVertical: 3,
+                              borderRadius: 8,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                              borderWidth: 0.5,
+                              borderColor: 'rgba(255,255,255,0.1)'
+                            }}>
+                              <r.Icon size={10} color={r.color} fill="transparent" strokeWidth={2.5} />
+                              <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>
+                                {count}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
             </View>
           )}
         </Animatable.View>
       </Animated.ScrollView>
+
+      {/* Media Detail Modal (Full Screen) */}
+      <Modal
+        visible={!!selectedWork}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedWork(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'black' }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            {/* Header */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+              paddingTop: 10,
+              zIndex: 10
+            }}>
+              <TouchableOpacity
+                onPress={() => setSelectedWork(null)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={24} color="white" />
+              </TouchableOpacity>
+
+              <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
+                {selectedWork?.type === 'video' ? tr('VIDÉO', 'فيديو', 'VIDEO') : tr('PHOTO', 'صورة', 'PHOTO')}
+              </Text>
+
+              <View style={{ width: 44 }} />
+            </View>
+
+            {/* Media Content */}
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              {selectedWork?.type === 'video' ? (
+                <Video
+                  source={{ uri: selectedWork.url }}
+                  style={{ width: width, height: height * 0.7 }}
+                  resizeMode={ResizeMode.CONTAIN}
+                  shouldPlay={true}
+                  isLooping={true}
+                  useNativeControls
+                />
+              ) : (
+                <Image
+                  source={{ uri: selectedWork?.url }}
+                  style={{ width: width, height: height * 0.7 }}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
+
+            {/* Reaction Bar */}
+            <Animatable.View animation="fadeInUp" duration={500} style={{
+              paddingBottom: 50,
+              paddingHorizontal: 20,
+              alignItems: 'center'
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 30,
+                width: width * 0.92,
+                justifyContent: 'space-between',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)'
+              }}>
+                {[
+                  { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('Amour', 'حب', 'Love') },
+                  { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('Feu', 'نار', 'Fire') },
+                  { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('Haha', 'هاها', 'Haha') },
+                  { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('Mauvais', 'سيء', 'Bad') },
+                  { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('Moche', 'بشع', 'Ugly') },
+                  { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('Intéressant', 'مشوق', 'Interesting') }
+                ].map((btn) => {
+                  const isSelected = selectedWork?.userReactions?.[user?.uid] === btn.type;
+                  const itemWidth = (width * 0.92 - 24) / 6;
+                  return (
+                    <TouchableOpacity
+                      key={btn.type}
+                      onPress={() => handleReact(selectedWork, btn.type)}
+                      activeOpacity={0.7}
+                      style={{ alignItems: 'center', width: itemWidth }}
+                    >
+                      <View style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 2,
+                        borderColor: btn.color,
+                        marginBottom: 6
+                      }}>
+                        <btn.Icon
+                          size={22}
+                          color={btn.color}
+                          fill="transparent"
+                          strokeWidth={isSelected ? 3 : 1.5}
+                        />
+                      </View>
+                      <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 7, fontWeight: '700', marginBottom: 1 }} numberOfLines={1}>
+                        {btn.label}
+                      </Text>
+                      <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>
+                        {selectedWork?.reactions?.[btn.type] || 0}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            </Animatable.View>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </View>
   );
 }
