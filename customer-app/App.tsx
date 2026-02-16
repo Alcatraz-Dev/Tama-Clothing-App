@@ -3168,7 +3168,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                     {language === 'ar' ? 'تأكيد الهوية' : (language === 'fr' ? "Vérification d'identité" : 'Identity Verification')}
                   </Text>
                   {profileData?.kycStatus && (
-                    <Text style={{ fontSize: 10, color: profileData.kycStatus === 'approved' ? colors.success : colors.warning, fontWeight: '700', marginLeft: 12, marginTop: 2 }}>
+                    <Text style={{ fontSize: 10, color: profileData.kycStatus === 'approved' ? colors.success : colors.warning, fontWeight: '700', marginTop: 2 }}>
                       {profileData.kycStatus === 'approved' ? (language === 'ar' ? 'تم التحقق' : 'VERIFIED') : (language === 'ar' ? 'قيد المراجعة' : 'PENDING')}
                     </Text>
                   )}

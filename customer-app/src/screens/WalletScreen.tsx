@@ -585,7 +585,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             <View style={styles.sectionContainer}>
                 <View style={[styles.infoBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
                     <Text style={{ color: colors.foreground, fontSize: 13, textAlign: 'center' }}>
-                        {tr('Diamonds are earned from gifts received during live streams. You can withdraw them as cash or exchange them for Coins.', 'Les diamants sont gagnés grâce aux cadeaux reçus lors des directs. Vous pouvez les retirer en espèces ou les échanger contre des pièces.', 'يتم كسب الألماس من الهدايا المستلمة أثناء البث المباشر. يمكنك سحبها نقدًا أو استبدالها بعملات.')}
+                        {tr('Diamonds are earned from gifts received during live streams. You can withdraw them as cash (Min 50 TND) or exchange them for Coins.', 'Les diamants sont gagnés grâce aux cadeaux reçus lors des directs. Vous pouvez les retirer en espèces (Min 50 TND) ou les échanger contre des pièces.', 'يتم كسب الألماس من الهدايا المستلمة أثناء البث المباشر. يمكنك سحبها نقدًا (50 د.ت كحد أدنى) أو استبدالها بعملات.')}
                     </Text>
                 </View>
 
@@ -597,44 +597,58 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             borderWidth: 1.5,
                             borderColor: 'rgba(16, 185, 129, 0.3)'
                         }]}
-                        onPress={() => Alert.alert(
-                            tr('Confirm Withdrawal', 'Confirmer le Retrait', 'تأكيد السحب'),
-                            tr(
-                                `Do you want to request a withdrawal for ${tndValue} TND?`,
-                                `Voulez-vous demander un retrait de ${tndValue} TND ?`,
-                                `هل تريد طلب سحب بقيمة ${tndValue} دينار؟`
-                            ),
-                            [
-                                { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
-                                {
-                                    text: tr('Request', 'Demander', 'طلب'),
-                                    onPress: async () => {
-                                        setLoading(true);
-                                        try {
-                                            const userRef = doc(db, 'users', user.uid);
-                                            await setDoc(userRef, {
-                                                wallet: { diamonds: 0 }
-                                            }, { merge: true });
+                        onPress={() => {
+                            const amountTND = parseFloat(tndValue);
+                            if (amountTND < 50) {
+                                Alert.alert(
+                                    tr('Minimum Amount', 'Montant Minimum', 'المبلغ الأدنى'),
+                                    tr(
+                                        'The minimum withdrawal amount is 50.00 TND.',
+                                        'Le montant minimum de retrait est de 50,00 TND.',
+                                        'المبلغ الأدنى للسحب هو 50.00 دينار.'
+                                    )
+                                );
+                                return;
+                            }
+                            Alert.alert(
+                                tr('Confirm Withdrawal', 'Confirmer le Retrait', 'تأكيد السحب'),
+                                tr(
+                                    `Do you want to request a withdrawal for ${tndValue} TND?`,
+                                    `Voulez-vous demander un retrait de ${tndValue} TND ?`,
+                                    `هل تريد طلب سحب بقيمة ${tndValue} دينار؟`
+                                ),
+                                [
+                                    { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
+                                    {
+                                        text: tr('Request', 'Demander', 'طلب'),
+                                        onPress: async () => {
+                                            setLoading(true);
+                                            try {
+                                                const userRef = doc(db, 'users', user.uid);
+                                                await setDoc(userRef, {
+                                                    wallet: { diamonds: 0 }
+                                                }, { merge: true });
 
-                                            await addDoc(collection(db, 'users', user.uid, 'transactions'), {
-                                                type: 'withdrawal',
-                                                amountTND: parseFloat(tndValue),
-                                                amountDiamonds: diamondBalance,
-                                                description: `Withdrawal Request`,
-                                                timestamp: serverTimestamp(),
-                                                status: 'pending'
-                                            });
+                                                await addDoc(collection(db, 'users', user.uid, 'transactions'), {
+                                                    type: 'withdrawal',
+                                                    amountTND: parseFloat(tndValue),
+                                                    amountDiamonds: diamondBalance,
+                                                    description: `Withdrawal Request`,
+                                                    timestamp: serverTimestamp(),
+                                                    status: 'pending'
+                                                });
 
-                                            Alert.alert(tr('Success', 'Succès', 'نجاح'), tr('Withdrawal request sent', 'Demande de retrait envoyée', 'تم إرسال طلب السحب'));
-                                        } catch (error) {
-                                            Alert.alert('Error', 'Withdrawal request failed');
-                                        } finally {
-                                            setLoading(false);
+                                                Alert.alert(tr('Success', 'Succès', 'نجاح'), tr('Withdrawal request sent', 'Demande de retrait envoyée', 'تم إرسال طلب السحب'));
+                                            } catch (error) {
+                                                Alert.alert('Error', 'Withdrawal request failed');
+                                            } finally {
+                                                setLoading(false);
+                                            }
                                         }
                                     }
-                                }
-                            ]
-                        )}
+                                ]
+                            );
+                        }}
                     >
                         <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.2)', marginBottom: 8 }]}>
                             <ArrowUpRight size={22} color="#10B981" />
