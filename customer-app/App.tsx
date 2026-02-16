@@ -48,6 +48,7 @@ import {
   Minus,
   ShoppingCart,
   Shield,
+  ShieldCheck,
   LayoutDashboard,
   ListTree,
   FileText,
@@ -78,7 +79,9 @@ import {
   Send,
   Fingerprint,
   ScanFace,
-  Lock
+  Lock,
+  Wallet,
+  Coins
 } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 import * as Notifications from 'expo-notifications';
@@ -93,7 +96,10 @@ import LiveStreamScreen from './src/screens/LiveStreamScreen';
 import HostLiveScreen from './src/screens/HostLiveScreen';
 import AudienceLiveScreen from './src/screens/AudienceLiveScreen';
 import LiveAnalyticsScreen from './src/screens/LiveAnalyticsScreen';
+import KYCScreen from './src/screens/KYCScreen';
+import AdminKYCScreen from './src/screens/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
+import WalletScreen from './src/screens/WalletScreen';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -193,6 +199,7 @@ const getAppColors = (theme: 'light' | 'dark') => {
     error: t.error,
     secondary: t.muted,
     success: t.success,
+    warning: t.warning,
   };
 };
 
@@ -1076,48 +1083,45 @@ export default function App() {
       if (u) {
         setUser(u);
         setAppState('Main');
-        const fetchUserData = async () => {
-          let userData = null;
-          const userSnap = await getDoc(doc(db, 'users', u.uid));
-          if (userSnap.exists()) {
-            userData = userSnap.data();
-          } else if (u.email) {
-            const emailQ = query(collection(db, 'users'), where('email', '==', u.email), limit(1));
-            const emailS = await getDocs(emailQ);
-            if (!emailS.empty) {
-              userData = emailS.docs[0].data();
-              await setDoc(doc(db, 'users', u.uid), userData, { merge: true });
-            }
-          }
-          if (userData) {
+        // Listen to user data changes in real-time
+        const unsubscribeUser = onSnapshot(doc(db, 'users', u.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
             setProfileData(userData);
             if (userData.followedCollabs) setFollowedCollabs(userData.followedCollabs);
           } else if (u.email) {
-            const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User' };
+            // Initial user setup if doc doesn't exist
+            const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User', wallet: { coins: 0, diamonds: 0 } };
             setProfileData(def);
-            await setDoc(doc(db, 'users', u.uid), def, { merge: true });
+            setDoc(doc(db, 'users', u.uid), def, { merge: true });
           }
-        };
-        fetchUserData();
+        });
 
         // Cleanup any stale live sessions owned by this user
         // If the app is just starting, the user cannot be live.
-        try {
-          const sessionsQ = query(
-            collection(db, 'Live_sessions'),
-            where('hostId', '==', u.uid),
-            where('status', '==', 'live')
-          );
-          const sessionsSnap = await getDocs(sessionsQ);
-          if (!sessionsSnap.empty) {
-            console.log('Found stale live sessions, cleaning up...');
-            sessionsSnap.forEach(async (docSnap) => {
-              await updateDoc(doc(db, 'Live_sessions', docSnap.id), { status: 'ended' });
-            });
+        const cleanupSessions = async () => {
+          try {
+            const sessionsQ = query(
+              collection(db, 'Live_sessions'),
+              where('hostId', '==', u.uid),
+              where('status', '==', 'live')
+            );
+            const sessionsSnap = await getDocs(sessionsQ);
+            if (!sessionsSnap.empty) {
+              console.log('Found stale live sessions, cleaning up...');
+              for (const docSnap of sessionsSnap.docs) {
+                await updateDoc(doc(db, 'Live_sessions', docSnap.id), { status: 'ended' });
+              }
+            }
+          } catch (err) {
+            console.error('Error cleaning stale sessions:', err);
           }
-        } catch (err) {
-          console.error('Error cleaning stale sessions:', err);
-        }
+        };
+        cleanupSessions();
+
+        return () => {
+          unsubscribeUser();
+        };
       } else {
         setUser(null);
         setProfileData(null);
@@ -1428,6 +1432,8 @@ export default function App() {
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
       case 'Settings': return <SettingsScreen onBack={() => setActiveTab('Profile')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(screen: string) => setActiveTab(screen)} t={t} user={user} />;
+      case 'KYC': return <KYCScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} updateProfile={updateProfileData} theme={theme} t={t} language={language} />;
+      case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} />;
       case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} />;
       case 'PrivacyPolicy': return <PrivacyPolicyScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'TermsOfService': return <TermsOfServiceScreen onBack={() => setActiveTab('Settings')} t={t} />;
@@ -1463,6 +1469,7 @@ export default function App() {
       case 'AdminCoupons': return <AdminCouponsScreen onBack={() => setActiveTab('AdminMenu')} t={t} language={language} />;
       case 'AdminSettings': return <AdminSettingsScreen onBack={() => setActiveTab('AdminMenu')} user={user} t={t} />;
       case 'AdminNotifications': return <AdminNotificationsScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
+      case 'AdminKYC': return <AdminKYCScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
       case 'AdminSupportList': return <AdminSupportListScreen onBack={() => setActiveTab('AdminMenu')} onChatPress={(chatId: string, customerName: string) => {
         setSelectedAdminChat({ chatId, customerName });
         setActiveTab('AdminSupportChat');
@@ -1955,7 +1962,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View style={[styles.modernHeader, {
-        backgroundColor: 'transparent',
+        backgroundColor: 'transparent', // Let the blur view handle the background
         position: 'absolute',
         top: 0,
         left: 0,
@@ -1978,7 +1985,9 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
             ) : user?.photoURL ? (
               <Image source={{ uri: user.photoURL }} style={styles.headerAvatar} />
             ) : (
-              <User size={20} color={colors.foreground} strokeWidth={2} />
+              <View style={[styles.headerAvatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.border }]}>
+                <User size={20} color={colors.foreground} strokeWidth={2} />
+              </View>
             )}
           </View>
         </TouchableOpacity>
@@ -2059,7 +2068,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
               }}
             >
               <LinearGradient
-                colors={theme === 'dark' ? ['rgba(30, 0, 0, 0.95)', 'rgba(0, 0, 0, 0.9)'] : ['rgba(255, 245, 245, 1)', 'rgba(255, 255, 255, 1)']}
+                colors={theme === 'dark' ? ['#1A1A1A', '#000000'] : ['#FFF5F5', '#FFFFFF']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}
@@ -2696,7 +2705,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
         left: 0,
         right: 0,
         zIndex: 1000,
-        height: 64 + insets.top,
+        height: 60 + insets.top,
         paddingTop: insets.top,
         borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
         borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
@@ -2865,7 +2874,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
 
         <Animatable.View animation="fadeInUp" duration={800} style={[styles.campaignContent, { marginTop: -40, borderTopLeftRadius: 40, borderTopRightRadius: 40, backgroundColor: colors.background, paddingTop: 40 }]}>
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
-            <Text style={[styles.campaignTitle, { marginBottom: 8, color: colors.foreground }]}>{displayName.toUpperCase()}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+              <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{displayName.toUpperCase()}</Text>
+              {profileData?.kycStatus === 'approved' && (
+                <ShieldCheck size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} style={{ marginBottom: 16 }} />
+              )}
+            </View>
             <TouchableOpacity onPress={() => setShowEmail(!showEmail)}>
               <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.5 }}>
                 {showEmail ? user?.email : '••••••••@••••.•••'}
@@ -3083,6 +3097,49 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
               <ChevronRight size={18} color={colors.textMuted} />
             </TouchableOpacity>
 
+            <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+              {language === 'ar' ? 'المالية' : (language === 'fr' ? 'FINANCE' : 'FINANCE')}
+            </Text>
+
+            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Wallet')}>
+              <View style={styles.menuRowLeft}>
+                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Wallet size={20} color={colors.foreground} strokeWidth={2} /></View>
+                <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                  {language === 'ar' ? 'المحفظة' : (language === 'fr' ? 'Portefeuille' : 'My Wallet')}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '600' }}>
+                  {profileData?.wallet?.coins ? profileData.wallet.coins.toLocaleString() : 0}
+                </Text>
+                <Coins size={14} color="#F59E0B" fill="#F59E0B" />
+                <ChevronRight size={18} color={colors.textMuted} />
+              </View>
+            </TouchableOpacity>
+
+
+            <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+              {language === 'ar' ? 'الأمان' : (language === 'fr' ? 'SÉCURITÉ' : 'SECURITY')}
+            </Text>
+
+            <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('KYC')}>
+              <View style={styles.menuRowLeft}>
+                <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                  <ShieldCheck size={20} color={profileData?.kycStatus === 'approved' ? colors.success : (profileData?.kycStatus === 'pending' ? colors.warning : colors.foreground)} strokeWidth={2} />
+                </View>
+                <View>
+                  <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                    {language === 'ar' ? 'تأكيد الهوية' : (language === 'fr' ? "Vérification d'identité" : 'Identity Verification')}
+                  </Text>
+                  {profileData?.kycStatus && (
+                    <Text style={{ fontSize: 10, color: profileData.kycStatus === 'approved' ? colors.success : colors.warning, fontWeight: '700', marginLeft: 12, marginTop: 2 }}>
+                      {profileData.kycStatus === 'approved' ? (language === 'ar' ? 'تم التحقق' : 'VERIFIED') : (language === 'ar' ? 'قيد المراجعة' : 'PENDING')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </TouchableOpacity>
 
             <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('preferences')}</Text>
 
@@ -6806,6 +6863,7 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
     { label: t('flashSale').toUpperCase(), icon: Zap, route: 'AdminFlashSale', roles: ['admin'], color: '#FFCC00' },
     { label: t('promotions').toUpperCase(), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin'], color: '#FF2D55' },
     { label: t('support').toUpperCase(), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
+    { label: (t('identityVerification') || 'VERIFICATIONS').toUpperCase(), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
     { label: t('broadcast').toUpperCase(), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
     { label: t('settings').toUpperCase(), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
   ].filter(item => item.roles.includes(role));

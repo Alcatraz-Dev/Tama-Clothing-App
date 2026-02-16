@@ -5,12 +5,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users } from 'lucide-react-native';
-import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins } from 'lucide-react-native';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
 import { db } from '../api/firebase';
 import { GIFTS, Gift } from '../config/gifts';
+import { RechargeModal } from '../components/RechargeModal';
 
 
 // ✅ Expo Go detection
@@ -140,6 +141,8 @@ export default function AudienceLiveScreen(props: Props) {
     const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
     const [giftCategory, setGiftCategory] = useState<'POPULAIRE' | 'SPÉCIAL' | 'LUXE'>('POPULAIRE');
     const [userBalance, setUserBalance] = useState(0);
+    const [showRechargeModal, setShowRechargeModal] = useState(false);
+    const [hostId, setHostId] = useState<string | null>(null);
 
 
     // Pinned Product Timer State
@@ -153,7 +156,7 @@ export default function AudienceLiveScreen(props: Props) {
         if (profileData) {
             setCustomerName(prev => prev || profileData.fullName || '');
             setPhoneNumber(prev => prev || profileData.phone || '');
-            setUserBalance(profileData.points || 0);
+            setUserBalance(profileData?.wallet?.coins || 0);
 
             // For address, we might have multiple. Get the default or first one.
             if (profileData.addresses && profileData.addresses.length > 0) {
@@ -356,7 +359,15 @@ export default function AudienceLiveScreen(props: Props) {
         return false;
     };
 
-    const sendGift = (gift: any) => {
+    const sendGift = async (gift: any) => {
+        if (!userId) return;
+
+        // 1. Check Balance
+        if (userBalance < gift.points) {
+            Alert.alert(t('Insufficient Balance'), t('You need more coins to send this gift.'));
+            return;
+        }
+
         // COMBO LOGIC: Local feedback
         const current = recentGiftRef.current;
         const finalAvatar = userAvatar || profileData?.avatar || CustomBuilder.getUserAvatar(userId);
@@ -407,48 +418,93 @@ export default function AudienceLiveScreen(props: Props) {
             });
         }
 
-        // Optimistically update totalLikes with gift points
+        // Optimistically update local states
         setTotalLikes(prev => prev + (gift.points || 1));
         if (streamHostIdRef.current) {
             setHostScore(prev => prev + (gift.points || 1));
         }
+        setUserBalance(prev => prev - gift.points);
 
-        // Send Command via Signal (Zego)
-        if (ZegoUIKit) {
-            ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
-                type: 'gift',
-                senderId: userId,
-                senderAvatar: finalAvatar, // ✅ Consistent avatar
-                userName: userName,
-                giftName: gift.name,
-                points: gift.points,
-                icon: gift.icon,
-                combo: newCount, // ✅ Send Combo Count
-                timestamp: Date.now()
-            })).catch((e: any) => console.log('Gift Send Error:', e));
-        }
+        // SEND TO FIRESTORE & SIGNALING
+        try {
+            // A. Deduct Coins from Sender
+            const senderRef = doc(db, 'users', userId);
+            await setDoc(senderRef, {
+                wallet: {
+                    coins: increment(-gift.points)
+                }
+            }, { merge: true });
 
-        // Sync with Firestore (Backup & Reliability)
-        if (channelId) {
-            LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
+            // B. Add 70% of value to Host as Diamonds
+            if (streamHostIdRef.current) {
+                const hostRef = doc(db, 'users', streamHostIdRef.current);
+                const hostEarnings = Math.ceil(gift.points * 0.7); // Use ceil to ensure at least 1 diamond for points > 0
+                await setDoc(hostRef, {
+                    wallet: {
+                        diamonds: increment(hostEarnings)
+                    }
+                }, { merge: true });
 
-            // ✅ If in PK, also increment host's PK score atomically (Supports Cross-Room Sync)
-            if (isInPKRef.current && streamHostIdRef.current) {
-                LiveSessionService.incrementPKHostScore(channelId, gift.points || 1, opponentChannelIdRef.current || undefined).catch(e =>
-                    console.error('PK Host Score Increment Error:', e)
-                );
+                // Record Transaction for Host (Earnings)
+                await addDoc(collection(db, 'users', streamHostIdRef.current, 'transactions'), {
+                    type: 'gift_received',
+                    amountDiamonds: hostEarnings,
+                    giftName: gift.name,
+                    senderName: userName || 'Viewer',
+                    timestamp: serverTimestamp(),
+                    status: 'completed'
+                });
             }
 
-            LiveSessionService.broadcastGift(channelId, {
+            // Record Transaction for Sender (Spending)
+            await addDoc(collection(db, 'users', userId, 'transactions'), {
+                type: 'gift_sent',
+                amountCoins: gift.points,
                 giftName: gift.name,
-                icon: gift.icon,
-                points: gift.points || 1,
-                senderName: userName || 'Viewer',
-                senderId: userId,
-                senderAvatar: finalAvatar, // ✅ Include avatar for Host display
-                targetName: 'Host', // Target is always Host in audience view
-                combo: newCount // ✅ Send Combo Count
-            }).catch(e => console.error('Gift Broadcast Error:', e));
+                recipientName: 'Host',
+                timestamp: serverTimestamp(),
+                status: 'completed'
+            });
+
+            // Send Command via Signal (Zego)
+            if (ZegoUIKit) {
+                ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
+                    type: 'gift',
+                    senderId: userId,
+                    senderAvatar: finalAvatar,
+                    userName: userName,
+                    giftName: gift.name,
+                    points: gift.points,
+                    icon: gift.icon,
+                    combo: newCount,
+                    timestamp: Date.now()
+                })).catch((e: any) => console.log('Gift Signal Error:', e));
+            }
+
+            // Sync with Firestore (Backup & Reliability)
+            if (channelId) {
+                LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(e => console.error('Gift Score Error:', e));
+
+                if (isInPKRef.current && streamHostIdRef.current) {
+                    LiveSessionService.incrementPKHostScore(channelId, gift.points || 1, opponentChannelIdRef.current || undefined).catch(e =>
+                        console.error('PK Host Score Sync Error:', e)
+                    );
+                }
+
+                LiveSessionService.broadcastGift(channelId, {
+                    giftName: gift.name,
+                    icon: gift.icon,
+                    points: gift.points || 1,
+                    senderName: userName || 'Viewer',
+                    senderId: userId,
+                    senderAvatar: finalAvatar,
+                    targetName: 'Host',
+                    combo: newCount
+                }).catch(e => console.error('Gift Broadcast Error:', e));
+            }
+        } catch (error) {
+            console.error('Gift Processing Error:', error);
+            // Optionally revert local optimistic update on failure
         }
     };
 
@@ -1601,7 +1657,7 @@ export default function AudienceLiveScreen(props: Props) {
                                                 }}
                                             >
                                                 <LinearGradient
-                                                    colors={['rgba(60, 30, 0, 0.4)', 'rgba(60, 30, 0, 0.2)', 'rgba(251, 191, 36, 0.05)', 'transparent']}
+                                                    colors={['transparent', 'rgba(60, 30, 0, 0.4)', 'rgba(60, 30, 0, 0.2)', 'rgba(251, 191, 36, 0.05)', 'transparent']}
                                                     style={{ flex: 1 }}
                                                 />
                                             </Animatable.View>
@@ -2237,7 +2293,7 @@ export default function AudienceLiveScreen(props: Props) {
                                         <Text numberOfLines={1} style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{gift.name}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                             <Text style={{ color: isSelected ? '#fff' : '#FFD700', fontSize: 9, fontWeight: '900' }}>{gift.points}</Text>
-                                            <Text style={{ fontSize: 8, marginLeft: 2 }}>💎</Text>
+                                            <Coins size={8} color={isSelected ? '#fff' : '#FFD700'} style={{ marginLeft: 2 }} fill={isSelected ? '#fff' : '#FFD700'} />
                                         </View>
 
                                         {isSelected && (
@@ -2276,9 +2332,18 @@ export default function AudienceLiveScreen(props: Props) {
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 15, flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{userBalance}</Text>
-                                    <Text style={{ fontSize: 12, marginLeft: 4 }}>💎</Text>
-                                    <TouchableOpacity style={{ marginLeft: 6 }}>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{userBalance.toLocaleString()}</Text>
+                                    <Coins size={12} color="#F59E0B" style={{ marginLeft: 4 }} fill="#F59E0B" />
+                                    <TouchableOpacity
+                                        style={{ marginLeft: 8 }}
+                                        onPress={() => {
+                                            setShowGifts(false);
+                                            // Add a small delay to allow the gift modal to close first (fixes iOS race condition)
+                                            setTimeout(() => {
+                                                setShowRechargeModal(true);
+                                            }, 500);
+                                        }}
+                                    >
                                         <PlusCircle size={16} color="#FF0066" />
                                     </TouchableOpacity>
                                 </View>
@@ -2681,6 +2746,14 @@ export default function AudienceLiveScreen(props: Props) {
                     </Animatable.View>
                 )
             }
+            {/* Recharge Modal */}
+            <RechargeModal
+                isVisible={showRechargeModal}
+                onClose={() => setShowRechargeModal(false)}
+                userId={userId}
+                userName={userName}
+                language={props.language || 'fr'}
+            />
         </View >
     );
 }
