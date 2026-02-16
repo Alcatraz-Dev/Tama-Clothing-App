@@ -2634,6 +2634,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [selectedWork, setSelectedWork] = useState<any>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
+  const profileScrollRef = useRef<any>(null);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -2931,6 +2932,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
       </Animated.View>
 
       <Animated.ScrollView
+        ref={profileScrollRef}
         showsVerticalScrollIndicator={false}
         bounces={false}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -3786,7 +3788,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                       <ChevronLeft size={18} color={colors.accent} />
                       <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>{tr('RETOUR', 'رجوع', 'BACK')}</Text>
                     </TouchableOpacity>
-                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} currentUserData={profileData} />
+                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} currentUserData={profileData} profileScrollRef={profileScrollRef} />
                   </View>
                 ) : (
                   <DirectInboxView
@@ -11756,7 +11758,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
 }
 
 
-function DirectChatView({ user, targetUser, theme, colors, t, language, currentUserData }: any) {
+function DirectChatView({ user, targetUser, theme, colors, t, language, currentUserData, profileScrollRef }: any) {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -11919,7 +11921,7 @@ function DirectChatView({ user, targetUser, theme, colors, t, language, currentU
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      style={{ height: 500, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}
+      style={{ height: 760, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}
     >
       <ScrollView
         ref={scrollViewRef}
@@ -11997,47 +11999,83 @@ function DirectChatView({ user, targetUser, theme, colors, t, language, currentU
             </View>
           );
         })}
+        <View style={{
+          flexDirection: 'row',
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          backgroundColor: theme === 'dark' ? '#121218' : '#FFF',
+          alignItems: 'center',
+          borderTopWidth: 1,
+          borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
+        }}>
+          <TouchableOpacity onPress={pickMedia} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+            {uploading ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <ImagePlay size={20} color={colors.textMuted} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={{
+            flex: 1,
+            flexDirection: 'row',
+            backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
+            borderRadius: 25,
+            alignItems: 'center',
+            paddingHorizontal: 15,
+            marginRight: 10,
+            borderWidth: 1,
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'transparent'
+          }}>
+            <TextInput
+              style={{
+                flex: 1,
+                backgroundColor: 'transparent',
+                color: colors.foreground,
+                fontSize: 14,
+                maxHeight: 80,
+                paddingVertical: 8
+              }}
+              placeholder="Écrire..."
+              placeholderTextColor={colors.textMuted}
+              value={inputText}
+              onChangeText={setInputText}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                  profileScrollRef?.current?.scrollToEnd({ animated: true });
+                }, 100);
+              }}
+              multiline
+              maxLength={500}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={sendMessage}
+            disabled={!inputText.trim() || sending}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'),
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: inputText.trim() ? 0.3 : 0,
+              shadowRadius: 6,
+              elevation: inputText.trim() ? 4 : 0
+            }}
+          >
+            {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
-      <View style={{
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: theme === 'dark' ? '#121218' : '#FFF',
-        alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
-      }}>
-        <TouchableOpacity onPress={pickMedia} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-          {uploading ? (
-            <ActivityIndicator size="small" color={colors.accent} />
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <ImagePlay size={20} color={colors.textMuted} />
-            </View>
-          )}
-        </TouchableOpacity>
-        <TextInput
-          style={{ flex: 1, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, color: colors.foreground, fontSize: 14, maxHeight: 80 }}
-          placeholder="Écrire..."
-          placeholderTextColor={colors.textMuted}
-          value={inputText}
-          onChangeText={setInputText}
-          onFocus={() => {
-            setTimeout(() => {
-              scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 300);
-          }}
-          multiline
-        />
-        <TouchableOpacity
-          onPress={sendMessage}
-          disabled={!inputText.trim() || sending}
-          style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'), alignItems: 'center', justifyContent: 'center' }}
-        >
-          {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={16} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
-        </TouchableOpacity>
-      </View>
+
 
       <Modal visible={!!fullScreenImage} transparent onRequestClose={() => setFullScreenImage(null)}>
         <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
