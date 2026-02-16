@@ -101,17 +101,25 @@ import AdminKYCScreen from './src/screens/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo = Constants.appOwnership === 'expo';
+if (!(isExpoGo && Platform.OS === 'android')) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 async function registerForPushNotificationsAsync() {
+  const isExpoGo = Constants.appOwnership === 'expo';
+  if (isExpoGo && Platform.OS === 'android') {
+    console.warn('Push notifications (remote) are not supported in Expo Go on Android SDK 53+. Use a development build.');
+    return null;
+  }
   let token;
 
   if (Platform.OS === 'android') {
@@ -967,13 +975,15 @@ export default function App() {
       if (token) setExpoPushToken(token);
     }).catch(err => console.log('Push Token Error:', err));
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      // Handle foreground notification
-    });
+    if (!(isExpoGo && Platform.OS === 'android')) {
+      notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        // Handle foreground notification
+      });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      // Handle interaction
-    });
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        // Handle interaction
+      });
+    }
 
     return () => {
       notificationListener.current && notificationListener.current.remove();
@@ -4334,7 +4344,11 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
                 if (newValue) {
                   const permission = await registerForPushNotificationsAsync();
                   if (!permission) {
-                    Alert.alert(t('error'), t('failedToSave') || 'Could not enable notifications');
+                    const isExpoGo = Constants.appOwnership === 'expo';
+                    const message = (isExpoGo && Platform.OS === 'android')
+                      ? t('devBuildRequired')
+                      : (t('failedToSave') || 'Could not enable notifications');
+                    Alert.alert(t('error'), message);
                     return;
                   }
                 }
