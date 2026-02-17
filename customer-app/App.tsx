@@ -983,6 +983,7 @@ export default function App() {
   const [isLiveReplay, setIsLiveReplay] = useState(false);
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
+  const [totalUnread, setTotalUnread] = useState(0);
 
   // Sync global legacy Colors with state
   Colors = getAppColors(theme);
@@ -1036,6 +1037,22 @@ export default function App() {
       responseListener.current && responseListener.current.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db, 'direct_chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(doc => {
+        count += (doc.data()[`unreadCount_${user.uid}`] || 0);
+      });
+      setTotalUnread(count);
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   useEffect(() => {
     if (user && expoPushToken) {
@@ -1483,8 +1500,8 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} />;
-      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
+      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1644,7 +1661,10 @@ export default function App() {
                         <Text style={[styles.tabLabel, activeTab === 'Cart' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('bag')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => setActiveTab('Profile')} style={styles.tabItem}>
-                        <User size={22} color={activeTab === 'Profile' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Profile' ? 2.5 : 2} />
+                        <View>
+                          <User size={22} color={activeTab === 'Profile' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Profile' ? 2.5 : 2} />
+                          {totalUnread > 0 && <View style={[styles.cartBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.cartBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text></View>}
+                        </View>
                         <Text style={[styles.tabLabel, activeTab === 'Profile' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('me')}</Text>
                       </TouchableOpacity>
                     </View>
@@ -3167,16 +3187,17 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                   position: 'absolute',
                   top: -5,
                   right: 5,
-                  backgroundColor: colors.accent,
-                  borderRadius: 8,
-                  width: 16,
-                  height: 16,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 10,
+                  minWidth: 20,
+                  height: 20,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: theme === 'dark' ? '#000' : '#FFF'
+                  borderWidth: 1.5,
+                  borderColor: theme === 'dark' ? '#000' : '#FFF',
+                  paddingHorizontal: 4
                 }}>
-                  <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
                 </View>
               )}
             </TouchableOpacity>

@@ -41,7 +41,11 @@ type Props = {
 
 export default function LiveAnalyticsScreen(props: Props) {
     const insets = useSafeAreaInsets();
-    const isDark = props.theme === 'dark' || true; // Default to dark
+    const isDark = props.theme === 'dark'; // Correct theme logic
+    const iconColor = isDark ? '#FFF' : '#000';
+    const textColorMuted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+    const borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    const cardBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
     const t = props.t || ((key: string) => key);
 
     // Handle both React Navigation and Direct Props
@@ -176,7 +180,7 @@ export default function LiveAnalyticsScreen(props: Props) {
         return (
             <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#FFF', justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color="#EF4444" />
-                <Text style={[styles.loadingText, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                <Text style={[styles.loadingText, { color: textColorMuted }]}>
                     {t('loadingAnalytics')}
                 </Text>
             </View>
@@ -190,7 +194,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                     <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
                     <View style={styles.headerContent}>
                         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                            <ChevronLeft size={24} color="#FFF" />
+                            <ChevronLeft size={24} color={iconColor} />
                         </TouchableOpacity>
                         <View style={{ flex: 1, alignItems: 'center' }}>
                             <Text style={styles.headerTitle}>Live Analytics</Text>
@@ -275,16 +279,16 @@ export default function LiveAnalyticsScreen(props: Props) {
                 <View style={styles.headerContent}>
                     <TouchableOpacity
                         onPress={handleBack}
-                        style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                        style={[styles.backButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
                     >
-                        <ChevronLeft size={24} color="#FFF" />
+                        <ChevronLeft size={24} color={iconColor} />
                     </TouchableOpacity>
 
                     <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>
                             {t('liveAnalytics')}
                         </Text>
-                        <Text style={[styles.headerSubtitle, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                        <Text style={[styles.headerSubtitle, { color: textColorMuted }]}>
                             {t('sessionSummary')}
                         </Text>
                     </View>
@@ -302,11 +306,11 @@ export default function LiveAnalyticsScreen(props: Props) {
                 {/* Session Info */}
                 <Animatable.View
                     animation="fadeInUp"
-                    style={[styles.sessionInfo, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}
+                    style={[styles.sessionInfo, { backgroundColor: cardBg, borderColor: borderColor }]}
                 >
                     <View style={styles.sessionInfoRow}>
-                        <Calendar size={16} color={isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)'} />
-                        <Text style={[styles.sessionInfoText, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                        <Calendar size={16} color={textColorMuted} />
+                        <Text style={[styles.sessionInfoText, { color: textColorMuted }]}>
                             {formatDate(sessionData.startedAt)}
                         </Text>
                     </View>
@@ -326,7 +330,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                             delay={index * 100}
                             style={[
                                 styles.statCard,
-                                { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' },
+                                { backgroundColor: cardBg, borderColor: borderColor },
                                 index === stats.length - 1 && stats.length % 2 !== 0 ? { width: SCREEN_WIDTH - 40, flexDirection: 'row', gap: 20, alignItems: 'center' } : {}
                             ]}
                         >
@@ -337,7 +341,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                                 <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
                                     {stat.value}
                                 </Text>
-                                <Text style={[styles.statLabel, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                                <Text style={[styles.statLabel, { color: textColorMuted }]}>
                                     {stat.label}
                                 </Text>
                             </View>
@@ -349,7 +353,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                 <Animatable.View
                     animation="fadeInUp"
                     delay={400}
-                    style={[styles.section, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}
+                    style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}
                 >
                     <View style={styles.sectionHeader}>
                         <Zap size={20} color="#F59E0B" />
@@ -360,7 +364,7 @@ export default function LiveAnalyticsScreen(props: Props) {
 
                     <View style={styles.engagementBar}>
                         <View style={styles.engagementItem}>
-                            <Text style={[styles.engagementLabel, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                            <Text style={[styles.engagementLabel, { color: textColorMuted }]}>
                                 {t('likesPerMin')}
                             </Text>
                             <Text style={[styles.engagementValue, { color: '#EF4444' }]}>
@@ -368,10 +372,10 @@ export default function LiveAnalyticsScreen(props: Props) {
                             </Text>
                         </View>
 
-                        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]} />
+                        <View style={[styles.divider, { backgroundColor: borderColor }]} />
 
                         <View style={styles.engagementItem}>
-                            <Text style={[styles.engagementLabel, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                            <Text style={[styles.engagementLabel, { color: textColorMuted }]}>
                                 {t('giftsPerMin')}
                             </Text>
                             <Text style={[styles.engagementValue, { color: '#A855F7' }]}>
@@ -379,10 +383,10 @@ export default function LiveAnalyticsScreen(props: Props) {
                             </Text>
                         </View>
 
-                        <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]} />
+                        <View style={[styles.divider, { backgroundColor: borderColor }]} />
 
                         <View style={styles.engagementItem}>
-                            <Text style={[styles.engagementLabel, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+                            <Text style={[styles.engagementLabel, { color: textColorMuted }]}>
                                 {t('viewers')}
                             </Text>
                             <Text style={[styles.engagementValue, { color: '#3B82F6' }]}>
