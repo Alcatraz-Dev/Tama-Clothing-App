@@ -120,6 +120,7 @@ import KYCScreen from './src/screens/KYCScreen';
 import AdminKYCScreen from './src/screens/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
+import FeedScreen from './src/screens/FeedScreen';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 if (!(isExpoGo && Platform.OS === 'android')) {
@@ -292,7 +293,7 @@ const uploadImageToCloudinary = async (uri: string) => {
 // Multi-language Translations
 const Translations: any = {
   fr: {
-    home: 'ACCUEIL', shop: 'SHOP', bag: 'PANIER', me: 'MOI',
+    home: 'ACCUEIL', shop: 'SHOP', bag: 'PANIER', me: 'MOI', feed: 'FIL',
     explore: 'Explorer', seeAll: 'Voir Tout', refineGallery: 'Affiner',
     collections: 'COLLECTIONS', flashSale: 'Vente Flash', campaigns: 'CAMPAGNES',
     featured: 'TENDANCES', newDrop: 'NOUVEAU', brands: 'MARQUES', categories: 'CATÉGORIES',
@@ -628,7 +629,7 @@ const Translations: any = {
   },
   ar: {
     success: 'تم بنجاح',
-    home: 'الرئيسية', shop: 'المتجر', bag: 'الحقيبة', me: 'أنا',
+    home: 'الرئيسية', shop: 'المتجر', bag: 'الحقيبة', me: 'أنا', feed: 'الخلاصة',
     explore: 'استكشف', seeAll: 'عرض الكل', refineGallery: 'المعرض',
     collections: 'التشكيلات', flashSale: 'تخفيضات', campaigns: 'الحملات',
     featured: 'رائجة الآن', newDrop: 'جديدنا', brands: 'العلامات التجارية', categories: 'الفئات',
@@ -996,6 +997,22 @@ export default function App() {
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
+
+  // Hoisted state variables for global access (Feed/Profile/Chat)
+  const [works, setWorks] = useState<any[]>([]);
+  const [uploadingWork, setUploadingWork] = useState(false);
+  const [selectedWork, setSelectedWork] = useState<any>(null);
+  const [targetUid, setTargetUid] = useState<string | null>(null);
+  const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [editingComment, setEditingComment] = useState<any>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<string[]>([]);
+
+  // Derived state (for App level usage)
+  const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
 
   // Sync global legacy Colors with state
   Colors = getAppColors(theme);
@@ -1513,7 +1530,7 @@ export default function App() {
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
       case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
-      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
+      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1575,6 +1592,20 @@ export default function App() {
         t={t}
         theme={theme}
         colors={getAppColors(theme)}
+      />;
+
+      case 'Feed': return <FeedScreen
+        t={t}
+        theme={theme}
+        language={language}
+        onNavigate={(screen, params) => setActiveTab(screen)}
+        onJoinLive={handleJoinLive}
+        onWorkPress={(work, targetUid) => {
+          setSelectedWork(work);
+          setTargetUid(targetUid);
+
+
+        }}
       />;
 
       case 'Collaboration': return <CollaborationScreen
@@ -1657,13 +1688,17 @@ export default function App() {
                         <Home size={22} color={activeTab === 'Home' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Home' ? 2.5 : 2} />
                         <Text style={[styles.tabLabel, activeTab === 'Home' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('home')}</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setActiveTab('Feed')} style={styles.tabItem}>
+                        <LayoutGrid size={22} color={activeTab === 'Feed' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Feed' ? 2.5 : 2} />
+                        <Text style={[styles.tabLabel, activeTab === 'Feed' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('feed')}</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity onPress={() => { setFilterCategory(null); setActiveTab('Shop'); }} style={styles.tabItem}>
                         <Search size={22} color={activeTab === 'Shop' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Shop' ? 2.5 : 2} />
                         <Text style={[styles.tabLabel, activeTab === 'Shop' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('shop')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => setActiveTab('Collaboration')} style={styles.tabItem}>
                         <Handshake size={22} color={activeTab === 'Collaboration' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Collaboration' ? 2.5 : 2} />
-                        <Text style={[styles.tabLabel, activeTab === 'Collaboration' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>Collab</Text>
+                        <Text style={[styles.tabLabel, activeTab === 'Collaboration' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('collab')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => setActiveTab('Cart')} style={styles.tabItem}>
                         <View>
@@ -2074,7 +2109,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
         </Animated.View>
 
-        <TouchableOpacity onPress={() => onNavigate('Profile')} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onNavigate('Profile')} activeOpacity={0.7} style={{ marginTop: 10 }}>
           <View style={[styles.headerAvatarContainer, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
             {profileData?.avatarUrl ? (
               <Image source={{ uri: profileData.avatarUrl }} style={styles.headerAvatar} />
@@ -2671,6 +2706,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   const [works, setWorks] = useState<any[]>([]);
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
+  const [targetUid, setTargetUid] = useState<string | null>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
   const [comments, setComments] = useState<any[]>([]);
@@ -2777,12 +2813,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   useEffect(() => {
     if (selectedWork) {
-      const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-      if (!targetUid) return;
+      // Get owner UID from work object (for Feed) or from profileData (for Profile screen)
+      const ownerUid = selectedWork.ownerUid || targetUid || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+      if (!ownerUid) return;
 
       setLoadingComments(true);
       const q = query(
-        collection(db, 'users', targetUid, 'works', selectedWork.id, 'comments'),
+        collection(db, 'users', ownerUid, 'works', selectedWork.id, 'comments'),
         orderBy('createdAt', 'asc')
       );
 
@@ -2793,7 +2830,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
       return () => unsubscribe();
     }
-  }, [selectedWork, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
+  }, [selectedWork, targetUid, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
 
   const handleComment = async () => {
     if (!user || !commentText.trim() || !selectedWork) return;
@@ -7596,7 +7633,6 @@ Tama Clothing ليست مسؤولة عن الأضرار غير المباشرة 
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Tabs */}
       {/* Tabs */}
       <View style={{ flexDirection: 'row', paddingHorizontal: 25, marginBottom: 20 }}>
         <TouchableOpacity
