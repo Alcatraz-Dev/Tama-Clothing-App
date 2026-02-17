@@ -380,6 +380,7 @@ const Translations: any = {
     returnPolicyDefault: 'Les retours sont acceptés dans les 30 jours suivant l\'achat. L\'article doit être dans son état d\'origine.',
     orderStatusDrops: 'Statut de commande, nouveautés et soldes',
     biometricAuth: 'AUTHENTIFICATION BIOMÉTRIQUE', faceIdCheckout: 'Utiliser FaceID pour commander plus vite',
+    useBiometricToPay: 'Utiliser {{type}} pour commander plus vite',
     supportLegal: 'SUPPORT ET LÉGAL', deactivateAccount: 'DÉSACTIVER LE COMPTE',
     darkMode: 'MODE SOMBRE', profileUpdated: 'Profil mis à jour', deliveryTime: '2-4 jours ouvrables',
     orderNumber: 'COMMANDE #', statusPending: 'EN ATTENTE', statusDelivered: 'LIVRÉ',
@@ -719,6 +720,7 @@ const Translations: any = {
     returnPolicyDefault: 'يتم قبول الإرجاع في غضون 30 يوماً من الشراء. يجب أن يكون المنتج في حالته الأصلية.',
     orderStatusDrops: 'حالة الطلب، العروض الجديدة والتخفيضات',
     biometricAuth: 'المصادقة البيومترية', faceIdCheckout: 'استخدم FaceID للدفع الأسرع',
+    useBiometricToPay: 'استخدم {{type}} للدفع الأسرع',
     supportLegal: 'الدعم والقانوني', deactivateAccount: 'تعطيل الحساب',
     darkMode: 'الوضع الداكن', profileUpdated: 'تم تحديث الحساب', deliveryTime: '2-4 أيام عمل',
     orderNumber: 'طلب رقم #', statusPending: 'قيد الانتظار', statusDelivered: 'تم التوصيل',
@@ -4715,9 +4717,32 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotifications] = useState(profileData?.settings?.notifications ?? true);
   const [faceId, setFaceId] = useState(profileData?.settings?.faceId ?? false);
+  const [biometricType, setBiometricType] = useState<string>('');
 
+  useEffect(() => {
+    const getBiometricType = async () => {
+      try {
+        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+          setBiometricType('FaceID');
+        } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+          setBiometricType(Platform.OS === 'ios' ? 'TouchID' : 'Fingerprint');
+        } else {
+          setBiometricType('Biometrics');
+        }
+      } catch (e) {
+        setBiometricType('Biometrics');
+      }
+    };
+    getBiometricType();
+  }, []);
+
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passLoading, setPassLoading] = useState(false);
 
   useEffect(() => {
@@ -4809,6 +4834,10 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
   };
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      Alert.alert(t('error'), t('currentPasswordRequired'));
+      return;
+    }
     if (!newPassword || newPassword.length < 6) {
       Alert.alert(t('error'), t('weakPassword'));
       return;
@@ -4820,18 +4849,24 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
 
     try {
       setPassLoading(true);
-      const { getAuth, updatePassword } = await import('firebase/auth');
-      const auth = getAuth();
-      if (auth.currentUser) {
+      if (auth.currentUser && auth.currentUser.email) {
+        // Re-authenticate user before updating password
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+
         await updatePassword(auth.currentUser, newPassword);
+
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         Alert.alert(t('successTitle'), t('passwordChanged'));
       }
     } catch (e: any) {
       console.error(e);
-      if (e.code === 'auth/requires-recent-login') {
-        Alert.alert(t('error'), "Please logout and login again to change password for security reasons.");
+      if (e.code === 'auth/wrong-password') {
+        Alert.alert(t('error'), t('incorrectPassword'));
+      } else if (e.code === 'auth/requires-recent-login') {
+        Alert.alert(t('error'), "Session expired. Please logout and login again.");
       } else {
         Alert.alert(t('error'), t('failedToSave'));
       }
@@ -4997,29 +5032,73 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
         {/* Change Password Section */}
         <View style={[styles.settingsSectionPremium, { marginTop: 25, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, borderWidth: 1 }]}>
           <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('changePassword')}</Text>
+
+          <View style={styles.premiumInputGroup}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Lock size={14} color={appColors.textMuted} />
+              <Text style={[styles.inputLabelField, { color: appColors.textMuted, marginBottom: 0 }]}>{t('currentPasswordRequired')}</Text>
+            </View>
+            <View style={{ position: 'relative', justifyContent: 'center' }}>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1, paddingRight: 50 }]}
+                secureTextEntry={!showCurrentPassword}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="••••••••"
+                placeholderTextColor={appColors.textMuted}
+              />
+              <TouchableOpacity
+                style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <View style={styles.premiumInputGroup}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Lock size={14} color={appColors.textMuted} />
               <Text style={[styles.inputLabelField, { color: appColors.textMuted, marginBottom: 0 }]}>{t('newPassword')}</Text>
             </View>
-            <TextInput
-              style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1 }]}
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
+            <View style={{ position: 'relative', justifyContent: 'center' }}>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1, paddingRight: 50 }]}
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="••••••••"
+                placeholderTextColor={appColors.textMuted}
+              />
+              <TouchableOpacity
+                style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
+                onPress={() => setShowNewPassword(!showNewPassword)}
+              >
+                {showNewPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
+              </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.premiumInputGroup}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Check size={14} color={appColors.textMuted} />
               <Text style={[styles.inputLabelField, { color: appColors.textMuted, marginBottom: 0 }]}>{t('confirmPassword')}</Text>
             </View>
-            <TextInput
-              style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1 }]}
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
+            <View style={{ position: 'relative', justifyContent: 'center' }}>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1, paddingRight: 50 }]}
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="••••••••"
+                placeholderTextColor={appColors.textMuted}
+              />
+              <TouchableOpacity
+                style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
+              </TouchableOpacity>
+            </View>
           </View>
           <TouchableOpacity
             style={[styles.saveBtnPremium, { backgroundColor: theme === 'dark' ? '#FFF' : '#000', marginTop: 10 }]}
@@ -5063,16 +5142,33 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
           <View style={[styles.settingsRowSwitch, { borderBottomWidth: 0 }]}>
             <View style={{ flex: 1, paddingRight: 20 }}>
               <Text style={[styles.switchTitle, { color: appColors.foreground }]}>{t('biometricAuth')}</Text>
-              <Text style={[styles.switchSub, { color: appColors.textMuted }]}>{t('faceIdCheckout')}</Text>
+              <Text style={[styles.switchSub, { color: appColors.textMuted }]}>
+                {t('useBiometricToPay').replace('{{type}}', biometricType || 'Biometrics')}
+              </Text>
             </View>
             <TouchableOpacity
               onPress={async () => {
                 const newValue = !faceId;
                 if (newValue) {
-                  const hasHardware = await LocalAuthentication.hasHardwareAsync();
-                  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-                  if (!hasHardware || !isEnrolled) {
-                    Alert.alert(t('error'), "Biometric authentication is not available on this device.");
+                  try {
+                    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+                    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+                    if (!hasHardware || !isEnrolled) {
+                      Alert.alert(t('error'), "Biometric authentication is not available on this device.");
+                      return;
+                    }
+
+                    const result = await LocalAuthentication.authenticateAsync({
+                      promptMessage: Platform.OS === 'ios' ? 'FaceID / TouchID' : 'Biometric Auth',
+                      fallbackLabel: t('usePasscode') || 'Use Passcode',
+                    });
+
+                    if (!result.success) {
+                      return;
+                    }
+                  } catch (err) {
+                    console.error("Biometric auth error:", err);
                     return;
                   }
                 }
@@ -6078,7 +6174,26 @@ function CartScreen({ cart, onRemove, onUpdateQuantity, onComplete, profileData,
   const { colors, theme } = useAppTheme();
   const [checkingOut, setCheckingOut] = useState(false);
   const [orderDone, setOrderDone] = useState(false);
-  const [showAddressForm, setShowAddressForm] = useState(true); // Always show details for review
+  const [showAddressForm, setShowAddressForm] = useState(true);
+  const [biometricType, setBiometricType] = useState<string>('');
+
+  useEffect(() => {
+    const getBiometricType = async () => {
+      try {
+        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+          setBiometricType('FaceID');
+        } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+          setBiometricType(Platform.OS === 'ios' ? 'TouchID' : 'Fingerprint');
+        } else {
+          setBiometricType('Biometrics');
+        }
+      } catch (e) {
+        setBiometricType('Biometrics');
+      }
+    };
+    getBiometricType();
+  }, []);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
@@ -6245,7 +6360,7 @@ function CartScreen({ cart, onRemove, onUpdateQuantity, onComplete, profileData,
 
           if (hasHardware && isEnrolled) {
             const authResult = await LocalAuth.authenticateAsync({
-              promptMessage: t('faceIdCheckout'),
+              promptMessage: t('useBiometricToPay').replace('{{type}}', biometricType || 'Biometrics'),
               fallbackLabel: t('password'),
               disableDeviceFallback: false,
             });
@@ -6672,8 +6787,10 @@ function AdminSettingsScreen({ onBack, user, t }: any) {
 
   // Account State
   const [currentPassword, setCurrentPassword] = useState('');
-  const [updateNewEmail, setUpdateNewEmail] = useState(user?.email || '');
-  const [updateNewPassword, setUpdateNewPassword] = useState('');
+  const [updateNewEmail, setUpdateNewEmail] = useState(user?.email || "");
+  const [updateNewPassword, setUpdateNewPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [accountLoading, setAccountLoading] = useState(false);
 
   // Socials State
@@ -6998,25 +7115,41 @@ Tama Clothing ليست مسؤولة عن الأضرار غير المباشرة 
               </View>
               <View>
                 <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('currentPasswordRequired')}</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                  placeholder="********"
-                  placeholderTextColor="#666"
-                  secureTextEntry
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                />
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, paddingRight: 50 }]}
+                    placeholder="********"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showCurrentPassword}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                  />
+                  <TouchableOpacity
+                    style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                  >
+                    {showCurrentPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
+                  </TouchableOpacity>
+                </View>
               </View>
               <View>
                 <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('newPasswordOptional')}</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                  placeholder={t('leaveEmptyToKeepCurrent')}
-                  placeholderTextColor="#666"
-                  secureTextEntry
-                  value={updateNewPassword}
-                  onChangeText={setUpdateNewPassword}
-                />
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, paddingRight: 50 }]}
+                    placeholder={t('leaveEmptyToKeepCurrent')}
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showNewPassword}
+                    value={updateNewPassword}
+                    onChangeText={setUpdateNewPassword}
+                  />
+                  <TouchableOpacity
+                    style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
+                  </TouchableOpacity>
+                </View>
               </View>
               <TouchableOpacity
                 style={[styles.saveBtnPremium, { backgroundColor: theme === 'dark' ? '#FFF' : '#000', marginTop: 30 }]}
