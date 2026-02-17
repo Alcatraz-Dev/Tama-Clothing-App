@@ -60,7 +60,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface FeedItem {
     id: string;
-    type: 'live' | 'work';
+    type: 'live' | 'work' | 'ad';
     data: any;
     score: number;
     createdAt: any;
@@ -75,12 +75,14 @@ interface FeedScreenProps {
     onWorkPress?: (work: any, targetUid: string) => void;
     onCommentPress?: (work: any, targetUid: string) => void;
     onUserPress?: (userId: string) => void;
+    onCampaignPress?: (campaign: any) => void;
     user?: any;
     profileData?: any;
+    ads?: any[];
 }
 
 export default function FeedScreen(props: FeedScreenProps) {
-    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, user, profileData } = props;
+    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, onCampaignPress, user, profileData, ads = [] } = props;
     const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -113,8 +115,37 @@ export default function FeedScreen(props: FeedScreenProps) {
             const timeB = b.createdAt?.seconds || 0;
             return timeB - timeA;
         });
+
+        // Inject ADS at random intervals (every 4-7 items)
+        if (ads.length > 0 && combined.length > 2) {
+            const adItems: FeedItem[] = ads.map(a => ({
+                id: `ad-${a.id}`,
+                type: 'ad',
+                data: a,
+                score: 0,
+                createdAt: serverTimestamp()
+            }));
+
+            // Shuffle ads
+            const shuffledAds = [...adItems].sort(() => Math.random() - 0.5);
+
+            let result: FeedItem[] = [];
+            let adIndex = 0;
+            let nextAdPos = Math.floor(Math.random() * 3) + 3; // Initial ad position between 3-5
+
+            for (let i = 0; i < combined.length; i++) {
+                result.push(combined[i]);
+                if (result.length === nextAdPos && adIndex < shuffledAds.length) {
+                    result.push(shuffledAds[adIndex]);
+                    adIndex++;
+                    nextAdPos += Math.floor(Math.random() * 4) + 4; // Next ad after another 4-7 items
+                }
+            }
+            return result;
+        }
+
         return combined;
-    }, [lives, works]);
+    }, [lives, works, ads]);
 
     const sortedFeedItems = useMemo(() => {
         let items = [...feedItemsCombined];
@@ -136,6 +167,12 @@ export default function FeedScreen(props: FeedScreenProps) {
         if (language === 'ar') return ar;
         if (language === 'fr') return fr;
         return en;
+    };
+
+    const getTranslated = (obj: any) => {
+        if (!obj) return '';
+        if (typeof obj === 'string') return obj;
+        return obj[language] || obj['en'] || obj['fr'] || '';
     };
 
     const getTotalStats = (work: any) => {
@@ -483,6 +520,153 @@ export default function FeedScreen(props: FeedScreenProps) {
         </View>
     );
 
+    const renderAdItem = (item: FeedItem, isActive: boolean) => {
+        const ad = item.data;
+        const isVideo = ad.type === 'video';
+
+        return (
+            <View style={styles.workCard}>
+                {isVideo ? (
+                    <Video
+                        source={{ uri: ad.url }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={isActive}
+                        isLooping
+                        isMuted
+                    />
+                ) : (
+                    <Image
+                        source={{ uri: ad.url }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                    />
+                )}
+
+                <LinearGradient
+                    colors={['rgba(0,0,0,0.5)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
+                    locations={[0, 0.2, 0.6, 1]}
+                    style={StyleSheet.absoluteFillObject}
+                />
+
+                {/* Top Glass Sponsored Badge */}
+                <View style={{
+                    position: 'absolute',
+                    top: insets.top + 20, // Now at the very top
+                    left: 20,
+                    zIndex: 20
+                }}>
+                    <BlurView intensity={30} tint="dark" style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 30, // Fully rounded
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        overflow: 'hidden',
+                    }}>
+                        <Star size={12} color="#FBBF24" fill="#FBBF24" />
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', marginLeft: 6, letterSpacing: 1 }}>
+                            {tr('SPONSORISÉ', 'ممول', 'SPONSORED')}
+                        </Text>
+                    </BlurView>
+                </View>
+
+                {/* Ad Content & Brand */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 180,
+                    left: 16,
+                    right: 16,
+                }}>
+                    {/* Brand Entity */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <View style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: isDark ? '#FFF' : '#000',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 10,
+                            borderWidth: 2,
+                            borderColor: 'rgba(255,255,255,0.3)'
+                        }}>
+                            <Sparkles size={18} color={isDark ? '#000' : '#FFF'} />
+                        </View>
+                        <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }}>
+                            TAMA CLOTHING
+                        </Text>
+                    </View>
+
+                    <Text style={{
+                        color: '#FFF',
+                        fontSize: 26,
+                        fontWeight: '900',
+                        textShadowColor: 'rgba(0,0,0,0.5)',
+                        textShadowRadius: 10,
+                        marginBottom: 6,
+                        lineHeight: 32
+                    }}>
+                        {getTranslated(ad.title)}
+                    </Text>
+
+                    {ad.description && (
+                        <Text style={{
+                            color: 'rgba(255,255,255,0.95)',
+                            fontSize: 15,
+                            fontWeight: '600',
+                            textShadowColor: 'rgba(0,0,0,0.5)',
+                            textShadowRadius: 5,
+                            lineHeight: 20
+                        }}>
+                            {getTranslated(ad.description)}
+                        </Text>
+                    )}
+                </View>
+
+                {/* Theme-Aware Floating CTA */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 110, // Slightly higher for better thumb reach
+                    left: 16,
+                    right: 16,
+                }}>
+                    <TouchableOpacity
+                        onPress={() => onCampaignPress?.(ad)}
+                        activeOpacity={0.8}
+                        style={{
+                            backgroundColor: isDark ? '#FFF' : '#000', // Dynamic Theme Color
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 10,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.4,
+                            shadowRadius: 10,
+                            elevation: 8
+                        }}
+                    >
+                        <Text style={{
+                            color: isDark ? '#000' : '#FFF', // Inverse Text Color
+                            fontSize: 15,
+                            fontWeight: '900',
+                            letterSpacing: 1
+                        }}>
+                            {tr('DÉCOUVRIR', 'اكتشف', 'DISCOVER')}
+                        </Text>
+                        <ChevronRight size={20} color={isDark ? '#000' : '#FFF'} strokeWidth={3} />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
     const renderWorkItem = (item: FeedItem, isActive: boolean) => {
         const work = item.data;
         const score = item.score;
@@ -637,9 +821,9 @@ export default function FeedScreen(props: FeedScreenProps) {
                     paddingVertical: 6,
                     paddingHorizontal: 8,
                     borderRadius: 24,
-                    backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.15)',
                     borderWidth: 1,
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
                     zIndex: 20
                 }}>
                     {[
@@ -670,20 +854,20 @@ export default function FeedScreen(props: FeedScreenProps) {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     borderWidth: showColor ? 1.2 : 1,
-                                    borderColor: showColor ? btn.color : 'rgba(255,255,255,0.2)',
+                                    borderColor: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'),
                                     marginBottom: 4
                                 }}>
                                     <btn.Icon
                                         size={16}
-                                        color={showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
+                                        color={showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)')}
                                         fill="transparent"
                                         strokeWidth={isSelected ? 2.5 : 1.5}
                                     />
                                 </View>
-                                <Text style={{ color: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)'), fontSize: 7, fontWeight: '800', marginBottom: 1 }}>
+                                <Text style={{ color: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'), fontSize: 7, fontWeight: '800', marginBottom: 1 }}>
                                     {btn.label}
                                 </Text>
-                                <Text style={{ color: isDark ? 'white' : 'black', fontSize: 10, fontWeight: '900' }}>
+                                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
                                     {count}
                                 </Text>
                             </TouchableOpacity>
@@ -711,8 +895,12 @@ export default function FeedScreen(props: FeedScreenProps) {
     const renderItem = ({ item }: { item: FeedItem }) => {
         const isActive = activeId === item.id;
         if (item.type === 'live') return renderLiveItem(item);
+        if (item.type === 'ad') return renderAdItem(item, isActive);
         return renderWorkItem(item, isActive);
     };
+
+    const activeItem = useMemo(() => sortedFeedItems.find(i => i.id === activeId), [sortedFeedItems, activeId]);
+    const isAdActive = activeItem?.type === 'ad';
 
     if (loading) {
         return (
@@ -728,7 +916,7 @@ export default function FeedScreen(props: FeedScreenProps) {
 
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, backgroundColor: 'transparent' }]}>
-                <View>
+                <View style={{ opacity: isAdActive ? 0 : 1 }}>
                     <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
                         {tr('Exploration', 'استكشاف', 'Explore')}
                     </Text>
@@ -737,7 +925,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     </Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.profileButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+                    style={[styles.profileButton, { backgroundColor: isAdActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
                     onPress={() => {
                         if (feedFilter === 'default') setFeedFilter('viral');
                         else if (feedFilter === 'viral') setFeedFilter('comments');

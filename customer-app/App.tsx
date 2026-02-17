@@ -1001,6 +1001,7 @@ export default function App() {
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [ads, setAds] = useState<any[]>([]);
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
   const [works, setWorks] = useState<any[]>([]);
@@ -1073,6 +1074,23 @@ export default function App() {
       setComments([]);
     }
   }, [selectedWork?.id, targetUid]);
+
+  // Global Ads fetch
+  useEffect(() => {
+    const fetchAds = async () => {
+      try {
+        const adsSnap = await getDocs(collection(db, 'ads'));
+        const adsList = adsSnap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((a: any) => (a as any).isActive !== false)
+          .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setAds(adsList);
+      } catch (e) {
+        console.error('Ads Fetch Error', e);
+      }
+    };
+    fetchAds();
+  }, []);
 
   const handleCommentReact = async (comment: any, type: string = 'love') => {
     if (!user || !selectedWork) return;
@@ -1816,8 +1834,10 @@ export default function App() {
           setPreviousTab('Feed');
           setActiveTab('PublicProfile');
         }}
+        onCampaignPress={navigateToCampaign}
         user={user}
         profileData={profileData}
+        ads={ads}
       />;
 
       case 'Collaboration': return <CollaborationScreen
