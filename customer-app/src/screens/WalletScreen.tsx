@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Alert, Image, Modal, TextInput, Animated, ActivityIndicator } from 'react-native';
-import { ChevronLeft, Coins, CreditCard, ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, History, Gem, Repeat, ArrowRight, X, RefreshCw, Search, Users, User, Send, Check, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, Coins, CreditCard, ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, History, Gem, Repeat, ArrowRight, X, RefreshCw, Search, Users, User, Send, Check, ChevronRight, Trash } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -443,6 +443,40 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDeleteFriend = async (friendId: string, friendName: string) => {
+        if (!user?.uid) return;
+
+        Alert.alert(
+            tr('Remove Friend', 'Supprimer l\'ami', 'حذف الصديق'),
+            `${tr('Are you sure you want to remove', 'Êtes-vous sûr de vouloir supprimer', 'هل أنت متأكد أنك تريد حذف')} ${friendName} ${tr('from your friends list?', 'de votre liste d\'amis ?', 'من قائمة أصدقائك؟')}`,
+            [
+                { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
+                {
+                    text: tr('Remove', 'Supprimer', 'حذف'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            await runTransaction(db, async (transaction) => {
+                                const meRef = doc(db, 'users', user.uid);
+                                const themRef = doc(db, 'users', friendId);
+
+                                transaction.update(meRef, { friends: arrayRemove(friendId) });
+                                transaction.update(themRef, { friends: arrayRemove(user.uid) });
+                            });
+                            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend removed successfully.', 'Ami supprimé avec succès.', 'تم حذف الصديق بنجاح.'));
+                        } catch (error) {
+                            console.error("Remove Friend Error:", error);
+                            Alert.alert('Error', 'Failed to remove friend');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const handleRejectFriendRequest = async (request: any) => {
@@ -991,7 +1025,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             >
                 <View style={styles.modalOverlay}>
                     <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', height: '85%' }]}>
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', maxHeight: keyboardOpen ? "97%" : "75%" }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Transfer Sold', 'Transférer Solde', 'تحويل الرصيد')}</Text>
                             <TouchableOpacity onPress={() => {
@@ -1102,7 +1136,22 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                             <Text style={{ fontSize: 11, color: colors.textMuted }}>{u.email}</Text>
                                                         </View>
                                                     </View>
-                                                    <ChevronRight size={18} color={colors.textMuted} />
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleDeleteFriend(u.uid, u.fullName)}
+                                                            style={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                borderRadius: 16,
+                                                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                        >
+                                                            <Trash size={16} color="#EF4444" />
+                                                        </TouchableOpacity>
+                                                        <ChevronRight size={18} color={colors.textMuted} />
+                                                    </View>
                                                 </TouchableOpacity>
                                             ))
                                         )}
@@ -1181,34 +1230,28 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                             </Text>
                                         </TouchableOpacity>
 
-                                        <TouchableOpacity
-                                            style={[styles.profileActionBtn, {
-                                                backgroundColor: profileData?.friends?.includes(selectedUserForTransfer.uid)
-                                                    ? 'rgba(16, 185, 129, 0.1)'
-                                                    : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid)
-                                                        ? 'rgba(100, 100, 100, 0.1)'
-                                                        : 'rgba(245, 158, 11, 0.1)'
-                                            }]}
-                                            onPress={() => !profileData?.friends?.includes(selectedUserForTransfer.uid) && handleSendFriendRequest(selectedUserForTransfer)}
-                                            disabled={sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) || profileData?.friends?.includes(selectedUserForTransfer.uid)}
-                                        >
-                                            {profileData?.friends?.includes(selectedUserForTransfer.uid) ? (
-                                                <>
-                                                    <Check size={18} color="#10B981" />
-                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981', marginLeft: 8 }}>{tr('Friend ✓', 'Ami ✓', 'صديق ✓')}</Text>
-                                                </>
-                                            ) : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) ? (
-                                                <>
-                                                    <RefreshCw size={18} color={colors.textMuted} />
-                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>{tr('Requested', 'Demandé', 'تم الطلب')}</Text>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Users size={18} color="#F59E0B" />
-                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 8 }}>{tr('Add Friend', 'Ajouter Ami', 'إضافة صديق')}</Text>
-                                                </>
-                                            )}
-                                        </TouchableOpacity>
+                                        {profileData?.friends?.includes(selectedUserForTransfer.uid) ? (
+                                            <TouchableOpacity
+                                                style={[styles.profileActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}
+                                                onPress={() => handleDeleteFriend(selectedUserForTransfer.uid, selectedUserForTransfer.fullName)}
+                                            >
+                                                <Trash size={18} color="#EF4444" />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444', marginLeft: 8 }}>{tr('Unfriend', 'Supprimer', 'حذف')}</Text>
+                                            </TouchableOpacity>
+                                        ) : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) ? (
+                                            <View style={[styles.profileActionBtn, { backgroundColor: 'rgba(100, 100, 100, 0.1)' }]}>
+                                                <RefreshCw size={18} color={colors.textMuted} />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>{tr('Requested', 'Demandé', 'تم الطلب')}</Text>
+                                            </View>
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={[styles.profileActionBtn, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}
+                                                onPress={() => handleSendFriendRequest(selectedUserForTransfer)}
+                                            >
+                                                <Users size={18} color="#F59E0B" />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 8 }}>{tr('Add Friend', 'Ajouter Ami', 'إضافة صديق')}</Text>
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
 
                                     {showTargetProfile && (
@@ -1545,7 +1588,7 @@ const styles = StyleSheet.create({
         flex: 1,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
-        padding: 20,
+        padding: 5,
         paddingBottom: 20,
 
     },

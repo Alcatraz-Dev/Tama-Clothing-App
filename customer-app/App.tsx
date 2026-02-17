@@ -2625,6 +2625,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
+  const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
+
   const getInitials = (name: string) => {
     if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
@@ -2648,7 +2650,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [followedList, setFollowedList] = useState<any[]>([]);
   const [showEmail, setShowEmail] = useState(false);
   const [liveChannels, setLiveChannels] = useState<string[]>([]);
-  const [profileTab, setProfileTab] = useState('Menu'); // 'Menu', 'Works' or 'Messages'
+  const [profileTab, setProfileTab] = useState(isOwnProfile ? 'Menu' : 'Works'); // Default to 'Works' for other users
+
+  useEffect(() => {
+    // Reset tab when switching between profiles (e.g. going from own profile to searching someone else)
+    setProfileTab(isOwnProfile ? 'Menu' : 'Works');
+  }, [isOwnProfile, profileData?.uid, profileData?.id]);
   const [works, setWorks] = useState<any[]>([]);
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
@@ -2711,7 +2718,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
     }
   };
 
-  const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
+
   const isBrandOwner = profileData?.role === 'brand_owner' || (profileData?.role === 'admin' && profileData?.brandId);
 
   useEffect(() => {
@@ -3114,29 +3121,31 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
             marginHorizontal: 15,
             marginBottom: 10
           }}>
-            <TouchableOpacity
-              onPress={() => setProfileTab('Menu')}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: profileTab === 'Menu' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
-              }}
-            >
-              <LayoutGrid size={16} color={profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
-              <Text style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
-                letterSpacing: 0.5
-              }}>
-                {tr('MENU', 'القائمة', 'MENU')}
-              </Text>
-            </TouchableOpacity>
+            {isOwnProfile && (
+              <TouchableOpacity
+                onPress={() => setProfileTab('Menu')}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: profileTab === 'Menu' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
+                }}
+              >
+                <LayoutGrid size={16} color={profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '800',
+                  color: profileTab === 'Menu' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
+                  letterSpacing: 0.5
+                }}>
+                  {tr('MENU', 'القائمة', 'MENU')}
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => setProfileTab('Works')}
               style={{
