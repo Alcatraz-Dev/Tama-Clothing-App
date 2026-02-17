@@ -288,50 +288,197 @@ export default function FeedScreen(props: FeedScreenProps) {
         setTimeout(() => setRefreshing(false), 800);
     };
 
-    const renderLiveItem = (item: FeedItem) => {
+    const renderLiveItem = (item: FeedItem, isActive: boolean) => {
         const session = item.data;
+        const isDark = theme === 'dark';
+        const liveUrl = session.url || session.playbackUrl || session.hlsUrl;
+
         return (
-            <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.liveCard}
-                onPress={() => onJoinLive(session.channelId)}
-            >
-                <Image
-                    source={{ uri: session.hostAvatar }}
-                    style={StyleSheet.absoluteFillObject}
-                />
+            <View style={styles.liveCard}>
+                {liveUrl ? (
+                    <Video
+                        source={{ uri: liveUrl }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode={ResizeMode.COVER}
+                        shouldPlay={isActive}
+                        isLooping
+                        isMuted={false}
+                    />
+                ) : (
+                    <Image
+                        source={{ uri: session.hostAvatar }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                    />
+                )}
+
                 <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    colors={['rgba(0,0,0,0.4)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
+                    locations={[0, 0.2, 0.6, 1]}
                     style={StyleSheet.absoluteFillObject}
+                    pointerEvents="none"
                 />
 
-                <View style={styles.liveBadgeContainer}>
-                    <View style={styles.liveBadge}>
-                        <View style={styles.pulseDot} />
-                        <Text style={styles.liveText}>{tr('EN DIRECT', 'مباشر', 'LIVE')}</Text>
+                {/* Top Glass Badges - Left aligned with Host Icon */}
+                <View style={[styles.liveBadgeContainer, { top: insets.top + 20, justifyContent: 'flex-start', gap: 10 }]}>
+                    {/* Host Mini Icon as requested */}
+                    <View style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        borderWidth: 1.5,
+                        borderColor: '#FF4D67',
+                        overflow: 'hidden',
+                        backgroundColor: '#333'
+                    }}>
+                        <Image source={{ uri: session.hostAvatar }} style={{ width: '100%', height: '100%' }} />
                     </View>
-                    <View style={styles.viewerBadge}>
+
+                    <BlurView intensity={40} tint="dark" style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        overflow: 'hidden',
+                        gap: 6
+                    }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>
+                            {tr('EN DIRECT', 'مباشر', 'LIVE')}
+                        </Text>
+                    </BlurView>
+
+                    <BlurView intensity={30} tint="dark" style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        overflow: 'hidden',
+                        gap: 5
+                    }}>
                         <Eye size={12} color="#FFF" />
-                        <Text style={styles.viewerText}>{session.viewCount || 0}</Text>
-                    </View>
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{session.viewCount || 0}</Text>
+                    </BlurView>
                 </View>
 
-                <View style={styles.liveInfo}>
-                    <Text style={styles.hostName}>{session.hostName}</Text>
-                    <View style={styles.flameContainer}>
-                        <Flame size={16} color="#FF8A00" fill="#FF8A00" />
-                        <Text style={styles.flameText}>{session.totalLikes || 0} {tr('Flammes', 'نار', 'Flames')}</Text>
+                {/* Host Info Section */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 180,
+                    left: 16,
+                    right: 16,
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <View style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: '#333',
+                            borderWidth: 1.5,
+                            borderColor: '#FFF',
+                            overflow: 'hidden',
+                            marginRight: 12
+                        }}>
+                            <Image source={{ uri: session.hostAvatar }} style={{ width: '100%', height: '100%' }} />
+                        </View>
+                        <View>
+                            <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }}>
+                                {session.hostName}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Flame size={14} color="#FF8A00" fill="#FF8A00" />
+                                <Text style={{ color: '#FF8A00', fontSize: 12, fontWeight: '800' }}>
+                                    {session.totalLikes || 0} {tr('Flammes', 'نار', 'Flames')}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
+
+                    <Text style={{
+                        color: '#FFF',
+                        fontSize: 24,
+                        fontWeight: '900',
+                        textShadowColor: 'rgba(0,0,0,0.5)',
+                        textShadowRadius: 10,
+                        lineHeight: 30
+                    }}>
+                        {session.title || `${session.hostName} is Live!`}
+                    </Text>
                 </View>
 
+                {/* Floating Join CTA */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 110,
+                    left: 16,
+                    right: 16,
+                }}>
+                    <TouchableOpacity
+                        onPress={() => onJoinLive(session.channelId)}
+                        activeOpacity={0.8}
+                        style={{
+                            backgroundColor: '#EF4444', // Hot Red for Live Action
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 10,
+                            shadowColor: '#EF4444',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 12,
+                            elevation: 8
+                        }}
+                    >
+                        <Animatable.View
+                            animation="pulse"
+                            iterationCount="infinite"
+                            duration={1500}
+                        >
+                            <Play size={20} color="#FFF" fill="#FFF" />
+                        </Animatable.View>
+                        <Text style={{
+                            color: '#FFF',
+                            fontSize: 15,
+                            fontWeight: '900',
+                            letterSpacing: 1
+                        }}>
+                            {tr('REJOINDRE LE LIVE', 'انضم الآن', 'JOIN LIVE')}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Center Pulse (Subtle Indicator) */}
                 <Animatable.View
                     animation="pulse"
                     iterationCount="infinite"
-                    style={styles.playIconContainer}
+                    style={{
+                        position: 'absolute',
+                        top: '40%',
+                        left: '50%',
+                        marginLeft: -25,
+                        marginTop: -25,
+                        width: 50,
+                        height: 50,
+                        borderRadius: 25,
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: -1
+                    }}
                 >
-                    <Play size={32} color="#FFF" fill="#FFF" />
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' }} />
                 </Animatable.View>
-            </TouchableOpacity>
+            </View>
         );
     };
 
@@ -939,13 +1086,15 @@ export default function FeedScreen(props: FeedScreenProps) {
 
     const renderItem = ({ item }: { item: FeedItem }) => {
         const isActive = activeId === item.id;
-        if (item.type === 'live') return renderLiveItem(item);
+        if (item.type === 'live') return renderLiveItem(item, isActive);
         if (item.type === 'ad') return renderAdItem(item, isActive);
         return renderWorkItem(item, isActive);
     };
 
     const activeItem = useMemo(() => sortedFeedItems.find(i => i.id === activeId), [sortedFeedItems, activeId]);
     const isAdActive = activeItem?.type === 'ad';
+    const isLiveActive = activeItem?.type === 'live';
+    const isSpecialActive = isAdActive || isLiveActive;
 
     if (loading) {
         return (
@@ -961,7 +1110,7 @@ export default function FeedScreen(props: FeedScreenProps) {
 
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, backgroundColor: 'transparent' }]}>
-                <View style={{ opacity: isAdActive ? 0 : 1 }}>
+                <View style={{ opacity: isSpecialActive ? 0 : 1 }}>
                     <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
                         {tr('Exploration', 'استكشاف', 'Explore')}
                     </Text>
@@ -970,7 +1119,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     </Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.profileButton, { backgroundColor: isAdActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
+                    style={[styles.profileButton, { backgroundColor: isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
                     onPress={() => {
                         if (feedFilter === 'default') setFeedFilter('viral');
                         else if (feedFilter === 'viral') setFeedFilter('comments');
