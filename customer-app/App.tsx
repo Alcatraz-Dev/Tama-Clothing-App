@@ -224,6 +224,7 @@ const getAppColors = (theme: 'light' | 'dark') => {
     textMuted: t.textMuted,
     white: t.white,
     accent: t.primary,
+    accentForeground: t.primaryForeground,
     error: t.error,
     secondary: t.muted,
     success: t.success,
@@ -1511,8 +1512,8 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
-      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
+      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -2632,7 +2633,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive }: any) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -2803,8 +2804,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
     const commentData = {
       text: commentText.trim(),
       userId: user.uid,
-      userName: profileData?.fullName || user.displayName || 'User',
-      userAvatar: profileData?.avatarUrl || null,
+      userName: currentUserProfileData?.fullName || user.displayName || 'User',
+      userAvatar: currentUserProfileData?.avatarUrl || null,
       createdAt: serverTimestamp(),
       replyToId: replyingTo?.id || null,
       replyToUser: replyingTo?.userName || null,
@@ -2970,6 +2971,9 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
           type: isVid ? 'video' : 'image',
           url,
           createdAt: serverTimestamp(),
+          commentsCount: 0,
+          reactions: {},
+          userReactions: {}
         });
 
         Alert.alert(
@@ -3949,16 +3953,37 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                         </TouchableOpacity>
                       )}
 
-                      {/* Reaction Counts on Thumbnail */}
+                      {/* Interaction Stats (Reactions & Comments) */}
                       <View style={{
                         position: 'absolute',
-                        bottom: 6,
-                        left: 6,
-                        right: 6,
+                        bottom: 8,
+                        left: 8,
+                        right: 8,
                         flexDirection: 'row',
                         flexWrap: 'wrap',
-                        gap: 4
+                        gap: 5,
+                        zIndex: 20
                       }}>
+                        {/* Comment Count Pill */}
+                        {((work.commentsCount || 0) > 0) && (
+                          <View style={{
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.2)'
+                          }}>
+                            <MessageSquare size={11} color="#FFF" strokeWidth={2.5} />
+                            <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>
+                              {work.commentsCount}
+                            </Text>
+                          </View>
+                        )}
+
                         {[
                           { type: 'love', Icon: Heart, color: '#FF4D67' },
                           { type: 'fire', Icon: Flame, color: '#FF8A00' },
@@ -3988,26 +4013,6 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                             </View>
                           );
                         })}
-
-                        {/* Comment Count on Thumbnail */}
-                        {(work.commentsCount > 0) && (
-                          <View style={{
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            paddingHorizontal: 6,
-                            paddingVertical: 3,
-                            borderRadius: 8,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 3,
-                            borderWidth: 0.5,
-                            borderColor: 'rgba(255,255,255,0.1)'
-                          }}>
-                            <MessageSquare size={10} color="#FFF" strokeWidth={2.5} />
-                            <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>
-                              {work.commentsCount}
-                            </Text>
-                          </View>
-                        )}
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -4259,8 +4264,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                               <btn.Icon
                                 size={20}
                                 color={isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
-                                fill={isSelected ? btn.color : "transparent"}
-                                strokeWidth={isSelected ? 2.5 : 1.5}
+                                fill="transparent"
+                                strokeWidth={isSelected ? 3 : 1.5}
                               />
                             </View>
                             <Text style={{ color: isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'), fontSize: 8, fontWeight: '800', marginBottom: 2 }}>
@@ -4314,26 +4319,55 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                                       <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 13 }}>{item.userName}</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                      {(item.userId === user?.uid || isOwnProfile) && (
-                                        <TouchableOpacity onPress={() => {
-                                          Alert.alert(
-                                            tr('Options', 'خيارات', 'Options'),
-                                            '',
-                                            [
-                                              { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' },
-                                              {
-                                                text: tr('Modifier', 'تعديل', 'Edit'), onPress: () => {
-                                                  setEditingComment(item);
-                                                  setCommentText(item.text);
+                                      {(() => {
+                                        const isCommentAuthor = item.userId === user?.uid;
+                                        // If we are on our own profile, we are the post owner
+                                        const isPostOwner = isOwnProfile;
+
+                                        if (isCommentAuthor || isPostOwner) {
+                                          return (
+                                            <TouchableOpacity
+                                              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                              style={{
+                                                padding: 4,
+                                                borderRadius: 12,
+                                                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                                                marginRight: -4
+                                              }}
+                                              onPress={() => {
+                                                const options: any[] = [
+                                                  { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' }
+                                                ];
+
+                                                if (isCommentAuthor) {
+                                                  options.push({
+                                                    text: tr('Modifier', 'تعديل', 'Edit'),
+                                                    onPress: () => {
+                                                      setEditingComment(item);
+                                                      setCommentText(item.text);
+                                                    }
+                                                  });
                                                 }
-                                              },
-                                              { text: tr('Supprimer', 'حذف', 'Delete'), style: 'destructive', onPress: () => handleDeleteComment(item.id) }
-                                            ]
+
+                                                options.push({
+                                                  text: tr('Supprimer', 'حذف', 'Delete'),
+                                                  style: 'destructive',
+                                                  onPress: () => handleDeleteComment(item.id)
+                                                });
+
+                                                Alert.alert(
+                                                  tr('Options', 'خيارات', 'Options'),
+                                                  '',
+                                                  options
+                                                );
+                                              }}
+                                            >
+                                              <MoreVertical size={18} color={colors.foreground} style={{ opacity: 0.9 }} />
+                                            </TouchableOpacity>
                                           );
-                                        }}>
-                                          <MoreVertical size={14} color={colors.secondary} />
-                                        </TouchableOpacity>
-                                      )}
+                                        }
+                                        return null;
+                                      })()}
                                     </View>
                                   </View>
                                   <Text style={{ color: colors.foreground, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{item.text}</Text>
@@ -4366,7 +4400,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                                             <reac.Icon
                                               size={14}
                                               color={isSelected ? reac.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
-                                              fill={isSelected ? reac.color : 'transparent'}
+                                              fill="transparent"
+                                              strokeWidth={isSelected ? 2.5 : 1.5}
                                             />
                                             {count > 0 && (
                                               <Text style={{ color: isSelected ? reac.color : colors.secondary, fontSize: 10, fontWeight: '800' }}>
@@ -4440,15 +4475,15 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                       onPress={handleComment}
                       disabled={!commentText.trim()}
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: commentText.trim() ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'),
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: commentText.trim() ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#E5E5EA'),
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}
                     >
-                      <Send size={16} color={commentText.trim() ? '#FFF' : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')} />
+                      <Send size={18} color={commentText.trim() ? colors.accentForeground : (theme === 'dark' ? 'rgba(255,255,255,0.3)' : '#9CA3AF')} />
                     </TouchableOpacity>
                   </View>
                   {editingComment && (

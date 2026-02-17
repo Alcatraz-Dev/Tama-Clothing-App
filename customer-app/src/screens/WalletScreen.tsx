@@ -549,12 +549,12 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         <View style={styles.balanceRow}>
                             {activeTab === 'recharge' ? <Coins size={28} color="#FFF" style={{ marginRight: 8 }} /> : <Gem size={28} color="#FFF" style={{ marginRight: 8 }} />}
                             <Text style={styles.balanceAmount}>
-                                {activeTab === 'recharge' ? coinBalance.toLocaleString() : diamondBalance.toLocaleString()}
+                                {activeTab === 'recharge' ? Math.max(0, coinBalance).toLocaleString() : Math.max(0, diamondBalance).toLocaleString()}
                             </Text>
                         </View>
                         {activeTab === 'earnings' && (
                             <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '600' }}>
-                                ≈ {(diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)} TND
+                                ≈ {Math.max(0, (diamondBalance * DIAMOND_TO_TND_RATE)).toFixed(2)} TND
                             </Text>
                         )}
                     </View>

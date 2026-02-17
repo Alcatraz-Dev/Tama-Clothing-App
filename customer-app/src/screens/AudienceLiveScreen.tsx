@@ -141,6 +141,7 @@ export default function AudienceLiveScreen(props: Props) {
     const [selectedGift, setSelectedGift] = useState<Gift | null>(null);
     const [giftCategory, setGiftCategory] = useState<'POPULAIRE' | 'SPÉCIAL' | 'LUXE'>('POPULAIRE');
     const [userBalance, setUserBalance] = useState(0);
+    const clampedBalance = Math.max(0, userBalance);
     const [showRechargeModal, setShowRechargeModal] = useState(false);
     const [hostId, setHostId] = useState<string | null>(null);
 
@@ -423,7 +424,7 @@ export default function AudienceLiveScreen(props: Props) {
         if (streamHostIdRef.current) {
             setHostScore(prev => prev + (gift.points || 1));
         }
-        setUserBalance(prev => prev - gift.points);
+        setUserBalance(prev => Math.max(0, prev - gift.points));
 
         // SEND TO FIRESTORE & SIGNALING
         try {
@@ -2332,7 +2333,7 @@ export default function AudienceLiveScreen(props: Props) {
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 15, flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{userBalance.toLocaleString()}</Text>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{clampedBalance.toLocaleString()}</Text>
                                     <Coins size={12} color="#F59E0B" style={{ marginLeft: 4 }} fill="#F59E0B" />
                                     <TouchableOpacity
                                         style={{ marginLeft: 8 }}
