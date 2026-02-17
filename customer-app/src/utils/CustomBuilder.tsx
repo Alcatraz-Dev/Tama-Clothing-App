@@ -89,7 +89,7 @@ export class CustomBuilder {
                 borderColor: 'rgba(255,255,255,0.1)'
             }}>
                 <Users size={12} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{memberCount}</Text>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{Math.max(0, memberCount)}</Text>
                 {requestCoHostCount > 0 && (
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginLeft: 2 }} />
                 )}

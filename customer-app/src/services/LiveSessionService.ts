@@ -138,7 +138,7 @@ export const LiveSessionService = {
         });
     },
     // Create or start a session (Broadcaster)
-    startSession: async (channelId: string, hostName: string, brandId?: string, hostAvatar?: string, hostUserId?: string, collaboratorIds?: string[]) => {
+    startSession: async (channelId: string, hostName: string, brandId?: string, hostAvatar?: string, hostUserId?: string, collaboratorIds?: string[], url?: string) => {
         // 1. Cleanup old sessions for this host
         if (hostUserId) {
             const q = query(
@@ -162,6 +162,8 @@ export const LiveSessionService = {
             publisherType: 'brand', 
             identityRing: true,
             viewCount: 0,
+            totalLikes: 0,
+            totalViewers: 0,
             status: 'live',
             hostName,
             hostAvatar: hostAvatar || null,
@@ -170,7 +172,8 @@ export const LiveSessionService = {
             startedAt: serverTimestamp(),
             lastHeartbeat: serverTimestamp(),
             pinnedTimeline: [],
-            activeCoupon: null
+            activeCoupon: null,
+            url: url || null
         }, { merge: true });
     },
 
@@ -404,7 +407,7 @@ export const LiveSessionService = {
     },
 
     // Start a live stream for a collaboration
-    startCollabSession: async (channelId: string, hostName: string, hostId: string, collabId: string, brandId?: string, hostAvatar?: string) => {
+    startCollabSession: async (channelId: string, hostName: string, hostId: string, collabId: string, brandId?: string, hostAvatar?: string, url?: string) => {
         // 1. Cleanup: If this host already has a live session, mark it as ended
         if (hostId) {
             const q = query(
@@ -429,6 +432,8 @@ export const LiveSessionService = {
             publisherType: 'influencer',
             identityRing: true,
             viewCount: 0,
+            totalLikes: 0,
+            totalViewers: 0,
             status: 'live',
             hostName,
             hostId,
@@ -439,7 +444,8 @@ export const LiveSessionService = {
             startedAt: serverTimestamp(),
             lastHeartbeat: serverTimestamp(),
             pinnedTimeline: [],
-            activeCoupon: null
+            activeCoupon: null,
+            url: url || null
         }, { merge: true });
     },
 

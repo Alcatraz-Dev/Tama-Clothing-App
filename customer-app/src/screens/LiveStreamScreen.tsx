@@ -156,6 +156,7 @@ function LiveDevBuildOnly({
     isReplay,
     replayUrl,
     t,
+    collabId,
 }: {
     channelId: string;
     isHost: boolean;
@@ -172,6 +173,7 @@ function LiveDevBuildOnly({
     isReplay?: boolean;
     replayUrl?: string;
     t?: (key: string) => string;
+    collabId?: string;
 }) {
     // State to force a re-render/retry
     const [retryCount, setRetryCount] = useState(0);
@@ -323,15 +325,34 @@ function LiveDevBuildOnly({
 
         const start = async () => {
             try {
+                // Generate HLS Playback URL for Zego (Common format)
+                // Note: Domain might vary based on your Zego CDN cluster configuration
+                const playbackUrl = `https://hls.zego.im/${ZEGO_APP_ID}/${channelId}.m3u8`;
+
                 // Determine if it's a collaboration or brand session
-                // We use startSession primarily for brands, but it's general enough.
-                await LiveSessionService.startSession(
-                    channelId,
-                    userName,
-                    brandId,
-                    user?.photoURL || undefined,
-                    user?.uid
-                );
+                // Already destructured from props in the component signature
+
+                if (collabId) {
+                    await LiveSessionService.startCollabSession(
+                        channelId,
+                        userName,
+                        userId,
+                        collabId,
+                        brandId,
+                        user?.photoURL || undefined,
+                        playbackUrl
+                    );
+                } else {
+                    await LiveSessionService.startSession(
+                        channelId,
+                        userName,
+                        brandId,
+                        user?.photoURL || undefined,
+                        user?.uid,
+                        [],
+                        playbackUrl
+                    );
+                }
             } catch (err) {
                 console.error("Error starting live session:", err);
             }

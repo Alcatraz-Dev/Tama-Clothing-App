@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { StyleSheet, View, Alert, Text, TouchableOpacity, Image, ActionSheetIOS, Platform, findNodeHandle, Modal, ScrollView, TextInput, ActivityIndicator, Animated, Easing, AppState, KeyboardAvoidingView, Dimensions, Clipboard, FlatList, Share } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { Gift as GiftIcon, Swords, Sparkles, MoreHorizontal, X, Share2, Flame, Radio, Ticket, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, ChessKingIcon, Coins } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
@@ -138,6 +139,13 @@ export default function HostLiveScreen(props: Props) {
     const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
     const couponTimerRef = useRef<any>(null);
     const [showPKResult, setShowPKResult] = useState(false);
+
+    // Promo Video States
+    const [promoUrl, setPromoUrl] = useState<string | null>(null);
+    const [isUploadingPromo, setIsUploadingPromo] = useState(false);
+    const [showPromoModal, setShowPromoModal] = useState(true);
+    const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
+    const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
 
     // ✅ Sync PK state periodically for late joiners
     // ✅ Keep refs in sync for signaling listeners
@@ -931,8 +939,8 @@ export default function HostLiveScreen(props: Props) {
             return;
         }
 
-        console.log('🚀 HostLiveScreen mounted, auto-starting session...');
-        startFirestoreSession();
+        console.log('🚀 HostLiveScreen mounted, waiting for promo selection...');
+        // startFirestoreSession(); // Don't auto-start yet, wait for promo setup
 
         // Subscribe to live sessions for PK Challenge selection
         setLoadingSessions(true);
@@ -1018,17 +1026,68 @@ export default function HostLiveScreen(props: Props) {
     }, [channelId]);
 
     // Handle session lifecycle
-    const startFirestoreSession = async () => {
+    const startFirestoreSession = async (finalPromoUrl?: string) => {
         try {
+            const videoUrl = finalPromoUrl || promoUrl;
             if (collabId) {
-                await LiveSessionService.startCollabSession(channelId, userName, userId, collabId, brandId, hostAvatar);
+                await LiveSessionService.startCollabSession(channelId, userName, userId, collabId, brandId, hostAvatar, videoUrl || undefined);
             } else {
-                await LiveSessionService.startSession(channelId, userName, brandId, hostAvatar, userId);
+                await LiveSessionService.startSession(channelId, userName, brandId, hostAvatar, userId, [], videoUrl || undefined);
             }
             setIsLiveStarted(true); // ✅ Show controls immediately
+            setShowPromoModal(false);
             console.log('🎬 Firestore session started');
         } catch (error) {
             console.error('Error starting Firestore session:', error);
+        }
+    };
+
+    const pickPromoVideo = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                allowsEditing: true,
+                quality: 1,
+            });
+
+            if (!result.canceled) {
+                uploadVideoToCloudinary(result.assets[0].uri);
+            }
+        } catch (error) {
+            Alert.alert(t('error') || 'Error', t('failedToPickVideo') || 'Failed to pick video');
+        }
+    };
+
+    const uploadVideoToCloudinary = async (videoUri: string) => {
+        setIsUploadingPromo(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', {
+                uri: videoUri,
+                type: 'video/mp4',
+                name: 'promo.mp4',
+            } as any);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`,
+                {
+                    method: 'POST',
+                    body: formData,
+                }
+            );
+
+            const data = await response.json();
+            if (data.secure_url) {
+                setPromoUrl(data.secure_url);
+            } else {
+                throw new Error('Upload failed');
+            }
+        } catch (error) {
+            console.error('Cloudinary Video Upload Error:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to upload video to Cloudinary. Check your connection.');
+        } finally {
+            setIsUploadingPromo(false);
         }
     };
 
@@ -1316,6 +1375,9 @@ export default function HostLiveScreen(props: Props) {
 
         // Increment total likes
         setTotalLikes(prev => prev + 1);
+
+        // ✅ Update Firestore (Persist for Feed etc)
+        LiveSessionService.incrementLikes(channelId, 1).catch(e => console.error('Host Like Error:', e));
 
         // If in PK battle, update score and broadcast
         if (isInPKRef.current) {
@@ -2572,7 +2634,7 @@ export default function HostLiveScreen(props: Props) {
                         </TouchableOpacity>
 
                         {/* Beauty Toggle Button */}
-                        <TouchableOpacity
+                        {/* <TouchableOpacity
                             onPress={() => Alert.alert("Beauty", "Beauty Filters toggled!")}
                             style={{
                                 width: 44,
@@ -2588,7 +2650,7 @@ export default function HostLiveScreen(props: Props) {
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                             <Sparkles size={20} color="#fff" />
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
 
 
                         {/* Share Button as requested */}
@@ -3376,6 +3438,230 @@ export default function HostLiveScreen(props: Props) {
                 userName={userName || 'Host'}
                 language={props.language || 'fr'}
             />
+
+            {/* Promo Video Setup Modal */}
+            <Modal
+                visible={showPromoModal && !isLiveStarted}
+                transparent
+                animationType="fade"
+            >
+                <BlurView
+                    intensity={80}
+                    tint="dark"
+                    style={{
+                        flex: 1,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: 20
+                    }}
+                >
+                    <Animatable.View
+                        animation="fadeInUp"
+                        duration={500}
+                        style={{
+                            width: '100%',
+                            maxWidth: 420,
+                            backgroundColor: 'rgba(26, 26, 36, 0.85)',
+                            borderRadius: 35,
+                            padding: 30,
+                            alignItems: 'center',
+                            borderWidth: 1.5,
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 20 },
+                            shadowOpacity: 0.6,
+                            shadowRadius: 30,
+                            elevation: 20
+                        }}
+                    >
+                        {/* Status Icon */}
+                        <View style={{
+                            width: 90,
+                            height: 90,
+                            borderRadius: 45,
+                            backgroundColor: 'rgba(255, 0, 85, 0.08)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginBottom: 24,
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 0, 85, 0.2)'
+                        }}>
+                            <LinearGradient
+                                colors={['#FF0055', '#FF4D80']}
+                                style={{
+                                    width: 60,
+                                    height: 60,
+                                    borderRadius: 30,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    shadowColor: '#FF0055',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 8,
+                                }}
+                            >
+                                <Radio size={32} color="#fff" />
+                            </LinearGradient>
+                        </View>
+
+                        <Text style={{
+                            color: '#fff',
+                            fontSize: 28,
+                            fontWeight: '900',
+                            textAlign: 'center',
+                            marginBottom: 12,
+                            letterSpacing: -0.5
+                        }}>
+                            {t('liveSetup')}
+                        </Text>
+
+                        <Text style={{
+                            color: 'rgba(255,255,255,0.7)',
+                            fontSize: 16,
+                            textAlign: 'center',
+                            marginBottom: 35,
+                            lineHeight: 24,
+                            paddingHorizontal: 10
+                        }}>
+                            {t('addPromoVideoDesc')}
+                        </Text>
+
+                        {promoUrl ? (
+                            <Animatable.View
+                                animation="bounceIn"
+                                style={{ width: '100%', alignItems: 'center', marginBottom: 35 }}
+                            >
+                                <LinearGradient
+                                    colors={['rgba(0, 255, 127, 0.15)', 'rgba(0, 255, 127, 0.05)']}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        paddingHorizontal: 20,
+                                        paddingVertical: 12,
+                                        borderRadius: 20,
+                                        marginBottom: 15,
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(0, 255, 127, 0.3)'
+                                    }}
+                                >
+                                    <Sparkles size={20} color="#00FF7F" style={{ marginRight: 10 }} />
+                                    <Text style={{ color: '#00FF7F', fontWeight: '800', fontSize: 16 }}>
+                                        {t('videoReady')}
+                                    </Text>
+                                </LinearGradient>
+                                <TouchableOpacity
+                                    onPress={pickPromoVideo}
+                                    activeOpacity={0.7}
+                                    style={{
+                                        paddingVertical: 8,
+                                        paddingHorizontal: 16,
+                                        backgroundColor: 'rgba(255,255,255,0.05)',
+                                        borderRadius: 12
+                                    }}
+                                >
+                                    <Text style={{ color: '#3B82F6', fontWeight: '800', fontSize: 14 }}>
+                                        {t('changeVideo').toUpperCase()}
+                                    </Text>
+                                </TouchableOpacity>
+                            </Animatable.View>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={pickPromoVideo}
+                                disabled={isUploadingPromo}
+                                activeOpacity={0.8}
+                                style={{
+                                    width: '100%',
+                                    height: 120,
+                                    borderRadius: 24,
+                                    borderWidth: 2,
+                                    borderColor: 'rgba(255, 0, 85, 0.4)',
+                                    borderStyle: 'dashed',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginBottom: 35,
+                                    backgroundColor: 'rgba(255, 0, 85, 0.03)'
+                                }}
+                            >
+                                {isUploadingPromo ? (
+                                    <View style={{ alignItems: 'center' }}>
+                                        <ActivityIndicator color="#FF0055" size="large" />
+                                        <Text style={{ color: '#FF0055', marginTop: 12, fontWeight: '700' }}>UPLOADING...</Text>
+                                    </View>
+                                ) : (
+                                    <View style={{ alignItems: 'center' }}>
+                                        <View style={{
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 24,
+                                            backgroundColor: 'rgba(255, 0, 85, 0.1)',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            marginBottom: 12
+                                        }}>
+                                            <PlusCircle size={28} color="#FF0055" />
+                                        </View>
+                                        <Text style={{ color: '#FF0055', fontWeight: '900', fontSize: 18 }}>
+                                            {t('selectVideo')}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        )}
+
+                        <View style={{ width: '100%', gap: 15 }}>
+                            <TouchableOpacity
+                                onPress={() => startFirestoreSession()}
+                                disabled={isUploadingPromo}
+                                activeOpacity={0.9}
+                            >
+                                <LinearGradient
+                                    colors={isUploadingPromo ? ['#444', '#333'] : ['#FF0055', '#FF4D80']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        width: '100%',
+                                        height: 64,
+                                        borderRadius: 20,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        shadowColor: '#FF0055',
+                                        shadowOffset: { width: 0, height: 8 },
+                                        shadowOpacity: 0.35,
+                                        shadowRadius: 12,
+                                        elevation: 8
+                                    }}
+                                >
+                                    <Text style={{ color: '#fff', fontSize: 19, fontWeight: '900', letterSpacing: 0.5 }}>
+                                        {t('startLiveNow').toUpperCase()}
+                                    </Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+
+                            {!promoUrl && !isUploadingPromo && (
+                                <TouchableOpacity
+                                    onPress={() => startFirestoreSession()}
+                                    activeOpacity={0.7}
+                                    style={{
+                                        width: '100%',
+                                        height: 50,
+                                        justifyContent: 'center',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: 'rgba(255,255,255,0.4)',
+                                        fontWeight: '800',
+                                        fontSize: 15,
+                                        textDecorationLine: 'underline'
+                                    }}>
+                                        {t('skipForNow')}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </Animatable.View>
+                </BlurView>
+            </Modal>
         </View >
     );
 }

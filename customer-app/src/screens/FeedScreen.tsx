@@ -291,7 +291,7 @@ export default function FeedScreen(props: FeedScreenProps) {
     const renderLiveItem = (item: FeedItem, isActive: boolean) => {
         const session = item.data;
         const isDark = theme === 'dark';
-        const liveUrl = session.url || session.playbackUrl || session.hlsUrl;
+        const liveUrl = session.promoUrl || session.url || session.playbackUrl || session.hlsUrl;
 
         return (
             <View style={styles.liveCard}>
@@ -348,7 +348,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     }}>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />
                         <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>
-                            {tr('EN DIRECT', 'مباشر', 'LIVE')}
+                            {t('enDirect') || 'EN DIRECT'}
                         </Text>
                     </BlurView>
 
@@ -365,7 +365,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         gap: 5
                     }}>
                         <Eye size={12} color="#FFF" />
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{session.viewCount || 0}</Text>
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{Math.max(0, session.viewCount || 0)}</Text>
                     </BlurView>
                 </View>
 
@@ -396,7 +396,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <Flame size={14} color="#FF8A00" fill="#FF8A00" />
                                 <Text style={{ color: '#FF8A00', fontSize: 12, fontWeight: '800' }}>
-                                    {session.totalLikes || 0} {tr('Flammes', 'نار', 'Flames')}
+                                    {session.totalLikes || 0} {t('flammes') || 'Flammes'}
                                 </Text>
                             </View>
                         </View>
@@ -410,7 +410,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         textShadowRadius: 10,
                         lineHeight: 30
                     }}>
-                        {session.title || `${session.hostName} is Live!`}
+                        {session.title || `${session.hostName} ${t('hostIsLive') || 'is Live!'}`}
                     </Text>
                 </View>
 
@@ -452,7 +452,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                             fontWeight: '900',
                             letterSpacing: 1
                         }}>
-                            {tr('REJOINDRE LE LIVE', 'انضم الآن', 'JOIN LIVE')}
+                            {(t('joinLive') || 'JOIN LIVE').toUpperCase()}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -1046,20 +1046,20 @@ export default function FeedScreen(props: FeedScreenProps) {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     borderWidth: showColor ? 1.2 : 1,
-                                    borderColor: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'),
+                                    borderColor: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.7)'),
                                     marginBottom: 4
                                 }}>
                                     <btn.Icon
                                         size={16}
-                                        color={showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)')}
+                                        color={showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.7)')}
                                         fill="transparent"
                                         strokeWidth={isSelected ? 2.5 : 1.5}
                                     />
                                 </View>
-                                <Text style={{ color: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'), fontSize: 7, fontWeight: '800', marginBottom: 1 }}>
+                                <Text style={{ color: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.7)'), fontSize: 7, fontWeight: '800', marginBottom: 1 }}>
                                     {btn.label}
                                 </Text>
-                                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
+                                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(255,255,255,0.7)', textShadowRadius: 2 }}>
                                     {count}
                                 </Text>
                             </TouchableOpacity>
