@@ -93,8 +93,16 @@ import {
   ThumbsDown,
   Meh,
   Sparkles,
-  ImagePlay
+  ImagePlay,
+  Download,
+  Share2,
+  Repeat,
+  MessageSquare,
+  MoreVertical,
+  DownloadCloud,
+  ArrowRightLeft
 } from 'lucide-react-native';
+import { Share } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -220,6 +228,7 @@ const getAppColors = (theme: 'light' | 'dark') => {
     secondary: t.muted,
     success: t.success,
     warning: t.warning,
+    surface: theme === 'dark' ? '#1A1A24' : '#F2F2F7',
   };
 };
 
@@ -1686,7 +1695,7 @@ export default function App() {
           </View>
         )}
       </SafeAreaProvider>
-    </ThemeContext.Provider>
+    </ThemeContext.Provider >
   );
 }
 
@@ -2663,6 +2672,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
   const [selectedWork, setSelectedWork] = useState<any>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [editingComment, setEditingComment] = useState<any>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<string[]>([]);
   const profileScrollRef = useRef<any>(null);
 
   useEffect(() => {
@@ -2719,6 +2734,186 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
       console.error('Reaction Error', e);
     }
   };
+
+  const handleCommentReact = async (comment: any, type: string = 'love') => {
+    if (!user || !selectedWork) return;
+    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!targetUid) return;
+
+    const commentRef = doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', comment.id);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const docSnap = await transaction.get(commentRef);
+        if (!docSnap.exists()) return;
+
+        const data = docSnap.data();
+        const currentReactions = data.reactions || {};
+        const userReactions = data.userReactions || {};
+
+        const prevType = userReactions[user.uid];
+
+        if (prevType === type) {
+          delete userReactions[user.uid];
+          currentReactions[type] = Math.max(0, (currentReactions[type] || 0) - 1);
+        } else {
+          if (prevType) {
+            currentReactions[prevType] = Math.max(0, (currentReactions[prevType] || 0) - 1);
+          }
+          userReactions[user.uid] = type;
+          currentReactions[type] = (currentReactions[type] || 0) + 1;
+        }
+
+        transaction.update(commentRef, {
+          reactions: currentReactions,
+          userReactions: userReactions
+        });
+      });
+    } catch (e) {
+      console.error('Comment Reaction Error', e);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedWork) {
+      const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+      if (!targetUid) return;
+
+      setLoadingComments(true);
+      const q = query(
+        collection(db, 'users', targetUid, 'works', selectedWork.id, 'comments'),
+        orderBy('createdAt', 'asc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setLoadingComments(false);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [selectedWork, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
+
+  const handleComment = async () => {
+    if (!user || !commentText.trim() || !selectedWork) return;
+
+    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!targetUid) return;
+
+    const commentData = {
+      text: commentText.trim(),
+      userId: user.uid,
+      userName: profileData?.fullName || user.displayName || 'User',
+      userAvatar: profileData?.avatarUrl || null,
+      createdAt: serverTimestamp(),
+      replyToId: replyingTo?.id || null,
+      replyToUser: replyingTo?.userName || null,
+      parentCommentId: replyingTo ? (replyingTo.parentCommentId || replyingTo.id) : null,
+      reactions: {},
+      userReactions: {},
+    };
+
+    try {
+      if (editingComment) {
+        await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', editingComment.id), {
+          text: commentText.trim(),
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'users', targetUid, 'works', selectedWork.id, 'comments'), commentData);
+        // Also update comment count on the work
+        await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id), {
+          commentsCount: increment(1)
+        });
+      }
+      setCommentText("");
+      setReplyingTo(null);
+      setEditingComment(null);
+    } catch (e) {
+      console.error('Comment Error', e);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!selectedWork) return;
+    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!targetUid) return;
+
+    try {
+      await deleteDoc(doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', commentId));
+      await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id), {
+        commentsCount: increment(-1)
+      });
+    } catch (e) {
+      console.error('Delete Comment Error', e);
+    }
+  };
+
+  const handleRepost = async (work: any) => {
+    if (!user) return;
+    Alert.alert(
+      tr('Republier', 'إعادة نشر', 'Repost'),
+      tr('Voulez-vous republier ce travail sur votre profil ?', 'هل تريد إعادة نشر هذا العمل على ملفك الشخصي؟', 'Do you want to repost this work to your profile?'),
+      [
+        { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' },
+        {
+          text: tr('Republier', 'إعادة نشر', 'Repost'),
+          onPress: async () => {
+            try {
+              await addDoc(collection(db, 'users', user.uid, 'works'), {
+                ...work,
+                repostedFrom: profileData?.uid || profileData?.id,
+                repostedFromName: profileData?.fullName || 'User',
+                createdAt: serverTimestamp(),
+                reactions: {},
+                userReactions: {},
+                commentsCount: 0
+              });
+              Alert.alert(t('successTitle'), tr('Republié avec succès', 'تمت إعادة النشر بنجاح', 'Reposted successfully'));
+            } catch (e) {
+              console.error('Repost Error', e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleShare = async (work: any) => {
+    try {
+      await Share.share({
+        message: `Check out this work on Tama Clothing! ${work.url}`,
+        url: work.url,
+      });
+    } catch (e) {
+      console.error('Share Error', e);
+    }
+  };
+
+  const handleDownload = async (work: any) => {
+    try {
+      // In a real app, you'd use FileSystem and MediaLibrary for native downloads.
+      // For now, we'll open the URL as a fallback if native modules aren't available.
+      Linking.openURL(work.url);
+      Alert.alert(t('successTitle'), tr('Ouverture du lien pour téléchargement', 'فتح الرابط للتحميل', 'Opening link for download'));
+    } catch (e) {
+      console.error('Download Error', e);
+    }
+  };
+
+  const getTotalStats = (work: any) => {
+    if (!work) return 0;
+    const totalReactions = work.reactions ? Object.values(work.reactions).reduce((a: any, b: any) => a + b, 0) : 0;
+    const commentsCount = work.commentsCount || 0;
+    return (totalReactions as number) + commentsCount;
+  };
+
+  const isViral = (work: any) => {
+    if (!work) return false;
+    return getTotalStats(work) >= 100;
+  };
+
+
 
 
   const isBrandOwner = profileData?.role === 'brand_owner' || (profileData?.role === 'admin' && profileData?.brandId);
@@ -2938,7 +3133,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 }}>
           <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
             onPress={onBack}
           >
             <ChevronLeft size={24} color={colors.foreground} strokeWidth={2.5} />
@@ -2952,7 +3147,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
           </Animated.Text>
 
           <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
             onPress={() => onNavigate('Settings')}
           >
             <Settings size={22} color={colors.foreground} strokeWidth={2} />
@@ -3793,6 +3988,26 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
                             </View>
                           );
                         })}
+
+                        {/* Comment Count on Thumbnail */}
+                        {(work.commentsCount > 0) && (
+                          <View style={{
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            paddingHorizontal: 6,
+                            paddingVertical: 3,
+                            borderRadius: 8,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                            borderWidth: 0.5,
+                            borderColor: 'rgba(255,255,255,0.1)'
+                          }}>
+                            <MessageSquare size={10} color="#FFF" strokeWidth={2.5} />
+                            <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>
+                              {work.commentsCount}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -3849,126 +4064,403 @@ function ProfileScreen({ user, onBack, onLogout, profileData, updateProfile, onN
       <Modal
         visible={!!selectedWork}
         animationType="slide"
-        transparent={true}
+        transparent={false}
         onRequestClose={() => setSelectedWork(null)}
       >
-        <View style={{ flex: 1, backgroundColor: 'black' }}>
-          <SafeAreaView style={{ flex: 1 }}>
-            {/* Header */}
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingHorizontal: 20,
-              paddingTop: 10,
-              zIndex: 10
-            }}>
-              <TouchableOpacity
-                onPress={() => setSelectedWork(null)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: 'rgba(255,255,255,0.15)',
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, backgroundColor: colors.background }}
+        >
+          <View style={{ flex: 1 }}>
+            {selectedWork && (
+              <View style={{ flex: 1 }}>
+                {/* Header Container (Floating & Blurred) */}
+                <View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <X size={24} color="white" />
-              </TouchableOpacity>
+                  paddingHorizontal: 16,
+                  paddingTop: insets.top + 12,
+                  paddingBottom: 12,
+                  zIndex: 100,
+                  backgroundColor: 'transparent'
+                }}>
+                  <BlurView
+                    intensity={80}
+                    tint={theme}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setSelectedWork(null)}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#FFF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <X size={20} color={colors.foreground} />
+                  </TouchableOpacity>
 
-              <Text style={{ color: 'white', fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
-                {selectedWork?.type === 'video' ? tr('VIDÉO', 'فيديو', 'VIDEO') : tr('PHOTO', 'صورة', 'PHOTO')}
-              </Text>
+                  <Text style={{ color: colors.foreground, fontWeight: '900', fontSize: 16 }}>
+                    {selectedWork?.type === 'video' ? tr('VIDÉO', 'فيديو', 'VIDEO') : tr('PHOTO', 'صورة', 'PHOTO')}
+                  </Text>
 
-              <View style={{ width: 44 }} />
-            </View>
-
-            {/* Media Content */}
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              {selectedWork?.type === 'video' ? (
-                <Video
-                  source={{ uri: selectedWork.url }}
-                  style={{ width: width, height: height * 0.7 }}
-                  resizeMode={ResizeMode.CONTAIN}
-                  shouldPlay={true}
-                  isLooping={true}
-                  useNativeControls
-                />
-              ) : (
-                <Image
-                  source={{ uri: selectedWork?.url }}
-                  style={{ width: width, height: height * 0.7 }}
-                  resizeMode="contain"
-                />
-              )}
-            </View>
-
-            {/* Reaction Bar */}
-            <Animatable.View animation="fadeInUp" duration={500} style={{
-              paddingBottom: 50,
-              paddingHorizontal: 20,
-              alignItems: 'center'
-            }}>
-              <View style={{
-                flexDirection: 'row',
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 30,
-                width: width * 0.92,
-                justifyContent: 'space-between',
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)'
-              }}>
-                {[
-                  { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('Amour', 'حب', 'Love') },
-                  { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('Feu', 'نار', 'Fire') },
-                  { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('Haha', 'هاها', 'Haha') },
-                  { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('Mauvais', 'سيء', 'Bad') },
-                  { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('Moche', 'بشع', 'Ugly') },
-                  { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('Intéressant', 'مشوق', 'Interesting') }
-                ].map((btn) => {
-                  const isSelected = selectedWork?.userReactions?.[user?.uid] === btn.type;
-                  const itemWidth = (width * 0.92 - 24) / 6;
-                  return (
-                    <TouchableOpacity
-                      key={btn.type}
-                      onPress={() => handleReact(selectedWork, btn.type)}
-                      activeOpacity={0.7}
-                      style={{ alignItems: 'center', width: itemWidth }}
-                    >
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    {isViral(selectedWork) && (
                       <View style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
+                        backgroundColor: '#FF4D67',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        <Flame size={12} color="white" fill="white" />
+                        <Text style={{ color: 'white', fontWeight: '900', fontSize: 10 }}>VIRAL</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => handleShare(selectedWork)}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#FFF',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderWidth: 2,
-                        borderColor: btn.color,
-                        marginBottom: 6
-                      }}>
-                        <btn.Icon
-                          size={22}
-                          color={btn.color}
-                          fill="transparent"
-                          strokeWidth={isSelected ? 3 : 1.5}
-                        />
-                      </View>
-                      <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 7, fontWeight: '700', marginBottom: 1 }} numberOfLines={1}>
-                        {btn.label}
-                      </Text>
-                      <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>
-                        {selectedWork?.reactions?.[btn.type] || 0}
-                      </Text>
+                        borderWidth: 1,
+                        borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <Share2 size={18} color={colors.foreground} />
                     </TouchableOpacity>
-                  )
-                })}
+                  </View>
+                </View>
+
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: 20, paddingTop: insets.top + 64 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Media Content - Full Width with black background to make media pop */}
+                  <View style={{ width: width, height: height * 0.5, backgroundColor: '#000', justifyContent: 'center' }}>
+                    {selectedWork?.type === 'video' ? (
+                      <Video
+                        source={{ uri: selectedWork.url }}
+                        style={{ width: width, height: height * 0.5 }}
+                        resizeMode={ResizeMode.CONTAIN}
+                        shouldPlay={true}
+                        isLooping={true}
+                        useNativeControls
+                      />
+                    ) : (
+                      <Image
+                        source={{ uri: selectedWork?.url }}
+                        style={{ width: width, height: height * 0.5 }}
+                        resizeMode="contain"
+                      />
+                    )}
+                  </View>
+
+                  <View style={{ paddingVertical: 20 }}>
+                    {/* Action Bar (Download, Repost) */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
+                      <TouchableOpacity
+                        onPress={() => handleDownload(selectedWork)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 25,
+                          borderWidth: 1,
+                          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                        }}
+                      >
+                        <DownloadCloud size={18} color={colors.foreground} />
+                        <Text style={{ color: colors.foreground, fontWeight: '700', fontSize: 13 }}>{tr('Télécharger', 'تحميل', 'Download')}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => handleRepost(selectedWork)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 25,
+                          borderWidth: 1,
+                          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                        }}
+                      >
+                        <Repeat size={18} color={colors.foreground} />
+                        <Text style={{ color: colors.foreground, fontWeight: '700', fontSize: 13 }}>{tr('Republier', 'إعادة نشر', 'Repost')}</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Reaction Bar */}
+                    <View style={{
+                      flexDirection: 'row',
+                      backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderRadius: 30,
+                      alignSelf: 'center',
+                      width: width * 0.94,
+                      justifyContent: 'space-between',
+                      borderWidth: 1,
+                      borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                      marginBottom: 25
+                    }}>
+                      {[
+                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('Amour', 'حب', 'Love') },
+                        { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('Feu', 'نار', 'Fire') },
+                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('Drôle', 'مضحك', 'Haha') },
+                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('Bof', 'سيء', 'Bad') },
+                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('Moche', 'بشع', 'Ugly') },
+                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('Top', 'مثير', 'Cool') },
+                        ...(isViral(selectedWork) ? [{ type: 'trendy', Icon: Star, color: '#FFD700', label: tr('Viral', 'فيروس', 'Trendy') }] : [])
+                      ].map((btn) => {
+                        const isSelected = selectedWork?.userReactions?.[user?.uid] === btn.type;
+                        const itemCount = isViral(selectedWork) ? 7 : 6;
+                        const itemWidth = (width * 0.94 - 32) / itemCount;
+                        return (
+                          <TouchableOpacity
+                            key={btn.type}
+                            onPress={() => handleReact(selectedWork, btn.type)}
+                            activeOpacity={0.7}
+                            style={{ alignItems: 'center', width: itemWidth }}
+                          >
+                            <View style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: 19,
+                              backgroundColor: isSelected ? (btn.color + '20') : 'transparent',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: 1.5,
+                              borderColor: isSelected ? btn.color : 'transparent',
+                              marginBottom: 4
+                            }}>
+                              <btn.Icon
+                                size={20}
+                                color={isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
+                                fill={isSelected ? btn.color : "transparent"}
+                                strokeWidth={isSelected ? 2.5 : 1.5}
+                              />
+                            </View>
+                            <Text style={{ color: isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'), fontSize: 8, fontWeight: '800', marginBottom: 2 }}>
+                              {btn.label.toUpperCase()}
+                            </Text>
+                            <Text style={{ color: colors.foreground, fontSize: 10, fontWeight: '900' }}>
+                              {selectedWork?.reactions?.[btn.type] || 0}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+
+                    {/* Comments Section Container */}
+                    <View style={{ paddingHorizontal: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                        <MessageSquare size={18} color={colors.foreground} />
+                        <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 15 }}>
+                          {tr('Commentaires', 'تعليقات', 'Comments')} ({selectedWork?.commentsCount || 0})
+                        </Text>
+                      </View>
+
+                      {loadingComments ? (
+                        <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
+                      ) : comments.length === 0 ? (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                          <MessageSquare size={40} color={colors.foreground} style={{ opacity: 0.2, marginBottom: 12 }} />
+                          <Text style={{ color: colors.foreground, textAlign: 'center', fontSize: 13, opacity: 0.6, fontWeight: '800' }}>
+                            {tr('Soyez le premier à commenter', 'كن أول من يعلق', 'Be the first to comment')}
+                          </Text>
+                        </View>
+                      ) : (
+                        (() => {
+                          const topLevelComments = comments.filter(c => !c.parentCommentId);
+                          return topLevelComments.map((comment) => {
+                            const replies = comments.filter(r => r.parentCommentId === comment.id);
+                            const isExpanded = expandedReplies.includes(comment.id);
+
+                            const renderComment = (item: any, isReply = false) => (
+                              <View key={item.id} style={{ marginBottom: isReply ? 12 : 16, flexDirection: 'row', gap: 12 }}>
+                                <View style={{ width: isReply ? 28 : 36, height: isReply ? 28 : 36, borderRadius: isReply ? 14 : 18, backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
+                                  {item.userAvatar ? (
+                                    <Image source={{ uri: item.userAvatar }} style={{ width: isReply ? 28 : 36, height: isReply ? 28 : 36, borderRadius: isReply ? 14 : 18 }} />
+                                  ) : (
+                                    <Text style={{ color: colors.foreground, fontSize: isReply ? 10 : 12, fontWeight: '900' }}>{getInitials(item.userName)}</Text>
+                                  )}
+                                </View>
+                                <View style={{ flex: 1, backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'), padding: 10, borderRadius: 15, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 13 }}>{item.userName}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                      {(item.userId === user?.uid || isOwnProfile) && (
+                                        <TouchableOpacity onPress={() => {
+                                          Alert.alert(
+                                            tr('Options', 'خيارات', 'Options'),
+                                            '',
+                                            [
+                                              { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' },
+                                              {
+                                                text: tr('Modifier', 'تعديل', 'Edit'), onPress: () => {
+                                                  setEditingComment(item);
+                                                  setCommentText(item.text);
+                                                }
+                                              },
+                                              { text: tr('Supprimer', 'حذف', 'Delete'), style: 'destructive', onPress: () => handleDeleteComment(item.id) }
+                                            ]
+                                          );
+                                        }}>
+                                          <MoreVertical size={14} color={colors.secondary} />
+                                        </TouchableOpacity>
+                                      )}
+                                    </View>
+                                  </View>
+                                  <Text style={{ color: colors.foreground, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{item.text}</Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                                    <TouchableOpacity onPress={() => {
+                                      setReplyingTo(item);
+                                      setCommentText(`@${item.userName} `);
+                                    }}>
+                                      <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '900' }}>{tr('Répondre', 'رد', 'Reply')}</Text>
+                                    </TouchableOpacity>
+
+                                    {/* Small Reactions List */}
+                                    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                      {[
+                                        { type: 'love', Icon: Heart, color: '#FF4D67' },
+                                        { type: 'fire', Icon: Flame, color: '#FF8A00' },
+                                        { type: 'haha', Icon: Laugh, color: '#FFD600' },
+                                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8' },
+                                        { type: 'ugly', Icon: Ghost, color: '#818CF8' },
+                                        { type: 'interesting', Icon: Sparkles, color: '#A855F7' }
+                                      ].map(reac => {
+                                        const isSelected = item.userReactions?.[user?.uid] === reac.type;
+                                        const count = item.reactions?.[reac.type] || 0;
+                                        return (
+                                          <TouchableOpacity
+                                            key={reac.type}
+                                            onPress={() => handleCommentReact(item, reac.type)}
+                                            style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                                          >
+                                            <reac.Icon
+                                              size={14}
+                                              color={isSelected ? reac.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
+                                              fill={isSelected ? reac.color : 'transparent'}
+                                            />
+                                            {count > 0 && (
+                                              <Text style={{ color: isSelected ? reac.color : colors.secondary, fontSize: 10, fontWeight: '800' }}>
+                                                {count}
+                                              </Text>
+                                            )}
+                                          </TouchableOpacity>
+                                        );
+                                      })}
+                                    </View>
+                                  </View>
+                                </View>
+                              </View>
+                            );
+
+                            return (
+                              <View key={comment.id}>
+                                {renderComment(comment)}
+                                {replies.length > 0 && (
+                                  <View style={{ marginLeft: 48, marginBottom: 12 }}>
+                                    <TouchableOpacity
+                                      onPress={() => setExpandedReplies(prev =>
+                                        prev.includes(comment.id) ? prev.filter(id => id !== comment.id) : [...prev, comment.id]
+                                      )}
+                                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                                    >
+                                      <View style={{ height: 1, width: 20, backgroundColor: colors.foreground, opacity: 0.2 }} />
+                                      <Text style={{ color: colors.foreground, fontSize: 11, fontWeight: '900', opacity: 0.7 }}>
+                                        {isExpanded ? tr('Masquer les réponses', 'إخفاء الردود', 'Hide replies') : `${tr('Voir', 'عرض', 'View')} ${replies.length} ${tr('réponses', 'ردود', 'replies')}`}
+                                      </Text>
+                                    </TouchableOpacity>
+                                    {isExpanded && replies.map(reply => renderComment(reply, true))}
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          });
+                        })()
+                      )}
+                    </View>
+                  </View>
+                </ScrollView>
+
+                {/* Fixed Bottom Input Area */}
+                <View style={{
+                  paddingHorizontal: 16,
+                  paddingTop: 12,
+                  paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+                  borderTopWidth: 1,
+                  borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                  backgroundColor: colors.background
+                }}>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+                    borderRadius: 24,
+                    paddingHorizontal: 16,
+                    height: 48,
+                    borderWidth: 1,
+                    borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                  }}>
+                    <TextInput
+                      style={{ flex: 1, color: colors.foreground, fontSize: 14 }}
+                      placeholder={tr('Écrire un commentaire...', 'اكتب تعليقاً...', 'Write a comment...')}
+                      placeholderTextColor={theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)'}
+                      value={commentText}
+                      onChangeText={setCommentText}
+                    />
+                    <TouchableOpacity
+                      onPress={handleComment}
+                      disabled={!commentText.trim()}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: commentText.trim() ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'),
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <Send size={16} color={commentText.trim() ? '#FFF' : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')} />
+                    </TouchableOpacity>
+                  </View>
+                  {editingComment && (
+                    <TouchableOpacity onPress={() => { setEditingComment(null); setCommentText(""); }} style={{ marginTop: 8, paddingLeft: 12 }}>
+                      <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '700' }}>{tr('Annuler modification', 'إلغاء التعديل', 'Cancel edit')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </Animatable.View>
-          </SafeAreaView>
-        </View>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
