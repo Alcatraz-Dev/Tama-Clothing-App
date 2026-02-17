@@ -929,7 +929,10 @@ export default function HostLiveScreen(props: Props) {
         if (hostAvatar && userId) {
             CustomBuilder.registerAvatar(userId, hostAvatar);
         }
-    }, [hostAvatar, userId]);
+        if (userName && userId) {
+            CustomBuilder.registerUserName(userId, userName);
+        }
+    }, [hostAvatar, userId, userName]);
 
     // AUTO-START Firestore session on mount (since we skip the start button)
     useEffect(() => {
@@ -2014,28 +2017,51 @@ export default function HostLiveScreen(props: Props) {
 
                             const isCoHost = item.role === 1;
                             const isBlocked = blockedApplying.includes(item.userID);
-                            // FORCE Name Resolution: The item passed to callback often has stale/ID name.
-                            // We fetch the latest user object from SDK which the list uses for display.
-                            let targetName = item.userName;
-                            if (ZegoUIKit) {
-                                try {
-                                    const realUser = ZegoUIKit.getUser(item.userID);
-                                    if (realUser) {
-                                        if (realUser.userName && realUser.userName !== item.userID) {
-                                            targetName = realUser.userName;
-                                        } else if (realUser.nickName && realUser.nickName !== item.userID) {
-                                            targetName = realUser.nickName;
+
+                            // Helper function to check if a string looks like a user ID
+                            const looksLikeUserId = (str: string) => {
+                                if (!str) return true;
+                                // User IDs are typically long alphanumeric strings (20+ chars)
+                                return str.length > 20 && /^[a-zA-Z0-9]+$/.test(str);
+                            };
+
+                            // FORCE Name Resolution: Try multiple sources for the display name
+                            // 1. Check CustomBuilder cache (most reliable)
+                            let targetName = CustomBuilder.getUserName(item.userID);
+                            console.log('📝 CustomBuilder name:', targetName);
+
+                            // 2. If not cached or looks like ID, try item properties
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                targetName = item.userName || item.nickName || '';
+                                console.log('📝 Item name:', targetName);
+                            }
+
+                            // 3. If still showing user ID or empty, try ZegoUIKit
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                if (ZegoUIKit) {
+                                    try {
+                                        const realUser = ZegoUIKit.getUser(item.userID);
+                                        console.log('📝 ZegoUIKit user:', realUser);
+                                        if (realUser) {
+                                            const name = realUser.userName || realUser.nickName || '';
+                                            if (name && !looksLikeUserId(name)) {
+                                                targetName = name;
+                                                // Cache it for future use
+                                                CustomBuilder.registerUserName(item.userID, name);
+                                            }
                                         }
+                                    } catch (e) {
+                                        console.log('Error fetching user info:', e);
                                     }
-                                } catch (e) {
-                                    console.log('Error fetching user info:', e);
                                 }
                             }
 
-                            // Fallback
-                            if (!targetName || targetName === item.userID) {
+                            // 4. Final fallback to a generic name (never show user IDs)
+                            if (!targetName || looksLikeUserId(targetName)) {
                                 targetName = 'User';
                             }
+
+                            console.log('✅ Final targetName:', targetName);
 
                             // Define Actions
                             const actionOptions = [
@@ -2558,15 +2584,15 @@ export default function HostLiveScreen(props: Props) {
             {/* ✅ Only show after live starts to prevent bugs */}
             {
                 isLiveStarted && (
-                    <View style={{ position: 'absolute', bottom: 100, right: 15, gap: 14, alignItems: 'center', zIndex: 1000 }}>
+                    <View style={{ position: 'absolute', bottom: 100, right: 15, gap: 14, alignItems: 'center' }}>
                         {/* Commerce Button */}
                         <TouchableOpacity
                             onPress={() => setShowProductModal(true)}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2575,17 +2601,17 @@ export default function HostLiveScreen(props: Props) {
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <ShoppingBag size={20} color="#fff" />
+                            <ShoppingBag size={16} color="#fff" />
                         </TouchableOpacity>
 
                         {/* PK Toggle Button */}
                         <TouchableOpacity
                             onPress={() => setShowPKInviteModal(true)}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.4)',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2594,34 +2620,36 @@ export default function HostLiveScreen(props: Props) {
                             }}
                         >
                             {!isInPK && <BlurView intensity={20} style={StyleSheet.absoluteFill} />}
-                            <Swords size={20} color="#fff" />
+                            <Swords size={16} color="#fff" />
                         </TouchableOpacity>
 
                         {/* Gift Button for Host */}
                         <TouchableOpacity
                             onPress={openGiftModal}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: '#FF0066',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                borderWidth: 1.5,
-                                borderColor: '#fff'
+                                borderWidth: 1,
+                                borderColor: 'rgba(255,255,255,0.2)',
+                                overflow: 'hidden'
                             }}
                         >
-                            <GiftIcon size={20} color="#fff" strokeWidth={2} />
+                            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                            <GiftIcon size={16} color="#fff" strokeWidth={2} />
                         </TouchableOpacity>
 
                         {/* Coupon Button */}
                         <TouchableOpacity
                             onPress={() => setShowCouponModal(true)}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: activeCoupon ? '#F59E0B' : 'rgba(0,0,0,0.4)',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: activeCoupon ? '#F59E0B' : 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2629,18 +2657,18 @@ export default function HostLiveScreen(props: Props) {
                                 overflow: 'hidden'
                             }}
                         >
-                            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <Ticket size={20} color="#fff" />
+                            {!activeCoupon && <BlurView intensity={20} style={StyleSheet.absoluteFill} />}
+                            <Ticket size={16} color="#fff" />
                         </TouchableOpacity>
 
                         {/* Beauty Toggle Button */}
                         {/* <TouchableOpacity
                             onPress={() => Alert.alert("Beauty", "Beauty Filters toggled!")}
                             style={{
-                                width: 44,
-                                height: 44,
+                                width: 37,
+                                height: 37,
                                 borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                backgroundColor: 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2649,7 +2677,7 @@ export default function HostLiveScreen(props: Props) {
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <Sparkles size={20} color="#fff" />
+                            <Sparkles size={16} color="#fff" />
                         </TouchableOpacity> */}
 
 
@@ -2657,10 +2685,10 @@ export default function HostLiveScreen(props: Props) {
                         <TouchableOpacity
                             onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2669,7 +2697,7 @@ export default function HostLiveScreen(props: Props) {
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <Share2 size={20} color="#fff" />
+                            <Share2 size={16} color="#fff" />
                         </TouchableOpacity>
                     </View>
                 )

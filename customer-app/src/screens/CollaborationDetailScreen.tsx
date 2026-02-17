@@ -815,11 +815,16 @@ export default function CollaborationDetailScreen({
                                 {/* START BUTTON - ONLY FOR HOST */}
                                 {isHost && (
                                     <TouchableOpacity
-                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
+                                        style={[styles.liveActionButton, { backgroundColor: '#EF4444', flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12 }]}
                                         onPress={handleLiveAction}
                                     >
                                         <Camera size={16} color="#FFF" style={{ marginRight: 6 }} />
-                                        <Text style={styles.liveActionText} numberOfLines={1} adjustsFontSizeToFit>
+                                        <Text
+                                            style={[styles.liveActionText, { flexShrink: 1, textAlign: 'center' }]}
+                                            numberOfLines={2}
+                                            adjustsFontSizeToFit
+                                            minimumFontScale={0.75}
+                                        >
                                             {t('startLive') || 'START LIVE'}
                                         </Text>
                                     </TouchableOpacity>
@@ -1273,7 +1278,7 @@ const styles = StyleSheet.create({
     },
     liveActionText: {
         color: '#FFF',
-        fontSize: 7.5,
+        fontSize: 9,
         fontWeight: '900',
         letterSpacing: 0.5,
     },

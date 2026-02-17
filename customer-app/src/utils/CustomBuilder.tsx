@@ -4,6 +4,8 @@ import { Camera, Video, Mic, MicOff, Users, X, MessageCircle, Gift, RefreshCw, S
 export class CustomBuilder {
     // Store for user avatars
     private static avatars: Map<string, string> = new Map();
+    // Store for user display names
+    private static userNames: Map<string, string> = new Map();
 
     static registerAvatar = (userId: string, avatarUrl: string) => {
         this.avatars.set(userId, avatarUrl);
@@ -11,6 +13,14 @@ export class CustomBuilder {
 
     static getUserAvatar = (userId: string): string | undefined => {
         return this.avatars.get(userId);
+    };
+
+    static registerUserName = (userId: string, userName: string) => {
+        this.userNames.set(userId, userName);
+    };
+
+    static getUserName = (userId: string): string | undefined => {
+        return this.userNames.get(userId);
     };
 
     static toggleCameraBuilder = (isOn: boolean) => {
@@ -48,14 +58,14 @@ export class CustomBuilder {
     static leaveBuilder = () => {
         return (
             <View style={{
-                width: 32,
-                height: 32,
+                width: 27,
+                height: 27,
                 backgroundColor: '#EF4444',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 16
+                borderRadius: 20
             }}>
-                <X size={14} color="#fff" strokeWidth={3} />
+                <X size={16} color="#fff" fontSize={16} />
             </View>
         );
     };
@@ -63,14 +73,14 @@ export class CustomBuilder {
     static minimizingBuilder = () => {
         return (
             <View style={{
-                width: 32,
-                height: 32,
+                width: 27,
+                height: 27,
                 backgroundColor: 'rgba(0,0,0,0.6)',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 16
+                borderRadius: 20
             }}>
-                <Text style={{ color: '#fff', fontSize: 14 }}>−</Text>
+                <Text style={{ color: '#fff', fontSize: 16 }}>−</Text>
             </View>
         );
     };
@@ -166,17 +176,12 @@ export class CustomBuilder {
             <View style={{
                 width: 44,
                 height: 44,
-                backgroundColor: '#FF0066', // TikTok Pink
+                backgroundColor: 'rgba(0,0,0,0.4)', // Standard dark background
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: 22,
-                shadowColor: '#FE2C55',
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.8,
-                shadowRadius: 10,
-                elevation: 5,
-                borderWidth: 1.5,
-                borderColor: '#fff'
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
             }}>
                 <Gift size={20} color="#fff" strokeWidth={2.5} />
             </View>
@@ -188,12 +193,12 @@ export class CustomBuilder {
             <View style={{
                 width: 40,
                 height: 40,
-                backgroundColor: 'rgba(59, 130, 246, 0.8)', // Professional Blue
+                backgroundColor: 'rgba(0,0,0,0.4)', // Standard dark background
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: 20,
-                borderWidth: 1.5,
-                borderColor: '#fff'
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
             }}>
                 <Swords size={18} color="#fff" />
             </View>

@@ -524,6 +524,9 @@ export default function AudienceLiveScreen(props: Props) {
         if (userAvatar && userId) {
             CustomBuilder.registerAvatar(userId, userAvatar);
         }
+        if (userName && userId) {
+            CustomBuilder.registerUserName(userId, userName);
+        }
 
         // 1. Subscribe to session to get host details and sync state
         const unsubscribe = LiveSessionService.subscribeToSession(channelId, (session) => {
@@ -2553,10 +2556,10 @@ export default function AudienceLiveScreen(props: Props) {
                 <TouchableOpacity
                     onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                     style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        width: 37,
+                        height: 37,
+                        borderRadius: 20,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderWidth: 1,
@@ -2565,7 +2568,7 @@ export default function AudienceLiveScreen(props: Props) {
                     }}
                 >
                     <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                    <Share2 size={20} color="#fff" />
+                    <Share2 size={16} color="#fff" />
                 </TouchableOpacity>
 
                 {/* Like Button - TikTok Style Glass/Pink */}
@@ -2573,10 +2576,10 @@ export default function AudienceLiveScreen(props: Props) {
                     onPress={handleSendLike}
                     activeOpacity={0.7}
                     style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: 'rgba(0,0,0,0.4)', // Glass background for base state
+                        width: 37,
+                        height: 37,
+                        borderRadius: 20,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderWidth: 1,
@@ -2585,7 +2588,7 @@ export default function AudienceLiveScreen(props: Props) {
                     }}
                 >
                     <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                    <Heart size={20} color="#FF0066" fill="#FF0066" />
+                    <Heart size={16} color="#FF0066" fill="#FF0066" />
                 </TouchableOpacity>
 
                 {/* PINK GIFT BUTTON - Prominent */}
@@ -2593,34 +2596,32 @@ export default function AudienceLiveScreen(props: Props) {
                     onPress={() => setShowGifts(true)}
                     activeOpacity={0.7}
                     style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: '#FF0066',
+                        width: 37,
+                        height: 37,
+                        borderRadius: 20,
+                        backgroundColor: 'rgba(0,0,0,0.8)',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderWidth: 1.5,
-                        borderColor: '#fff',
-                        shadowColor: '#FE2C55',
-                        shadowOpacity: 0.5,
-                        shadowRadius: 10,
-                        elevation: 10
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        overflow: 'hidden'
                     }}
                 >
-                    <GiftIcon size={20} color="#fff" strokeWidth={2.5} />
+                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                    <GiftIcon size={16} color="#fff" strokeWidth={2} />
                 </TouchableOpacity>
 
                 {/* AMBER SHOPPING BAG BUTTON */}
                 {featuredProducts.length > 0 && (
-                    <View style={{ width: 44, height: 44 }}>
+                    <View style={{ width: 37, height: 37 }}>
                         <TouchableOpacity
                             onPress={() => setShowProductSheet(true)}
                             activeOpacity={0.7}
                             style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                width: 37,
+                                height: 37,
+                                borderRadius: 20,
+                                backgroundColor: 'rgba(0,0,0,0.8)',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderWidth: 1,
@@ -2629,7 +2630,7 @@ export default function AudienceLiveScreen(props: Props) {
                             }}
                         >
                             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <ShoppingBag size={20} color="#fff" />
+                            <ShoppingBag size={16} color="#fff" />
                         </TouchableOpacity>
                         <View style={{
                             position: 'absolute',
