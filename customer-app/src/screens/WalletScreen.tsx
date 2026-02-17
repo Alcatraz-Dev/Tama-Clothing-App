@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Alert, Image, Modal, TextInput, Animated, ActivityIndicator } from 'react-native';
 import { ChevronLeft, Coins, CreditCard, ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, History, Gem, Repeat, ArrowRight, X, RefreshCw, Search, Users, User, Send, Check, ChevronRight } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
@@ -8,7 +8,7 @@ import { Theme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, setDoc, increment, serverTimestamp, collection, query, orderBy, limit, onSnapshot, addDoc, getDocs, where, runTransaction, arrayUnion, arrayRemove, deleteDoc, documentId } from 'firebase/firestore';
 import { db } from '../api/firebase';
-
+import { KeyboardAvoidingView, Platform, Keyboard } from "react-native";
 const RECHARGE_PACKAGES = [
     { id: '1', coins: 100, price: 3.00, priceDisplay: '3.00 TND', bonus: 0 },
     { id: '2', coins: 550, price: 15.00, priceDisplay: '15.00 TND', bonus: 50 },
@@ -824,7 +824,17 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             )}
         </View>
     );
+    const [keyboardOpen, setKeyboardOpen] = useState(false);
 
+    useEffect(() => {
+        const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+        const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+
+        return () => {
+            show.remove();
+            hide.remove();
+        };
+    }, []);
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {renderHeader()}
@@ -846,116 +856,128 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                 animationType="fade"
                 onRequestClose={() => setShowExchangeModal(false)}
             >
+                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
                 <View style={styles.modalOverlay}>
-                    <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
+                    <View style={[styles.modalContent, { maxHeight: keyboardOpen ? "95%" : "65%" }, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Exchange Assets', 'Échanger des Actifs', 'تبادل الأصول')}</Text>
                             <TouchableOpacity onPress={() => setShowExchangeModal(false)}>
                                 <X size={24} color={colors.foreground} />
                             </TouchableOpacity>
                         </View>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === "ios" ? "padding" : "height"}
+                            style={{ flex: 1 }}
+                            keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                        >
+                            <ScrollView
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                                contentContainerStyle={{ paddingBottom: 20 }}
+                            >
 
-                        <View style={styles.exchangeSelector}>
-                            <TouchableOpacity
-                                style={[styles.exchangeTypeBtn, exchangeType === 'diamondsToCoins' && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }]}
-                                onPress={() => setExchangeType('diamondsToCoins')}
-                            >
-                                <Gem size={18} color={exchangeType === 'diamondsToCoins' ? '#FFF' : '#8B5CF6'} fill={exchangeType === 'diamondsToCoins' ? '#FFF' : 'transparent'} />
-                                <ArrowRight size={12} color={exchangeType === 'diamondsToCoins' ? '#FFF' : colors.textMuted} style={{ marginHorizontal: 4 }} />
-                                <Coins size={18} color={exchangeType === 'diamondsToCoins' ? '#FFF' : '#F59E0B'} fill={exchangeType === 'diamondsToCoins' ? '#FFF' : 'transparent'} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.exchangeTypeBtn, exchangeType === 'coinsToDiamonds' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}
-                                onPress={() => setExchangeType('coinsToDiamonds')}
-                            >
-                                <Coins size={18} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : '#F59E0B'} fill={exchangeType === 'coinsToDiamonds' ? '#FFF' : 'transparent'} />
-                                <ArrowRight size={12} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : colors.textMuted} style={{ marginHorizontal: 4 }} />
-                                <Gem size={18} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : '#8B5CF6'} fill={exchangeType === 'coinsToDiamonds' ? '#FFF' : 'transparent'} />
-                            </TouchableOpacity>
-                        </View>
+                                <View style={styles.exchangeSelector}>
+                                    <TouchableOpacity
+                                        style={[styles.exchangeTypeBtn, exchangeType === 'diamondsToCoins' && { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' }]}
+                                        onPress={() => setExchangeType('diamondsToCoins')}
+                                    >
+                                        <Gem size={18} color={exchangeType === 'diamondsToCoins' ? '#FFF' : '#8B5CF6'} fill={exchangeType === 'diamondsToCoins' ? '#FFF' : 'transparent'} />
+                                        <ArrowRight size={12} color={exchangeType === 'diamondsToCoins' ? '#FFF' : colors.textMuted} style={{ marginHorizontal: 4 }} />
+                                        <Coins size={18} color={exchangeType === 'diamondsToCoins' ? '#FFF' : '#F59E0B'} fill={exchangeType === 'diamondsToCoins' ? '#FFF' : 'transparent'} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.exchangeTypeBtn, exchangeType === 'coinsToDiamonds' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}
+                                        onPress={() => setExchangeType('coinsToDiamonds')}
+                                    >
+                                        <Coins size={18} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : '#F59E0B'} fill={exchangeType === 'coinsToDiamonds' ? '#FFF' : 'transparent'} />
+                                        <ArrowRight size={12} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : colors.textMuted} style={{ marginHorizontal: 4 }} />
+                                        <Gem size={18} color={exchangeType === 'coinsToDiamonds' ? '#FFF' : '#8B5CF6'} fill={exchangeType === 'coinsToDiamonds' ? '#FFF' : 'transparent'} />
+                                    </TouchableOpacity>
+                                </View>
 
-                        {/* Balance Card in Modal */}
-                        <View style={{ marginBottom: 24 }}>
-                            <LinearGradient
-                                colors={exchangeType === 'coinsToDiamonds' ? ['#F59E0B', '#D97706'] : ['#8B5CF6', '#7C3AED']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={[styles.balanceCard, { height: 100, padding: 16 }]}
-                            >
-                                <View>
-                                    <Text style={[styles.balanceLabel, { fontSize: 12, marginBottom: 4 }]}>
-                                        {exchangeType === 'diamondsToCoins' ? tr('Diamond Balance', 'Solde de Diamants', 'رصيد الألماس') : tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات')}
+                                {/* Balance Card in Modal */}
+                                <View style={{ marginBottom: 24 }}>
+                                    <LinearGradient
+                                        colors={exchangeType === 'coinsToDiamonds' ? ['#F59E0B', '#D97706'] : ['#8B5CF6', '#7C3AED']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={[styles.balanceCard, { height: 100, padding: 16 }]}
+                                    >
+                                        <View>
+                                            <Text style={[styles.balanceLabel, { fontSize: 12, marginBottom: 4 }]}>
+                                                {exchangeType === 'diamondsToCoins' ? tr('Diamond Balance', 'Solde de Diamants', 'رصيد الألماس') : tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات')}
+                                            </Text>
+                                            <View style={styles.balanceRow}>
+                                                {exchangeType === 'diamondsToCoins' ? <Gem size={22} color="#FFF" style={{ marginRight: 6 }} /> : <Coins size={22} color="#FFF" style={{ marginRight: 6 }} />}
+                                                <Text style={[styles.balanceAmount, { fontSize: 28 }]}>
+                                                    {exchangeType === 'diamondsToCoins' ? diamondBalance.toLocaleString() : coinBalance.toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={[styles.walletIconContainer, { width: 44, height: 44, borderRadius: 22 }]}>
+                                            <Wallet size={24} color="rgba(255,255,255,0.8)" />
+                                        </View>
+                                    </LinearGradient>
+                                </View>
+
+                                <View style={{ marginBottom: 20 }}>
+                                    <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
+                                        {exchangeType === 'diamondsToCoins' ? tr('Amount of Diamonds to Send', 'Montant de Diamants à Envoyer', 'مبلغ الألماس للإرسال') : tr('Amount of Coins to Send', 'Montant de Pièces à Envoyer', 'مبلغ العملات للإرسال')}
                                     </Text>
-                                    <View style={styles.balanceRow}>
-                                        {exchangeType === 'diamondsToCoins' ? <Gem size={22} color="#FFF" style={{ marginRight: 6 }} /> : <Coins size={22} color="#FFF" style={{ marginRight: 6 }} />}
-                                        <Text style={[styles.balanceAmount, { fontSize: 28 }]}>
-                                            {exchangeType === 'diamondsToCoins' ? diamondBalance.toLocaleString() : coinBalance.toLocaleString()}
-                                        </Text>
+                                    <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                                        <TextInput
+                                            style={[styles.modalInput, { color: colors.foreground }]}
+                                            keyboardType="numeric"
+                                            value={exchangeAmount}
+                                            onChangeText={setExchangeAmount}
+                                            placeholder="0"
+                                            placeholderTextColor={colors.textMuted}
+                                        />
+                                        <TouchableOpacity onPress={() => setExchangeAmount((exchangeType === 'diamondsToCoins' ? diamondBalance : coinBalance).toString())}>
+                                            <Text style={{ color: colors.info, fontWeight: 'bold', fontSize: 13 }}>MAX</Text>
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                                <View style={[styles.walletIconContainer, { width: 44, height: 44, borderRadius: 22 }]}>
-                                    <Wallet size={24} color="rgba(255,255,255,0.8)" />
-                                </View>
-                            </LinearGradient>
-                        </View>
 
-                        <View style={{ marginBottom: 20 }}>
-                            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
-                                {exchangeType === 'diamondsToCoins' ? tr('Amount of Diamonds to Send', 'Montant de Diamants à Envoyer', 'مبلغ الألماس للإرسال') : tr('Amount of Coins to Send', 'Montant de Pièces à Envoyer', 'مبلغ العملات للإرسال')}
-                            </Text>
-                            <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
-                                <TextInput
-                                    style={[styles.modalInput, { color: colors.foreground }]}
-                                    keyboardType="numeric"
-                                    value={exchangeAmount}
-                                    onChangeText={setExchangeAmount}
-                                    placeholder="0"
-                                    placeholderTextColor={colors.textMuted}
-                                />
-                                <TouchableOpacity onPress={() => setExchangeAmount((exchangeType === 'diamondsToCoins' ? diamondBalance : coinBalance).toString())}>
-                                    <Text style={{ color: colors.info, fontWeight: 'bold', fontSize: 13 }}>MAX</Text>
+                                <View style={[styles.exchangeReview, { padding: 15, marginBottom: 15 }]}>
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('From', 'De', 'من')}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.foreground }}>{exchangeAmount || '0'}</Text>
+                                            {exchangeType === 'diamondsToCoins' ? <Gem size={14} color="#8B5CF6" style={{ marginLeft: 4 }} /> : <Coins size={14} color="#F59E0B" style={{ marginLeft: 4 }} />}
+                                        </View>
+                                    </View>
+
+                                    <ArrowRight size={18} color={colors.textMuted} />
+
+                                    <View style={{ alignItems: 'center', flex: 1 }}>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('You Get', 'Vous recevez', 'سوف تستلم')}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#10B981' }}>
+                                                {exchangeType === 'diamondsToCoins' ? (parseInt(exchangeAmount) || 0) : Math.ceil((parseInt(exchangeAmount) || 0) * 0.7)}
+                                            </Text>
+                                            {exchangeType === 'diamondsToCoins' ? <Coins size={14} color="#F59E0B" style={{ marginLeft: 4 }} /> : <Gem size={14} color="#8B5CF6" style={{ marginLeft: 4 }} />}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {exchangeType === 'coinsToDiamonds' && (
+                                    <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', padding: 10, borderRadius: 12, marginBottom: 20 }}>
+                                        <Text style={{ color: '#EF4444', fontSize: 10, textAlign: 'center', lineHeight: 14 }}>
+                                            ⚠️ {tr('30% conversion fee applied when converting Coins to Diamonds.', 'Frais de conversion de 30% appliqués lors de la conversion de pièces en diamants.', 'يتم تطبيق رسوم تحويل بنسبة 30٪ عند تحويل العملات إلى ماس.')}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                <TouchableOpacity
+                                    style={[styles.confirmBtn, { backgroundColor: loading ? colors.textMuted : (exchangeType === 'diamondsToCoins' ? '#8B5CF6' : '#F59E0B'), height: 50 }]}
+                                    onPress={handleConfirmExchange}
+                                    disabled={loading || !exchangeAmount}
+                                >
+                                    <Text style={[styles.confirmBtnText, { fontSize: 15 }]}>{loading ? tr('Processing...', 'Traitement...', 'جاري التحميل...') : tr('Confirm Exchange', 'Confirmer l\'Échange', 'تأكيد التبادل')}</Text>
                                 </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <View style={[styles.exchangeReview, { padding: 15, marginBottom: 15 }]}>
-                            <View style={{ alignItems: 'center', flex: 1 }}>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('From', 'De', 'من')}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.foreground }}>{exchangeAmount || '0'}</Text>
-                                    {exchangeType === 'diamondsToCoins' ? <Gem size={14} color="#8B5CF6" style={{ marginLeft: 4 }} /> : <Coins size={14} color="#F59E0B" style={{ marginLeft: 4 }} />}
-                                </View>
-                            </View>
-
-                            <ArrowRight size={18} color={colors.textMuted} />
-
-                            <View style={{ alignItems: 'center', flex: 1 }}>
-                                <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('You Get', 'Vous recevez', 'سوف تستلم')}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#10B981' }}>
-                                        {exchangeType === 'diamondsToCoins' ? (parseInt(exchangeAmount) || 0) : Math.ceil((parseInt(exchangeAmount) || 0) * 0.7)}
-                                    </Text>
-                                    {exchangeType === 'diamondsToCoins' ? <Coins size={14} color="#F59E0B" style={{ marginLeft: 4 }} /> : <Gem size={14} color="#8B5CF6" style={{ marginLeft: 4 }} />}
-                                </View>
-                            </View>
-                        </View>
-
-                        {exchangeType === 'coinsToDiamonds' && (
-                            <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', padding: 10, borderRadius: 12, marginBottom: 20 }}>
-                                <Text style={{ color: '#EF4444', fontSize: 10, textAlign: 'center', lineHeight: 14 }}>
-                                    ⚠️ {tr('30% conversion fee applied when converting Coins to Diamonds.', 'Frais de conversion de 30% appliqués lors de la conversion de pièces en diamants.', 'يتم تطبيق رسوم تحويل بنسبة 30٪ عند تحويل العملات إلى ماس.')}
-                                </Text>
-                            </View>
-                        )}
-
-                        <TouchableOpacity
-                            style={[styles.confirmBtn, { backgroundColor: loading ? colors.textMuted : (exchangeType === 'diamondsToCoins' ? '#8B5CF6' : '#F59E0B'), height: 50 }]}
-                            onPress={handleConfirmExchange}
-                            disabled={loading || !exchangeAmount}
-                        >
-                            <Text style={[styles.confirmBtnText, { fontSize: 15 }]}>{loading ? tr('Processing...', 'Traitement...', 'جاري التحميل...') : tr('Confirm Exchange', 'Confirmer l\'Échange', 'تأكيد التبادل')}</Text>
-                        </TouchableOpacity>
+                            </ScrollView>
+                        </KeyboardAvoidingView>
                     </View>
                 </View>
             </Modal>
@@ -1286,7 +1308,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     </View>
                 </View>
             </Modal>
-        </View>
+        </View >
     );
 }
 
@@ -1519,10 +1541,13 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
+        width: "100%",
+        flex: 1,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
-        paddingBottom: 40,
-        maxHeight: '90%',
+        padding: 20,
+        paddingBottom: 20,
+
     },
     modalHeader: {
         flexDirection: 'row',
@@ -1675,6 +1700,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         backgroundColor: 'rgba(100,100,100,0.05)',
         padding: 20,
+
         borderRadius: 16,
         marginBottom: 20,
     },
