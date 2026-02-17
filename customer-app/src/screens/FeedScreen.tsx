@@ -16,9 +16,12 @@ import {
     Platform,
     StatusBar,
     RefreshControl,
-    Animated
+    Animated,
+    Share,
+    Alert,
+    Linking
 } from 'react-native';
-import { collection, query, where, getDocs, onSnapshot, collectionGroup, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, collectionGroup, orderBy, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { Video, ResizeMode } from 'expo-av';
 import { db } from '../api/firebase';
 import { BlurView } from 'expo-blur';
@@ -40,10 +43,15 @@ import {
     User,
     ChevronRight,
     Laugh,
+    DownloadCloud,
+    Send,
+    Repeat,
     ThumbsDown,
     Ghost,
     Sparkles
 } from 'lucide-react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { Theme } from '../theme';
 import { LiveSessionService } from '../services/LiveSessionService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -64,28 +72,61 @@ interface FeedScreenProps {
     language: string;
     onNavigate: (screen: string, params?: any) => void;
     onJoinLive: (channelId: string) => void;
-    onWorkPress: (work: any, targetUid: string) => void;
+    onWorkPress?: (work: any, targetUid: string) => void;
+    onCommentPress?: (work: any, targetUid: string) => void;
+    onUserPress?: (userId: string) => void;
+    user?: any;
+    profileData?: any;
 }
 
-export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive, onWorkPress }: FeedScreenProps) {
+export default function FeedScreen(props: FeedScreenProps) {
+    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, user, profileData } = props;
     const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [feedFilter, setFeedFilter] = useState<'default' | 'viral' | 'comments'>('default');
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [lives, setLives] = useState<FeedItem[]>([]);
+    const [works, setWorks] = useState<FeedItem[]>([]);
+
+    const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+        if (viewableItems.length > 0) {
+            setActiveId(viewableItems[0].key);
+        }
+    }).current;
+
+    const viewabilityConfig = useRef({
+        itemVisiblePercentThreshold: 50
+    }).current;
+
+    const feedItemsCombined = useMemo(() => {
+        let combined = [...lives, ...works];
+        combined.sort((a, b) => {
+            const aUrgent = (a.type === 'live' && a.score >= 50) || (a.type === 'work' && a.score >= 100);
+            const bUrgent = (b.type === 'live' && b.score >= 50) || (b.type === 'work' && b.score >= 100);
+
+            if (aUrgent && !bUrgent) return -1;
+            if (!aUrgent && bUrgent) return 1;
+            if (aUrgent && bUrgent) return b.score - a.score;
+
+            const timeA = a.createdAt?.seconds || 0;
+            const timeB = b.createdAt?.seconds || 0;
+            return timeB - timeA;
+        });
+        return combined;
+    }, [lives, works]);
 
     const sortedFeedItems = useMemo(() => {
-        let items = [...feedItems];
+        let items = [...feedItemsCombined];
         if (feedFilter === 'viral') {
-            // Sort by score (Reactions) descending
             return items.sort((a, b) => b.score - a.score);
         }
         if (feedFilter === 'comments') {
-            // Sort by Comments Count descending
             return items.sort((a, b) => (b.data.commentsCount || 0) - (a.data.commentsCount || 0));
         }
-        // Default: Keep original fetch order (which has urgency + date logic)
         return items;
-    }, [feedItems, feedFilter]);
+    }, [feedItemsCombined, feedFilter]);
+
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
 
@@ -108,16 +149,18 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
         return getTotalStats(work) >= 100;
     };
 
-    const fetchFeed = async () => {
-        try {
-            // 1. Fetch Active Lives
-            const livesQuery = query(
-                collection(db, 'Live_sessions'),
-                where('status', '==', 'live'),
-                limit(10)
-            );
-            const livesSnap = await getDocs(livesQuery);
-            const lives: FeedItem[] = livesSnap.docs.map(doc => {
+    useEffect(() => {
+        setLoading(true);
+
+        // 1. Real-time Listener for Active Lives
+        const livesQuery = query(
+            collection(db, 'Live_sessions'),
+            where('status', '==', 'live'),
+            limit(10)
+        );
+
+        const unsubscribeLives = onSnapshot(livesQuery, (snapshot) => {
+            const liveItems: FeedItem[] = snapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     id: doc.id,
@@ -127,50 +170,46 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                     createdAt: data.startedAt || { seconds: Date.now() / 1000 }
                 };
             });
+            setLives(liveItems);
+            // If lives update, we might still be loading works
+        });
 
-            // 2. Fetch Works (using collectionGroup)
-            // Note: We fetch without orderBy to avoid needing a composite index
-            // Sorting is done in JavaScript below
-            const worksQuery = query(
-                collectionGroup(db, 'works'),
-                // orderBy('createdAt', 'desc'), // Only enable if composite index exists
-                limit(30)
-            );
-            const worksSnap = await getDocs(worksQuery);
+        // 2. Real-time Listener for Works
+        const worksQuery = query(
+            collectionGroup(db, 'works'),
+            limit(30)
+        );
 
-            // 2a. Pre-process works to get User IDs
-            const rawWorks = worksSnap.docs.map(doc => {
+        // Persistent cache for profiles within this screen's lifecycle
+        const userProfiles: Record<string, any> = {};
+
+        const unsubscribeWorks = onSnapshot(worksQuery, async (snapshot) => {
+            const rawDocs = snapshot.docs.map(doc => {
                 const data = doc.data();
-                const parentPath = doc.ref.parent.path; // users/UID/works
-                const userId = parentPath.split('/')[1];
-                return { id: doc.id, data, userId, doc };
+                const fullPath = doc.ref.path;
+                const parentPath = doc.ref.parent.path;
+                const segments = parentPath.split('/');
+                // Robust extraction: if it's users/UID/works, userId is segments[1]
+                const userId = segments[0] === 'users' ? segments[1] : (data.userId || data.authorId || segments[1]);
+                return { id: doc.id, data, userId, fullPath };
             });
 
-            // 2b. Fetch User Profiles
-            const uniqueUserIds = [...new Set(rawWorks.map(w => w.userId))];
-            const userProfiles: Record<string, any> = {};
-
-            await Promise.all(uniqueUserIds.map(async (uid) => {
-                try {
-                    if (!uid) return;
-                    const snap = await getDoc(doc(db, 'users', uid));
-                    if (snap.exists()) {
-                        userProfiles[uid] = snap.data();
+            // Fetch missing profiles
+            const missingUids = [...new Set(rawDocs.filter(w => !userProfiles[w.userId]).map(w => w.userId))];
+            if (missingUids.length > 0) {
+                await Promise.all(missingUids.map(async (uid) => {
+                    try {
+                        const snap = await getDoc(doc(db, 'users', uid));
+                        if (snap.exists()) userProfiles[uid] = snap.data();
+                    } catch (e) {
+                        console.warn('Error fetching user profile:', uid);
                     }
-                } catch (e) {
-                    console.warn('Error fetching user profile for feed:', uid);
-                }
-            }));
+                }));
+            }
 
-            // 2c. Construct Feed Items
-            const works: FeedItem[] = rawWorks.map(({ id, data, userId }) => {
-                const userProfile = userProfiles[userId];
-                const userName = userProfile?.displayName || userProfile?.fullName || 'User';
-                const userPhoto = userProfile?.avatarUrl || userProfile?.photoURL || userProfile?.image || null;
-
-                // Prioritize 'url' field which is used in addDoc, fallback to others
+            const workItems: FeedItem[] = rawDocs.map(({ id, data, userId, fullPath }) => {
+                const profile = userProfiles[userId];
                 const finalUrl = data.url || data.imageUrl || data.mediaUrl;
-
                 return {
                     id,
                     type: 'work',
@@ -178,54 +217,30 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                         ...data,
                         id,
                         userId,
-                        userName,
-                        userPhoto,
-                        imageUrl: finalUrl, // Standardized key for display
+                        userName: profile?.displayName || profile?.fullName || 'User',
+                        userPhoto: profile?.avatarUrl || profile?.photoURL || profile?.image || null,
+                        imageUrl: finalUrl,
+                        fullPath: fullPath,
                         type: data.type || (finalUrl?.includes('.mp4') ? 'video' : 'image')
                     },
                     score: getTotalStats(data),
                     createdAt: data.createdAt || { seconds: Date.now() / 1000 }
                 };
             });
-
-            // 3. Combine and Sort
-            let combined = [...lives, ...works];
-
-            combined.sort((a, b) => {
-                // Priority 1: Lives with high flame count or Viral works
-                const aUrgent = (a.type === 'live' && a.score >= 50) || (a.type === 'work' && a.score >= 100);
-                const bUrgent = (b.type === 'live' && b.score >= 50) || (b.type === 'work' && b.score >= 100);
-
-                if (aUrgent && !bUrgent) return -1;
-                if (!aUrgent && bUrgent) return 1;
-
-                // Priority 2: Score within urgency/non-urgency groups
-                if (aUrgent && bUrgent) {
-                    return b.score - a.score;
-                }
-
-                // Priority 3: Date (descending)
-                const timeA = a.createdAt?.seconds || 0;
-                const timeB = b.createdAt?.seconds || 0;
-                return timeB - timeA;
-            });
-
-            setFeedItems(combined);
-        } catch (error) {
-            console.error('Error fetching feed:', error);
-        } finally {
+            setWorks(workItems);
             setLoading(false);
             setRefreshing(false);
-        }
-    };
+        });
 
-    useEffect(() => {
-        fetchFeed();
+        return () => {
+            unsubscribeLives();
+            unsubscribeWorks();
+        };
     }, []);
 
     const onRefresh = () => {
         setRefreshing(true);
-        fetchFeed();
+        setTimeout(() => setRefreshing(false), 800);
     };
 
     const renderLiveItem = (item: FeedItem) => {
@@ -275,6 +290,151 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
         );
     };
 
+    const handleReaction = async (work: any, type: string = 'love') => {
+        if (!user) {
+            Alert.alert(tr('Connexion requise', 'تسجيل الدخول مطلوب', 'Login Required'), tr('Veuillez vous connecter pour réagir', 'يرجى تسجيل الدخول للتفاعل', 'Please login to react'));
+            return;
+        }
+
+        const workId = work.id;
+        // work.userId is the Author ID (from fetchFeed mapping)
+        const authorId = work.userId;
+
+        const currentReactions = work.userReactions || {};
+        const previousReaction = currentReactions[user.uid];
+
+        // 1. Calculate Optimistic State
+        let newReactionsCounts = { ...work.reactions };
+        let newUserReactions = { ...currentReactions };
+
+        if (previousReaction === type) {
+            // Toggle OFF (Remove)
+            delete newUserReactions[user.uid];
+            newReactionsCounts[type] = Math.max(0, (newReactionsCounts[type] || 0) - 1);
+        } else {
+            // New or Switch
+            if (previousReaction) {
+                // Decrement old
+                newReactionsCounts[previousReaction] = Math.max(0, (newReactionsCounts[previousReaction] || 0) - 1);
+            }
+            // Increment new
+            newReactionsCounts[type] = (newReactionsCounts[type] || 0) + 1;
+            newUserReactions[user.uid] = type;
+        }
+
+        // 2. Apply Optimistic Update
+        setFeedItems(prev => prev.map(item => {
+            if (item.id === workId) {
+                return {
+                    ...item,
+                    data: {
+                        ...item.data,
+                        reactions: newReactionsCounts,
+                        userReactions: newUserReactions
+                    },
+                    score: getTotalStats({ ...item.data, reactions: newReactionsCounts })
+                };
+            }
+            return item;
+        }));
+
+        // 3. Persist to Firestore
+        try {
+            const workRef = work.fullPath
+                ? doc(db, work.fullPath)
+                : doc(db, 'users', authorId, 'works', workId);
+            const updates: any = {};
+
+            if (previousReaction === type) {
+                // Remove
+                updates[`reactions.${type}`] = increment(-1);
+                updates[`userReactions.${user.uid}`] = deleteField();
+            } else {
+                // Add or Switch
+                updates[`reactions.${type}`] = increment(1);
+                updates[`userReactions.${user.uid}`] = type;
+                if (previousReaction) {
+                    updates[`reactions.${previousReaction}`] = increment(-1);
+                }
+            }
+            await updateDoc(workRef, updates);
+        } catch (e) {
+            console.error('Error reacting:', e);
+            // Ideally revert optimistic update here, but omitted for brevity
+        }
+    };
+
+    const handleShare = async (work: any) => {
+        try {
+            const url = work.imageUrl || work.url;
+            if (!url) return;
+
+            // Download file first to share "cleanly" (hides res.cloudinary.com)
+            const extension = url.split('.').pop()?.split('?')[0] || 'jpg';
+            const fileUri = FileSystem.cacheDirectory + `share_${work.id}.${extension}`;
+
+            const { uri } = await FileSystem.downloadAsync(url, fileUri);
+
+            await Share.share({
+                message: `${work.text || 'Check this out!'} \nShared via Tama App`,
+                url: uri, // Sharing local URI shares the file
+            });
+        } catch (e) {
+            console.error('Error sharing:', e);
+            // Fallback
+            await Share.share({
+                message: `Check out this work on Tama: ${work.text || ''}`,
+                url: work.url || work.imageUrl
+            });
+        }
+    };
+
+    const handleDownload = async (work: any) => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(tr('Erreur', 'خطأ', 'Error'), tr('Permission refusée', 'تم رفض الإذن', 'Permission denied'));
+                return;
+            }
+
+            const url = work.imageUrl || work.url;
+            if (!url) return;
+
+            const extension = url.split('.').pop()?.split('?')[0] || 'jpg';
+            const fileUri = FileSystem.documentDirectory + `tama_${work.id}.${extension}`;
+
+            const { uri } = await FileSystem.downloadAsync(url, fileUri);
+            await MediaLibrary.createAssetAsync(uri);
+
+            Alert.alert(tr('Succès', 'نجاح', 'Success'), tr('Enregistré dans la galerie', 'تم حفظ الملف', 'Saved to gallery'));
+        } catch (e) {
+            console.error('Download Error', e);
+            Alert.alert(tr('Erreur', 'خطأ', 'Error'), tr('Échec du téléchargement', 'فشل التحميل', 'Download failed'));
+        }
+    };
+
+    const handleRepost = async (work: any) => {
+        if (!user) {
+            Alert.alert(tr('Connexion requise', 'تسجيل الدخول مطلوب', 'Login Required'), tr('Veuillez vous connecter pour republier', 'يرجى تسجيل الدخول لإعادة النشر', 'Please login to repost'));
+            return;
+        }
+        try {
+            await addDoc(collection(db, 'users', user.uid, 'works'), {
+                ...work,
+                repostedFrom: profileData?.uid || profileData?.id || user.uid,
+                repostedFromName: profileData?.fullName || 'User',
+                createdAt: serverTimestamp(),
+                reactions: {},
+                userReactions: {},
+                commentsCount: 0
+            });
+            Alert.alert(tr('Succès', 'نجاح', 'Success'), tr('Republié sur votre profil', 'تم إعادة النشر', 'Reposted to your profile'));
+        } catch (e) {
+            console.error('Repost error:', e);
+            Alert.alert(tr('Erreur', 'خطأ', 'Error'), tr('Échec de la republication', 'فشل إعادة النشر', 'Failed to repost'));
+        }
+    };
+
     const renderStatsPills = (work: any) => (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 8, zIndex: 20 }}>
             {/* Comment Count Pill */}
@@ -294,18 +454,36 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                 { type: 'interesting', Icon: Sparkles, color: '#A855F7' }
             ].map((r) => {
                 const count = work.reactions?.[r.type] || 0;
-                if (count === 0) return null;
+                // Highlight if user reacted with this type
+                const isSelected = work.userReactions?.[user?.uid] === r.type;
+
+                if (count === 0 && !isSelected) return null;
+
                 return (
-                    <View key={r.type} style={{ backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.2)' }}>
-                        <r.Icon size={10} color={r.color} fill="transparent" strokeWidth={2.5} />
+                    <TouchableOpacity
+                        key={r.type}
+                        onPress={() => handleReaction(work, r.type)}
+                        style={{
+                            backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)',
+                            paddingHorizontal: 6,
+                            paddingVertical: 3,
+                            borderRadius: 8,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                            borderWidth: isSelected ? 1 : 0.5,
+                            borderColor: isSelected ? r.color : 'rgba(255,255,255,0.2)'
+                        }}
+                    >
+                        <r.Icon size={10} color={r.color} fill={isSelected ? r.color : "transparent"} strokeWidth={2.5} />
                         <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{count}</Text>
-                    </View>
+                    </TouchableOpacity>
                 );
             })}
         </View>
     );
 
-    const renderWorkItem = (item: FeedItem) => {
+    const renderWorkItem = (item: FeedItem, isActive: boolean) => {
         const work = item.data;
         const score = item.score;
         const viral = isViral(work);
@@ -313,9 +491,9 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
 
         return (
             <TouchableOpacity
-                activeOpacity={0.9}
+                activeOpacity={1}
                 style={styles.workCard}
-                onPress={() => onWorkPress(work, work.userId)}
+                onPress={() => onWorkPress?.(work, work.userId)}
             >
                 {/* Media Content */}
                 {isVideo && work.imageUrl ? (
@@ -323,9 +501,9 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                         source={{ uri: work.imageUrl }}
                         style={StyleSheet.absoluteFillObject}
                         resizeMode={ResizeMode.COVER}
-                        shouldPlay={true}
+                        shouldPlay={isActive}
                         isLooping
-                        isMuted
+                        isMuted={false}
                     />
                 ) : (work.imageUrl ? (
                     <Image
@@ -348,13 +526,13 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
 
                 {/* Video Indicator Overlay */}
                 {isVideo && (
-                    <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 }}>
+                    <View style={{ position: 'absolute', top: 50, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 }}>
                         <Play size={12} color="#FFF" fill="#FFF" />
                     </View>
                 )}
 
                 <LinearGradient
-                    colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.9)']}
+                    colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.6)']}
                     style={StyleSheet.absoluteFillObject}
                 />
 
@@ -365,8 +543,155 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                     </View>
                 )}
 
+                {/* Top Right Actions (Traveaux Style Stack) */}
+                <View style={{
+                    position: 'absolute',
+                    right: 16,
+                    bottom: 250, // Positioned above text/reactions
+                    alignItems: 'center',
+                    gap: 16,
+                    zIndex: 50
+                }}>
+                    {/* Author Profile */}
+                    <TouchableOpacity
+                        onPress={() => onUserPress ? onUserPress(work.userId) : onWorkPress?.(work, work.userId)}
+                        style={{ marginBottom: 4, alignItems: 'center' }}
+                    >
+                        <View style={{
+                            width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: '#FFF',
+                            alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: '#333'
+                        }}>
+                            {work.userPhoto ? <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} /> : <User size={20} color="#FFF" />}
+                        </View>
+                        {!(profileData?.friends?.includes(work.userId) || work.userId === user?.uid) && (
+                            <View style={{
+                                position: 'absolute', bottom: -5, width: 16, height: 16, borderRadius: 8, backgroundColor: '#A855F7',
+                                alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>+</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Comment */}
+                    <TouchableOpacity onPress={() => onCommentPress?.(work, work.userId)} style={{ alignItems: 'center' }}>
+                        <View style={{
+                            width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)'
+                        }}>
+                            <MessageSquare size={18} color="#FFF" strokeWidth={2.5} />
+                        </View>
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', marginTop: 6, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } }}>
+                            {work.commentsCount || 0}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Repost */}
+                    <TouchableOpacity onPress={() => handleRepost(work)} style={{ alignItems: 'center' }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                        }}>
+                            <Repeat size={18} color="#FFF" strokeWidth={2} />
+                        </View>
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
+                            {tr('Republier', 'نشر', 'Repost')}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Download */}
+                    <TouchableOpacity onPress={() => handleDownload(work)} style={{ alignItems: 'center' }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                        }}>
+                            <DownloadCloud size={18} color="#FFF" strokeWidth={2} />
+                        </View>
+                        <View>
+                            <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>{tr('Télécharger', 'تحميل', 'Download')}</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Share (Changed Icon) */}
+                    <TouchableOpacity onPress={() => handleShare(work)} style={{ alignItems: 'center' }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+                        }}>
+                            <Send size={18} color="#FFF" strokeWidth={2} />
+                        </View>
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
+                            {tr('Share', 'مشاركة', 'Share')}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Bottom Reaction Bar (Traveaux Style) */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 96,
+                    left: 12,
+                    right: 12,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    paddingVertical: 6,
+                    paddingHorizontal: 8,
+                    borderRadius: 24,
+                    backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    zIndex: 20
+                }}>
+                    {[
+                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('AMOUR', 'حب', 'LOVE') },
+                        { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('FEU', 'نار', 'FIRE') },
+                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('DRÔLE', 'مضحك', 'HAHA') },
+                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('BOF', 'سيء', 'BAD') },
+                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('MOCHE', 'بشع', 'UGLY') },
+                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('TOP', 'مثير', 'COOL') }
+                    ].map((btn) => {
+                        const isSelected = work.userReactions?.[user?.uid] === btn.type;
+                        const count = work.reactions?.[btn.type] || 0;
+                        const hasActivity = count > 0;
+                        const showColor = isSelected || hasActivity;
+
+                        return (
+                            <TouchableOpacity
+                                key={btn.type}
+                                onPress={() => handleReaction(work, btn.type)}
+                                activeOpacity={0.7}
+                                style={{ alignItems: 'center', flex: 1 }}
+                            >
+                                <View style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 14,
+                                    backgroundColor: isSelected ? (btn.color + '20') : 'transparent',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: showColor ? 1.2 : 1,
+                                    borderColor: showColor ? btn.color : 'rgba(255,255,255,0.2)',
+                                    marginBottom: 4
+                                }}>
+                                    <btn.Icon
+                                        size={16}
+                                        color={showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
+                                        fill="transparent"
+                                        strokeWidth={isSelected ? 2.5 : 1.5}
+                                    />
+                                </View>
+                                <Text style={{ color: showColor ? btn.color : (isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)'), fontSize: 7, fontWeight: '800', marginBottom: 1 }}>
+                                    {btn.label}
+                                </Text>
+                                <Text style={{ color: isDark ? 'white' : 'black', fontSize: 10, fontWeight: '900' }}>
+                                    {count}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
                 <View style={styles.workBottom}>
-                    {renderStatsPills(work)}
                     <View style={styles.userInfo}>
                         <View style={[styles.avatarPlaceholder, { overflow: 'hidden' }]}>
                             {work.userPhoto ? (
@@ -384,8 +709,9 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
     };
 
     const renderItem = ({ item }: { item: FeedItem }) => {
+        const isActive = activeId === item.id;
         if (item.type === 'live') return renderLiveItem(item);
-        return renderWorkItem(item);
+        return renderWorkItem(item, isActive);
     };
 
     if (loading) {
@@ -401,24 +727,24 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15 }]}>
+            <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, backgroundColor: 'transparent' }]}>
                 <View>
-                    <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>
+                    <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
                         {tr('Exploration', 'استكشاف', 'Explore')}
                     </Text>
-                    <Text style={[styles.headerSubtitle, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }]}>
+                    <Text style={[styles.headerSubtitle, { color: 'rgba(255,255,255,0.8)', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
                         {tr('Vos flux tendances', 'خلاصاتك الرائجة', 'Your trending feed')}
                     </Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.profileButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
+                    style={[styles.profileButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
                     onPress={() => {
                         if (feedFilter === 'default') setFeedFilter('viral');
                         else if (feedFilter === 'viral') setFeedFilter('comments');
                         else setFeedFilter('default');
                     }}
                 >
-                    <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : (isDark ? '#FFF' : '#000'))} />
+                    <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : '#FFF')} />
                 </TouchableOpacity>
             </View>
 
@@ -426,11 +752,17 @@ export default function FeedScreen({ t, theme, language, onNavigate, onJoinLive,
                 data={sortedFeedItems}
                 renderItem={renderItem}
                 keyExtractor={item => item.id}
-                numColumns={2}
-                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+                pagingEnabled
+                snapToAlignment="start"
+                decelerationRate="fast"
+                snapToInterval={SCREEN_HEIGHT}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 0 }}
+                removeClippedSubviews
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#FFF" : "#000"} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFF" />
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
@@ -476,20 +808,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
     },
     liveCard: {
-        flex: 1,
-        height: 280,
-        margin: 6,
-        borderRadius: 24,
-        overflow: 'hidden',
-        backgroundColor: '#111',
+        width: Dimensions.get('window').width,
+        height: Dimensions.get('window').height,
+        backgroundColor: '#000',
+        marginBottom: 0,
     },
     workCard: {
-        flex: 1,
-        height: 280,
-        margin: 6,
-        borderRadius: 24,
-        overflow: 'hidden',
-        backgroundColor: '#ddd',
+        width: Dimensions.get('window').width,
+        height: Dimensions.get('window').height,
+        backgroundColor: '#000',
+        marginBottom: 0,
     },
     liveBadgeContainer: {
         position: 'absolute',
@@ -604,7 +932,7 @@ const styles = StyleSheet.create({
     },
     workBottom: {
         position: 'absolute',
-        bottom: 0,
+        bottom: 160, // Shifted up to make room for Reaction Bar
         left: 0,
         right: 0,
         padding: 16,

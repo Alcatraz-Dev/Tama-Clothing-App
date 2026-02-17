@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Dimensions, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, updateEmail, updatePassword, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { Video, ResizeMode } from 'expo-av';
@@ -23,8 +24,11 @@ import {
   deleteDoc,
   onSnapshot,
   increment,
-  runTransaction
+  runTransaction,
+  deleteField
 } from 'firebase/firestore';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { Theme } from './src/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -103,7 +107,6 @@ import {
   ArrowRightLeft
 } from 'lucide-react-native';
 import { Share } from 'react-native';
-import * as Animatable from 'react-native-animatable';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -973,6 +976,7 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [appState, setAppState] = useState<'Onboarding' | 'Auth' | 'Main' | 'SizeGuide'>('Onboarding');
   const [activeTab, setActiveTab] = useState('Home');
+  const [previousTab, setPreviousTab] = useState('Home');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quickAddProduct, setQuickAddProduct] = useState<any>(null);
   const [isLogin, setIsLogin] = useState(true);
@@ -1010,14 +1014,211 @@ export default function App() {
   const [editingComment, setEditingComment] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<string[]>([]);
+  const [isCommentSheetVisible, setIsCommentSheetVisible] = useState(false);
 
-  // Derived state (for App level usage)
+  const tr = (fr: string, ar: string, en: string) => language === 'ar' ? ar : (language === 'fr' ? fr : en);
+
   const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
+
+  const getInitials = (name: string) => {
+    if (!name) return '??';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  };
+
+  useEffect(() => {
+    if (selectedWork) {
+      const ownerUid = selectedWork.userId || targetUid;
+      if (!ownerUid) return;
+
+      // Real-time listener for comments
+      setLoadingComments(true);
+      const commentsRef = selectedWork.fullPath
+        ? collection(db, selectedWork.fullPath, 'comments')
+        : collection(db, 'users', ownerUid, 'works', selectedWork.id, 'comments');
+
+      const q = query(commentsRef, orderBy('createdAt', 'asc'));
+
+      const unsubscribeComments = onSnapshot(q, (snapshot) => {
+        const fetchedComments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setComments(fetchedComments);
+        setLoadingComments(false);
+
+        // Auto-sync commentsCount if it's out of sync with actual subcollection size
+        if (selectedWork && fetchedComments.length !== selectedWork.commentsCount) {
+          const syncWorkRef = selectedWork.fullPath
+            ? doc(db, selectedWork.fullPath)
+            : doc(db, 'users', ownerUid, 'works', selectedWork.id);
+          updateDoc(syncWorkRef, { commentsCount: fetchedComments.length }).catch(console.error);
+        }
+      });
+
+      // Real-time listener for the work document itself to sync counts/reactions
+      const workRef = selectedWork.fullPath
+        ? doc(db, selectedWork.fullPath)
+        : doc(db, 'users', ownerUid, 'works', selectedWork.id);
+
+      const unsubscribeWork = onSnapshot(workRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          // Only update if it's still the same selected work
+          setSelectedWork((prev: any) => (prev?.id === docSnap.id ? { ...data, id: docSnap.id, userId: ownerUid, fullPath: selectedWork.fullPath } : prev));
+        }
+      });
+
+      return () => {
+        unsubscribeComments();
+        unsubscribeWork();
+      };
+    } else {
+      setComments([]);
+    }
+  }, [selectedWork?.id, targetUid]);
+
+  const handleCommentReact = async (comment: any, type: string = 'love') => {
+    if (!user || !selectedWork) return;
+    const authorId = selectedWork.userId || targetUid;
+    if (!authorId) return;
+
+    const commentRef = selectedWork.fullPath
+      ? doc(db, selectedWork.fullPath, 'comments', comment.id)
+      : doc(db, 'users', authorId, 'works', selectedWork.id, 'comments', comment.id);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const docSnap = await transaction.get(commentRef);
+        if (!docSnap.exists()) return;
+
+        const data = docSnap.data();
+        const currentReactions = data.reactions || {};
+        const userReactions = data.userReactions || {};
+
+        const prevType = userReactions[user.uid];
+
+        if (prevType === type) {
+          delete userReactions[user.uid];
+          currentReactions[type] = Math.max(0, (currentReactions[type] || 0) - 1);
+        } else {
+          if (prevType) {
+            currentReactions[prevType] = Math.max(0, (currentReactions[prevType] || 0) - 1);
+          }
+          userReactions[user.uid] = type;
+          currentReactions[type] = (currentReactions[type] || 0) + 1;
+        }
+
+        transaction.update(commentRef, {
+          reactions: currentReactions,
+          userReactions: userReactions
+        });
+      });
+    } catch (e) {
+      console.error('Comment Reaction Error', e);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!user || !commentText.trim() || !selectedWork) return;
+
+    const authorId = selectedWork.userId || targetUid;
+    if (!authorId) return;
+
+    const commentData = {
+      text: commentText.trim(),
+      userId: user.uid,
+      userName: profileData?.fullName || user.displayName || 'User',
+      userAvatar: profileData?.avatarUrl || null,
+      createdAt: serverTimestamp(),
+      replyToId: replyingTo?.id || null,
+      replyToUser: replyingTo?.userName || null,
+      parentCommentId: replyingTo ? (replyingTo.parentCommentId || replyingTo.id) : null,
+      reactions: {},
+      userReactions: {},
+    };
+
+    try {
+      if (editingComment) {
+        const editRef = selectedWork.fullPath
+          ? doc(db, selectedWork.fullPath, 'comments', editingComment.id)
+          : doc(db, 'users', authorId, 'works', selectedWork.id, 'comments', editingComment.id);
+
+        await updateDoc(editRef, {
+          text: commentText.trim(),
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        const commentsColl = selectedWork.fullPath
+          ? collection(db, selectedWork.fullPath, 'comments')
+          : collection(db, 'users', authorId, 'works', selectedWork.id, 'comments');
+
+        await addDoc(commentsColl, commentData);
+
+        const workDocRef = selectedWork.fullPath
+          ? doc(db, selectedWork.fullPath)
+          : doc(db, 'users', authorId, 'works', selectedWork.id);
+
+        await updateDoc(workDocRef, {
+          commentsCount: increment(1)
+        });
+      }
+      setCommentText("");
+      setReplyingTo(null);
+      setEditingComment(null);
+    } catch (e) {
+      console.error('Comment Error', e);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!selectedWork) return;
+    const authorId = selectedWork.userId || targetUid;
+    if (!authorId) return;
+
+    try {
+      const delRef = selectedWork.fullPath
+        ? doc(db, selectedWork.fullPath, 'comments', commentId)
+        : doc(db, 'users', authorId, 'works', selectedWork.id, 'comments', commentId);
+
+      await deleteDoc(delRef);
+
+      const workDocRef = selectedWork.fullPath
+        ? doc(db, selectedWork.fullPath)
+        : doc(db, 'users', authorId, 'works', selectedWork.id);
+
+      await updateDoc(workDocRef, {
+        commentsCount: increment(-1)
+      });
+    } catch (e) {
+      console.error('Delete Comment Error', e);
+    }
+  };
 
   // Sync global legacy Colors with state
   Colors = getAppColors(theme);
 
   const t = (key: string) => Translations[language][key] || key;
+
+  // Fetch Target User Profile when switching to PublicProfile
+  useEffect(() => {
+    if (activeTab === 'PublicProfile' && targetUid) {
+      // If we already have the correct data, skip refetch (optional optimization)
+      if (targetUserProfile?.uid === targetUid) return;
+
+      const fetchTargetProfile = async () => {
+        try {
+          const snap = await getDoc(doc(db, 'users', targetUid));
+          if (snap.exists()) {
+            setTargetUserProfile({ ...snap.data(), uid: targetUid, id: targetUid });
+          } else {
+            console.log("Target user not found:", targetUid);
+            setTargetUserProfile(null);
+          }
+        } catch (err) {
+          console.error("Error fetching target profile:", err);
+          setTargetUserProfile(null);
+        }
+      };
+      fetchTargetProfile();
+    }
+  }, [activeTab, targetUid]);
 
   useEffect(() => {
     // Sync global language for helper functions
@@ -1530,7 +1731,7 @@ export default function App() {
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
       case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
-      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab('Wallet')} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} />;
+      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1539,6 +1740,7 @@ export default function App() {
       case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} onNavigate={(screen, params) => {
         if (screen === 'PublicProfile') {
           setTargetUserProfile(params);
+          setPreviousTab('Wallet');
           setActiveTab('PublicProfile');
         } else {
           setActiveTab(screen);
@@ -1603,9 +1805,19 @@ export default function App() {
         onWorkPress={(work, targetUid) => {
           setSelectedWork(work);
           setTargetUid(targetUid);
-
-
         }}
+        onCommentPress={(work, targetUid) => {
+          setSelectedWork(work);
+          setTargetUid(targetUid);
+          setIsCommentSheetVisible(true);
+        }}
+        onUserPress={(userId) => {
+          setTargetUid(userId);
+          setPreviousTab('Feed');
+          setActiveTab('PublicProfile');
+        }}
+        user={user}
+        profileData={profileData}
       />;
 
       case 'Collaboration': return <CollaborationScreen
@@ -1719,6 +1931,62 @@ export default function App() {
                 )}
               </>
             )}
+
+            {/* GLOBAL COMMENTS BOTTOM SHEET */}
+            <Modal
+              visible={isCommentSheetVisible}
+              animationType="slide"
+              transparent
+              onRequestClose={() => setIsCommentSheetVisible(false)}
+            >
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => setIsCommentSheetVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Animatable.View
+                  animation="slideInUp"
+                  duration={300}
+                  style={{
+                    height: height * 0.75,
+                    backgroundColor: Theme[theme].colors.background,
+                    borderTopLeftRadius: 30,
+                    borderTopRightRadius: 30,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                  >
+                    <CommentsSectionComponent
+                      selectedWork={selectedWork}
+                      comments={comments}
+                      loadingComments={loadingComments}
+                      commentText={commentText}
+                      setCommentText={setCommentText}
+                      handleComment={handleComment}
+                      handleCommentReact={handleCommentReact}
+                      handleDeleteComment={handleDeleteComment}
+                      replyingTo={replyingTo}
+                      setReplyingTo={setReplyingTo}
+                      editingComment={editingComment}
+                      setEditingComment={setEditingComment}
+                      expandedReplies={expandedReplies}
+                      setExpandedReplies={setExpandedReplies}
+                      onClose={() => setIsCommentSheetVisible(false)}
+                      colors={Theme[theme].colors}
+                      theme={theme}
+                      tr={tr}
+                      user={user}
+                      isPostOwner={selectedWork?.userId === user?.uid}
+                      getInitials={getInitials}
+                    />
+                  </KeyboardAvoidingView>
+                </Animatable.View>
+              </View>
+            </Modal>
 
             <QuickAddModal
               isVisible={!!quickAddProduct}
@@ -1938,6 +2206,39 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
   const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+  const randomColors = [
+    "#FF6B6B",
+    "#FF4757",
+    "#FF9F1C",
+    "#FF922B",
+    "#FFD93D",
+    "#F9C74F",
+
+    "#6BCB77",
+    "#2ECC71",
+    "#06D6A0",
+    "#00C896",
+
+    "#00B4D8",
+    "#48CAE4",
+    "#4D96FF",
+    "#3A86FF",
+    "#4361EE",
+
+    "#7209B7",
+    "#9D4EDD",
+    "#8338EC",
+    "#B5179E",
+    "#F72585",
+    "#FF4D6D",
+
+    "#FB5607",
+  ];
+  const [randomBorderColor, setRandomBorderColor] = useState("#FF6B6B")
+  useEffect(() => {
+    const randomColor = randomColors[Math.floor(Math.random() * randomColors.length)];
+    setRandomBorderColor(randomColor);
+  }, []);
 
   const unreadCount = notifications?.filter((n: any) => !n.read).length || 0;
 
@@ -2090,6 +2391,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
     );
   }
 
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View style={[styles.modernHeader, {
@@ -2109,7 +2411,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
         </Animated.View>
 
-        <TouchableOpacity onPress={() => onNavigate('Profile')} activeOpacity={0.7} style={{ marginTop: 10 }}>
+        <TouchableOpacity onPress={() => onNavigate('Profile')} activeOpacity={0.7} style={{ borderWidth: 2, borderColor: randomBorderColor, borderRadius: 50 }}>
           <View style={[styles.headerAvatarContainer, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
             {profileData?.avatarUrl ? (
               <Image source={{ uri: profileData.avatarUrl }} style={styles.headerAvatar} />
@@ -2662,9 +2964,276 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           </View>
         </View>
 
-        <View style={{ height: 120 }} />
       </Animated.ScrollView >
     </View >
+  );
+}
+
+// --- REUSABLE COMMENTS COMPONENT ---
+function CommentsSectionComponent({
+  selectedWork,
+  comments,
+  loadingComments,
+  commentText,
+  setCommentText,
+  handleComment,
+  handleCommentReact,
+  handleDeleteComment,
+  replyingTo,
+  setReplyingTo,
+  editingComment,
+  setEditingComment,
+  expandedReplies,
+  setExpandedReplies,
+  onClose,
+  colors,
+  theme,
+  tr,
+  user,
+  isPostOwner,
+  getInitials
+}: any) {
+  const insets = useSafeAreaInsets();
+
+  const renderComment = (item: any, isReply = false) => (
+    <View key={item.id} style={{ marginBottom: isReply ? 12 : 16, flexDirection: 'row', gap: 12 }}>
+      <View style={{
+        width: isReply ? 28 : 36,
+        height: isReply ? 28 : 36,
+        borderRadius: isReply ? 14 : 18,
+        backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+      }}>
+        {item.userAvatar ? (
+          <Image source={{ uri: item.userAvatar }} style={{ width: isReply ? 28 : 36, height: isReply ? 28 : 36, borderRadius: isReply ? 14 : 18 }} />
+        ) : (
+          <Text style={{ color: colors.foreground, fontSize: isReply ? 10 : 12, fontWeight: '900' }}>{getInitials(item.userName)}</Text>
+        )}
+      </View>
+      <View style={{
+        flex: 1,
+        backgroundColor: colors.surface || (theme === 'dark' ? '#1A1A24' : '#F2F2F7'),
+        padding: 10,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 13 }}>{item.userName}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {(() => {
+              const isCommentAuthor = item.userId === user?.uid;
+              if (isCommentAuthor || isPostOwner) {
+                return (
+                  <TouchableOpacity
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={{
+                      padding: 4,
+                      borderRadius: 12,
+                      backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                      marginRight: -4
+                    }}
+                    onPress={() => {
+                      const options: any[] = [
+                        { text: tr('Annuler', 'إلغاء', 'Cancel'), style: 'cancel' }
+                      ];
+                      if (isCommentAuthor) {
+                        options.push({
+                          text: tr('Modifier', 'تعديل', 'Edit'),
+                          onPress: () => {
+                            setEditingComment(item);
+                            setCommentText(item.text);
+                          }
+                        });
+                      }
+                      options.push({
+                        text: tr('Supprimer', 'حذف', 'Delete'),
+                        style: 'destructive',
+                        onPress: () => handleDeleteComment(item.id)
+                      });
+                      Alert.alert(tr('Options', 'خيارات', 'Options'), '', options);
+                    }}
+                  >
+                    <MoreVertical size={18} color={colors.foreground} style={{ opacity: 0.9 }} />
+                  </TouchableOpacity>
+                );
+              }
+              return null;
+            })()}
+          </View>
+        </View>
+        <Text style={{ color: colors.foreground, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{item.text}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+          <TouchableOpacity onPress={() => {
+            setReplyingTo(item);
+            setCommentText(`@${item.userName} `);
+          }}>
+            <Text style={{ color: '#A855F7', fontSize: 11, fontWeight: '900' }}>{tr('Répondre', 'رد', 'Reply')}</Text>
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {[
+              { type: 'love', Icon: Heart, color: '#FF4D67' },
+              { type: 'fire', Icon: Flame, color: '#FF8A00' },
+              { type: 'haha', Icon: Laugh, color: '#FFD600' },
+              { type: 'bad', Icon: ThumbsDown, color: '#94A3B8' },
+              { type: 'ugly', Icon: Ghost, color: '#818CF8' },
+              { type: 'interesting', Icon: Sparkles, color: '#A855F7' }
+            ].map(reac => {
+              const isSelected = item.userReactions?.[user?.uid] === reac.type;
+              const count = item.reactions?.[reac.type] || 0;
+              return (
+                <TouchableOpacity
+                  key={reac.type}
+                  onPress={() => handleCommentReact(item, reac.type)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                >
+                  <reac.Icon
+                    size={14}
+                    color={isSelected ? reac.color : (theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
+                    fill="transparent"
+                    strokeWidth={isSelected ? 2.5 : 1.5}
+                  />
+                  {count > 0 && (
+                    <Text style={{ color: isSelected ? reac.color : colors.secondary, fontSize: 10, fontWeight: '800' }}>{count}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <MessageSquare size={18} color={colors.foreground} />
+          <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 15 }}>
+            {tr('Commentaires', 'تعليقات', 'Comments')} ({comments.length})
+          </Text>
+        </View>
+        {onClose && (
+          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+            <X size={20} color={colors.foreground} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 80 }}
+      >
+        {loadingComments ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
+        ) : (comments.length === 0 || !comments) ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <MessageSquare size={40} color={colors.foreground} style={{ opacity: 0.2, marginBottom: 12 }} />
+            <Text style={{ color: colors.foreground, textAlign: 'center', fontSize: 13, opacity: 0.6, fontWeight: '800' }}>
+              {tr('Soyez le premier à commenter', 'كن أول من يعلق', 'Be the first to comment')}
+            </Text>
+          </View>
+        ) : (
+          (() => {
+            // Very inclusive filter to ensure all comments show up
+            const topLevelComments = comments.filter((c: any) => !c.parentCommentId || c.parentCommentId === "root" || c.parentCommentId === "" || !comments.find((pc: any) => pc.id === c.parentCommentId));
+            const displayComments = topLevelComments.length > 0 ? topLevelComments : comments;
+
+            return displayComments.map((comment: any) => {
+              const replies = comments.filter((r: any) => r.parentCommentId === comment.id);
+              const isExpanded = expandedReplies.includes(comment.id);
+
+              return (
+                <View key={comment.id}>
+                  {renderComment(comment)}
+                  {replies.length > 0 && (
+                    <View style={{ marginLeft: 48, marginBottom: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => setExpandedReplies((prev: any) =>
+                          prev.includes(comment.id) ? prev.filter((id: string) => id !== comment.id) : [...prev, comment.id]
+                        )}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                      >
+                        <View style={{ height: 1, width: 20, backgroundColor: colors.foreground, opacity: 0.2 }} />
+                        <Text style={{ color: colors.foreground, fontSize: 11, fontWeight: '900', opacity: 0.7 }}>
+                          {isExpanded ? tr('Masquer les réponses', 'إخفاء الردود', 'Hide replies') : `${tr('Voir', 'عرض', 'View')} ${replies.length} ${tr('réponses', 'ردود', 'replies')}`}
+                        </Text>
+                      </TouchableOpacity>
+                      {isExpanded && replies.map((reply: any) => renderComment(reply, true))}
+                    </View>
+                  )}
+                </View>
+              );
+            });
+          })()
+        )}
+      </ScrollView>
+
+      {/* Input Section */}
+      <View style={{
+        paddingBottom: insets.bottom + 10,
+        paddingTop: 10,
+        paddingHorizontal: 16,
+        borderTopWidth: 1,
+        borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        backgroundColor: colors.background
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{
+            flex: 1,
+            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+            borderRadius: 25,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            flexDirection: 'row',
+            alignItems: 'center'
+          }}>
+            <TextInput
+              placeholder={replyingTo ? `${tr('Répondre à', 'الرد على', 'Replying to')} ${replyingTo.userName}...` : tr('Ajouter un commentaire...', 'أضف تعليقًا...', 'Add a comment...')}
+              placeholderTextColor={theme === 'dark' ? 'rgba(255,255,255,0.3)' : '#9CA3AF'}
+              style={{ flex: 1, color: colors.foreground, fontSize: 14, fontWeight: '600', padding: 0 }}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+            />
+          </View>
+          <TouchableOpacity
+            onPress={handleComment}
+            disabled={!commentText.trim()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: commentText.trim() ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Send size={18} color={commentText.trim() ? "#FFFFFF" : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : '#9CA3AF')} />
+          </TouchableOpacity>
+        </View>
+        {editingComment && (
+          <TouchableOpacity onPress={() => { setEditingComment(null); setCommentText(""); }} style={{ marginTop: 8, paddingLeft: 12 }}>
+            <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '700' }}>{tr('Annuler modification', 'إلغاء التعديل', 'Cancel edit')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -2734,47 +3303,70 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   }, [user?.uid]);
 
   const handleReact = async (work: any, type: string) => {
-    if (!user) return;
-    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-    if (!targetUid) return;
+    if (!user) {
+      Alert.alert(t('loginRequired'), t('pleaseLoginToReact'));
+      return;
+    }
 
-    const workRef = doc(db, 'users', targetUid, 'works', work.id);
+    const { id: workId, userId: authorId, userReactions = {}, reactions = {} } = work;
+    const currentReaction = userReactions[user.uid];
 
+    // Optimistic Update Data
+    let newReactions = { ...reactions };
+    let newUserReactions = { ...userReactions };
+
+    if (currentReaction === type) {
+      // Toggle OFF (Remove)
+      delete newUserReactions[user.uid];
+      newReactions[type] = Math.max(0, (newReactions[type] || 0) - 1);
+    } else {
+      // Switch or Add
+      if (currentReaction) {
+        newReactions[currentReaction] = Math.max(0, (newReactions[currentReaction] || 0) - 1);
+      }
+      newReactions[type] = (newReactions[type] || 0) + 1;
+      newUserReactions[user.uid] = type;
+    }
+
+    // Create updated work object
+    const updatedWork = {
+      ...work,
+      reactions: newReactions,
+      userReactions: newUserReactions,
+      // Recalculate score if needed, but not strictly required for view
+    };
+
+    // Update States
+    if (selectedWork?.id === workId) {
+      setSelectedWork(updatedWork);
+    }
+
+    // Update 'works' list if present locally
+    setWorks(prev => prev.map(w => w.id === workId ? updatedWork : w));
+
+    // Firestore Update
     try {
-      await runTransaction(db, async (transaction) => {
-        const docSnap = await transaction.get(workRef);
-        if (!docSnap.exists()) return;
-
-        const data = docSnap.data();
-        const currentReactions = data.reactions || {};
-        const userReactions = data.userReactions || {};
-
-        const prevType = userReactions[user.uid];
-
-        if (prevType === type) {
-          delete userReactions[user.uid];
-          currentReactions[type] = Math.max(0, (currentReactions[type] || 0) - 1);
-        } else {
-          if (prevType) {
-            currentReactions[prevType] = Math.max(0, (currentReactions[prevType] || 0) - 1);
-          }
-          userReactions[user.uid] = type;
-          currentReactions[type] = (currentReactions[type] || 0) + 1;
-        }
-
-        transaction.update(workRef, {
-          reactions: currentReactions,
-          userReactions: userReactions
-        });
-      });
+      const workRef = work.fullPath
+        ? doc(db, work.fullPath)
+        : doc(db, 'users', authorId, 'works', workId);
+      const updates: any = {};
+      if (currentReaction === type) {
+        updates[`reactions.${type}`] = increment(-1);
+        updates[`userReactions.${user.uid}`] = deleteField();
+      } else {
+        updates[`reactions.${type}`] = increment(1);
+        updates[`userReactions.${user.uid}`] = type;
+        if (currentReaction) updates[`reactions.${currentReaction}`] = increment(-1);
+      }
+      await updateDoc(workRef, updates);
     } catch (e) {
-      console.error('Reaction Error', e);
+      console.error('Reaction Failed', e);
+      // Could revert here if needed
     }
   };
-
   const handleCommentReact = async (comment: any, type: string = 'love') => {
     if (!user || !selectedWork) return;
-    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
     if (!targetUid) return;
 
     const commentRef = doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', comment.id);
@@ -2813,8 +3405,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   useEffect(() => {
     if (selectedWork) {
-      // Get owner UID from work object (for Feed) or from profileData (for Profile screen)
-      const ownerUid = selectedWork.ownerUid || targetUid || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+      // Get owner UID from work object (prioritize userId which is standard)
+      const ownerUid = selectedWork.userId || selectedWork.ownerUid || targetUid || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
       if (!ownerUid) return;
 
       setLoadingComments(true);
@@ -2835,7 +3427,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   const handleComment = async () => {
     if (!user || !commentText.trim() || !selectedWork) return;
 
-    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
     if (!targetUid) return;
 
     const commentData = {
@@ -2874,7 +3466,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   const handleDeleteComment = async (commentId: string) => {
     if (!selectedWork) return;
-    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
     if (!targetUid) return;
 
     try {
@@ -2900,7 +3492,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             try {
               await addDoc(collection(db, 'users', user.uid, 'works'), {
                 ...work,
-                repostedFrom: profileData?.uid || profileData?.id,
+                repostedFrom: profileData?.uid || profileData?.id || user.uid,
                 repostedFromName: profileData?.fullName || 'User',
                 createdAt: serverTimestamp(),
                 reactions: {},
@@ -2919,23 +3511,47 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   const handleShare = async (work: any) => {
     try {
+      const url = work.url || work.imageUrl || work.mediaUrl;
+      if (!url) return;
+
+      // Download file first to share "cleanly"
+      const extension = url.split('.').pop()?.split('?')[0] || 'jpg';
+      const fileUri = FileSystem.cacheDirectory + `share_${work.id}.${extension}`;
+
+      const { uri } = await FileSystem.downloadAsync(url, fileUri);
+
+      await Share.share({
+        message: `${work.text || 'Check this out!'} \nShared via Tama App`,
+        url: uri, // Sharing local URI shares the file
+      });
+    } catch (e) {
+      console.error('Share Error', e);
+      // Fallback to URL sharing
       await Share.share({
         message: `Check out this work on Tama Clothing! ${work.url}`,
         url: work.url,
       });
-    } catch (e) {
-      console.error('Share Error', e);
     }
   };
 
   const handleDownload = async (work: any) => {
+    if (!work) return;
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('permissionRefused'), t('camerarollPermissionRequired'));
+      return;
+    }
+
     try {
-      // In a real app, you'd use FileSystem and MediaLibrary for native downloads.
-      // For now, we'll open the URL as a fallback if native modules aren't available.
-      Linking.openURL(work.url);
-      Alert.alert(t('successTitle'), tr('Ouverture du lien pour téléchargement', 'فتح الرابط للتحميل', 'Opening link for download'));
+      const url = work.url || work.imageUrl || work.mediaUrl;
+      const fileUri = FileSystem.cacheDirectory + (work.type === 'video' ? 'download.mp4' : 'download.jpg');
+      const { uri } = await FileSystem.downloadAsync(url, fileUri);
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      await MediaLibrary.createAlbumAsync('TamaClothing', asset, false);
+      Alert.alert(t('successTitle'), tr('Enregistré dans la galerie', 'تم الحفظ في المعرض', 'Saved to gallery'));
     } catch (e) {
       console.error('Download Error', e);
+      Alert.alert(t('error'), tr('Échec du téléchargement', 'فشل التحميل', 'Download failed'));
     }
   };
 
@@ -2970,7 +3586,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
     const q = query(collection(db, 'users', targetUid, 'works'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snap) => {
-      setWorks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const rawWorks = snap.docs.map(d => ({ ...d.data(), id: d.id, userId: targetUid }));
+      // Ensure specific uniqueness just to be safe vs race conditions
+      const uniqueWorks = rawWorks.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+      setWorks(uniqueWorks);
     }, (err) => {
       console.error('Error listening to works', err);
     });
@@ -4278,8 +4897,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                         ...(isViral(selectedWork) ? [{ type: 'trendy', Icon: Star, color: '#FFD700', label: tr('Viral', 'فيروس', 'Trendy') }] : [])
                       ].map((btn) => {
                         const isSelected = selectedWork?.userReactions?.[user?.uid] === btn.type;
+                        const count = selectedWork?.reactions?.[btn.type] || 0;
+                        const hasActivity = count > 0;
+                        const showColor = isSelected || hasActivity;
+
                         const itemCount = isViral(selectedWork) ? 7 : 6;
                         const itemWidth = (width * 0.94 - 32) / itemCount;
+
                         return (
                           <TouchableOpacity
                             key={btn.type}
@@ -4294,22 +4918,22 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                               backgroundColor: isSelected ? (btn.color + '20') : 'transparent',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              borderWidth: 1.5,
-                              borderColor: isSelected ? btn.color : 'transparent',
+                              borderWidth: showColor ? 1.5 : 1,
+                              borderColor: showColor ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
                               marginBottom: 4
                             }}>
                               <btn.Icon
                                 size={20}
-                                color={isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
+                                color={showColor ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
                                 fill="transparent"
                                 strokeWidth={isSelected ? 3 : 1.5}
                               />
                             </View>
-                            <Text style={{ color: isSelected ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'), fontSize: 8, fontWeight: '800', marginBottom: 2 }}>
+                            <Text style={{ color: showColor ? btn.color : (theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)'), fontSize: 8, fontWeight: '800', marginBottom: 2 }}>
                               {btn.label.toUpperCase()}
                             </Text>
                             <Text style={{ color: colors.foreground, fontSize: 10, fontWeight: '900' }}>
-                              {selectedWork?.reactions?.[btn.type] || 0}
+                              {count}
                             </Text>
                           </TouchableOpacity>
                         )
@@ -4321,7 +4945,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                         <MessageSquare size={18} color={colors.foreground} />
                         <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 15 }}>
-                          {tr('Commentaires', 'تعليقات', 'Comments')} ({selectedWork?.commentsCount || 0})
+                          {tr('Commentaires', 'تعليقات', 'Comments')} ({comments.length})
                         </Text>
                       </View>
 
@@ -4336,8 +4960,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                         </View>
                       ) : (
                         (() => {
-                          const topLevelComments = comments.filter(c => !c.parentCommentId);
-                          return topLevelComments.map((comment) => {
+                          // More robust filter for top-level comments
+                          const topLevelComments = comments.filter(c => !c.parentCommentId || c.parentCommentId === "root" || c.parentCommentId === "");
+
+                          // If for some reason we have comments but the filter returns nothing, fall back to showing all comments as top-level
+                          const displayComments = topLevelComments.length > 0 ? topLevelComments : comments;
+
+                          return displayComments.map((comment) => {
                             const replies = comments.filter(r => r.parentCommentId === comment.id);
                             const isExpanded = expandedReplies.includes(comment.id);
 
@@ -4413,7 +5042,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                                       setReplyingTo(item);
                                       setCommentText(`@${item.userName} `);
                                     }}>
-                                      <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '900' }}>{tr('Répondre', 'رد', 'Reply')}</Text>
+                                      <Text style={{ color: '#A855F7', fontSize: 11, fontWeight: '900' }}>{tr('Répondre', 'رد', 'Reply')}</Text>
                                     </TouchableOpacity>
 
                                     {/* Small Reactions List */}
@@ -4436,7 +5065,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                                           >
                                             <reac.Icon
                                               size={14}
-                                              color={isSelected ? reac.color : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}
+                                              color={isSelected ? reac.color : (theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
                                               fill="transparent"
                                               strokeWidth={isSelected ? 2.5 : 1.5}
                                             />
@@ -4520,7 +5149,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                         justifyContent: 'center'
                       }}
                     >
-                      <Send size={18} color={commentText.trim() ? colors.accentForeground : (theme === 'dark' ? 'rgba(255,255,255,0.3)' : '#9CA3AF')} />
+                      <Send size={18} color={commentText.trim() ? "#FFFFFF" : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : '#9CA3AF')} />
                     </TouchableOpacity>
                   </View>
                   {editingComment && (
