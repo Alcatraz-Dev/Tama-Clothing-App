@@ -48,7 +48,8 @@ import {
     Repeat,
     ThumbsDown,
     Ghost,
-    Sparkles
+    Sparkles,
+    Pause
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -90,6 +91,13 @@ export default function FeedScreen(props: FeedScreenProps) {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [lives, setLives] = useState<FeedItem[]>([]);
     const [works, setWorks] = useState<FeedItem[]>([]);
+    const [pausedItems, setPausedItems] = useState<string[]>([]);
+
+    const togglePlayPause = (id: string) => {
+        setPausedItems(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
 
     const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
         if (viewableItems.length > 0) {
@@ -526,27 +534,46 @@ export default function FeedScreen(props: FeedScreenProps) {
 
         return (
             <View style={styles.workCard}>
-                {isVideo ? (
-                    <Video
-                        source={{ uri: ad.url }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay={isActive}
-                        isLooping
-                        isMuted
-                    />
-                ) : (
-                    <Image
-                        source={{ uri: ad.url }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode="cover"
-                    />
-                )}
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => togglePlayPause(item.id)}
+                    style={StyleSheet.absoluteFillObject}
+                >
+                    {isVideo ? (
+                        <Video
+                            source={{ uri: ad.url }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={isActive && !pausedItems.includes(item.id)}
+                            isLooping
+                            isMuted
+                        />
+                    ) : (
+                        <Image
+                            source={{ uri: ad.url }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode="cover"
+                        />
+                    )}
+
+                    {isVideo && pausedItems.includes(item.id) && (
+                        <View style={{
+                            ...StyleSheet.absoluteFillObject,
+                            backgroundColor: 'rgba(0,0,0,0.2)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 10
+                        }}>
+                            <Play size={60} color="#FFF" fill="rgba(255,255,255,0.4)" />
+                        </View>
+                    )}
+                </TouchableOpacity>
 
                 <LinearGradient
                     colors={['rgba(0,0,0,0.5)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
                     locations={[0, 0.2, 0.6, 1]}
                     style={StyleSheet.absoluteFillObject}
+                    pointerEvents="none"
                 />
 
                 {/* Top Glass Sponsored Badge */}
@@ -674,43 +701,60 @@ export default function FeedScreen(props: FeedScreenProps) {
         const isVideo = work.type === 'video' || (work.imageUrl && work.imageUrl.includes('.mp4'));
 
         return (
-            <TouchableOpacity
-                activeOpacity={1}
-                style={styles.workCard}
-                onPress={() => onWorkPress?.(work, work.userId)}
-            >
+            <View style={styles.workCard}>
                 {/* Media Content */}
-                {isVideo && work.imageUrl ? (
-                    <Video
-                        source={{ uri: work.imageUrl }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay={isActive}
-                        isLooping
-                        isMuted={false}
-                    />
-                ) : (work.imageUrl ? (
-                    <Image
-                        source={{ uri: work.imageUrl }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode="cover"
-                    />
-                ) : (
-                    <LinearGradient
-                        colors={['#8B5CF6', '#EC4899']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center', padding: 10 }]}
-                    >
-                        <Text style={{ color: '#FFF', textAlign: 'center', fontWeight: 'bold', fontSize: 13 }} numberOfLines={4}>
-                            {work.text}
-                        </Text>
-                    </LinearGradient>
-                ))}
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => isVideo ? togglePlayPause(item.id) : onWorkPress?.(work, work.userId)}
+                    style={StyleSheet.absoluteFillObject}
+                >
+                    {isVideo && work.imageUrl ? (
+                        <Video
+                            source={{ uri: work.imageUrl }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={isActive && !pausedItems.includes(item.id)}
+                            isLooping
+                            isMuted={false}
+                        />
+                    ) : (work.imageUrl ? (
+                        <Image
+                            source={{ uri: work.imageUrl }}
+                            style={StyleSheet.absoluteFillObject}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <LinearGradient
+                            colors={['#8B5CF6', '#EC4899']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center', padding: 10 }]}
+                        >
+                            <Text style={{ color: '#FFF', textAlign: 'center', fontWeight: 'bold', fontSize: 13 }} numberOfLines={4}>
+                                {work.text}
+                            </Text>
+                        </LinearGradient>
+                    ))}
+
+                    {isVideo && pausedItems.includes(item.id) && (
+                        <View style={{
+                            ...StyleSheet.absoluteFillObject,
+                            backgroundColor: 'rgba(0,0,0,0.2)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 10
+                        }}>
+                            <Play size={60} color="#FFF" fill="rgba(255,255,255,0.4)" />
+                        </View>
+                    )}
+                </TouchableOpacity>
 
                 {/* Video Indicator Overlay */}
                 {isVideo && (
-                    <View style={{ position: 'absolute', top: 50, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 }}>
+                    <View
+                        pointerEvents="none"
+                        style={{ position: 'absolute', top: 50, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, padding: 4 }}
+                    >
                         <Play size={12} color="#FFF" fill="#FFF" />
                     </View>
                 )}
@@ -718,6 +762,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                 <LinearGradient
                     colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.6)']}
                     style={StyleSheet.absoluteFillObject}
+                    pointerEvents="none"
                 />
 
                 {viral && (
@@ -888,7 +933,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     </View>
                     <Text style={styles.workDescription} numberOfLines={1}>{work.text}</Text>
                 </View>
-            </TouchableOpacity>
+            </View>
         );
     };
 
