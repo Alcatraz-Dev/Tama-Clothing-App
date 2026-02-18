@@ -5180,12 +5180,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                         width: 36,
                         height: 36,
                         borderRadius: 18,
-                        backgroundColor: commentText.trim() ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#E5E5EA'),
+                        backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.1)',
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}
                     >
-                      <Send size={18} color={commentText.trim() ? "#FFFFFF" : (theme === 'dark' ? 'rgba(255,255,255,0.4)' : '#9CA3AF')} />
+                      <Send size={18} color={commentText.trim() ? "rgba(255,255,255,1)" : (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')} />
                     </TouchableOpacity>
                   </View>
                   {editingComment && (
