@@ -19,7 +19,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "ZPNsAppDelegateProxyEnabled": false,
-        "ZPNsProxyEnabled": false
+        "ZPNsProxyEnabled": false,
+        "NSCameraUsageDescription": "This app needs camera access to take photos and record videos.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record videos."
       }
     },
     "android": {
@@ -55,6 +57,14 @@
       "url": "https://u.expo.dev/3d48b864-f404-40a3-a69d-ac13e74fe8a2"
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for photos and videos.",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for video recording.",
+          "recordAudioAndroid": true
+        }
+      ],
       [
         "expo-notifications",
         {

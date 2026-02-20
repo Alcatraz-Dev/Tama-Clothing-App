@@ -124,6 +124,7 @@ import AdminKYCScreen from './src/screens/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
 import FeedScreen from './src/screens/FeedScreen';
+import CameraScreen from './src/screens/Camera';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 if (!(isExpoGo && Platform.OS === 'android')) {
@@ -296,7 +297,7 @@ const uploadImageToCloudinary = async (uri: string) => {
 // Multi-language Translations
 const Translations: any = {
   fr: {
-    home: 'ACCUEIL', shop: 'SHOP', bag: 'PANIER', me: 'MOI', feed: 'FIL',
+    home: 'ACCUEIL', shop: 'SHOP', bag: 'PANIER', me: 'MOI', feed: 'FIL', collab: 'COLLAB',
     explore: 'Explorer', seeAll: 'Voir Tout', refineGallery: 'Affiner',
     collections: 'COLLECTIONS', flashSale: 'Vente Flash', campaigns: 'CAMPAGNES',
     featured: 'TENDANCES', newDrop: 'NOUVEAU', brands: 'MARQUES', categories: 'CATÉGORIES',
@@ -356,6 +357,8 @@ const Translations: any = {
     preparingDelivery: 'Nous préparons votre livraison TAMA.',
     createAccount: 'Créer un Compte', searchCollections: 'RECHERCHER...', all: 'TOUT',
     signIn: 'CONNEXION', getStarted: 'COMMENCER', shopByBrand: 'SHOP PAR MARQUE', allBrands: 'TOUTES LES MARQUES',
+    confirm: 'Confirmer', removeFriendConfirm: 'Voulez-vous vraiment supprimer cet ami ?',
+    cancelRequest: 'Annuler la demande', cancelRequestConfirm: 'Voulez-vous annuler cette demande ?', no: 'Non', yes: 'Oui',
     error: 'ERREUR', save: 'SAUVEGARDER', delete: 'SUPPRIMER', areYouSure: 'Êtes-vous sûr ?',
     noBrandsFound: 'Aucune marque trouvée', editBrand: 'MODIFIER MARQUE', newBrand: 'NOUVELLE MARQUE',
     editCategory: 'MODIFIER CATÉGORIE', newCategory: 'NOUVELLE CATÉGORIE',
@@ -405,6 +408,12 @@ const Translations: any = {
     deleteReview: 'Supprimer l\'avis', confirmDeleteReview: 'Êtes-vous sûr de vouloir supprimer cet avis ?',
     broadcastCenter: 'CENTRE DE DIFFUSION', startLiveSession: 'DÉMARRER SESSION LIVE', liveAnalytics: 'Analyses en Direct',
     following: 'Suivi', unfollowed: 'Non suivi',
+    friends: 'Amis',
+    pending: 'En attente',
+    addFriend: 'Ajouter',
+    forYou: 'Pour toi',
+    friendsTab: 'Amis',
+    followingTab: 'Suivis',
     noReviews: 'Aucun avis pour le moment.', ratings: 'Évaluations', noPolicyDefined: 'Aucune politique définie.',
     futureMinimalism: 'MINIMALISME FUTUR', premiumQuality: 'Vêtements de qualité supérieure',
     noProductsInCategory: 'Aucun produit dans cette catégorie pour le moment.',
@@ -538,6 +547,9 @@ const Translations: any = {
     defaultAddressSet: 'Adresse par défaut mise à jour',
     viewDetails: 'DÉTAILS',
     followed: 'Vous suivez maintenant ce partenaire',
+    friendAdded: 'Ami ajouté avec succès',
+    friendRequestSent: 'Demande d\'ami envoyée! En attente d\'acceptation.',
+    requestAlreadySent: 'Demande d\'ami déjà envoyée',
     loginRequired: 'Veuillez vous connecter pour suivre',
     liveNotSupported: 'Le streaming en direct n\'est pas supporté sur Expo Go',
     devBuildRequired: 'Build de développement requis',
@@ -637,10 +649,29 @@ const Translations: any = {
     skipForNow: 'Passer pour le moment',
     videoReady: 'Vidéo prête !',
     changeVideo: 'Changer la vidéo',
+    cameraTitle: 'Caméra',
+    cameraPermission: 'L\'autorisation de caméra est requise',
+    allowCamera: 'Autoriser la caméra',
+    photoPreview: 'Aperçu Photo',
+    videoPreview: 'Aperçu Vidéo',
+    videoMode: 'Vidéo',
+    photoMode: 'Photo',
+    timer30s: '30s',
+    timer60s: '60s',
+    timerUnlimited: '∞',
+    cameraNotSupported: 'L\'enregistrement vidéo n\'est pas supporté sur le simulateur',
+    tapToPhoto: 'Appuyez pour prendre une photo',
+    tapToRecord: 'Appuyez pour enregistrer',
+    recording: 'Enregistrement...',
+    retake: 'Reprendre',
+    saveMedia: 'Enregistrer',
+    workUploaded: 'Ajouté à vos travaux!',
+    tapToCancel: 'Appuyez pour annuler', 
+    femmes: 'Femmes', hommes: 'Hommes', enfants: 'Enfants', accessoires: 'Accessoires',
   },
   ar: {
     success: 'تم بنجاح',
-    home: 'الرئيسية', shop: 'المتجر', bag: 'الحقيبة', me: 'أنا', feed: 'الخلاصة',
+    home: 'الرئيسية', shop: 'المتجر', bag: 'الحقيبة', me: 'أنا', feed: 'الخلاصة', collab: 'تعاون',
     explore: 'استكشف', seeAll: 'عرض الكل', refineGallery: 'المعرض',
     collections: 'التشكيلات', flashSale: 'تخفيضات', campaigns: 'الحملات',
     featured: 'رائجة الآن', newDrop: 'جديدنا', brands: 'العلامات التجارية', categories: 'الفئات',
@@ -651,178 +682,268 @@ const Translations: any = {
     writeReviewPlaceholder: 'ما رأيك في هذا الشريك؟', comment: 'تعليق',
     edit: 'تعديل', new: 'جديد', visible: 'مرئي',
     selectProducts: 'المنتجات', searchProducts: 'بحث',
-    myStudio: 'الاستوديو', preferences: 'تفضيلات', access: 'الدخول',
-    adminDash: 'لوحة التحكم', community: 'انضم إلينا',
-    dashboard: 'لوحة التحكم', products: 'المنتجات', banners: 'اللافتات',
-    search: 'بحث...', addToCart: 'أضف للحقيبة', buyNow: 'شراء الآن',
-    wishlist: 'المحفوظات', myOrders: 'طلباتي', profile: 'حسابي',
-    color: 'اللون', size: 'المقاس', description: 'الوصف', reviews: 'المراجعات',
+    myStudio: 'الاستوديو الخاص بي', preferences: 'التفضيلات', access: 'دخول',
+    adminDash: 'لوحة التحكم', community: 'انضم للمجتمع',
+    search: 'بحث...', addToCart: 'أضف للسلة', buyNow: 'اشتري الآن',
+    wishlist: 'المفضلة', myOrders: 'طلباتي', profile: 'الملف الشخصي',
+    color: 'اللون', size: 'المقاس', description: 'الوصف', reviews: 'التقييمات',
     price: 'السعر (د.ت)', discountPrice: 'سعر العرض (د.ت)', deliveryPrice: 'سعر التوصيل (د.ت)',
     productNameFr: 'اسم المنتج (فرنسي)', productNameAr: 'اسم المنتج (عربي)',
-    category: 'الفئة', brand: 'العلامة التجارية', sizesLabel: 'المقاسات', colorsLabel: 'الألوان',
-    soldOutStatus: 'حالة نفاذ الكمية', markUnavailable: 'تحديد كغير متوفر',
-    colorPlaceholder: 'Hex (#000) أو الاسم (أحمر، أزرق...)',
+    category: 'الفئة', brand: 'العلامة', sizesLabel: 'المقاسات', colorsLabel: 'الألوان',
+    soldOutStatus: 'حالة النفاد', markUnavailable: 'تحديد كغير متوفر',
+    colorPlaceholder: 'كود (#000) أو اسم (أحمر، أزرق...)',
     descriptionFr: 'الوصف (فرنسي)', descriptionAr: 'الوصف بالعربية...',
-    images: 'صور', duplicateColor: 'هذا اللون مضاف بالفعل',
-    frenchDesc: 'Description en français...', arabicDesc: 'الوصف بالعربية...',
+    images: 'الصور', duplicateColor: 'هذا اللون مضاف بالفعل',
+    frenchDesc: 'الوصف بالفرنسية...', arabicDesc: 'الوصف بالعربية...',
     brandOwner: 'مسؤول العلامة', role: 'الدور', admin: 'مسؤول', customer: 'عميل',
-    selectBrand: 'اختر العلامة', assignRole: 'تحديد الدور',
-    revenueThisBrand: 'أرباح العلامة', ordersThisBrand: 'طلبات العلامة',
-    freeDelivery: 'توصيل مجاني', viewProduct: 'عرض المنتج', exploreCollection: 'استكشف المجموعة',
+    selectBrand: 'اختر العلامة', assignRole: 'تعيين الدور',
+    revenueThisBrand: 'إيرادات العلامة', ordersThisBrand: 'طلبات العلامة',
+    freeDelivery: 'توصيل مجاني', viewProduct: 'عرض المنتج', exploreCollection: 'اكتشف المجموعة',
     discover: 'اكتشف', viewAll: 'عرض الكل', nothingSaved: 'لا توجد محفوظات', emptyCart: 'حقيبتك فارغة',
-    freeShipping: 'توصيل مجاني', securePayment: 'دفع آمن', easyReturns: 'إرجاع سهل',
-    trendingNow: 'رائجة الآن', exploreTrends: 'استكشاف الاتجاهات', ourSelection: 'اختياراتنا',
-    filtersSort: 'الفلاتر والفرز', sortBy: 'فرز حسب', newest: 'الأحدث',
-    priceLowHigh: 'السعر: من الأقل إلى الأعلى', priceHighLow: 'السعر: من الأعلى إلى الأقل',
+    freeShipping: 'شحن مجاني', securePayment: 'دفع آمن', easyReturns: 'إرجاع سهل',
+    trendingNow: 'رائج الآن', exploreTrends: 'استكشف الاتجاهات', ourSelection: 'اختياراتنا',
+    filtersSort: 'تصفية وترتيب', sortBy: 'ترتيب حسب', newest: 'الأحدث',
+    priceLowHigh: 'السعر: من الأقل للأعلى', priceHighLow: 'السعر: من الأعلى للأقل',
+    uploadComplete: 'تم الرفع بنجاح!', uploadFailed: 'فشل الرفع',
     colors: 'الألوان', sizes: 'المقاسات',
     checkout: 'إتمام الطلب', subtotal: 'المجموع الفرعي', total: 'المجموع', promoPlaceholder: 'كود الخصم',
     apply: 'تطبيق', delivery: 'التوصيل', orderDetails: 'تفاصيل الطلب', noOrders: 'لا توجد طلبات',
-    editProfile: 'تعديل الحساب', memberSince: 'عضو منذ', orders: 'الطلبات', languageSelect: 'اختر اللغة',
-    liveNow: 'مباشر الآن', enDirect: 'مباشر', viewers: 'مشاهد', flammes: 'نار', joinNow: 'انضم الآن', join: 'انضمام', startLive: 'بدء البث', joinLive: 'انضم للبث',
-    hostIsLive: 'يبث الآن!',
-    login: 'تسجيل الدخول', signup: 'إنشاء حساب', email: 'البريد الإلكتروني', password: 'كلمة السر', welcomeBack: 'مرحباً بعودتك',
-    forgotPassword: 'نسيت كلمة السر؟', logout: 'تسجيل الخروج', sizeGuide: 'دليل المقاسات',
-    resetEmailSent: 'تم إرسال البريد! تحقق من صندوق الوارد والبريد المزعج.', emailRequired: 'البريد الإلكتروني مطلوب',
-    invalidCredentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة', emailInUse: 'البريد الإلكتروني مستخدم بالفعل',
+    editProfile: 'تعديل الملف', memberSince: 'عضو منذ', orders: 'الطلبات', languageSelect: 'اختر اللغة',
+    liveNow: 'مباشر الآن', enDirect: 'مباشر', viewers: 'مشاهدين', flammes: 'لهب', joinNow: 'انضم الآن', join: 'انضمام', startLive: 'بدء بث مباشر', joinLive: 'انضمام للبث',
+    hostIsLive: 'في بث مباشر الآن!',
+    login: 'دخول', signup: 'تسجيل', email: 'البريد الإلكتروني', password: 'كلمة المرور', welcomeBack: 'مرحباً بعودتك',
+    forgotPassword: 'نسيت كلمة المرور؟', logout: 'خروج', sizeGuide: 'دليل المقاسات',
+    resetEmailSent: 'تم إرسال البريد! تحقق من رسائلك.', emailRequired: 'البريد الإلكتروني مطلوب',
+    invalidCredentials: 'البريد أو كلمة المرور غير صحيحة', emailInUse: 'هذا البريد مستخدم بالفعل',
     invalidEmail: 'بريد إلكتروني غير صالح', weakPassword: 'كلمة المرور ضعيفة جداً',
-    onboardTitle: 'إعادة تعريف الأناقة الحديثة.\nمختارة للأشخاص المميزين.',
-    onboardBtn: 'كن واحداً منا', personalData: 'البيانات الشخصية', fullName: 'الاسم الكامل', contactNumber: 'رقم الهاتف',
+    onboardTitle: 'إعادة تعريف الأناقة الحديثة.\nمختارة للأقوياء.',
+    onboardBtn: 'كن من المطلعين', personalData: 'البيانات الشخصية', fullName: 'الاسم الكامل', contactNumber: 'رقم الاتصال',
     defaultAddress: 'العنوان الافتراضي', changeAvatar: 'تغيير الصورة',
     rateProduct: 'تقييم المنتج', writeReview: 'اكتب تقييمك...',
-    cancel: 'إلغاء', submit: 'إرسال', rate: 'تقييم', reviewed: 'تم التقييم ✓',
+    cancel: 'إلغاء', submit: 'إرسال', rate: 'تقديم', reviewed: 'تم التقييم ✓',
     notifications: 'التنبيهات', clearAll: 'مسح الكل', noNotifications: 'لا توجد تنبيهات',
-    sendAGift: 'ارسال هدية', giftSent: 'تم ارسال الهدية!', sentA: 'أرسل',
-    disconnectUser: 'فصل المستخدم', confirmDisconnect: 'تأكيد الفصل', areYouSureDisconnect: 'هل أنت متأكد من فصل', disconnect: 'فصل',
+    sendAGift: 'إرسال هدية', giftSent: 'تم إرسال الهدية!', sentA: 'أرسل',
+    disconnectUser: 'فصل المستخدم', confirmDisconnect: 'تأكيد الفصل', areYouSureDisconnect: 'هل تريد فصل', disconnect: 'فصل',
     blockComment: 'حظر الدردشة', blockApplying: 'حظر الطلبات', manageUser: 'إدارة المستخدم',
-    userBlockedInfo: 'تم حظره من الدردشة', removeUser: 'إزالة من البث',
-    removeUserFromRoom: 'إزالة من الغرفة', inviteToCoHost: 'دعوة للانضمام للبث', stopCoHosting: 'إيقاف البث المشترك', confirmRemove: 'تأكيد الإزالة', areYouSureRemove: 'هل أنت متأكد من إزالة',
-    showResults: 'عرض النتائج', yourBag: 'الحقيبة', thankYou: 'شكراً لطلبك', preparingDelivery: 'نحن نجهز طلبك من TAMA.',
+    userBlockedInfo: 'تم حظره من الدردشة', removeUser: 'إخراج من البث',
+    removeUserFromRoom: 'إخراج من الغرفة', inviteToCoHost: 'دعوة للانضمام', stopCoHosting: 'وقف المشاركة', confirmRemove: 'تأكيد الإخراج', areYouSureRemove: 'هل تريد إخراج',
+    showResults: 'إظهار النتائج', yourBag: 'حقيبتك', thankYou: 'شكراً لطلبك',
+    preparingDelivery: 'نحن نجهز طلبك من TAMA.',
     createAccount: 'إنشاء حساب', searchCollections: 'ابحث...', all: 'الكل',
     signIn: 'دخول', getStarted: 'ابدأ الآن', shopByBrand: 'تسوق حسب العلامة', allBrands: 'كل العلامات',
     pinDuration: 'مدة التثبيت:',
-    pinned: 'مثبت',
     productPinned: 'تم تثبيت المنتج على الشاشة!',
     timeRemaining: 'الوقت المتبقي',
     mins: 'دقيقة',
+    confirm: 'تأكيد', removeFriendConfirm: 'هل أنت متأكد من إزالة هذا الصديق؟',
+    cancelRequest: 'إلغاء الطلب', cancelRequestConfirm: 'هل تريد إلغاء طلب الصداقة؟', no: 'لا', yes: 'نعم',
     error: 'خطأ', save: 'حفظ', delete: 'حذف', areYouSure: 'هل أنت متأكد؟',
     noBrandsFound: 'لم يتم العثور على علامات', editBrand: 'تعديل العلامة', newBrand: 'علامة جديدة',
     editCategory: 'تعديل الفئة', newCategory: 'فئة جديدة',
     editProduct: 'تعديل المنتج', newProduct: 'منتج جديد',
     itemsLabel: 'عناصر', searchOrdersPlaceholder: 'بحث برقم الطلب، الاسم أو الهاتف',
-    activeStatusLabel: 'الحالة النشطة', showFlashSale: 'عرض البيع فلاش على الشاشة الرئيسية',
-    endTimeIso: 'وقت الانتهاء (تنسيق ISO)', selectPresetOrIso: 'اختر إعدادا مسبقا أو استخدم تنسيق ISO',
+    activeStatusLabel: 'الحالة النشطة', showFlashSale: 'عرض البيع فلاش ',
+    endTimeIso: 'وقت الانتهاء', selectPresetOrIso: 'اختر إعدادا مسبقا',
     selectProductsLabel: 'اختر المنتجات', noPromoBanners: 'لا توجد لافتات ترويجية',
     editPromotion: 'تعديل العرض', newPromotion: 'عرض جديد',
-    bannerImage: 'صورة اللافتة', selectImage169: 'اختر صورة (16:9)',
-    promotionTitle: 'عنوان العرض', descriptionOffer: 'الوصف / العرض',
-    bgColorHex: 'لون الخلفية (HEX)', order: 'الترتيب',
-    flashSaleTitlePlaceholder: 'مثال: تخفيضات فلاش -50%', summerSalePlaceholder: 'مثال: تخفيضات الصيف',
-    offerPlaceholder: 'مثال: خصم يصل إلى 50%', norKam: 'نور كام',
-    editor: 'محرر', viewer: 'مشاهد',
-    tapToUploadLogo: 'اضغط لرفع الشعار', brandNameFr: 'اسم العلامة (فرنسي)', brandNameAr: 'اسم العلامة (عربي)',
-    nameRequired: 'الاسم مطلوب', failedToSave: 'فشل في الحفظ',
-    account: 'الحساب', team: 'الفريق', socials: 'التواصل الاجتماعي', pages: 'الصفحات',
-    updateAccount: 'تحديث الحساب', emailAddress: 'البريد الإلكتروني',
-    currentPasswordRequired: 'كلمة السر الحالية (مطلوب)', newPasswordOptional: 'كلمة السر الجديدة (اختياري)',
-    leaveEmptyToKeepCurrent: 'اتركه فارغاً للحفاظ على الحالي',
-    updateProfile: 'تحديث الحساب', addNewMember: 'إضافة عضو جديد', userEmail: 'البريد الإلكتروني',
-    invite: 'دعوة', currentTeam: 'الفريق الحالي', manageSocialLinks: 'روابط التواصل الاجتماعي',
-    instagram: 'انستغرام', facebook: 'فيسبوك', tiktok: 'تيك توك', whatsappNumber: 'رقم الواتساب',
-    saveChanges: 'حفظ التغييرات', manageLegalPages: 'الصفحات القانونية',
-    privacyPolicy: 'سياسة الخصوصية', enterPrivacyPolicyContent: 'أدخل محتوى سياسة الخصوصية...',
-    termsOfService: 'شروط الخدمة', enterTermsOfServiceContent: 'أدخل محتوى شروط الخدمة...',
-    saving: 'جاري الحفظ...', updatePages: 'تحديث الصفحات',
-    notificationTitle: 'عنوان التنبيه', messageContent: 'محتوى الرسالة',
-    coupons: 'كوبونات', couponCode: 'رمز الكوبون', discount: 'خصم',
-    invalidCoupon: 'كوبون غير صالح', couponApplied: 'تم تطبيق الكوبون', remove: 'إزالة',
-    value: 'القيمة', minOrder: 'الحد الأدنى للطلب', type: 'النوع', active: 'نشط',
-    createCoupon: 'إنشاء كوبون', enterCouponCode: 'أدخل رمز الكوبون', confirmOrder: 'تأكيد الطلب',
-    deliveryDetails: 'تفاصيل التوصيل', phone: 'رقم الهاتف', shippingAddress: 'عنوان التوصيل',
-    shippingPolicyDefault: 'نقدم توصيل مجاني لجميع الطلبات التي تزيد عن 200 دينار. يستغرق التوصيل من 1 إلى 3 أيام عمل.',
-    paymentPolicyDefault: 'جميع المدفوعات آمنة. نقبل الدفع عند الاستلام وبطاقات الائتمان.',
-    returnPolicyDefault: 'يتم قبول الإرجاع في غضون 30 يوماً من الشراء. يجب أن يكون المنتج في حالته الأصلية.',
-    orderStatusDrops: 'حالة الطلب، العروض الجديدة والتخفيضات',
-    biometricAuth: 'المصادقة البيومترية', faceIdCheckout: 'استخدم FaceID للدفع الأسرع',
-    useBiometricToPay: 'استخدم {{type}} للدفع الأسرع',
-    supportLegal: 'الدعم والقانوني', deactivateAccount: 'تعطيل الحساب',
-    darkMode: 'الوضع الداكن', profileUpdated: 'تم تحديث الحساب', deliveryTime: '2-4 أيام عمل',
-    orderNumber: 'طلب رقم #', statusPending: 'قيد الانتظار', statusDelivered: 'تم التوصيل',
-    statusShipped: 'تم الشحن', statusCancelled: 'ملغي', statusProcessing: 'قيد المعالجة', reviewSubmitted: 'تم إرسال التقييم!',
-    reviewFailed: 'فشل إرسال التقييم', free: 'مجاني', date: 'التاريخ',
-    bundleInCart: 'المنتج المطلوب ليس في الحقيبة', errorCoupon: 'خطأ في التحقق من الكوبون',
-    deleteReview: 'حذف التقييم', confirmDeleteReview: 'هل أنت متأكد من حذف هذا التقييم؟',
-    noReviews: 'لا توجد مراجعات بعد.', ratings: 'تقييمات', noPolicyDefined: 'لم يتم تحديد سياسة بعد.',
-    futureMinimalism: 'بساطة المستقبل', premiumQuality: 'ملابس ذات جودة عالية',
-    noProductsInCategory: 'لا توجد منتجات في هذه الفئة بعد.',
-    appNotifications: 'تنبيهات التطبيق', pushNotifications: 'إشعارات الهاتف',
-    appVersion: 'إصدار التطبيق', soldOut: 'نفذت الكمية', inStock: 'متوفر',
-    support: 'الدعم', chatWithSupport: 'تحدث مع الدعم', typeMessage: 'اكتب رسالتك...',
+    bannerImage: 'صورة الإعلان', selectImage169: 'اختر صورة 16:9',
+    cameraPermission: 'مطلوب إذن الكاميرا',
+    allowCamera: 'السماح بالكاميرا',
+    photoPreview: 'معاينة الصورة',
+    videoPreview: 'معاينة الفيديو',
+    videoMode: 'فيديو',
+    photoMode: 'صورة',
+    timer30s: '30ث',
+    timer60s: '60ث',
+    timerUnlimited: '∞',
+    cameraNotSupported: 'تسجيل الفيديو غير مدعوم على المحاكي',
+    tapToPhoto: 'اضغط لالتقاط صورة',
+    tapToRecord: 'اضغط للتسجيل',
+    recording: 'جاري التسجيل...',
+    retake: 'إعادة',
+    saveMedia: 'حفظ',
+    workUploaded: 'تمت الإضافة إلى أعمالك!',
+    tapToCancel: 'اضغط للإلغاء',
+    femmes: 'نساء', hommes: 'رجال', enfants: 'أطفال', accessoires: 'إكسسوارات',
+    promotionTitle: 'عنوان العرض',
+    descriptionOffer: 'الوصف / العرض',
+    bgColorHex: 'لون الخلفية (HEX)',
+    order: 'الترتيب',
+    flashSaleTitlePlaceholder: 'مثال: عرض فلاش -50%',
+    summerSalePlaceholder: 'مثال: تخفيضات الصيف',
+    offerPlaceholder: 'مثال: خصم يصل إلى 50%',
+    norKam: 'NOR KAM',
+    editor: 'المحرر',
+    viewer: 'المشاهد',
+    tapToUploadLogo: 'اضغط لرفع الشعار',
+    brandNameFr: 'NOM MARQUE (FR)',
+    brandNameAr: 'NOM MARQUE (AR)',
+    nameRequired: 'الاسم مطلوب',
+    failedToSave: 'فشل الحفظ',
+    account: 'الحساب',
+    team: 'الفريق',
+    socials: 'التواصل الاجتماعي',
+    pages: 'الصفحات',
+    updateAccount: 'تحديث الحساب',
+    emailAddress: 'البريد الإلكتروني',
+    currentPasswordRequired: 'كلمة المرور الحالية (مطلوبة)',
+    newPasswordOptional: 'كلمة المرور الجديدة (اختياري)',
+    leaveEmptyToKeepCurrent: 'اتركه فارغاً للمحافظة على الحالية',
+    updateProfile: 'تحديث الملف الشخصي',
+    addNewMember: 'إضافة عضو جديد',
+    userEmail: 'البريد الإلكتروني للمستخدم',
+    invite: 'دعوة',
+    currentTeam: 'الفريق الحالي',
+    manageSocialLinks: 'إدارة روابط التواصل',
+    instagram: 'INSTAGRAM',
+    facebook: 'FACEBOOK',
+    tiktok: 'TIKTOK',
+    whatsappNumber: 'رقم الواتساب',
+    saveChanges: 'حفظ التغييرات',
+    manageLegalPages: 'إدارة الصفحات القانونية',
+    privacyPolicy: 'سياسة الخصوصية',
+    enterPrivacyPolicyContent: 'أدخل محتوى السياسة...',
+    termsOfService: 'شروط الخدمة',
+    enterTermsOfServiceContent: 'أدخل محتوى الشروط...',
+    saving: 'جاري الحفظ...',
+    updatePages: 'تحديث الصفحات',
+    notificationTitle: 'عنوان التنبيه',
+    messageContent: 'محتوى الرسالة',
+    coupons: 'الكوبونات',
+    couponCode: 'كود الخصم',
+    discount: 'تخفيض',
+    invalidCoupon: 'كوبون غير صالح',
+    couponApplied: 'تم تطبيق الكوبون',
+    remove: 'إزالة',
+    value: 'القيمة',
+    minOrder: 'الحد الأدنى للطلب',
+    type: 'النوع',
+    active: 'نشط',
+    createCoupon: 'إنشاء كوبون',
+    enterCouponCode: 'أدخل كود الخصم',
+    confirmOrder: 'تأكيد الطلب',
+    deliveryDetails: 'تفاصيل التوصيل',
+    phone: 'رقم الهاتف',
+    shippingAddress: 'عنوان الشحن',
+    shippingPolicyDefault: 'نحن نقدم توصيل مجاني لجميع الطلبات التي تتجاوز 200 دينار. يستغرق التوصيل من 1 إلى 3 أيام عمل.',
+    paymentPolicyDefault: 'جميع الدفعات مؤمنة. نحن نقبل الدفع عند الاستلام وبطاقات الائتمان.',
+    returnPolicyDefault: 'نقبل الإرجاع خلال 30 يوم من الشراء. يجب أن تكون المنتجات في حالتها الأصلية.',
+    orderStatusDrops: 'حالة الطلب، الجديد والتخفيضات',
+    biometricAuth: 'المصادقة البيومترية',
+    faceIdCheckout: 'استخدم FaceID للطلب بشكل أسرع',
+    useBiometricToPay: 'استخدم {{type}} للطلب بشكل أسرع',
+    supportLegal: 'الدعم والقانوني',
+    deactivateAccount: 'تعطيل الحساب',
+    darkMode: 'الوضع الليلي',
+    profileUpdated: 'تم تحديث الملف الشخصي',
+    deliveryTime: '2-4 أيام عمل',
+    orderNumber: 'رقم الطلب #',
+    statusPending: 'قيد الانتظار',
+    statusDelivered: 'تم التوصيل',
+    statusShipped: 'تم الشحن',
+    statusCancelled: 'ملغي',
+    statusProcessing: 'جاري المعالجة',
+    reviewSubmitted: 'تم إرسال التقييم!',
+    reviewFailed: 'فشل إرسال التقييم',
+    free: 'مجاني',
+    date: 'التاريخ',
+    bundleInCart: 'المنتج المطلوب غير موجود في السلة',
+    errorCoupon: 'خطأ في التحقق من الكوبون',
+    deleteReview: 'حذف التقييم',
+    confirmDeleteReview: 'هل أنت متأكد من حذف هذا التقييم؟',
+    broadcastCenter: 'مركز البث',
+    startLiveSession: 'بدء جلسة مباشرة',
+    liveAnalytics: 'تحليلات المباشر',
+    following: 'المتـابعون',
+    unfollowed: 'إلغاء المتابعة',
+    friends: 'الأصدقاء',
+    pending: 'قيد الانتظار',
+    addFriend: 'إضافة صديق',
+    forYou: 'لك',
+    friendsTab: 'الأصدقاء',
+    followingTab: 'المتابعة',
+    noReviews: 'لا توجد تقييمات حاليا.',
+    ratings: 'التقييمات',
+    noPolicyDefined: 'لم يتم تحديد سياسة.',
+    futureMinimalism: 'بساطة مستقبلية',
+    premiumQuality: 'ملابس بجودة عالية',
+    noProductsInCategory: 'لا توجد منتجات في هذه الفئة حاليا.',
+    appNotifications: 'تنبيهات التطبيق',
+    pushNotifications: 'التنبيهات',
+    appVersion: 'نسخة التطبيق',
+    soldOut: 'نفذت الكمية',
+    inStock: 'متوفر',
+    support: 'الدعم',
+    chatWithSupport: 'تحدث مع الدعم',
+    typeMessage: 'اكتب رسالة...',
     startConversation: 'ابدأ محادثة مع فريقنا',
-    logoutConfirmTitle: 'تسجيل الخروج', logoutConfirmMessage: 'هل أنت متأكد أنك تريد تسجيل الخروج؟',
-    orderTotal: 'إجمالي الطلب', clientInfo: 'بيانات العميل', orderItems: 'المنتجات',
-    updateStatus: 'تحديث الحالة', tapToChangeStatus: 'اضغط للتغيير',
-    deliveryAddress: 'عنوان التوصيل', contactInfo: 'معلومات الاتصال', paymentMethod: 'طريقة الدفع',
-    orderSummary: 'ملخص الطلب', campaignTitle: 'عنوان الحملة', campaignSubtitle: 'العنوان الفرعي',
-    campaignImage: 'صورة الحملة', status: 'الحالة', adminConsole: 'لوحة التحكم',
-    broadcast: 'بث تنبيهات',
+    logoutConfirmTitle: 'تسجيل الخروج',
+    logoutConfirmMessage: 'هل أنت متأكد من رغبتك في تسجيل الخروج؟',
+    orderTotal: 'إجمالي الطلب',
+    clientInfo: 'معلومات العميل',
+    orderItems: 'المنتجات',
+    updateStatus: 'تحديث الحالة',
+    tapToChangeStatus: 'اضغط للتغيير',
+    deliveryAddress: 'عنوان التوصيل',
+    contactInfo: 'معلومات الاتصال',
+    paymentMethod: 'طريقة الدفع',
+    orderSummary: 'ملخص الطلب',
+    newCampaign: 'حملة جديدة',
+    editCampaign: 'تعديل الحملة',
+    campaignTitle: 'عنوان الحملة',
+    campaignSubtitle: 'العنوان الفرعي',
+    campaignImage: 'صورة الحملة',
+    status: 'الحالة',
+    adminConsole: 'لوحة المسؤول',
+    broadcast: 'البث',
+    products: 'المنتجات',
+    dashboard: 'لوحة التحكم',
+    users: 'المستخدمين',
+    banners: 'البانرات',
     totalSales: 'إجمالي المبيعات',
     clients: 'العملاء',
-    creators: 'المشتركين',
-    works: 'أعمال',
     recentOrders: 'آخر الطلبات',
     notificationImage: 'صورة التنبيه',
     optional: '(اختياري)',
     tapToUpload: 'اضغط للرفع',
     notificationTitleLabel: 'عنوان التنبيه',
     notificationMessageLabel: 'رسالة التنبيه',
-    sendBroadcast: 'إرسال التنبيه',
-    broadcastHelpText: 'سيتم إرسال هذا التنبيه لجميع المستخدمين المسجلين.',
-    broadcastSuccess: 'تم إرسال التنبيه بنجاح',
-    broadcastError: 'فشل الإرسال',
+    sendBroadcast: 'إرسال البث',
+    broadcastHelpText: 'سيؤدي هذا إلى إرسال تنبيه لجميع المستخدمين المسجلين.',
+    broadcastSuccess: 'تم إرسال البث بنجاح',
+    broadcastError: 'فشل إرسال البث',
     adsPromo: 'الإعلانات والعروض',
     promotions: 'العروض',
     uploadImage: 'رفع صورة',
     uploadVideo: 'رفع فيديو',
     mediaType: 'نوع الميديا',
-    flashSalePlaceholder: 'تنبيه تخفيضات!', broadcastCenter: 'مركز البث',
-    startLiveSession: 'بدء جلسة مباشرة', liveAnalytics: 'تحليلات البث',
-    following: 'متابعات', unfollowed: 'تم إلغاء المتابعة',
+    flashSalePlaceholder: 'تحذير عرض فلاش!',
     typeMessagePlaceholder: 'اكتب رسالتك لجميع المستخدمين...',
-    successTitle: 'نجاح',
+    successTitle: 'تم بنجاح',
     accountUpdated: 'تم تحديث الحساب بنجاح',
     linksUpdated: 'تم تحديث الروابط بنجاح',
     pagesUpdated: 'تم تحديث الصفحات بنجاح',
-    memberAdded: 'تم إضافة عضو الفريق',
+    memberAdded: 'تم إضافة العضو',
     productUpdated: 'تم تحديث المنتج',
     productCreated: 'تم إنشاء المنتج',
     couponCreated: 'تم إنشاء الكوبون',
-    flashSaleUpdated: 'تم تحديث البيع السريع',
+    flashSaleUpdated: 'تم تحديث عرض الفلاش',
     requiredFields: 'يرجى ملء الحقول المطلوبة',
     mediaRequired: 'العنوان والميديا مطلوبان',
     codeRequired: 'الكود مطلوب',
     selectProduct: 'يرجى اختيار منتج',
-    addPriceTier: 'أضف مستوى سعر واحد على الأقل',
-    incorrectPassword: 'كلمة السر الحالية غير صحيحة',
-    liveNotSupported: 'البث المباشر غير مدعوم في Expo Go',
-    devBuildRequired: 'يتطلب نسخة تطوير',
-    zegoRequiresDevBuild: 'يتطلب البث المباشر نسخة تطوير خاصة.',
-    runCommands: 'قم بتشغيل أوامر البناء...',
-    goBack: 'رجوع',
-    retry: 'إعادة المحاولة',
-    zegoFailed: 'فشل تحميل SDK. يرجى إعادة بناء التطبيق.',
-    selectProductToPin: 'اختر منتجاً لتثبيته',
+    addPriceTier: 'أضف على الأقل مستوى سعر واحد',
+    incorrectPassword: 'كلمة المرور الحالية غير صحيحة',
     updateFailed: 'فشل التحديث',
     userNotFound: 'المستخدم غير موجود',
     video: 'فيديو',
     campaignDescription: 'وصف الحملة',
     adsCampaigns: 'الإعلانات والحملات',
     noCampaigns: 'لا توجد حملات نشطة',
-
-    // Collaborations
     collabWelcome: 'مرحباً بكم في',
-    collabAppName: 'Tama Collabs',
-    collabSubText: 'اكتشف مجموعات فريدة وإصدارات حصرية من شركائنا.',
-    partnerWithUs: 'كن شريكاً معنا',
+    collabAppName: 'تعاون تاما',
+    collabSubText: 'اكتشف مجموعات فريدة وإطلاقات حصرية من شركائنا.',
+    partnerWithUs: 'كن شريكاً لنا',
     editAd: 'تعديل الإعلان',
     newAd: 'إعلان جديد',
     editBanner: 'تعديل البانر',
@@ -830,22 +951,19 @@ const Translations: any = {
     uncategorized: 'غير مصنف',
     targetAction: 'الإجراء المستهدف',
     targetNone: 'لا شيء',
-    targetProduct: 'منتج',
-    targetCategory: 'فئة',
+    targetProduct: 'المنتج',
+    targetCategory: 'الفئة',
     percentage: 'نسبة مئوية',
     fixed: 'مبلغ ثابت',
-    bundlePrice: 'سعر الحزمة',
-    priceTiers: 'مستويات الأسعار',
+    bundlePrice: 'سعر المجموعة',
+    priceTiers: 'مستويات السعر',
     qty: 'الكمية',
-    noResults: 'لا توجد نتائج',
-    viewDetails: 'التفاصيل',
-    followed: 'أنت تتابع هذا الشريك الآن',
-    loginRequired: 'يرجى تسجيل الدخول للمتابعة',
+    noResults: 'لم يتم العثور على نتائج',
     targetProductLabel: 'المنتج المستهدف',
     selectProductPlaceholder: 'اختر منتجاً...',
     addTierBtn: '+ إضافة مستوى',
-    freeShip: 'شحن مجاني',
-    bundle: 'حزمة',
+    freeShip: 'توصيل مجاني',
+    bundle: 'عرض',
     ban: 'حظر',
     unban: 'إلغاء الحظر',
     banUser: 'حظر المستخدم',
@@ -853,28 +971,56 @@ const Translations: any = {
     confirmBan: 'هل أنت متأكد من حظر هذا المستخدم؟',
     confirmUnban: 'هل أنت متأكد من إلغاء حظر هذا المستخدم؟',
     deleteUser: 'حذف المستخدم',
-    confirmDeleteUser: 'هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.',
+    confirmDeleteUser: 'هل أنت متأكد من حذف هذا المستخدم؟ هذا الإجراء لا يمكن التراجع عنه.',
     duplicate: 'تكرار',
-    missingFields: 'حقول ناقصة',
+    missingFields: 'حقول مفقودة',
     confirmDeleteMember: 'حذف هذا العضو؟',
     userRegistered: 'يجب أن يكون المستخدم مسجلاً أولاً',
-    failedAvatar: 'فشل تحميل الصورة',
+    failedAvatar: 'فشل رفع الصورة الشخصية',
     deletePromotion: 'حذف العرض',
     activeStatus: 'نشط',
     inactiveStatus: 'غير نشط',
-    offOrder: '٪ خصم على طلبك',
+    offOrder: '% خصم على طلبك',
     tndDiscount: 'دينار خصم',
     noCoupons: 'لا توجد كوبونات نشطة',
-    completed: 'مكتمل',
-    buyXforY: 'اشترِ {{qty}} مقابل {{price}} د.ت',
+    completed: 'اكتمل',
+    buyXforY: 'اشترِ {{qty}} بـ {{price}} دينار',
     minOrderLabel: 'الحد الأدنى للطلب:',
     revenue: 'الإيرادات',
-    joined: 'انضم في',
-    searchClients: 'البحث عن العملاء...',
+    joined: 'انضم منذ',
+    creators: 'المشتركون',
+    works: 'الأعمال',
+    searchClients: 'ابحث عن العملاء...',
     noClients: 'لم يتم العثور على عملاء',
     banned: 'محظور',
-    sessionSummary: 'ملخص البث',
-    hostLabel: 'المستضيف',
+    manageAddresses: 'إدارة العناوين',
+    addAddress: 'إضافة عنوان',
+    setAsDefault: 'افتراضي',
+    changePassword: 'تغيير كلمة المرور',
+    newPassword: 'كلمة مرور جديدة',
+    confirmPassword: 'تأكيد كلمة المرور',
+    passwordsDoNotMatch: 'كلمات المرور غير متطابقة',
+    passwordChanged: 'تم تغيير كلمة المرور بنجاح',
+    addressAdded: 'تم إضافة العنوان',
+    addressDeleted: 'تم حذف العنوان',
+    defaultAddressSet: 'تم تحديث العنوان الافتراضي',
+    viewDetails: 'عرض التفاصيل',
+    followed: 'أنت تتابع هذا الشريك الآن',
+    friendAdded: 'تم إضافة الصديق بنجاح',
+    friendRequestSent: 'تم إرسال طلب الصداقة! في انتظار القبول.',
+    requestAlreadySent: 'تم إرسال طلب الصداقة مسبقاً',
+    loginRequired: 'يرجى تسجيل الدخول للمتابعة',
+    liveNotSupported: 'البث المباشر غير مدعوم على Expo Go',
+    devBuildRequired: 'يتطلب نسخة تطوير (Dev Build)',
+    zegoRequiresDevBuild: 'البث يتطلب نسخة تطوير.',
+    runCommands: 'قم بتشغيل أوامر البناء...',
+    goBack: 'الرجوع',
+    retry: 'إعادة المحاولة',
+    zegoFailed: 'فشل الـ SDK. يرجى إعادة بناء التطبيق.',
+    selectProductToPin: 'اختر منتجاً لتثبيته',
+    pinned: 'مُثبّت',
+    sessionSummary: 'ملخص الجلسة',
+    hostLabel: 'المضيف',
     totalLikes: 'إجمالي الإعجابات',
     giftPoints: 'نقاط الهدايا',
     pkWins: 'انتصارات PK',
@@ -883,11 +1029,46 @@ const Translations: any = {
     peakViewers: 'ذروة المشاهدة',
     duration: 'المدة',
     engagement: 'التفاعل',
-    likesPerMin: 'إعجاب/دقيقة',
-    giftsPerMin: 'هدية/دقيقة',
+    likesPerMin: 'إعجابات/دقيقة',
+    giftsPerMin: 'هدايا/دقيقة',
+    viewStatsInfo: 'الإحصائيات النهائية للبث المباشر المكتمل',
+    loadingAnalytics: 'جاري تحميل الإحصائيات...',
+    noAnalyticsData: 'لا توجد بيانات متاحة',
+    selectRecipient: 'اختر المستلم',
+    noParticipants: 'لا يوجد مشاركون آخرون...',
+    selectGift: 'اختر هدية',
+    sendGiftToParticipant: 'إرسال هدية للمشارك',
+    invitationSentTo: 'تم إرسال الدعوة إلى',
+    sendingInvitation: 'جاري إرسال الدعوة...',
+    stoppedCoHostingFor: 'تم إيقاف الاستضافة المشتركة لـ',
+    areYouSureRemoveFromRoom: 'هل تريد إخراج هذا المستخدم من الغرفة؟',
+    pkWinnerTitle: 'فائز تحدي PK',
+    battleEnded: 'انتهى التحدي',
+    itsADraw: 'تعادل !',
+    dropCoupon: 'طرح كوبون',
+    discountAmount: 'المبلغ (د.ت أو %)',
+    expiryMinutes: 'الصلاحية (بالدقائق)',
+    claimCoupon: 'الحصول على الكوبون',
+    couponDropped: 'تم تفعيل الكوبون!',
+    couponEnded: 'انتهت صلاحية الكوبون',
+    couponCopied: 'تم نسخ الكود!',
+    limitedTimeOffer: 'عرض لفترة محدودة',
+    liveEnded: 'انتهى البث',
+    hostEndedSession: 'أنهى المضيف الجلسة المباشرة.',
+    phoneRequired: 'رقم الهاتف مطلوب',
+    addressRequired: 'عنوان التوصيل مطلوب',
+    selectColor: 'يرجى اختيار اللون',
+    selectSize: 'يرجى اختيار المقاس',
+    featuredProducts: 'منتجات مميزة',
+    buy: 'شراء',
+    completePurchase: 'إتمام الشراء',
+    noProductsFeatured: 'لا توجد منتجات مميزة حالياً.',
+    liveShoppingBag: 'حقيبة تسوق البث المباشر',
+    pin: 'تثبيت',
+    updateStreamBag: 'تحديث حقيبة البث',
     pkBattle: 'تحدي PK',
-    battleInProgress: 'التحدي جارٍ',
-    battleInProgressDesc: 'أنت حالياً في تحدي PK. يجب إيقاف التحدي الحالي قبل بدء تحدي جديد.',
+    battleInProgress: 'تحدي جاري',
+    battleInProgressDesc: 'أنت حالياً في تحدي PK. يجب عليك إيقاف التحدي الحالي قبل بدء تحدي جديد.',
     stopBattle: 'إيقاف التحدي',
     chooseBattleDuration: 'اختر مدة التحدي:',
     activeHosts: 'المضيفون النشطون:',
@@ -895,66 +1076,470 @@ const Translations: any = {
     inviteJoinFirst: 'ادعُ أحداً للانضمام أولاً!',
     challenge: 'تحدي',
     pkBattleRequest: 'طلب تحدي PK',
-    wantsToStartPK: 'يريد بدء تحدي PK معك!',
+    wantsToStartPK: 'يريد بدء تحدي PK!',
     reject: 'رفض',
     accept: 'قبول',
     pkBattleStarted: 'بدأ تحدي PK!',
-    declined: 'تم الرفض',
+    declined: 'مرفوض',
     pkDeclinedDesc: 'رفض المضيف طلب التحدي الخاص بك.',
     opponentLabel: 'الخصم',
     transfer: 'تحويل',
-    transferToFriend: 'تحويل لصديق',
+    transferToFriend: 'تحويل إلى صديق',
     searchUser: 'بحث عن مستخدم',
     addToFriends: 'إضافة للأصدقاء',
-    liveSetup: 'إعداد البث المباشر',
-    addPromoVideoDesc: 'أضف مقطع فيديو قصيرًا لمنتجاتك لعرض معاينة في صفحة الاستكشاف.',
-    selectVideo: 'اختر فيديو',
-    startLiveNow: 'بدء البث الآن',
-    skipForNow: 'تخطي الآن',
-    videoReady: 'الفيديو جاهز!',
-    changeVideo: 'تغيير الفيديو',
     friendList: 'قائمة الأصدقاء',
     alreadyFriend: 'صديق ✓',
     transferSuccess: 'تم التحويل بنجاح!',
-    selectRecipient: 'اختر المستلم',
-    amountToTransfer: 'المبلغ المراد تحويله',
+    amountToTransfer: 'المبلغ للتحويل',
     userProfile: 'ملف المستخدم',
     sendSold: 'إرسال الرصيد',
     transferConfirm: 'تأكيد التحويل',
     transferCoins: 'تحويل عملات',
-    transferDiamonds: 'تحويل ماس',
-    viewStatsInfo: 'الإحصائيات النهائية للبث المباشر المكتمل',
-    loadingAnalytics: 'جاري تحميل الإحصائيات...',
-    noAnalyticsData: 'لا توجد بيانات متاحة',
-    noParticipants: 'لا يوجد مشاركون آخرون...',
-    selectGift: 'اختر الهدية',
-    sendGiftToParticipant: 'إرسال هدية للمشارك',
-    invitationSentTo: 'تم إرسال الدعوة إلى',
-    sendingInvitation: 'جاري إرسال الدعوة...',
-    stoppedCoHostingFor: 'تم إيقاف البث المشترك لـ',
-    areYouSureRemoveFromRoom: 'هل أنت متأكد من إزالة هذا المستخدم من الغرفة؟',
-    pkWinnerTitle: 'فائز تحدي PK',
-    battleEnded: 'انتهى التحدي',
-    itsADraw: 'تعادل !',
-    dropCoupon: 'إرسال كوبون',
-    discountAmount: 'قيمة الخصم',
-    expiryMinutes: 'الدقائق الصالحة',
-    uploadComplete: 'تم التحميل بنجاح!',
-    uploadFailed: 'فشل التحميل',
-    claimCoupon: 'احصل عليه',
-    couponDropped: 'تم تفعيل الكوبون!',
-    couponEnded: 'انتهت صلاحية الكوبون',
-    couponCopied: 'تم نسخ الرمز!',
-    liveEnded: 'انتهى البث',
-    hostEndedSession: 'أنهى المضيف البث المباشر.',
-    limitedTimeOffer: 'عرض لفترة محدودة',
-    featuredProducts: 'المنتجات المميزة',
-    buy: 'شراء',
-    completePurchase: 'إتمام الشراء',
-    noProductsFeatured: 'لا توجد منتجات مميزة حالياً.',
-    liveShoppingBag: 'حقيبة التسوق المباشرة',
-    pin: 'تثبيت',
-    updateStreamBag: 'تحديث حقيبة البث',
+    transferDiamonds: 'تحويل جواهر',
+    liveSetup: 'إعداد البث',
+    addPromoVideoDesc: 'أضف فيديو قصير لمنتجاتك ليظهر كمعاينة في صفحة الاستكشاف.',
+    selectVideo: 'اختر فيديو',
+    startLiveNow: 'ابدأ البث الآن',
+    skipForNow: 'تخطي الآن',
+    videoReady: 'الفيديو جاهز!',
+    changeVideo: 'تغيير الفيديو',
+    cameraTitle: 'الكاميرا',
+  },
+  en: {
+    success: 'Success',
+    home: 'HOME', shop: 'SHOP', bag: 'BAG', me: 'ME', feed: 'FEED', collab: 'COLLAB',
+    explore: 'Explore', seeAll: 'See All', refineGallery: 'Refine',
+    collections: 'COLLECTIONS', flashSale: 'Flash Sale', campaigns: 'CAMPAIGNS',
+    featured: 'TRENDING', newDrop: 'NEW', brands: 'BRANDS', categories: 'CATEGORIES',
+    orderHistory: 'History', savedItems: 'Favorites',
+    officialPartner: 'OFFICIAL PARTNER', shopCollection: 'SHOP COLLECTION', follow: 'FOLLOW', unfollow: 'UNFOLLOW', rating: 'RATING', followers: 'FOLLOWERS', connect: 'CONNECT', socialMedia: 'SOCIAL MEDIA', viewAllCollection: 'VIEW ALL COLLECTION', noProductsAvailable: 'No products available.', partner: 'PARTNER', checkOut: 'Discover', leaveReview: 'LEAVE A REVIEW', website: 'WEBSITE',
+    projects: 'PROJECTS',
+    settings: 'Settings', language: 'Language', signOut: 'Sign Out', info: 'INFO',
+    writeReviewPlaceholder: 'What do you think of this partner?', comment: 'COMMENT',
+    edit: 'Edit', new: 'New', visible: 'Visible',
+    selectProducts: 'Products', searchProducts: 'Search',
+    myStudio: 'MY STUDIO', preferences: 'PREFERENCES', access: 'ACCESS',
+    adminDash: 'Dashboard', community: 'JOIN COMMUNITY',
+    search: 'Search...', addToCart: 'ADD TO CART', buyNow: 'BUY NOW',
+    wishlist: 'WISHLIST', myOrders: 'MY ORDERS', profile: 'PROFILE',
+    color: 'COLOR', size: 'SIZE', description: 'DESCRIPTION', reviews: 'REVIEWS',
+    price: 'PRICE (TND)', discountPrice: 'DISCOUNT PRICE (TND)', deliveryPrice: 'DELIVERY (TND)',
+    productNameFr: 'PRODUCT NAME (FR)', productNameAr: 'PRODUCT NAME (AR)',
+    category: 'CATEGORY', brand: 'BRAND', sizesLabel: 'SIZES', colorsLabel: 'COLORS',
+    soldOutStatus: 'SOLD OUT STATUS', markUnavailable: 'Mark as unavailable',
+    colorPlaceholder: 'Hex (#000) or Name (Red, Blue...)',
+    descriptionFr: 'DESCRIPTION (FR)', descriptionAr: 'DESCRIPTION (AR)',
+    images: 'IMAGES', duplicateColor: 'Color already added',
+    frenchDesc: 'French description...', arabicDesc: 'Arabic description...',
+    brandOwner: 'BRAND OWNER', role: 'ROLE', admin: 'ADMIN', customer: 'CUSTOMER',
+    selectBrand: 'SELECT BRAND', assignRole: 'ASSIGN ROLE',
+    revenueThisBrand: 'BRAND REVENUE', ordersThisBrand: 'BRAND ORDERS',
+    freeDelivery: 'FREE DELIVERY', viewProduct: 'VIEW PRODUCT', exploreCollection: 'EXPLORE COLLECTION',
+    discover: 'DISCOVER', viewAll: 'VIEW ALL', nothingSaved: 'NOTHING SAVED', emptyCart: 'YOUR CART IS EMPTY',
+    freeShipping: 'Free Shipping', securePayment: 'Secure Payment', easyReturns: 'Easy Returns',
+    trendingNow: 'TRENDING', exploreTrends: 'EXPLORE TRENDS', ourSelection: 'OUR SELECTION',
+    filtersSort: 'Filters & Sort', sortBy: 'Sort by', newest: 'Newest',
+    priceLowHigh: 'Price Low to High', priceHighLow: 'Price High to Low',
+    uploadComplete: 'Upload complete!', uploadFailed: 'Upload failed',
+    colors: 'Colors', sizes: 'Sizes',
+    checkout: 'CHECKOUT', subtotal: 'Subtotal', total: 'Total', promoPlaceholder: 'Promo Code',
+    apply: 'Apply', delivery: 'Delivery', orderDetails: 'Order Details', noOrders: 'NO ORDERS',
+    editProfile: 'Edit Profile', memberSince: 'Member since', orders: 'ORDERS', languageSelect: 'Choose language',
+    liveNow: 'LIVE NOW', enDirect: 'LIVE', viewers: 'viewers', flammes: 'Flames', joinNow: 'Join Now', join: 'JOIN', startLive: 'START LIVE', joinLive: 'JOIN LIVE',
+    hostIsLive: 'is live now!',
+    login: 'Login', signup: 'Sign Up', email: 'Email', password: 'Password', welcomeBack: 'Welcome Back',
+    forgotPassword: 'Forgot Password?', logout: 'Logout', sizeGuide: 'SIZE GUIDE',
+    resetEmailSent: 'Email sent! Check your inbox and SPAM.', emailRequired: 'Email required',
+    invalidCredentials: 'Invalid email or password', emailInUse: 'Email already in use',
+    invalidEmail: 'Invalid email', weakPassword: 'Password is too weak',
+    onboardTitle: 'Redefining modern elegance.\nSelected for the bold.',
+    onboardBtn: 'BECOME AN INSIDER', personalData: 'PERSONAL DATA', fullName: 'FULL NAME', contactNumber: 'CONTACT NUMBER',
+    defaultAddress: 'DEFAULT ADDRESS', changeAvatar: 'CHANGE AVATAR',
+    rateProduct: 'RATE PRODUCT', writeReview: 'Write your review...',
+    cancel: 'CANCEL', submit: 'SUBMIT', rate: 'RATE', reviewed: 'REVIEWED ✓',
+    notifications: 'NOTIFICATIONS', clearAll: 'CLEAR ALL', noNotifications: 'NO NOTIFICATIONS',
+    sendAGift: 'SEND A GIFT', giftSent: 'Gift sent!', sentA: 'sent a',
+    disconnectUser: 'Disconnect User', confirmDisconnect: 'Confirm Disconnect', areYouSureDisconnect: 'Do you want to disconnect', disconnect: 'Disconnect',
+    blockComment: 'Block Chat', blockApplying: 'Block Requests', manageUser: 'Manage User',
+    userBlockedInfo: 'has been blocked from chat', removeUser: 'Remove from Live',
+    removeUserFromRoom: 'Remove from Room', inviteToCoHost: 'Invite to Co-host', stopCoHosting: 'Stop Co-hosting', confirmRemove: 'Confirm Removal', areYouSureRemove: 'Do you want to remove',
+    showResults: 'SHOW RESULTS', yourBag: 'YOUR BAG', thankYou: 'THANK YOU FOR YOUR ORDER',
+    preparingDelivery: 'We are preparing your TAMA delivery.',
+    createAccount: 'Create Account', searchCollections: 'SEARCH...', all: 'ALL',
+    signIn: 'SIGN IN', getStarted: 'GET STARTED', shopByBrand: 'SHOP BY BRAND', allBrands: 'ALL BRANDS',
+    pinDuration: 'PIN DURATION:',
+    productPinned: 'Product is now pinned to screen!',
+    timeRemaining: 'Time remaining',
+    mins: 'min',
+    confirm: 'Confirm', removeFriendConfirm: 'Are you sure you want to remove this friend?',
+    cancelRequest: 'Cancel Request', cancelRequestConfirm: 'Do you want to cancel this friend request?', no: 'No', yes: 'Yes',
+    error: 'ERROR', save: 'SAVE', delete: 'DELETE', areYouSure: 'Are you sure?',
+    noBrandsFound: 'No brands found', editBrand: 'EDIT BRAND', newBrand: 'NEW BRAND',
+    editCategory: 'EDIT CATEGORY', newCategory: 'NEW CATEGORY',
+    editProduct: 'EDIT PRODUCT', newProduct: 'NEW PRODUCT',
+    itemsLabel: 'Items', searchOrdersPlaceholder: 'Search Order ID, Name or Phone',
+    activeStatusLabel: 'ACTIVE STATUS', showFlashSale: 'Show flash sale on home screen',
+    endTimeIso: 'END TIME (ISO FORMAT)', selectPresetOrIso: 'Select a preset or use ISO format',
+    selectProductsLabel: 'SELECT PRODUCTS', noPromoBanners: 'NO PROMOTIONAL BANNERS',
+    editPromotion: 'EDIT PROMOTION', newPromotion: 'NEW PROMOTION',
+    bannerImage: 'BANNER IMAGE', selectImage169: 'SELECT IMAGE (16:9)',
+    cameraPermission: 'Camera permission required',
+    allowCamera: 'Allow Camera',
+    photoPreview: 'Photo Preview',
+    videoPreview: 'Video Preview',
+    videoMode: 'Video',
+    photoMode: 'Photo',
+    timer30s: '30s',
+    timer60s: '60s',
+    timerUnlimited: '∞',
+    cameraNotSupported: 'Video recording not supported on simulator',
+    tapToPhoto: 'Tap to take photo',
+    tapToRecord: 'Tap to record',
+    recording: 'Recording...',
+    retake: 'Retake',
+    saveMedia: 'Save',
+    workUploaded: 'Added to your works!',
+    tapToCancel: 'Tap to cancel',
+    femmes: 'Women', hommes: 'Men', enfants: 'Kids', accessoires: 'Accessories',
+    promotionTitle: 'PROMOTION TITLE',
+    descriptionOffer: 'DESCRIPTION / OFFER',
+    bgColorHex: 'BG COLOR (HEX)',
+    order: 'ORDER',
+    flashSaleTitlePlaceholder: 'e.g. FLASH SALE -50%',
+    summerSalePlaceholder: 'e.g. SUMMER SALE',
+    offerPlaceholder: 'e.g. UP TO 50% OFF',
+    norKam: 'NORKAM',
+    editor: 'EDITOR',
+    viewer: 'VIEWER',
+    tapToUploadLogo: 'TAPTOUPLOADLOGO',
+    brandNameFr: 'BRANDNAMEFR',
+    brandNameAr: 'BRANDNAMEAR',
+    nameRequired: 'Name required',
+    failedToSave: 'Failed to save',
+    account: 'ACCOUNT',
+    team: 'TEAM',
+    socials: 'SOCIALS',
+    pages: 'PAGES',
+    updateAccount: 'UPDATE ACCOUNT',
+    emailAddress: 'EMAIL ADDRESS',
+    currentPasswordRequired: 'CURRENTPASSWORDREQUIRED',
+    newPasswordOptional: 'NEWPASSWORDOPTIONAL',
+    leaveEmptyToKeepCurrent: 'leaveEmptyToKeepCurrent',
+    updateProfile: 'UPDATE PROFILE',
+    addNewMember: 'ADD NEW MEMBER',
+    userEmail: 'userEmail',
+    invite: 'INVITE',
+    currentTeam: 'CURRENTTEAM',
+    manageSocialLinks: 'SOCIAL LINKS',
+    instagram: 'INSTAGRAM',
+    facebook: 'FACEBOOK',
+    tiktok: 'TIKTOK',
+    whatsappNumber: 'WHATSAPPNUMBER',
+    saveChanges: 'SAVE CHANGES',
+    manageLegalPages: 'MANAGELEGALPAGES',
+    privacyPolicy: 'PRIVACYPOLICY',
+    enterPrivacyPolicyContent: 'enterPrivacyPolicyContent',
+    termsOfService: 'TERMSOFSERVICE',
+    enterTermsOfServiceContent: 'enterTermsOfServiceContent',
+    saving: 'SAVING',
+    updatePages: 'UPDATEPAGES',
+    notificationTitle: 'NOTIFICATIONTITLE',
+    messageContent: 'MESSAGECONTENT',
+    coupons: 'COUPONS',
+    couponCode: 'PROMO CODE',
+    discount: 'DISCOUNT',
+    invalidCoupon: 'INVALIDCOUPON',
+    couponApplied: 'COUPONAPPLIED',
+    remove: 'REMOVE',
+    value: 'VALUE',
+    minOrder: 'MINORDER',
+    type: 'TYPE',
+    active: 'ACTIVE',
+    createCoupon: 'CREATECOUPON',
+    enterCouponCode: 'ENTERCOUPONCODE',
+    confirmOrder: 'CONFIRM ORDER',
+    deliveryDetails: 'DELIVERYDETAILS',
+    phone: 'PHONE NUMBER',
+    shippingAddress: 'SHIPPING ADDRESS',
+    shippingPolicyDefault: 'shippingPolicyDefault',
+    paymentPolicyDefault: 'paymentPolicyDefault',
+    returnPolicyDefault: 'returnPolicyDefault',
+    orderStatusDrops: 'orderStatusDrops',
+    biometricAuth: 'BIOMETRICAUTH',
+    faceIdCheckout: 'faceIdCheckout',
+    useBiometricToPay: 'useBiometricToPay',
+    supportLegal: 'SUPPORTLEGAL',
+    deactivateAccount: 'DEACTIVATEACCOUNT',
+    darkMode: 'DARKMODE',
+    profileUpdated: 'Profile updated',
+    deliveryTime: 'deliveryTime',
+    orderNumber: 'ORDERNUMBER',
+    statusPending: 'STATUSPENDING',
+    statusDelivered: 'STATUSDELIVERED',
+    statusShipped: 'STATUSSHIPPED',
+    statusCancelled: 'STATUSCANCELLED',
+    statusProcessing: 'STATUSPROCESSING',
+    reviewSubmitted: 'reviewSubmitted',
+    reviewFailed: 'reviewFailed',
+    free: 'FREE',
+    date: 'Date',
+    bundleInCart: 'bundleInCart',
+    errorCoupon: 'errorCoupon',
+    deleteReview: 'deleteReview',
+    confirmDeleteReview: 'confirmDeleteReview',
+    broadcastCenter: 'BROADCASTCENTER',
+    startLiveSession: 'STARTLIVESESSION',
+    liveAnalytics: 'liveAnalytics',
+    following: 'Following',
+    unfollowed: 'unfollowed',
+    friends: 'Friends',
+    pending: 'pending',
+    addFriend: 'Add',
+    forYou: 'forYou',
+    friendsTab: 'friendsTab',
+    followingTab: 'followingTab',
+    noReviews: 'noReviews',
+    ratings: 'ratings',
+    noPolicyDefined: 'noPolicyDefined',
+    futureMinimalism: 'FUTUREMINIMALISM',
+    premiumQuality: 'premiumQuality',
+    noProductsInCategory: 'noProductsInCategory',
+    appNotifications: 'APPNOTIFICATIONS',
+    pushNotifications: 'pushNotifications',
+    appVersion: 'appVersion',
+    soldOut: 'SOLDOUT',
+    inStock: 'inStock',
+    support: 'Support',
+    chatWithSupport: 'chatWithSupport',
+    typeMessage: 'typeMessage',
+    startConversation: 'startConversation',
+    logoutConfirmTitle: 'logoutConfirmTitle',
+    logoutConfirmMessage: 'logoutConfirmMessage',
+    orderTotal: 'ORDERTOTAL',
+    clientInfo: 'CLIENTINFO',
+    orderItems: 'ORDERITEMS',
+    updateStatus: 'UPDATESTATUS',
+    tapToChangeStatus: 'TAPTOCHANGESTATUS',
+    deliveryAddress: 'DELIVERYADDRESS',
+    contactInfo: 'CONTACTINFO',
+    paymentMethod: 'PAYMENTMETHOD',
+    orderSummary: 'ORDERSUMMARY',
+    newCampaign: 'NEWCAMPAIGN',
+    editCampaign: 'EDITCAMPAIGN',
+    campaignTitle: 'CAMPAIGNTITLE',
+    campaignSubtitle: 'CAMPAIGNSUBTITLE',
+    campaignImage: 'CAMPAIGNIMAGE',
+    status: 'STATUS',
+    adminConsole: 'ADMINCONSOLE',
+    broadcast: 'BROADCAST',
+    products: 'PRODUCTS',
+    dashboard: 'DASHBOARD',
+    users: 'USERS',
+    banners: 'BANNERS',
+    totalSales: 'TOTAL SALES',
+    clients: 'CLIENTS',
+    recentOrders: 'RECENTORDERS',
+    notificationImage: 'NOTIFICATIONIMAGE',
+    optional: 'OPTIONAL',
+    tapToUpload: 'TAPTOUPLOAD',
+    notificationTitleLabel: 'NOTIFICATIONTITLELABEL',
+    notificationMessageLabel: 'NOTIFICATIONMESSAGELABEL',
+    sendBroadcast: 'SENDBROADCAST',
+    broadcastHelpText: 'broadcastHelpText',
+    broadcastSuccess: 'broadcastSuccess',
+    broadcastError: 'broadcastError',
+    adsPromo: 'ADSPROMO',
+    promotions: 'PROMOTIONS',
+    uploadImage: 'UPLOADIMAGE',
+    uploadVideo: 'UPLOADVIDEO',
+    mediaType: 'MEDIATYPE',
+    flashSalePlaceholder: 'flashSalePlaceholder',
+    typeMessagePlaceholder: 'typeMessagePlaceholder',
+    successTitle: 'SUCCESS',
+    accountUpdated: 'accountUpdated',
+    linksUpdated: 'linksUpdated',
+    pagesUpdated: 'pagesUpdated',
+    memberAdded: 'memberAdded',
+    productUpdated: 'productUpdated',
+    productCreated: 'productCreated',
+    couponCreated: 'couponCreated',
+    flashSaleUpdated: 'flashSaleUpdated',
+    requiredFields: 'requiredFields',
+    mediaRequired: 'mediaRequired',
+    codeRequired: 'codeRequired',
+    selectProduct: 'selectProduct',
+    addPriceTier: 'addPriceTier',
+    incorrectPassword: 'incorrectPassword',
+    updateFailed: 'updateFailed',
+    userNotFound: 'userNotFound',
+    video: 'VIDEO',
+    campaignDescription: 'CAMPAIGNDESCRIPTION',
+    adsCampaigns: 'ADSCAMPAIGNS',
+    noCampaigns: 'noCampaigns',
+    collabWelcome: 'collabWelcome',
+    collabAppName: 'collabAppName',
+    collabSubText: 'collabSubText',
+    partnerWithUs: 'partnerWithUs',
+    editAd: 'EDITAD',
+    newAd: 'NEWAD',
+    editBanner: 'EDITBANNER',
+    newBanner: 'NEWBANNER',
+    uncategorized: 'uncategorized',
+    targetAction: 'TARGETACTION',
+    targetNone: 'TARGETNONE',
+    targetProduct: 'TARGETPRODUCT',
+    targetCategory: 'TARGETCATEGORY',
+    percentage: 'PERCENTAGE',
+    fixed: 'FIXED',
+    bundlePrice: 'BUNDLEPRICE',
+    priceTiers: 'PRICETIERS',
+    qty: 'QTY',
+    noResults: 'noResults',
+    targetProductLabel: 'TARGETPRODUCTLABEL',
+    selectProductPlaceholder: 'selectProductPlaceholder',
+    addTierBtn: 'ADDTIERBTN',
+    freeShip: 'freeShip',
+    bundle: 'bundle',
+    ban: 'BAN',
+    unban: 'UNBAN',
+    banUser: 'BANUSER',
+    unbanUser: 'UNBANUSER',
+    confirmBan: 'confirmBan',
+    confirmUnban: 'confirmUnban',
+    deleteUser: 'DELETE USER',
+    confirmDeleteUser: 'confirmDeleteUser',
+    duplicate: 'DUPLICATE',
+    missingFields: 'MISSINGFIELDS',
+    confirmDeleteMember: 'confirmDeleteMember',
+    userRegistered: 'userRegistered',
+    failedAvatar: 'failedAvatar',
+    deletePromotion: 'DELETEPROMOTION',
+    activeStatus: 'ACTIVESTATUS',
+    inactiveStatus: 'INACTIVESTATUS',
+    offOrder: 'OFFORDER',
+    tndDiscount: 'TNDDISCOUNT',
+    noCoupons: 'noCoupons',
+    completed: 'COMPLETED',
+    buyXforY: 'buyXforY',
+    minOrderLabel: 'minOrderLabel',
+    revenue: 'REVENUE',
+    joined: 'Joined on',
+    creators: 'CREATORS',
+    works: 'WORKS',
+    searchClients: 'searchClients',
+    noClients: 'noClients',
+    banned: 'BANNED',
+    manageAddresses: 'MANAGEADDRESSES',
+    addAddress: 'ADD ADDRESS',
+    setAsDefault: 'setAsDefault',
+    changePassword: 'CHANGE PASSWORD',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm password',
+    passwordsDoNotMatch: 'passwordsDoNotMatch',
+    passwordChanged: 'passwordChanged',
+    addressAdded: 'addressAdded',
+    addressDeleted: 'addressDeleted',
+    defaultAddressSet: 'defaultAddressSet',
+    viewDetails: 'DETAILS',
+    followed: 'followed',
+    friendAdded: 'friendAdded',
+    friendRequestSent: 'friendRequestSent',
+    requestAlreadySent: 'requestAlreadySent',
+    loginRequired: 'loginRequired',
+    liveNotSupported: 'liveNotSupported',
+    devBuildRequired: 'devBuildRequired',
+    zegoRequiresDevBuild: 'zegoRequiresDevBuild',
+    runCommands: 'runCommands',
+    goBack: 'Go Back',
+    retry: 'Retry',
+    zegoFailed: 'zegoFailed',
+    selectProductToPin: 'selectProductToPin',
+    pinned: 'PINNED',
+    sessionSummary: 'sessionSummary',
+    hostLabel: 'hostLabel',
+    totalLikes: 'totalLikes',
+    giftPoints: 'giftPoints',
+    pkWins: 'pkWins',
+    pkLosses: 'pkLosses',
+    totalViewers: 'totalViewers',
+    peakViewers: 'peakViewers',
+    duration: 'duration',
+    engagement: 'engagement',
+    likesPerMin: 'likesPerMin',
+    giftsPerMin: 'giftsPerMin',
+    viewStatsInfo: 'viewStatsInfo',
+    loadingAnalytics: 'loadingAnalytics',
+    noAnalyticsData: 'noAnalyticsData',
+    selectRecipient: 'SELECTRECIPIENT',
+    noParticipants: 'noParticipants',
+    selectGift: 'SELECTGIFT',
+    sendGiftToParticipant: 'SENDGIFTTOPARTICIPANT',
+    invitationSentTo: 'invitationSentTo',
+    sendingInvitation: 'sendingInvitation',
+    stoppedCoHostingFor: 'stoppedCoHostingFor',
+    areYouSureRemoveFromRoom: 'areYouSureRemoveFromRoom',
+    pkWinnerTitle: 'pkWinnerTitle',
+    battleEnded: 'battleEnded',
+    itsADraw: 'itsADraw',
+    dropCoupon: 'dropCoupon',
+    discountAmount: 'discountAmount',
+    expiryMinutes: 'expiryMinutes',
+    claimCoupon: 'claimCoupon',
+    couponDropped: 'couponDropped',
+    couponEnded: 'couponEnded',
+    couponCopied: 'couponCopied',
+    limitedTimeOffer: 'LIMITEDTIMEOFFER',
+    liveEnded: 'liveEnded',
+    hostEndedSession: 'hostEndedSession',
+    phoneRequired: 'phoneRequired',
+    addressRequired: 'addressRequired',
+    selectColor: 'selectColor',
+    selectSize: 'selectSize',
+    featuredProducts: 'featuredProducts',
+    buy: 'Buy',
+    completePurchase: 'completePurchase',
+    noProductsFeatured: 'noProductsFeatured',
+    liveShoppingBag: 'liveShoppingBag',
+    pin: 'PIN',
+    updateStreamBag: 'updateStreamBag',
+    pkBattle: 'pkBattle',
+    battleInProgress: 'BATTLEINPROGRESS',
+    battleInProgressDesc: 'battleInProgressDesc',
+    stopBattle: 'STOPBATTLE',
+    chooseBattleDuration: 'CHOOSEBATTLEDURATION',
+    activeHosts: 'ACTIVEHOSTS',
+    noOtherHostsLive: 'noOtherHostsLive',
+    inviteJoinFirst: 'inviteJoinFirst',
+    challenge: 'challenge',
+    pkBattleRequest: 'pkBattleRequest',
+    wantsToStartPK: 'wantsToStartPK',
+    reject: 'Reject',
+    accept: 'Accept',
+    pkBattleStarted: 'pkBattleStarted',
+    declined: 'declined',
+    pkDeclinedDesc: 'pkDeclinedDesc',
+    opponentLabel: 'opponentLabel',
+    transfer: 'TRANSFER',
+    transferToFriend: 'transferToFriend',
+    searchUser: 'searchUser',
+    addToFriends: 'addToFriends',
+    friendList: 'friendList',
+    alreadyFriend: 'alreadyFriend',
+    transferSuccess: 'transferSuccess',
+    amountToTransfer: 'Amount to transfer',
+    userProfile: 'userProfile',
+    sendSold: 'sendSold',
+    transferConfirm: 'transferConfirm',
+    transferCoins: 'transferCoins',
+    transferDiamonds: 'transferDiamonds',
+    liveSetup: 'liveSetup',
+    addPromoVideoDesc: 'addPromoVideoDesc',
+    selectVideo: 'selectVideo',
+    startLiveNow: 'startLiveNow',
+    skipForNow: 'skipForNow',
+    videoReady: 'videoReady',
+    changeVideo: 'changeVideo',
+    cameraTitle: 'Camera',
   }
 };
 
@@ -965,8 +1550,50 @@ const getName = (field: any, fallback = '') => {
   if (!field) return fallback;
   if (typeof field === 'string') return field || fallback;
   // Prioritize selected language, then fallbacks
-  const val = field[currentLang] || field['ar-tn'] || field.fr || field.en || Object.values(field)[0];
-  return val || fallback;
+  const val = field[currentLang] || 
+              (currentLang === 'ar' ? (field['ar-tn'] || field['ar']) : undefined) || 
+              field.fr || field.en || field['ar-tn'] || Object.values(field)[0];
+  return (val as string) || fallback;
+};
+
+const translateColor = (color: string) => {
+  if (!color) return '';
+  const colorsMap: any = {
+    red: {fr: 'Rouge', ar: 'أحمر', en: 'Red'},
+    blue: {fr: 'Bleu', ar: 'أزرق', en: 'Blue'},
+    green: {fr: 'Vert', ar: 'أخضر', en: 'Green'},
+    black: {fr: 'Noir', ar: 'أسود', en: 'Black'},
+    white: {fr: 'Blanc', ar: 'أبيض', en: 'White'},
+    yellow: {fr: 'Jaune', ar: 'أصفر', en: 'Yellow'},
+    grey: {fr: 'Gris', ar: 'رمادي', en: 'Grey'},
+    gray: {fr: 'Gris', ar: 'رمادي', en: 'Gray'},
+    purple: {fr: 'Violet', ar: 'بنفسجي', en: 'Purple'},
+    pink: {fr: 'Rose', ar: 'وردي', en: 'Pink'},
+    orange: {fr: 'Orange', ar: 'برتقالي', en: 'Orange'},
+    brown: {fr: 'Marron', ar: 'بني', en: 'Brown'},
+    beige: {fr: 'Beige', ar: 'بيج', en: 'Beige'},
+    olive: {fr: 'Olive', ar: 'زيتوني', en: 'Olive'},
+    navy: {fr: 'Marine', ar: 'كحلي', en: 'Navy'},
+    burgundy: {fr: 'Bordeaux', ar: 'عنابي', en: 'Burgundy'},
+    khaki: {fr: 'Kaki', ar: 'خاكي', en: 'Khaki'},
+    teal: {fr: 'Teal', ar: 'تركوازي', en: 'Teal'},
+    gold: {fr: 'Or', ar: 'ذهبي', en: 'Gold'},
+    silver: {fr: 'Argent', ar: 'فضي', en: 'Silver'},
+    mustard: {fr: 'Moutarde', ar: 'خردلي', en: 'Mustard'},
+    emerald: {fr: 'Émeraude', ar: 'زمردي', en: 'Emerald'},
+    sapphire: {fr: 'Saphir', ar: 'ياقوتي', en: 'Sapphire'},
+    cream: {fr: 'Crème', ar: 'كريمي', en: 'Cream'},
+    ivory: {fr: 'Ivoire', ar: 'عاجي', en: 'Ivory'},
+  };
+  const key = color.toLowerCase();
+  const langKey = currentLang === 'ar-tn' ? 'ar' : (currentLang || 'fr');
+  return colorsMap[key]?.[langKey] || colorsMap[key]?.[currentLang === 'ar' ? 'ar' : currentLang] || colorsMap[key]?.en || color;
+};
+
+const translateCategory = (cat: string) => {
+  if (!cat) return '';
+  const key = cat.toLowerCase();
+  return Translations[currentLang]?.[key] || cat;
 };
 
 const updateProductRating = async (productId: string) => {
@@ -1233,21 +1860,110 @@ export default function App() {
   // Fetch Target User Profile when switching to PublicProfile
   useEffect(() => {
     if (activeTab === 'PublicProfile' && targetUid) {
-      // If we already have the correct data, skip refetch (optional optimization)
-      if (targetUserProfile?.uid === targetUid) return;
-
       const fetchTargetProfile = async () => {
+        // Reset profile first to show loading
+        setTargetUserProfile(null);
+        
         try {
-          const snap = await getDoc(doc(db, 'users', targetUid));
-          if (snap.exists()) {
-            setTargetUserProfile({ ...snap.data(), uid: targetUid, id: targetUid });
-          } else {
-            console.log("Target user not found:", targetUid);
-            setTargetUserProfile(null);
+          // First try users collection
+          const userSnap = await getDoc(doc(db, 'users', targetUid));
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            // Check if user is a partner/brand_owner
+            const isPartnerUser = userData.isPartner || userData.role === 'brand_owner' || userData.role === 'partner' || !!userData.brandId;
+            setTargetUserProfile({ 
+              ...userData, 
+              uid: targetUid, 
+              id: targetUid,
+              isPartner: isPartnerUser
+            });
+            return;
           }
+
+          // Try collaborations collection by ID
+          const collabSnap = await getDoc(doc(db, 'collaborations', targetUid));
+          if (collabSnap.exists()) {
+            const collabData = collabSnap.data();
+            // Get the owner's user profile if ownerId exists
+            if (collabData.ownerId) {
+              const ownerSnap = await getDoc(doc(db, 'users', collabData.ownerId));
+              if (ownerSnap.exists()) {
+                setTargetUserProfile({ 
+                  ...ownerSnap.data(), 
+                  uid: collabData.ownerId, 
+                  id: collabData.ownerId,
+                  brandName: collabData.name || collabData.brandName,
+                  brandId: collabData.brandId,
+                  isPartner: true,
+                  collabData: collabData
+                });
+                return;
+              }
+            }
+            // Use collaboration data as profile
+            setTargetUserProfile({
+              uid: targetUid,
+              id: targetUid,
+              fullName: collabData.name || collabData.brandName || 'Partner',
+              displayName: collabData.name || collabData.brandName,
+              avatarUrl: collabData.imageUrl || collabData.logo,
+              brandId: collabData.brandId,
+              isPartner: true,
+              collabData: collabData
+            });
+            return;
+          }
+
+          // Try to find collaboration by brandId
+          const brandQuery = query(collection(db, 'collaborations'), where('brandId', '==', targetUid), limit(1));
+          const brandSnap = await getDocs(brandQuery);
+          if (!brandSnap.empty) {
+            const collabDoc = brandSnap.docs[0];
+            const collabData = collabDoc.data();
+            if (collabData.ownerId) {
+              const ownerSnap = await getDoc(doc(db, 'users', collabData.ownerId));
+              if (ownerSnap.exists()) {
+                setTargetUserProfile({
+                  ...ownerSnap.data(),
+                  uid: collabData.ownerId,
+                  id: collabData.ownerId,
+                  brandName: collabData.name || collabData.brandName,
+                  brandId: collabData.brandId,
+                  isPartner: true,
+                  collabData: collabData
+                });
+                return;
+              }
+            }
+            setTargetUserProfile({
+              uid: targetUid,
+              id: targetUid,
+              fullName: collabData.name || collabData.brandName || 'Partner',
+              displayName: collabData.name || collabData.brandName,
+              avatarUrl: collabData.imageUrl || collabData.logo,
+              brandId: collabData.brandId,
+              isPartner: true,
+              collabData: collabData
+            });
+            return;
+          }
+
+          console.log("Target user not found anywhere:", targetUid);
+          // Create a minimal profile to avoid blank screen
+          setTargetUserProfile({
+            uid: targetUid,
+            id: targetUid,
+            fullName: 'User',
+            displayName: 'User',
+          });
         } catch (err) {
           console.error("Error fetching target profile:", err);
-          setTargetUserProfile(null);
+          setTargetUserProfile({
+            uid: targetUid,
+            id: targetUid,
+            fullName: 'User',
+            displayName: 'User',
+          });
         }
       };
       fetchTargetProfile();
@@ -1475,8 +2191,14 @@ export default function App() {
     setProfileData({ ...profileData, ...updatedData });
   };
 
-  const addToCart = (product: any, size: string, color: string) => {
-    const item = { ...product, selectedSize: size, selectedColor: color, quantity: 1, cartId: Date.now() };
+  const addToCart = (product: any, size?: string, color?: string) => {
+    const item = { 
+      ...product, 
+      selectedSize: size || product.sizes?.[0] || 'M', 
+      selectedColor: color || product.colors?.[0] || '', 
+      quantity: 1, 
+      cartId: Date.now() 
+    };
     setCart([...cart, item]);
     setActiveTab('Cart');
   };
@@ -1499,97 +2221,317 @@ export default function App() {
     setWishlist(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]);
   };
 
-  const toggleFollowCollab = async (collabId: string) => {
+  const toggleFollowCollab = async (collabIdOrUserId: string) => {
     if (!user) {
       Alert.alert(t('error'), t('loginRequired') || 'Please login to follow partners');
       return;
     }
 
-    // Optimistic update
-    const isFollowing = followedCollabs.includes(collabId);
-    const newList = isFollowing
-      ? followedCollabs.filter(id => id !== collabId)
-      : [...followedCollabs, collabId];
-
-    setFollowedCollabs(newList);
-
-    // Update local selectedCollab if strictly matching
-    if (selectedCollab && selectedCollab.id === collabId) {
-      const currentCount = selectedCollab.followersCount || 0;
-      const newCount = isFollowing ? Math.max(0, currentCount - 1) : currentCount + 1;
-      setSelectedCollab({ ...selectedCollab, followersCount: newCount });
-    }
-
     try {
+      // First, find the actual collaboration document
+      let actualCollabId = collabIdOrUserId;
+      let collabData: any = null;
+
+      // Try to get collaboration by direct ID
+      const collabSnap = await getDoc(doc(db, 'collaborations', collabIdOrUserId));
+      if (collabSnap.exists()) {
+        collabData = collabSnap.data();
+        actualCollabId = collabIdOrUserId;
+      } else {
+        // Try to find by brandId
+        const brandQuery = query(collection(db, 'collaborations'), where('brandId', '==', collabIdOrUserId), limit(1));
+        const brandSnap = await getDocs(brandQuery);
+        if (!brandSnap.empty) {
+          actualCollabId = brandSnap.docs[0].id;
+          collabData = brandSnap.docs[0].data();
+        } else {
+          // Try to find by ownerId
+          const ownerQuery = query(collection(db, 'collaborations'), where('ownerId', '==', collabIdOrUserId), limit(1));
+          const ownerSnap = await getDocs(ownerQuery);
+          if (!ownerSnap.empty) {
+            actualCollabId = ownerSnap.docs[0].id;
+            collabData = ownerSnap.docs[0].data();
+          } else {
+            // If still not found, check if it's a User ID that has a brandId
+            try {
+              const userSnap = await getDoc(doc(db, 'users', collabIdOrUserId));
+              if (userSnap.exists()) {
+                const uData = userSnap.data();
+                if (uData.brandId) {
+                  const bQuery = query(collection(db, 'collaborations'), where('brandId', '==', uData.brandId), limit(1));
+                  const bSnap = await getDocs(bQuery);
+                  if (!bSnap.empty) {
+                    actualCollabId = bSnap.docs[0].id;
+                    collabData = bSnap.docs[0].data();
+                  }
+                }
+              }
+            } catch (userErr) {
+              console.log("Not a user ID or error fetching user:", userErr);
+            }
+          }
+        }
+      }
+
+      if (!collabData) {
+        Alert.alert(t('error'), 'Collaboration not found');
+        return;
+      }
+
+      // Optimistic update
+      const isFollowing = followedCollabs.includes(actualCollabId);
+      const newList = isFollowing
+        ? followedCollabs.filter(id => id !== actualCollabId)
+        : [...followedCollabs, actualCollabId];
+
+      setFollowedCollabs(newList);
+
       // 1. Update User's Follow List
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { followedCollabs: newList });
       setProfileData({ ...profileData, followedCollabs: newList });
 
-      // 2. Update Collaboration's Follower Count safely using Transaction
-      const collabRef = doc(db, 'collaborations', collabId);
-      console.log(`Attempting to update followersCount for ${collabId}. Current isFollowing: ${isFollowing}`);
-
-      let ownerIdToNotify: string | null = null;
-
+      // 2. Update Collaboration's Follower Count
+      const collabRef = doc(db, 'collaborations', actualCollabId);
       await runTransaction(db, async (transaction) => {
-        const collabDoc = await transaction.get(collabRef);
-        if (!collabDoc.exists()) {
-          throw "Document does not exist!";
-        }
-
-        const currentCount = collabDoc.data().followersCount || 0;
-        let newCount = isFollowing ? currentCount - 1 : currentCount + 1;
-
-        // Ensure never negative
-        if (newCount < 0) newCount = 0;
-
+        const docSnap = await transaction.get(collabRef);
+        if (!docSnap.exists()) return;
+        
+        const currentCount = docSnap.data().followersCount || 0;
+        let newCount = isFollowing ? Math.max(0, currentCount - 1) : currentCount + 1;
         transaction.update(collabRef, { followersCount: newCount });
-
-        // Capture ownerId for notification outside transaction (or inside if we read user doc here)
-        // Optimization: just get the ID here
-        const data = collabDoc.data();
-        ownerIdToNotify = data.userId || data.ownerId;
       });
 
-      console.log(`Successfully updated followersCount for ${collabId}`);
-
-      // 3. Send Notification if Following
-      if (!isFollowing && ownerIdToNotify) {
-        try {
-          const ownerSnap = await getDoc(doc(db, 'users', ownerIdToNotify));
-          if (ownerSnap.exists()) {
-            const ownerData = ownerSnap.data();
-            const ownerToken = ownerData.expoPushToken;
-
-            if (ownerToken) {
-              // Localize based on owner's preference or app default
-              const ownerLang = ownerData.language || 'fr';
-              const title = ownerLang === 'ar' ? 'متابع جديد!' : (ownerLang === 'fr' ? 'Nouveau follower !' : 'New Follower!');
-              const body = ownerLang === 'ar'
-                ? `${user.displayName || 'مستخدم'} بدأ بمتابعتك`
-                : (ownerLang === 'fr' ? `${user.displayName || 'Un utilisateur'} vous suit maintenant` : `${user.displayName || 'A user'} started following you`);
-
-              await sendPushNotification(ownerToken, title, body);
-              console.log(`Notification sent to owner ${ownerIdToNotify}`);
-            } else {
-              console.log(`Owner ${ownerIdToNotify} has no push token`);
-            }
-          }
-        } catch (notifError) {
-          console.error("Error sending notification:", notifError);
-        }
-      }
-
-      // Show local feedback
+      // Show feedback
       Alert.alert(
         t('successTitle'),
-        isFollowing ? (t('unfollowed') || 'You unfollowed this partner') : (t('followed') || 'You are now following this partner')
+        isFollowing ? (t('unfollowed') || 'Unfollowed') : (t('followed') || 'Following')
       );
 
     } catch (e) {
-      console.error("Error saving follow:", e);
-      Alert.alert(t('error'), "Failed to update follow status. Please try again.");
+      console.error("Error toggling follow:", e);
+      Alert.alert(t('error'), "Failed to update follow status");
+    }
+  };
+
+  const handleAcceptFriend = async (userId: string) => {
+    if (!user) return;
+    try {
+      const myRef = doc(db, 'users', user.uid);
+      const targetRef = doc(db, 'users', userId);
+      
+      // Find the request ID to clean up
+      const q = query(
+        collection(db, 'friendRequests'),
+        where('senderId', '==', userId),
+        where('receiverId', '==', user.uid),
+        where('status', '==', 'pending'),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      const requestId = !snap.empty ? snap.docs[0].id : null;
+
+      await runTransaction(db, async (transaction) => {
+        const mySnap = await transaction.get(myRef);
+        const targetSnap = await transaction.get(targetRef);
+        
+        if (!mySnap.exists() || !targetSnap.exists()) return;
+        
+        const myData = mySnap.data();
+        const targetData = targetSnap.data();
+        
+        // Thoroughly clear ALL request traces between these two users
+        const myIncoming = (myData.incomingFriendRequests || []).filter((id: string) => id !== userId);
+        const myPending = (myData.pendingFriendRequests || []).filter((id: string) => id !== userId);
+        const myFriends = [...new Set([...(myData.friends || []), userId])];
+        
+        const targetPending = (targetData.pendingFriendRequests || []).filter((id: string) => id !== user.uid);
+        const targetIncoming = (targetData.incomingFriendRequests || []).filter((id: string) => id !== user.uid);
+        const targetFriends = [...new Set([...(targetData.friends || []), user.uid])];
+        
+        transaction.update(myRef, {
+          incomingFriendRequests: myIncoming,
+          pendingFriendRequests: myPending,
+          friends: myFriends
+        });
+        
+        transaction.update(targetRef, {
+          pendingFriendRequests: targetPending,
+          incomingFriendRequests: targetIncoming,
+          friends: targetFriends
+        });
+
+        if (requestId) {
+          const globalReqRef = doc(db, 'friendRequests', requestId);
+          const subReqRef = doc(db, 'users', user.uid, 'friendRequests', requestId);
+          transaction.update(globalReqRef, { status: 'accepted' });
+          transaction.delete(subReqRef);
+        }
+      });
+      
+      // Local state will be updated by onSnapshot, but we can set it for immediate feedback
+      setProfileData({
+        ...profileData,
+        incomingFriendRequests: (profileData.incomingFriendRequests || []).filter((id: string) => id !== userId),
+        pendingFriendRequests: (profileData.pendingFriendRequests || []).filter((id: string) => id !== userId),
+        friends: [...new Set([...(profileData.friends || []), userId])]
+      });
+      
+      Alert.alert(t('successTitle'), t('friendAdded') || 'Friend added!');
+    } catch (e) {
+      console.error("Error accepting friend:", e);
+      Alert.alert(t('error'), "Failed to accept friend request");
+    }
+  };
+
+  const handleRemoveFriend = async (userId: string) => {
+    if (!user) return;
+    Alert.alert(
+      t('confirm') || 'Confirm',
+      t('removeFriendConfirm') || 'Are you sure you want to remove this friend?',
+      [
+        { text: t('cancel') || 'Cancel', style: 'cancel' },
+        { 
+          text: t('remove') || 'Remove', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const myRef = doc(db, 'users', user.uid);
+              const targetRef = doc(db, 'users', userId);
+              
+              const myFriends = (profileData.friends || []).filter((id: string) => id !== userId);
+              const myPending = (profileData.pendingFriendRequests || []).filter((id: string) => id !== userId);
+              const myIncoming = (profileData.incomingFriendRequests || []).filter((id: string) => id !== userId);
+              
+              await updateDoc(myRef, { 
+                friends: myFriends,
+                pendingFriendRequests: myPending,
+                incomingFriendRequests: myIncoming
+              });
+              
+              const targetSnap = await getDoc(targetRef);
+              if (targetSnap.exists()) {
+                const tData = targetSnap.data();
+                const targetFriends = (tData.friends || []).filter((id: string) => id !== user.uid);
+                const targetPending = (tData.pendingFriendRequests || []).filter((id: string) => id !== user.uid);
+                const targetIncoming = (tData.incomingFriendRequests || []).filter((id: string) => id !== user.uid);
+                
+                await updateDoc(targetRef, { 
+                  friends: targetFriends,
+                  pendingFriendRequests: targetPending,
+                  incomingFriendRequests: targetIncoming
+                });
+              }
+              
+              setProfileData({ 
+                ...profileData, 
+                friends: myFriends,
+                pendingFriendRequests: myPending,
+                incomingFriendRequests: myIncoming
+              });
+              Alert.alert(t('successTitle'), t('friendRemoved') || 'Friend removed');
+            } catch (e) {
+              console.error("Error removing friend:", e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleAddFriend = async (userId: string) => {
+    if (!user) {
+      Alert.alert(t('error'), t('loginRequired') || 'Please login to add friends');
+      return;
+    }
+
+    const currentFriends = profileData?.friends || [];
+    const pendingSent = profileData?.pendingFriendRequests || [];
+    const incomingRequests = profileData?.incomingFriendRequests || [];
+    
+    if (currentFriends.includes(userId)) {
+      handleRemoveFriend(userId);
+      return;
+    }
+
+    if (incomingRequests.includes(userId)) {
+      handleAcceptFriend(userId);
+      return;
+    }
+
+    if (pendingSent.includes(userId)) {
+      Alert.alert(
+        t('cancelRequest') || 'Cancel Request',
+        t('cancelRequestConfirm') || 'Cancel this friend request?',
+        [
+          { text: t('no') || 'No', style: 'cancel' },
+          {
+            text: t('yes') || 'Yes',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const myPending = pendingSent.filter((id: string) => id !== userId);
+                await updateDoc(doc(db, 'users', user.uid), { pendingFriendRequests: myPending });
+                
+                const targetRef = doc(db, 'users', userId);
+                const targetSnap = await getDoc(targetRef);
+                if (targetSnap.exists()) {
+                  const targetIncoming = (targetSnap.data().incomingFriendRequests || []).filter((id: string) => id !== user.uid);
+                  await updateDoc(targetRef, { incomingFriendRequests: targetIncoming });
+                }
+                
+                setProfileData({ ...profileData, pendingFriendRequests: myPending });
+              } catch (e) { console.error("Error canceling request", e); }
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    try {
+      // Get target user data for the invitation
+      const targetRef = doc(db, 'users', userId);
+      const targetSnap = await getDoc(targetRef);
+      if (!targetSnap.exists()) return;
+      const targetData = targetSnap.data();
+
+      // 1. Create invitation documents (Align with WalletScreen)
+      const requestId = doc(collection(db, 'friendRequests')).id;
+      const requestData = {
+        senderId: user.uid,
+        senderName: profileData?.fullName || 'User',
+        senderAvatar: profileData?.avatarUrl || '',
+        receiverId: userId,
+        receiverName: targetData.fullName || 'User',
+        receiverAvatar: targetData.avatarUrl || '',
+        status: 'pending',
+        timestamp: serverTimestamp()
+      };
+
+      const batch = [
+        setDoc(doc(db, 'friendRequests', requestId), requestData),
+        setDoc(doc(db, 'users', userId, 'friendRequests', requestId), requestData),
+        // 2. Update user document arrays for quick status check
+        updateDoc(doc(db, 'users', user.uid), {
+          pendingFriendRequests: [...pendingSent, userId]
+        }),
+        updateDoc(targetRef, {
+          incomingFriendRequests: [...(targetData.incomingFriendRequests || []), user.uid]
+        })
+      ];
+      
+      await Promise.all(batch);
+      
+      setProfileData({ 
+        ...profileData, 
+        pendingFriendRequests: [...pendingSent, userId] 
+      });
+      
+      Alert.alert(t('successTitle'), t('friendRequestSent') || 'Friend request sent! Waiting for acceptance.');
+    } catch (e) {
+      console.error("Error sending friend request:", e);
+      Alert.alert(t('error'), "Failed to send friend request");
     }
   };
 
@@ -1764,13 +2706,14 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} />;
-      case 'PublicProfile': return <ProfileScreen user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} />;
+      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} />;
+      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
       case 'Settings': return <SettingsScreen onBack={() => setActiveTab('Profile')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(screen: string) => setActiveTab(screen)} t={t} user={user} />;
       case 'KYC': return <KYCScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} updateProfile={updateProfileData} theme={theme} t={t} language={language} />;
+      case 'Camera': return <CameraScreen onBack={() => setActiveTab('Feed')} onNavigate={(screen: string) => setActiveTab(screen)} t={t} language={language} theme={theme} user={user} />;
       case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} onNavigate={(screen, params) => {
         if (screen === 'PublicProfile') {
           setTargetUserProfile(params);
@@ -1851,9 +2794,18 @@ export default function App() {
           setActiveTab('PublicProfile');
         }}
         onCampaignPress={navigateToCampaign}
+        onAddFriend={handleAddFriend}
+        onFollowCollab={toggleFollowCollab}
+        onCollabPress={async (collabId) => {
+          // Navigate to user profile to show Works and Messages tabs
+          setTargetUid(collabId);
+          setPreviousTab('Feed');
+          setActiveTab('PublicProfile');
+        }}
         user={user}
         profileData={profileData}
         ads={ads}
+        followedCollabs={followedCollabs}
       />;
 
       case 'Collaboration': return <CollaborationScreen
@@ -1885,17 +2837,21 @@ export default function App() {
       />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
-      case 'Detail': return <ProductDetailScreen
-        product={selectedProduct}
-        onBack={() => setActiveTab(activeTab === 'Detail' ? 'Home' : activeTab)}
-        onAddToCart={addToCart}
-        toggleWishlist={toggleWishlist}
-        isWishlisted={wishlist.includes(selectedProduct?.id)}
-        onSizeGuide={navigateToSizeGuide}
-        user={user}
-        profileData={profileData}
-        t={t}
-      />;
+      case 'Detail': 
+        if (!selectedProduct) return null;
+        return <ProductDetailScreen
+          product={selectedProduct}
+          onBack={() => setActiveTab(previousTab || 'Home')}
+          onAddToCart={addToCart}
+          toggleWishlist={toggleWishlist}
+          isWishlisted={wishlist.includes(selectedProduct?.id)}
+          onSizeGuide={navigateToSizeGuide}
+          user={user}
+          profileData={profileData}
+          t={t}
+          language={language}
+          theme={theme}
+        />;
       case 'CampaignDetail': return <CampaignDetailScreen
         campaign={selectedCampaign}
         onBack={() => setActiveTab('Home')}
@@ -1908,7 +2864,22 @@ export default function App() {
       case 'PaymentPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="securePayment" fieldKey="paymentPolicy" defaultText={t('paymentPolicyDefault')} Icon={Shield} />;
       case 'ReturnPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="easyReturns" fieldKey="returnPolicy" defaultText={t('returnPolicyDefault')} Icon={RotateCcw} />;
 
-      default: return <HomeScreen onProductPress={navigateToProduct} onCategoryPress={navigateToCategory} onNavigate={(screen: string) => setActiveTab(screen)} t={t} />;
+      default: return <HomeScreen 
+        user={user} 
+        profileData={profileData} 
+        onProductPress={navigateToProduct} 
+        onCategoryPress={navigateToCategory} 
+        onCampaignPress={navigateToCampaign}
+        onNavigate={(screen: string) => setActiveTab(screen)} 
+        wishlist={wishlist} 
+        toggleWishlist={toggleWishlist} 
+        notifications={notifications}
+        addToCart={(p: any) => setQuickAddProduct(p)}
+        t={t} 
+        language={language}
+        setFilterBrand={setFilterBrand}
+        onJoinLive={handleJoinLive}
+      />;
     }
   };
 
@@ -1923,12 +2894,12 @@ export default function App() {
         ) : (
           <View style={[styles.mainContainer, { backgroundColor: theme === 'dark' ? Theme.dark.colors.background : Theme.light.colors.background }]}>
             {appState === 'SizeGuide' ? (
-              <SizeGuideScreen onBack={handleBackToMain} />
+              <SizeGuideScreen onBack={handleBackToMain} t={t} language={language} />
             ) : (
               <>
                 {renderMainContent()}
 
-                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && (
+                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && (
                   <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
                     <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
                       <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
@@ -2479,7 +3450,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 64 + insets.top + 15 }}
+        contentContainerStyle={{ paddingTop: 64 + insets.top + 15, paddingBottom: 100 + insets.bottom }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -2777,7 +3748,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                     <View style={[styles.modernCatCard, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9' }]}>
                       <Image source={{ uri: cat.image || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400' }} style={styles.catBgImage} />
                     </View>
-                    <Text style={{ fontSize: 9, fontWeight: '800', marginTop: 8, color: colors.foreground, letterSpacing: 1 }}>{String(getName(cat.name)).toUpperCase()}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '800', marginTop: 8, color: colors.foreground, letterSpacing: 1 }}>{String(translateCategory(getName(cat.name))).toUpperCase()}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -2969,7 +3940,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                 onPress={() => onProductPress(p)}
                 isWishlisted={wishlist?.includes(p.id)}
                 onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p, 'M', 1)}
+                onAddToCart={() => addToCart(p)}
                 showRating={true}
                 theme={theme}
                 language={language}
@@ -3273,18 +4244,18 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile }: any) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
-  const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
+  const isOwnProfile = !isPublicProfile && (user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email));
 
   const getInitials = (name: string) => {
     if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
-  const displayName = profileData?.fullName || user?.displayName || 'USER';
+  const displayName = profileData?.fullName || profileData?.displayName || 'USER';
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const tr = (fr: string, ar: string, en: string) => {
@@ -3305,13 +4276,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   const [profileTab, setProfileTab] = useState(isOwnProfile ? 'Menu' : 'Works'); // Default to 'Works' for other users
 
   useEffect(() => {
-    // Reset tab when switching between profiles (e.g. going from own profile to searching someone else)
+    // Reset tab when switching between profiles
     setProfileTab(isOwnProfile ? 'Menu' : 'Works');
   }, [isOwnProfile, profileData?.uid, profileData?.id]);
   const [works, setWorks] = useState<any[]>([]);
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
-  const [targetUid, setTargetUid] = useState<string | null>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
   const [comments, setComments] = useState<any[]>([]);
@@ -3402,10 +4372,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   };
   const handleCommentReact = async (comment: any, type: string = 'love') => {
     if (!user || !selectedWork) return;
-    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-    if (!targetUid) return;
+    const effectiveTargetUid = selectedWork.userId || targetUidProp || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!effectiveTargetUid) return;
 
-    const commentRef = doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', comment.id);
+    const commentRef = doc(db, 'users', effectiveTargetUid, 'works', selectedWork.id, 'comments', comment.id);
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -3441,8 +4411,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   useEffect(() => {
     if (selectedWork) {
-      // Get owner UID from work object (prioritize userId which is standard)
-      const ownerUid = selectedWork.userId || selectedWork.ownerUid || targetUid || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+      const ownerUid = selectedWork.userId || selectedWork.ownerUid || targetUidProp || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
       if (!ownerUid) return;
 
       setLoadingComments(true);
@@ -3458,13 +4427,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
       return () => unsubscribe();
     }
-  }, [selectedWork, targetUid, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
+  }, [selectedWork, targetUidProp, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
 
   const handleComment = async () => {
     if (!user || !commentText.trim() || !selectedWork) return;
 
-    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-    if (!targetUid) return;
+    const effectiveTargetUid = selectedWork.userId || targetUidProp || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!effectiveTargetUid) return;
 
     const commentData = {
       text: commentText.trim(),
@@ -3481,14 +4450,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
     try {
       if (editingComment) {
-        await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', editingComment.id), {
+        await updateDoc(doc(db, 'users', effectiveTargetUid, 'works', selectedWork.id, 'comments', editingComment.id), {
           text: commentText.trim(),
           updatedAt: serverTimestamp()
         });
       } else {
-        await addDoc(collection(db, 'users', targetUid, 'works', selectedWork.id, 'comments'), commentData);
-        // Also update comment count on the work
-        await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id), {
+        await addDoc(collection(db, 'users', effectiveTargetUid, 'works', selectedWork.id, 'comments'), commentData);
+        await updateDoc(doc(db, 'users', effectiveTargetUid, 'works', selectedWork.id), {
           commentsCount: increment(1)
         });
       }
@@ -3502,12 +4470,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
   const handleDeleteComment = async (commentId: string) => {
     if (!selectedWork) return;
-    const targetUid = selectedWork.userId || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-    if (!targetUid) return;
+    const effectiveTargetUid = selectedWork.userId || targetUidProp || profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
+    if (!effectiveTargetUid) return;
 
     try {
-      await deleteDoc(doc(db, 'users', targetUid, 'works', selectedWork.id, 'comments', commentId));
-      await updateDoc(doc(db, 'users', targetUid, 'works', selectedWork.id), {
+      await deleteDoc(doc(db, 'users', effectiveTargetUid, 'works', selectedWork.id, 'comments', commentId));
+      await updateDoc(doc(db, 'users', effectiveTargetUid, 'works', selectedWork.id), {
         commentsCount: increment(-1)
       });
     } catch (e) {
@@ -3616,14 +4584,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   }, [profileData]);
 
   useEffect(() => {
-    // Determine the target UID: try profileData.uid, profileData.id, or fallback to auth user if it's our own profile
-    const targetUid = profileData?.uid || profileData?.id || (isOwnProfile ? user?.uid : null);
-    if (!targetUid) return;
+    // Use profileData for works, or fallback to targetUidProp, or user's own uid for own profile
+    const effectiveTargetUid = profileData?.uid || profileData?.id || targetUidProp || (isOwnProfile ? user?.uid : null);
+    if (!effectiveTargetUid) return;
 
-    const q = query(collection(db, 'users', targetUid, 'works'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'users', effectiveTargetUid, 'works'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snap) => {
-      const rawWorks = snap.docs.map(d => ({ ...d.data(), id: d.id, userId: targetUid }));
-      // Ensure specific uniqueness just to be safe vs race conditions
+      const rawWorks = snap.docs.map(d => ({ ...d.data(), id: d.id, userId: effectiveTargetUid }));
       const uniqueWorks = rawWorks.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
       setWorks(uniqueWorks);
     }, (err) => {
@@ -3631,7 +4598,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
     });
 
     return () => unsubscribe();
-  }, [profileData, isOwnProfile, user?.uid]);
+  }, [profileData, isOwnProfile, user?.uid, targetUidProp]);
 
   useEffect(() => {
     if (selectedWork) {
@@ -3808,6 +4775,23 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   };
 
   const badgeColor = getBadgeColor();
+
+  // Show loading if no profile data
+  if (!profileData) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <TouchableOpacity
+          style={{ position: 'absolute', top: insets.top + 10, left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+          onPress={onBack}
+        >
+          <ChevronLeft size={24} color={colors.foreground} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={{ marginTop: 16, color: colors.textMuted, fontWeight: '600' }}>{tr('Chargement...', 'جاري التحميل...', 'Loading...')}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Sticky Animated Blur Header */}
@@ -3914,7 +4898,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
           )}
 
           {/* Stats Cards Overlay - Bottom of Image */}
-          {isBrandOwner && (
+          {isOwnProfile && isBrandOwner && (
             <View style={{ position: 'absolute', bottom: 130, left: 0, right: 0, paddingHorizontal: 10 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
@@ -3995,11 +4979,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                 <ShieldCheck style={{ marginBottom: 20 }} size={20} color="#34C759" fill={theme === 'dark' ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)'} strokeWidth={2.5} />
               )}
             </View>
-            <TouchableOpacity onPress={() => setShowEmail(!showEmail)}>
-              <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.5 }}>
-                {showEmail ? user?.email : '••••••••@••••.•••'}
-              </Text>
-            </TouchableOpacity>
+            {isOwnProfile && (
+              <TouchableOpacity onPress={() => setShowEmail(!showEmail)}>
+                <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.5 }}>
+                  {showEmail ? user?.email : '••••••••@••••.•••'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Animatable.View>
 
@@ -4084,7 +5070,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               }}>
                 {tr('MESSAGES', 'الرسائل', 'MESSAGES')}
               </Text>
-              {totalUnread > 0 && (
+              {isOwnProfile && totalUnread > 0 && (
                 <View style={{
                   position: 'absolute',
                   top: -5,
@@ -4109,9 +5095,9 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
         {/* Tab Content Section (Child Index 3) */}
         <Animatable.View animation="fadeInUp" duration={800} delay={200} style={{ paddingHorizontal: 15 }}>
 
-          {profileTab === 'Menu' && (
+          {profileTab === 'Menu' && isOwnProfile && (
             <View>
-              {isOwnProfile && followedList.length > 0 && (
+              {followedList.length > 0 && (
                 <View style={{ marginTop: 10, marginBottom: 25 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 5, marginBottom: 15 }}>
                     <Text style={[styles.menuSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>{t('follow').toUpperCase()}</Text>
@@ -5248,7 +6234,7 @@ function FollowManagementScreen({ onBack, followedCollabs, toggleFollowCollab, s
   const getName = (field: any) => {
     if (!field) return '';
     if (typeof field === 'string') return field;
-    return field[language || 'fr'] || field['en'] || field['fr'] || '';
+    return field[language === 'ar' ? 'ar-tn' : language] || field[language] || field['fr'] || field['en'] || Object.values(field)[0] || '';
   };
 
   return (
@@ -5788,8 +6774,8 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.accent, letterSpacing: 1.2, marginBottom: 4 }}>{product.category?.toUpperCase() || t('collections')}</Text>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground, letterSpacing: -0.5, lineHeight: 22 }}>{getName(product.name).toUpperCase()}</Text>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.accent, letterSpacing: 1.2, marginBottom: 4 }}>{String(translateCategory(getName(product.category)) || t('collections')).toUpperCase()}</Text>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground, letterSpacing: -0.5, lineHeight: 22 }}>{String(getName(product.name)).toUpperCase()}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: colors.foreground }}>
                     {product.discountPrice ? product.discountPrice.toFixed(2) : product.price.toFixed(2)} TND
@@ -5808,7 +6794,7 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
               <View style={{ marginBottom: 20 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text style={{ fontSize: 11, fontWeight: '900', color: colors.foreground, letterSpacing: 1 }}>{t('color')}</Text>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{selectedColor.toUpperCase()}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{translateColor(selectedColor).toUpperCase()}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                   {product.colors.map((c: string) => {
@@ -6441,8 +7427,11 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
   );
 }
 
-function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isWishlisted, onSizeGuide, user, profileData, t }: any) {
+function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isWishlisted, onSizeGuide, user, profileData, t, language, theme: propTheme }: any) {
   const { colors, theme } = useAppTheme();
+  const currentTheme = propTheme || theme;
+  const currentLang = language || 'fr';
+  
   const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || 'M');
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || '');
   const [activeImg, setActiveImg] = useState(0);
@@ -6455,6 +7444,35 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });
+  
+  const getName = (field: any) => {
+    if (!field) return '';
+    if (typeof field === 'string') return field;
+    return field[currentLang === 'ar' ? 'ar-tn' : currentLang] || field[currentLang] || field['fr'] || field['en'] || Object.values(field)[0] || '';
+  };
+
+  const translateColor = (color: string) => {
+    if (!color) return '';
+    const colorsMap: any = {
+      red: {fr: 'Rouge', ar: 'أحمر', en: 'Red'},
+      blue: {fr: 'Bleu', ar: 'أزرق', en: 'Blue'},
+      green: {fr: 'Vert', ar: 'أخضر', en: 'Green'},
+      black: {fr: 'Noir', ar: 'أسود', en: 'Black'},
+      white: {fr: 'Blanc', ar: 'أبيض', en: 'White'},
+      yellow: {fr: 'Jaune', ar: 'أصفر', en: 'Yellow'},
+      grey: {fr: 'Gris', ar: 'رمادي', en: 'Grey'},
+      gray: {fr: 'Gris', ar: 'رمادي', en: 'Gray'},
+      purple: {fr: 'Violet', ar: 'بنفسجي', en: 'Purple'},
+      pink: {fr: 'Rose', ar: 'وردي', en: 'Pink'},
+      orange: {fr: 'Orange', ar: 'برتقالي', en: 'Orange'},
+      brown: {fr: 'Marron', ar: 'بني', en: 'Brown'},
+      beige: {fr: 'Beige', ar: 'بيج', en: 'Beige'},
+      olive: {fr: 'Olive', ar: 'زيتوني', en: 'Olive'},
+    };
+    const key = color.toLowerCase();
+    const langKey = currentLang === 'ar-tn' ? 'ar' : (currentLang || 'fr');
+    return colorsMap[key]?.[langKey] || colorsMap[key]?.[currentLang === 'ar' ? 'ar' : currentLang] || color;
+  };
 
   // Fix: Remove duplicate images - mainImage is already in images array
   const allImages = product.images && product.images.length > 0
@@ -6475,16 +7493,16 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
         height: 64 + insets.top,
         paddingTop: insets.top,
         borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+        borderBottomColor: currentTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
       }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
+          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={currentTheme} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
         </Animated.View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 }}>
           <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: currentTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
             onPress={onBack}
           >
             <X size={22} color={colors.foreground} strokeWidth={2.5} />
@@ -6494,11 +7512,11 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
             numberOfLines={1}
             style={[styles.modernLogo, { flex: 1, textAlign: 'center', marginHorizontal: 15, opacity: headerOpacity, color: colors.foreground, fontSize: 16 }]}
           >
-            {(product.name?.[t('home') === 'الرئيسية' ? 'ar' : 'fr'] || product.name || '').toUpperCase()}
+            {getName(product.name).toUpperCase()}
           </Animated.Text>
 
           <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: currentTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
             onPress={() => toggleWishlist(product.id)}
           >
             <Heart
@@ -6559,9 +7577,9 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
 
           {/* Brand & Product Name */}
           <View style={{ marginBottom: 8, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-            <Text style={[styles.detailBrandName, { color: colors.textMuted, marginBottom: 0 }]}>{(product.category || 'CATEGORY').toUpperCase()}</Text>
+            <Text style={[styles.detailBrandName, { color: colors.textMuted, marginBottom: 0 }]}>{String(translateCategory(getName(product.category)) || 'CATEGORY').toUpperCase()}</Text>
             <Text style={{ color: colors.border, fontSize: 12 }}>|</Text>
-            <Text style={[styles.detailBrandName, { color: colors.textMuted, marginBottom: 0 }]}>{(product.brandName || 'PREMIUM').toUpperCase()}</Text>
+            <Text style={[styles.detailBrandName, { color: colors.textMuted, marginBottom: 0 }]}>{String(getName(product.brandName) || 'PREMIUM').toUpperCase()}</Text>
           </View>
           <Text style={[styles.detailProductName, { color: colors.foreground }]}>{String(getName(product.name)).toUpperCase()}</Text>
 
@@ -6592,7 +7610,7 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={[styles.modernDetailLabel, { color: colors.foreground }]}>{t('color')}</Text>
                 <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>
-                  {selectedColor}
+                  {translateColor(selectedColor)}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
@@ -7185,7 +8203,7 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
                       fontWeight: '700'
                     }
                   ]}>
-                    {getName(cat.name).toUpperCase()}
+                    {translateCategory(getName(cat.name)).toUpperCase()}
                   </Text>
                 </TouchableOpacity>
               );
@@ -7743,7 +8761,7 @@ function CartScreen({ cart, onRemove, onUpdateQuantity, onComplete, profileData,
                           elevation: 1
                         }}
                       />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>{item.selectedColor}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>{translateColor(item.selectedColor)}</Text>
                     </View>
                   )}
                 </View>
@@ -7911,7 +8929,7 @@ function CartScreen({ cart, onRemove, onUpdateQuantity, onComplete, profileData,
 
 // --- STYLES ---
 
-function SizeGuideScreen({ onBack, t }: any) {
+function SizeGuideScreen({ onBack, t, language }: any) {
   const { colors, theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -7921,6 +8939,10 @@ function SizeGuideScreen({ onBack, t }: any) {
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });
+  
+  const tr = (fr: string, ar: string, en: string) => {
+    return language === 'ar' ? ar : (language === 'fr' ? fr : en);
+  };
 
   const sizes = [
     { label: 'XS', chest: '82-86', waist: '64-68', hip: '90-94' },
@@ -7968,16 +8990,16 @@ function SizeGuideScreen({ onBack, t }: any) {
         scrollEventThrottle={16}
       >
         <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
-          <Text style={[styles.settingsLabel, { marginBottom: 20, color: colors.foreground }]}>MESURES (CM)</Text>
+          <Text style={[styles.settingsLabel, { marginBottom: 20, color: colors.foreground }]}>{tr('MESURES (CM)', 'القياسات (سم)', 'MEASUREMENTS (CM)')}</Text>
 
           <View style={{
             flexDirection: 'row'
             , paddingBottom: 15, marginBottom: 15
           }}>
-            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted }}>TAILLE</Text>
-            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>POITRINE</Text>
-            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>TAILLE</Text>
-            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>HANCHES</Text>
+            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted }}>{tr('TAILLE', 'المقاس', 'SIZE')}</Text>
+            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>{tr('POITRINE', 'الصدر', 'CHEST')}</Text>
+            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>{tr('TAILLE', 'الخصر', 'WAIST')}</Text>
+            <Text style={{ flex: 1, fontSize: 10, fontWeight: '900', color: colors.textMuted, textAlign: 'center' }}>{tr('HANCHES', 'الوركين', 'HIPS')}</Text>
           </View>
 
           {sizes.map((s, i) => (
@@ -7991,11 +9013,13 @@ function SizeGuideScreen({ onBack, t }: any) {
         </View>
 
         <View style={{ marginTop: 40, padding: 20, backgroundColor: theme === 'dark' ? '#121218' : '#FAFAFA', borderRadius: 25, borderWidth: 1, borderColor: colors.border }}>
-          <Text style={{ fontSize: 14, fontWeight: '900', marginBottom: 15, color: colors.foreground }}>COMMENT MESURER ?</Text>
+          <Text style={{ fontSize: 14, fontWeight: '900', marginBottom: 15, color: colors.foreground }}>{tr('COMMENT MESURER ?', 'كيفية القياس؟', 'HOW TO MEASURE?')}</Text>
           <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 20, marginBottom: 10 }}>
-            • Poitrine : Mesurez horizontalement au point le plus large de la poitrine.{'\n'}
-            • Taille : Mesurez autour de la partie la plus étroite de votre taille.{'\n'}
-            • Hanches : Mesurez au point le plus large de vos hanches.
+            {language === 'ar' 
+              ? '• الصدر: قس أفقياً عند أوسع نقطة من الصدر.\n• الخصر: قس حول أضيق جزء من خصرك.\n• الوركين: قس عند أوسع نقطة من وركيك.'
+              : language === 'fr'
+              ? '• Poitrine : Mesurez horizontalement au point le plus large de la poitrine.\n• Taille : Mesurez autour de la partie la plus étroite de votre taille.\n• Hanches : Mesurez au point le plus large de vos hanches.'
+              : '• Chest: Measure horizontally at the widest point of the chest.\n• Waist: Measure around the narrowest part of your waist.\n• Hips: Measure at the widest point of your hips.'}
           </Text>
         </View>
       </Animated.ScrollView>
@@ -10529,7 +11553,7 @@ function AdminAdsScreen({ onBack, t }: any) {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 25 }}>
                 {categories.map(c => (
                   <TouchableOpacity key={c.id} onPress={() => setTargetId(c.id)} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: targetId === c.id ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: targetId === c.id ? appColors.foreground : appColors.border }}>
-                    <Text style={{ color: targetId === c.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600', fontSize: 12 }}>{getName(c.name)}</Text>
+                    <Text style={{ color: targetId === c.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600', fontSize: 12 }}>{translateCategory(getName(c.name))}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>

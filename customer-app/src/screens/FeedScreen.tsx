@@ -41,6 +41,8 @@ import {
     TrendingUp,
     Clock,
     User,
+    UserPlus,
+    Check,
     ChevronRight,
     Laugh,
     DownloadCloud,
@@ -49,7 +51,8 @@ import {
     ThumbsDown,
     Ghost,
     Sparkles,
-    Pause
+    Pause,
+    Plus
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -77,17 +80,22 @@ interface FeedScreenProps {
     onCommentPress?: (work: any, targetUid: string) => void;
     onUserPress?: (userId: string) => void;
     onCampaignPress?: (campaign: any) => void;
+    onAddFriend?: (userId: string) => void;
+    onFollowCollab?: (collabId: string) => void;
+    onCollabPress?: (collabId: string) => void;
     user?: any;
     profileData?: any;
     ads?: any[];
+    followedCollabs?: string[];
 }
 
 export default function FeedScreen(props: FeedScreenProps) {
-    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, onCampaignPress, user, profileData, ads = [] } = props;
+    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, onCampaignPress, onAddFriend, onFollowCollab, onCollabPress, user, profileData, ads = [], followedCollabs = [] } = props;
     const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [feedFilter, setFeedFilter] = useState<'default' | 'viral' | 'comments'>('default');
+    const [feedTab, setFeedTab] = useState<'all' | 'friends' | 'following'>('all');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [lives, setLives] = useState<FeedItem[]>([]);
     const [works, setWorks] = useState<FeedItem[]>([]);
@@ -157,6 +165,22 @@ export default function FeedScreen(props: FeedScreenProps) {
 
     const sortedFeedItems = useMemo(() => {
         let items = [...feedItemsCombined];
+
+        if (feedTab === 'friends') {
+            items = items.filter(item => {
+                if (item.type !== 'work') return false;
+                return profileData?.friends?.includes(item.data.userId);
+            });
+        } else if (feedTab === 'following') {
+            items = items.filter(item => {
+                if (item.type !== 'work') return false;
+                // Check if following the user directly OR following their brand's collaboration
+                const isFollowingUser = profileData?.following?.includes(item.data.userId);
+                const isFollowingCollab = item.data.collabId && followedCollabs.includes(item.data.collabId);
+                return isFollowingUser || isFollowingCollab;
+            });
+        }
+
         if (feedFilter === 'viral') {
             return items.sort((a, b) => b.score - a.score);
         }
@@ -164,7 +188,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             return items.sort((a, b) => (b.data.commentsCount || 0) - (a.data.commentsCount || 0));
         }
         return items;
-    }, [feedItemsCombined, feedFilter]);
+    }, [feedItemsCombined, feedFilter, feedTab, profileData?.friends, profileData?.following]);
 
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -227,6 +251,7 @@ export default function FeedScreen(props: FeedScreenProps) {
 
         // Persistent cache for profiles within this screen's lifecycle
         const userProfiles: Record<string, any> = {};
+        const brandCollabs: Record<string, string> = {}; // brandId -> collabIdMapping
 
         const unsubscribeWorks = onSnapshot(worksQuery, async (snapshot) => {
             const rawDocs = snapshot.docs.map(doc => {
@@ -245,7 +270,22 @@ export default function FeedScreen(props: FeedScreenProps) {
                 await Promise.all(missingUids.map(async (uid) => {
                     try {
                         const snap = await getDoc(doc(db, 'users', uid));
-                        if (snap.exists()) userProfiles[uid] = snap.data();
+                        if (snap.exists()) {
+                            const pData = snap.data();
+                            userProfiles[uid] = pData;
+                            
+                            // If user is a partner/collab owner, try to find their collaboration ID and image
+                            if (pData.brandId && !brandCollabs[pData.brandId]) {
+                                const collabQuery = query(collection(db, 'collaborations'), where('brandId', '==', pData.brandId), limit(1));
+                                const collabSnap = await getDocs(collabQuery);
+                                if (!collabSnap.empty) {
+                                    const cDoc = collabSnap.docs[0];
+                                    const cData = cDoc.data();
+                                    brandCollabs[pData.brandId] = cDoc.id;
+                                    brandCollabs[pData.brandId + '_image'] = cData.imageUrl || cData.brandImage || '';
+                                }
+                            }
+                        }
                     } catch (e) {
                         console.warn('Error fetching user profile:', uid);
                     }
@@ -255,6 +295,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             const workItems: FeedItem[] = rawDocs.map(({ id, data, userId, fullPath }) => {
                 const profile = userProfiles[userId];
                 const finalUrl = data.url || data.imageUrl || data.mediaUrl;
+                const isCollab = profile?.isPartner || profile?.isCollab || profile?.role === 'partner' || profile?.role === 'brand_owner' || profile?.brandId || false;
                 return {
                     id,
                     type: 'work',
@@ -266,7 +307,11 @@ export default function FeedScreen(props: FeedScreenProps) {
                         userPhoto: profile?.avatarUrl || profile?.photoURL || profile?.image || null,
                         imageUrl: finalUrl,
                         fullPath: fullPath,
-                        type: data.type || (finalUrl?.includes('.mp4') ? 'video' : 'image')
+                        type: data.type || (finalUrl?.includes('.mp4') ? 'video' : 'image'),
+                        isCollab: isCollab,
+                        brandId: profile?.brandId || null,
+                        collabId: (profile?.brandId && brandCollabs[profile.brandId]) || null,
+                        collabImage: (profile?.brandId && brandCollabs[profile.brandId + '_image']) || null
                     },
                     score: getTotalStats(data),
                     createdAt: data.createdAt || { seconds: Date.now() / 1000 }
@@ -726,7 +771,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                 {/* Top Glass Sponsored Badge */}
                 <View style={{
                     position: 'absolute',
-                    top: insets.top + 20, // Now at the very top
+                    top: insets.top + 2, // Now at the very top
                     left: 20,
                     zIndex: 20
                 }}>
@@ -743,7 +788,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     }}>
                         <Star size={12} color="#FBBF24" fill="#FBBF24" />
                         <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', marginLeft: 6, letterSpacing: 1 }}>
-                            {tr('SPONSORISÉ', 'ممول', 'SPONSORED')}
+                            {tr('Ad SPONSORISÉ', 'إعلان ممول', 'SPONSORED')}
                         </Text>
                     </BlurView>
                 </View>
@@ -919,36 +964,15 @@ export default function FeedScreen(props: FeedScreenProps) {
                     </View>
                 )}
 
-                {/* Top Right Actions (Traveaux Style Stack) */}
+                {/* Top Right Actions */}
                 <View style={{
                     position: 'absolute',
                     right: 16,
-                    bottom: 250, // Positioned above text/reactions
+                    bottom: 280,
                     alignItems: 'center',
                     gap: 16,
                     zIndex: 50
                 }}>
-                    {/* Author Profile */}
-                    <TouchableOpacity
-                        onPress={() => onUserPress ? onUserPress(work.userId) : onWorkPress?.(work, work.userId)}
-                        style={{ marginBottom: 4, alignItems: 'center' }}
-                    >
-                        <View style={{
-                            width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: '#FFF',
-                            alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: '#333'
-                        }}>
-                            {work.userPhoto ? <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} /> : <User size={20} color="#FFF" />}
-                        </View>
-                        {!(profileData?.friends?.includes(work.userId) || work.userId === user?.uid) && (
-                            <View style={{
-                                position: 'absolute', bottom: -5, width: 16, height: 16, borderRadius: 8, backgroundColor: '#A855F7',
-                                alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>+</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
                     {/* Comment */}
                     <TouchableOpacity onPress={() => onCommentPress?.(work, work.userId)} style={{ alignItems: 'center' }}>
                         <View style={{
@@ -983,12 +1007,12 @@ export default function FeedScreen(props: FeedScreenProps) {
                         }}>
                             <DownloadCloud size={18} color="#FFF" strokeWidth={2} />
                         </View>
-                        <View>
-                            <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>{tr('Télécharger', 'تحميل', 'Download')}</Text>
-                        </View>
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
+                            {tr('Télécharger', 'تحميل', 'Download')}
+                        </Text>
                     </TouchableOpacity>
 
-                    {/* Share (Changed Icon) */}
+                    {/* Share */}
                     <TouchableOpacity onPress={() => handleShare(work)} style={{ alignItems: 'center' }}>
                         <View style={{
                             width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
@@ -1000,6 +1024,157 @@ export default function FeedScreen(props: FeedScreenProps) {
                             {tr('Share', 'مشاركة', 'Share')}
                         </Text>
                     </TouchableOpacity>
+                </View>
+
+                {/* Bottom User Info - TikTok Style with button below avatar */}
+                <View style={{
+                    position: 'absolute',
+                    bottom: 170,
+                    left: 16,
+                    right: 80,
+                    zIndex: 20
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                            onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
+                            style={{
+                                width: 50, height: 50, 
+                                marginRight: 15,
+                                position: 'relative'
+                            }}
+                        >
+                            {work.isCollab ? (
+                                <View style={{ width: 50, height: 50 }}>
+                                    {/* Main Brand/Collab Image */}
+                                    <View style={{
+                                        width: 42, height: 42, borderRadius: 21,
+                                        borderWidth: 2, borderColor: '#FFF',
+                                        overflow: 'hidden', backgroundColor: '#333'
+                                    }}>
+                                        {work.collabImage ? (
+                                            <Image source={{ uri: work.collabImage }} style={{ width: '100%', height: '100%' }} />
+                                        ) : (
+                                            <Star size={20} color="#FFF" />
+                                        )}
+                                    </View>
+                                    {/* Small User Avatar overlapping */}
+                                    <View style={{
+                                        position: 'absolute', bottom: 0, right: 0,
+                                        width: 24, height: 24, borderRadius: 12,
+                                        borderWidth: 2, borderColor: '#FFF',
+                                        overflow: 'hidden', backgroundColor: '#555',
+                                        zIndex: 5
+                                    }}>
+                                        {work.userPhoto ? (
+                                            <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} />
+                                        ) : (
+                                            <User size={12} color="#FFF" />
+                                        )}
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={{
+                                    width: 44, height: 44, borderRadius: 22, 
+                                    borderWidth: 2, borderColor: '#FFF',
+                                    alignItems: 'center', justifyContent: 'center', 
+                                    overflow: 'hidden', backgroundColor: '#333'
+                                }}>
+                                    {work.userPhoto ? (
+                                        <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} />
+                                    ) : (
+                                        <User size={20} color="#FFF" />
+                                    )}
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
+                            style={{ flexShrink: 1, marginRight: 10 }}
+                        >
+                            <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }} numberOfLines={1}>
+                                {work.userName}
+                            </Text>
+                            {work.text && (
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '500', marginTop: 2 }} numberOfLines={2}>
+                                    {work.text}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+
+                         {work.userId !== user?.uid && (
+                             <TouchableOpacity
+                                 onPress={() => work.isCollab ? onFollowCollab?.(work.collabId || work.userId) : onAddFriend?.(work.userId)}
+                                 style={{
+                                     flexDirection: 'row',
+                                     alignItems: 'center',
+                                     backgroundColor: work.isCollab 
+                                         ? (((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId))
+                                             ? '#EF4444' // Match red accent for active
+                                             : 'rgba(255, 255, 255, 0.25)')
+                                         : (profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId)
+                                             ? '#EF4444' // Match red accent for friends or incoming
+                                             : profileData?.pendingFriendRequests?.includes(work.userId)
+                                             ? '#444' // Dark for pending
+                                             : 'rgba(255, 255, 255, 0.25)'),
+                                     paddingVertical: 6,
+                                     paddingHorizontal: 12,
+                                     borderRadius: 18,
+                                     gap: 5,
+                                     borderWidth: 1,
+                                     borderColor: 'rgba(255, 255, 255, 0.3)',
+                                 }}
+                             >
+                                 {work.isCollab ? (
+                                     ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? (
+                                         <>
+                                             <Check size={12} color="#FFF" />
+                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                 {t('following') || 'Suivi'}
+                                             </Text>
+                                         </>
+                                     ) : (
+                                         <>
+                                             <Star size={12} color="#FFF" fill="#FFF" />
+                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                 {t('follow') || 'Suivre'}
+                                             </Text>
+                                         </>
+                                     )
+                                 ) : (
+                                     profileData?.friends?.includes(work.userId) ? (
+                                          <>
+                                              <Check size={12} color="#FFF" />
+                                              <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
+                                                  {t("friends") || "Amis"}
+                                              </Text>
+                                          </>
+                                      ) : profileData?.incomingFriendRequests?.includes(work.userId) ? (
+                                          <>
+                                              <Check size={12} color="#FFF" />
+                                              <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
+                                                  {t("accept") || "Accepter"}
+                                              </Text>
+                                          </>
+                                      ) : profileData?.pendingFriendRequests?.includes(work.userId) ? (
+                                          <>
+                                             <Clock size={12} color="#FFF" />
+                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                 {t('pending') || 'En attente'}
+                                             </Text>
+                                         </>
+                                     ) : (
+                                         <>
+                                             <UserPlus size={12} color="#FFF" />
+                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                 {t('addFriend') || 'Ajouter'}
+                                             </Text>
+                                         </>
+                                     )
+                                 )}
+                             </TouchableOpacity>
+                         )}
+                    </View>
                 </View>
 
                 {/* Bottom Reaction Bar (Traveaux Style) */}
@@ -1066,20 +1241,6 @@ export default function FeedScreen(props: FeedScreenProps) {
                         );
                     })}
                 </View>
-
-                <View style={styles.workBottom}>
-                    <View style={styles.userInfo}>
-                        <View style={[styles.avatarPlaceholder, { overflow: 'hidden' }]}>
-                            {work.userPhoto ? (
-                                <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} />
-                            ) : (
-                                <User size={14} color="#FFF" />
-                            )}
-                        </View>
-                        <Text style={styles.userName} numberOfLines={1}>{work.userName}</Text>
-                    </View>
-                    <Text style={styles.workDescription} numberOfLines={1}>{work.text}</Text>
-                </View>
             </View>
         );
     };
@@ -1108,26 +1269,98 @@ export default function FeedScreen(props: FeedScreenProps) {
         <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#F8F9FA' }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, backgroundColor: 'transparent' }]}>
-                <View style={{ opacity: isSpecialActive ? 0 : 1 }}>
-                    <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
-                        {tr('Exploration', 'استكشاف', 'Explore')}
-                    </Text>
-                    <Text style={[styles.headerSubtitle, { color: 'rgba(255,255,255,0.8)', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
-                        {tr('Vos flux tendances', 'خلاصاتك الرائجة', 'Your trending feed')}
-                    </Text>
+            {/* Header with Tabs */}
+            <View style={{
+                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                paddingTop: insets.top + 20,
+                backgroundColor: 'transparent'
+            }}>
+                {/* Top Row */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+                    <View style={{ opacity: isSpecialActive ? 0 : 1 }}>
+                        <TouchableOpacity onPress={() => onNavigate('Camera')}>
+                            <Plus size={24} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                    {!isAdActive && (
+                        <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
+                            {tr('Exploration', 'استكشاف', 'Explore')}
+                        </Text>
+                    )}
+                    {!isAdActive && (
+                        <TouchableOpacity
+                            style={[styles.profileButton, { backgroundColor: isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
+                            onPress={() => {
+                                if (feedFilter === 'default') setFeedFilter('viral');
+                                else if (feedFilter === 'viral') setFeedFilter('comments');
+                                else setFeedFilter('default');
+                            }}
+                        >
+                            <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : '#FFF')} />
+                        </TouchableOpacity>
+                    )}
                 </View>
-                <TouchableOpacity
-                    style={[styles.profileButton, { backgroundColor: isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
-                    onPress={() => {
-                        if (feedFilter === 'default') setFeedFilter('viral');
-                        else if (feedFilter === 'viral') setFeedFilter('comments');
-                        else setFeedFilter('default');
-                    }}
-                >
-                    <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : '#FFF')} />
-                </TouchableOpacity>
+
+                {/* Tab Bar - Instagram/TikTok Style */}
+                <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    opacity: isSpecialActive ? 0 : 1,
+                    marginBottom: 8
+                }}>
+                    <TouchableOpacity
+                        onPress={() => setFeedTab('all')}
+                        style={{
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                            borderBottomWidth: feedTab === 'all' ? 2 : 0,
+                            borderBottomColor: '#FFF'
+                        }}
+                    >
+                        <Text style={{
+                            color: feedTab === 'all' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            fontSize: 15,
+                            fontWeight: feedTab === 'all' ? '800' : '600'
+                        }}>
+                            {t('forYou')}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setFeedTab('friends')}
+                        style={{
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                            borderBottomWidth: feedTab === 'friends' ? 2 : 0,
+                            borderBottomColor: '#FFF'
+                        }}
+                    >
+                        <Text style={{
+                            color: feedTab === 'friends' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            fontSize: 15,
+                            fontWeight: feedTab === 'friends' ? '800' : '600'
+                        }}>
+                            {t('friendsTab')}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setFeedTab('following')}
+                        style={{
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                            borderBottomWidth: feedTab === 'following' ? 2 : 0,
+                            borderBottomColor: '#FFF'
+                        }}
+                    >
+                        <Text style={{
+                            color: feedTab === 'following' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            fontSize: 15,
+                            fontWeight: feedTab === 'following' ? '800' : '600'
+                        }}>
+                            {t('followingTab')}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <FlatList
@@ -1347,9 +1580,10 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     emptyContainer: {
-        marginTop: 100,
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        height: SCREEN_HEIGHT - 200,
     },
     emptyText: {
         fontSize: 16,

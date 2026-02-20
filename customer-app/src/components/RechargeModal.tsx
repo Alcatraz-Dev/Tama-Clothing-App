@@ -125,7 +125,7 @@ export const RechargeModal = ({ isVisible, onClose, userId, userName, language =
 
                                     <View style={styles.bonusContainer}>
                                         {pack.bonus > 0 ? (
-                                            <Text style={styles.bonusText}>+{pack.bonus} Bonus</Text>
+                                            <Text style={styles.bonusText}>+{pack.bonus} {tr('Bonus', 'Bonus', 'مكافأة')}</Text>
                                         ) : (
                                             <View style={{ height: 14 }} /> // Placeholder to keep spacing
                                         )}

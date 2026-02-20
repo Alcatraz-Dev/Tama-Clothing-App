@@ -20,7 +20,7 @@ interface ProductCardProps {
     showRating?: boolean;
     theme?: 'light' | 'dark';
     language?: string;
-    t?: any;
+    t?: (key: string) => string;
     colors?: any;
 }
 
@@ -37,11 +37,22 @@ export default function ProductCard({
     colors: extraColors,
 }: ProductCardProps) {
     const isDark = theme === 'dark';
-    
+
     const getName = (field: any) => {
         if (!field) return '';
         if (typeof field === 'string') return field;
-        return field[language || 'fr'] || field['en'] || field['fr'] || '';
+        const langCode = language === 'ar' ? 'ar-tn' : (language || 'fr');
+        return field[langCode] || field[language || 'fr'] || field['fr'] || field['en'] || Object.values(field)[0] || '';
+    };
+    
+    const translate = (key: string) => {
+        if (t) return t(key);
+        const defaults: Record<string, Record<string, string>> = {
+            soldOut: { ar: 'نفذ', fr: 'Épuisé', en: 'Sold Out' },
+            premiumQuality: { ar: 'جودة عالية', fr: 'Qualité Premium', en: 'Premium Quality' },
+        };
+        const lang = language || 'fr';
+        return defaults[key]?.[lang] || defaults[key]?.['en'] || key;
     };
 
     const colors = extraColors || {
@@ -53,15 +64,15 @@ export default function ProductCard({
     };
 
     return (
-        <TouchableOpacity 
+        <TouchableOpacity
             style={[
-                styles.modernProductCard, 
-                { 
-                    backgroundColor: colors.background, 
-                    borderColor: colors.border 
+                styles.modernProductCard,
+                {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border
                 }
-            ]} 
-            onPress={onPress} 
+            ]}
+            onPress={onPress}
             activeOpacity={0.9}
         >
             <View style={{ position: 'relative' }}>
@@ -74,7 +85,7 @@ export default function ProductCard({
                     <View style={styles.soldOutOverlay}>
                         <View style={styles.soldOutBadge}>
                             <View style={styles.soldOutDot} />
-                            <Text style={styles.soldOutText}>SOLD OUT</Text>
+                            <Text style={styles.soldOutText}>{translate('soldOut')}</Text>
                         </View>
                     </View>
                 )}
@@ -106,7 +117,7 @@ export default function ProductCard({
                     {getName(product.name)}
                 </Text>
                 <Text style={[styles.productDescription, { color: colors.textMuted }]} numberOfLines={1}>
-                    {getName(product.description) || 'Premium Quality'}
+                    {getName(product.description) || translate('premiumQuality')}
                 </Text>
                 <View style={styles.priceRow}>
                     <View style={styles.priceContainer}>
