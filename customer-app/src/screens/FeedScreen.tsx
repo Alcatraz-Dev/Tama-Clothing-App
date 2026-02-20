@@ -273,7 +273,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         if (snap.exists()) {
                             const pData = snap.data();
                             userProfiles[uid] = pData;
-                            
+
                             // If user is a partner/collab owner, try to find their collaboration ID and image
                             if (pData.brandId && !brandCollabs[pData.brandId]) {
                                 const collabQuery = query(collection(db, 'collaborations'), where('brandId', '==', pData.brandId), limit(1));
@@ -1038,7 +1038,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         <TouchableOpacity
                             onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
                             style={{
-                                width: 50, height: 50, 
+                                width: 50, height: 50,
                                 marginRight: 15,
                                 position: 'relative'
                             }}
@@ -1074,9 +1074,9 @@ export default function FeedScreen(props: FeedScreenProps) {
                                 </View>
                             ) : (
                                 <View style={{
-                                    width: 44, height: 44, borderRadius: 22, 
+                                    width: 44, height: 44, borderRadius: 22,
                                     borderWidth: 2, borderColor: '#FFF',
-                                    alignItems: 'center', justifyContent: 'center', 
+                                    alignItems: 'center', justifyContent: 'center',
                                     overflow: 'hidden', backgroundColor: '#333'
                                 }}>
                                     {work.userPhoto ? (
@@ -1102,78 +1102,78 @@ export default function FeedScreen(props: FeedScreenProps) {
                             )}
                         </TouchableOpacity>
 
-                         {work.userId !== user?.uid && (
-                             <TouchableOpacity
-                                 onPress={() => work.isCollab ? onFollowCollab?.(work.collabId || work.userId) : onAddFriend?.(work.userId)}
-                                 style={{
-                                     flexDirection: 'row',
-                                     alignItems: 'center',
-                                     backgroundColor: work.isCollab 
-                                         ? (((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId))
-                                             ? '#EF4444' // Match red accent for active
-                                             : 'rgba(255, 255, 255, 0.25)')
-                                         : (profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId)
-                                             ? '#EF4444' // Match red accent for friends or incoming
-                                             : profileData?.pendingFriendRequests?.includes(work.userId)
-                                             ? '#444' // Dark for pending
-                                             : 'rgba(255, 255, 255, 0.25)'),
-                                     paddingVertical: 6,
-                                     paddingHorizontal: 12,
-                                     borderRadius: 18,
-                                     gap: 5,
-                                     borderWidth: 1,
-                                     borderColor: 'rgba(255, 255, 255, 0.3)',
-                                 }}
-                             >
-                                 {work.isCollab ? (
-                                     ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? (
-                                         <>
-                                             <Check size={12} color="#FFF" />
-                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                 {t('following') || 'Suivi'}
-                                             </Text>
-                                         </>
-                                     ) : (
-                                         <>
-                                             <Star size={12} color="#FFF" fill="#FFF" />
-                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                 {t('follow') || 'Suivre'}
-                                             </Text>
-                                         </>
-                                     )
-                                 ) : (
-                                     profileData?.friends?.includes(work.userId) ? (
-                                          <>
-                                              <Check size={12} color="#FFF" />
-                                              <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
-                                                  {t("friends") || "Amis"}
-                                              </Text>
-                                          </>
-                                      ) : profileData?.incomingFriendRequests?.includes(work.userId) ? (
-                                          <>
-                                              <Check size={12} color="#FFF" />
-                                              <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
-                                                  {t("accept") || "Accepter"}
-                                              </Text>
-                                          </>
-                                      ) : profileData?.pendingFriendRequests?.includes(work.userId) ? (
-                                          <>
-                                             <Clock size={12} color="#FFF" />
-                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                 {t('pending') || 'En attente'}
-                                             </Text>
-                                         </>
-                                     ) : (
-                                         <>
-                                             <UserPlus size={12} color="#FFF" />
-                                             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                 {t('addFriend') || 'Ajouter'}
-                                             </Text>
-                                         </>
-                                     )
-                                 )}
-                             </TouchableOpacity>
-                         )}
+                        {work.userId !== user?.uid && (
+                            <TouchableOpacity
+                                onPress={() => work.isCollab ? onFollowCollab?.(work.collabId || work.userId) : onAddFriend?.(work.userId)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: work.isCollab
+                                        ? (((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId))
+                                            ? '#EF4444' // Match red accent for active
+                                            : 'rgba(255, 255, 255, 0.25)')
+                                        : (profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId)
+                                            ? '#EF4444' // Match red accent for friends or incoming
+                                            : profileData?.pendingFriendRequests?.includes(work.userId)
+                                                ? '#444' // Dark for pending
+                                                : 'rgba(255, 255, 255, 0.25)'),
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 18,
+                                    gap: 5,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                                }}
+                            >
+                                {work.isCollab ? (
+                                    ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? (
+                                        <>
+                                            <Check size={12} color="#FFF" />
+                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                {t('following') || 'Suivi'}
+                                            </Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Star size={12} color="#FFF" fill="#FFF" />
+                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                {t('follow') || 'Suivre'}
+                                            </Text>
+                                        </>
+                                    )
+                                ) : (
+                                    profileData?.friends?.includes(work.userId) ? (
+                                        <>
+                                            <Check size={12} color="#FFF" />
+                                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
+                                                {t("friends") || "Amis"}
+                                            </Text>
+                                        </>
+                                    ) : profileData?.incomingFriendRequests?.includes(work.userId) ? (
+                                        <>
+                                            <Check size={12} color="#FFF" />
+                                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
+                                                {t("accept") || "Accepter"}
+                                            </Text>
+                                        </>
+                                    ) : profileData?.pendingFriendRequests?.includes(work.userId) ? (
+                                        <>
+                                            <Clock size={12} color="#FFF" />
+                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                {t('pending') || 'En attente'}
+                                            </Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <UserPlus size={12} color="#FFF" />
+                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
+                                                {t('addFriend') || 'Ajouter'}
+                                            </Text>
+                                        </>
+                                    )
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
 
@@ -1256,17 +1256,21 @@ export default function FeedScreen(props: FeedScreenProps) {
     const isAdActive = activeItem?.type === 'ad';
     const isLiveActive = activeItem?.type === 'live';
     const isSpecialActive = isAdActive || isLiveActive;
+    const isEmpty = sortedFeedItems.length === 0;
+    const headerContentColor = (isDark || !isEmpty) ? '#FFF' : '#333';
+    const tabActiveColor = (isDark || !isEmpty) ? '#FFF' : '#000';
+    const tabInactiveColor = (isDark || !isEmpty) ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
 
     if (loading) {
         return (
             <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#FFF', justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={isDark ? '#FFF' : '#000'} />
+                <ActivityIndicator size="large" color={isDark ? Theme.dark.colors.primary : Theme.light.colors.primary} />
             </View>
         );
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#F8F9FA' }]}>
+        <View style={[styles.container, { backgroundColor: isDark ? '#000' : (isEmpty ? '#FFF' : '#000') }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
             {/* Header with Tabs */}
@@ -1279,24 +1283,32 @@ export default function FeedScreen(props: FeedScreenProps) {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
                     <View style={{ opacity: isSpecialActive ? 0 : 1 }}>
                         <TouchableOpacity onPress={() => onNavigate('Camera')}>
-                            <Plus size={24} color="#FFF" />
+                            <Plus size={24} color={headerContentColor} />
                         </TouchableOpacity>
                     </View>
                     {!isAdActive && (
-                        <Text style={[styles.headerTitle, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
+                        <Text style={[styles.headerTitle, {
+                            color: headerContentColor,
+                            textShadowColor: (isDark || !isEmpty) ? 'rgba(0,0,0,0.5)' : 'transparent',
+                            textShadowRadius: 5
+                        }]}>
                             {tr('Exploration', 'استكشاف', 'Explore')}
                         </Text>
                     )}
                     {!isAdActive && (
                         <TouchableOpacity
-                            style={[styles.profileButton, { backgroundColor: isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)' }]}
+                            style={[styles.profileButton, {
+                                backgroundColor: isDark || !isEmpty
+                                    ? (isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)')
+                                    : 'rgba(0,0,0,0.05)'
+                            }]}
                             onPress={() => {
                                 if (feedFilter === 'default') setFeedFilter('viral');
                                 else if (feedFilter === 'viral') setFeedFilter('comments');
                                 else setFeedFilter('default');
                             }}
                         >
-                            <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : '#FFF')} />
+                            <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : headerContentColor)} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -1315,11 +1327,11 @@ export default function FeedScreen(props: FeedScreenProps) {
                             paddingHorizontal: 20,
                             paddingVertical: 8,
                             borderBottomWidth: feedTab === 'all' ? 2 : 0,
-                            borderBottomColor: '#FFF'
+                            borderBottomColor: tabActiveColor
                         }}
                     >
                         <Text style={{
-                            color: feedTab === 'all' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            color: feedTab === 'all' ? tabActiveColor : tabInactiveColor,
                             fontSize: 15,
                             fontWeight: feedTab === 'all' ? '800' : '600'
                         }}>
@@ -1332,11 +1344,11 @@ export default function FeedScreen(props: FeedScreenProps) {
                             paddingHorizontal: 20,
                             paddingVertical: 8,
                             borderBottomWidth: feedTab === 'friends' ? 2 : 0,
-                            borderBottomColor: '#FFF'
+                            borderBottomColor: tabActiveColor
                         }}
                     >
                         <Text style={{
-                            color: feedTab === 'friends' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            color: feedTab === 'friends' ? tabActiveColor : tabInactiveColor,
                             fontSize: 15,
                             fontWeight: feedTab === 'friends' ? '800' : '600'
                         }}>
@@ -1349,11 +1361,11 @@ export default function FeedScreen(props: FeedScreenProps) {
                             paddingHorizontal: 20,
                             paddingVertical: 8,
                             borderBottomWidth: feedTab === 'following' ? 2 : 0,
-                            borderBottomColor: '#FFF'
+                            borderBottomColor: tabActiveColor
                         }}
                     >
                         <Text style={{
-                            color: feedTab === 'following' ? '#FFF' : 'rgba(255,255,255,0.5)',
+                            color: feedTab === 'following' ? tabActiveColor : tabInactiveColor,
                             fontSize: 15,
                             fontWeight: feedTab === 'following' ? '800' : '600'
                         }}>
@@ -1381,10 +1393,24 @@ export default function FeedScreen(props: FeedScreenProps) {
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Clock size={48} color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'} style={{ marginBottom: 16 }} />
-                        <Text style={[styles.emptyText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]}>
-                            {tr('Rien de nouveau pour le moment', 'لا يوجد شيء جديد حاليا', 'Nothing new right now')}
-                        </Text>
+                        <Animatable.View animation="fadeInUp" duration={800} style={{ alignItems: 'center' }}>
+                            <Clock size={48} color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'} style={{ marginBottom: 16 }} />
+                            <Text style={[styles.emptyText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#666', textAlign: 'center', paddingHorizontal: 40 }]}>
+                                {tr('Rien de nouveau pour le moment', 'لا يوجد شيء جديد حاليا', 'Nothing new right now')}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={onRefresh}
+                                style={{
+                                    marginTop: 20,
+                                    paddingHorizontal: 20,
+                                    paddingVertical: 10,
+                                    borderRadius: 20,
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                <Text style={{ color: isDark ? '#FFF' : '#333', fontWeight: '700' }}>{t('refresh') || 'Refresh'}</Text>
+                            </TouchableOpacity>
+                        </Animatable.View>
                     </View>
                 }
             />

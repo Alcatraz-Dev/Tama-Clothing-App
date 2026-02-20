@@ -654,6 +654,8 @@ const Translations: any = {
     allowCamera: 'Autoriser la caméra',
     photoPreview: 'Aperçu Photo',
     videoPreview: 'Aperçu Vidéo',
+    videoTitle: 'Vidéo',
+    photoTitle: 'Photo',
     videoMode: 'Vidéo',
     photoMode: 'Photo',
     timer30s: '30s',
@@ -666,7 +668,7 @@ const Translations: any = {
     retake: 'Reprendre',
     saveMedia: 'Enregistrer',
     workUploaded: 'Ajouté à vos travaux!',
-    tapToCancel: 'Appuyez pour annuler', 
+    tapToCancel: 'Appuyez pour annuler',
     femmes: 'Femmes', hommes: 'Hommes', enfants: 'Enfants', accessoires: 'Accessoires',
   },
   ar: {
@@ -751,6 +753,8 @@ const Translations: any = {
     allowCamera: 'السماح بالكاميرا',
     photoPreview: 'معاينة الصورة',
     videoPreview: 'معاينة الفيديو',
+    videoTitle: 'فيديو',
+    photoTitle: 'صورة',
     videoMode: 'فيديو',
     photoMode: 'صورة',
     timer30s: '30ث',
@@ -1187,6 +1191,8 @@ const Translations: any = {
     allowCamera: 'Allow Camera',
     photoPreview: 'Photo Preview',
     videoPreview: 'Video Preview',
+    videoTitle: 'Video',
+    photoTitle: 'Photo',
     videoMode: 'Video',
     photoMode: 'Photo',
     timer30s: '30s',
@@ -1550,40 +1556,40 @@ const getName = (field: any, fallback = '') => {
   if (!field) return fallback;
   if (typeof field === 'string') return field || fallback;
   // Prioritize selected language, then fallbacks
-  const val = field[currentLang] || 
-              (currentLang === 'ar' ? (field['ar-tn'] || field['ar']) : undefined) || 
-              field.fr || field.en || field['ar-tn'] || Object.values(field)[0];
+  const val = field[currentLang] ||
+    (currentLang === 'ar' ? (field['ar-tn'] || field['ar']) : undefined) ||
+    field.fr || field.en || field['ar-tn'] || Object.values(field)[0];
   return (val as string) || fallback;
 };
 
 const translateColor = (color: string) => {
   if (!color) return '';
   const colorsMap: any = {
-    red: {fr: 'Rouge', ar: 'أحمر', en: 'Red'},
-    blue: {fr: 'Bleu', ar: 'أزرق', en: 'Blue'},
-    green: {fr: 'Vert', ar: 'أخضر', en: 'Green'},
-    black: {fr: 'Noir', ar: 'أسود', en: 'Black'},
-    white: {fr: 'Blanc', ar: 'أبيض', en: 'White'},
-    yellow: {fr: 'Jaune', ar: 'أصفر', en: 'Yellow'},
-    grey: {fr: 'Gris', ar: 'رمادي', en: 'Grey'},
-    gray: {fr: 'Gris', ar: 'رمادي', en: 'Gray'},
-    purple: {fr: 'Violet', ar: 'بنفسجي', en: 'Purple'},
-    pink: {fr: 'Rose', ar: 'وردي', en: 'Pink'},
-    orange: {fr: 'Orange', ar: 'برتقالي', en: 'Orange'},
-    brown: {fr: 'Marron', ar: 'بني', en: 'Brown'},
-    beige: {fr: 'Beige', ar: 'بيج', en: 'Beige'},
-    olive: {fr: 'Olive', ar: 'زيتوني', en: 'Olive'},
-    navy: {fr: 'Marine', ar: 'كحلي', en: 'Navy'},
-    burgundy: {fr: 'Bordeaux', ar: 'عنابي', en: 'Burgundy'},
-    khaki: {fr: 'Kaki', ar: 'خاكي', en: 'Khaki'},
-    teal: {fr: 'Teal', ar: 'تركوازي', en: 'Teal'},
-    gold: {fr: 'Or', ar: 'ذهبي', en: 'Gold'},
-    silver: {fr: 'Argent', ar: 'فضي', en: 'Silver'},
-    mustard: {fr: 'Moutarde', ar: 'خردلي', en: 'Mustard'},
-    emerald: {fr: 'Émeraude', ar: 'زمردي', en: 'Emerald'},
-    sapphire: {fr: 'Saphir', ar: 'ياقوتي', en: 'Sapphire'},
-    cream: {fr: 'Crème', ar: 'كريمي', en: 'Cream'},
-    ivory: {fr: 'Ivoire', ar: 'عاجي', en: 'Ivory'},
+    red: { fr: 'Rouge', ar: 'أحمر', en: 'Red' },
+    blue: { fr: 'Bleu', ar: 'أزرق', en: 'Blue' },
+    green: { fr: 'Vert', ar: 'أخضر', en: 'Green' },
+    black: { fr: 'Noir', ar: 'أسود', en: 'Black' },
+    white: { fr: 'Blanc', ar: 'أبيض', en: 'White' },
+    yellow: { fr: 'Jaune', ar: 'أصفر', en: 'Yellow' },
+    grey: { fr: 'Gris', ar: 'رمادي', en: 'Grey' },
+    gray: { fr: 'Gris', ar: 'رمادي', en: 'Gray' },
+    purple: { fr: 'Violet', ar: 'بنفسجي', en: 'Purple' },
+    pink: { fr: 'Rose', ar: 'وردي', en: 'Pink' },
+    orange: { fr: 'Orange', ar: 'برتقالي', en: 'Orange' },
+    brown: { fr: 'Marron', ar: 'بني', en: 'Brown' },
+    beige: { fr: 'Beige', ar: 'بيج', en: 'Beige' },
+    olive: { fr: 'Olive', ar: 'زيتوني', en: 'Olive' },
+    navy: { fr: 'Marine', ar: 'كحلي', en: 'Navy' },
+    burgundy: { fr: 'Bordeaux', ar: 'عنابي', en: 'Burgundy' },
+    khaki: { fr: 'Kaki', ar: 'خاكي', en: 'Khaki' },
+    teal: { fr: 'Teal', ar: 'تركوازي', en: 'Teal' },
+    gold: { fr: 'Or', ar: 'ذهبي', en: 'Gold' },
+    silver: { fr: 'Argent', ar: 'فضي', en: 'Silver' },
+    mustard: { fr: 'Moutarde', ar: 'خردلي', en: 'Mustard' },
+    emerald: { fr: 'Émeraude', ar: 'زمردي', en: 'Emerald' },
+    sapphire: { fr: 'Saphir', ar: 'ياقوتي', en: 'Sapphire' },
+    cream: { fr: 'Crème', ar: 'كريمي', en: 'Cream' },
+    ivory: { fr: 'Ivoire', ar: 'عاجي', en: 'Ivory' },
   };
   const key = color.toLowerCase();
   const langKey = currentLang === 'ar-tn' ? 'ar' : (currentLang || 'fr');
@@ -1863,7 +1869,7 @@ export default function App() {
       const fetchTargetProfile = async () => {
         // Reset profile first to show loading
         setTargetUserProfile(null);
-        
+
         try {
           // First try users collection
           const userSnap = await getDoc(doc(db, 'users', targetUid));
@@ -1871,9 +1877,9 @@ export default function App() {
             const userData = userSnap.data();
             // Check if user is a partner/brand_owner
             const isPartnerUser = userData.isPartner || userData.role === 'brand_owner' || userData.role === 'partner' || !!userData.brandId;
-            setTargetUserProfile({ 
-              ...userData, 
-              uid: targetUid, 
+            setTargetUserProfile({
+              ...userData,
+              uid: targetUid,
               id: targetUid,
               isPartner: isPartnerUser
             });
@@ -1888,9 +1894,9 @@ export default function App() {
             if (collabData.ownerId) {
               const ownerSnap = await getDoc(doc(db, 'users', collabData.ownerId));
               if (ownerSnap.exists()) {
-                setTargetUserProfile({ 
-                  ...ownerSnap.data(), 
-                  uid: collabData.ownerId, 
+                setTargetUserProfile({
+                  ...ownerSnap.data(),
+                  uid: collabData.ownerId,
                   id: collabData.ownerId,
                   brandName: collabData.name || collabData.brandName,
                   brandId: collabData.brandId,
@@ -2192,12 +2198,12 @@ export default function App() {
   };
 
   const addToCart = (product: any, size?: string, color?: string) => {
-    const item = { 
-      ...product, 
-      selectedSize: size || product.sizes?.[0] || 'M', 
-      selectedColor: color || product.colors?.[0] || '', 
-      quantity: 1, 
-      cartId: Date.now() 
+    const item = {
+      ...product,
+      selectedSize: size || product.sizes?.[0] || 'M',
+      selectedColor: color || product.colors?.[0] || '',
+      quantity: 1,
+      cartId: Date.now()
     };
     setCart([...cart, item]);
     setActiveTab('Cart');
@@ -2296,7 +2302,7 @@ export default function App() {
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(collabRef);
         if (!docSnap.exists()) return;
-        
+
         const currentCount = docSnap.data().followersCount || 0;
         let newCount = isFollowing ? Math.max(0, currentCount - 1) : currentCount + 1;
         transaction.update(collabRef, { followersCount: newCount });
@@ -2319,7 +2325,7 @@ export default function App() {
     try {
       const myRef = doc(db, 'users', user.uid);
       const targetRef = doc(db, 'users', userId);
-      
+
       // Find the request ID to clean up
       const q = query(
         collection(db, 'friendRequests'),
@@ -2334,27 +2340,27 @@ export default function App() {
       await runTransaction(db, async (transaction) => {
         const mySnap = await transaction.get(myRef);
         const targetSnap = await transaction.get(targetRef);
-        
+
         if (!mySnap.exists() || !targetSnap.exists()) return;
-        
+
         const myData = mySnap.data();
         const targetData = targetSnap.data();
-        
+
         // Thoroughly clear ALL request traces between these two users
         const myIncoming = (myData.incomingFriendRequests || []).filter((id: string) => id !== userId);
         const myPending = (myData.pendingFriendRequests || []).filter((id: string) => id !== userId);
         const myFriends = [...new Set([...(myData.friends || []), userId])];
-        
+
         const targetPending = (targetData.pendingFriendRequests || []).filter((id: string) => id !== user.uid);
         const targetIncoming = (targetData.incomingFriendRequests || []).filter((id: string) => id !== user.uid);
         const targetFriends = [...new Set([...(targetData.friends || []), user.uid])];
-        
+
         transaction.update(myRef, {
           incomingFriendRequests: myIncoming,
           pendingFriendRequests: myPending,
           friends: myFriends
         });
-        
+
         transaction.update(targetRef, {
           pendingFriendRequests: targetPending,
           incomingFriendRequests: targetIncoming,
@@ -2368,7 +2374,7 @@ export default function App() {
           transaction.delete(subReqRef);
         }
       });
-      
+
       // Local state will be updated by onSnapshot, but we can set it for immediate feedback
       setProfileData({
         ...profileData,
@@ -2376,7 +2382,7 @@ export default function App() {
         pendingFriendRequests: (profileData.pendingFriendRequests || []).filter((id: string) => id !== userId),
         friends: [...new Set([...(profileData.friends || []), userId])]
       });
-      
+
       Alert.alert(t('successTitle'), t('friendAdded') || 'Friend added!');
     } catch (e) {
       console.error("Error accepting friend:", e);
@@ -2391,40 +2397,40 @@ export default function App() {
       t('removeFriendConfirm') || 'Are you sure you want to remove this friend?',
       [
         { text: t('cancel') || 'Cancel', style: 'cancel' },
-        { 
-          text: t('remove') || 'Remove', 
+        {
+          text: t('remove') || 'Remove',
           style: 'destructive',
           onPress: async () => {
             try {
               const myRef = doc(db, 'users', user.uid);
               const targetRef = doc(db, 'users', userId);
-              
+
               const myFriends = (profileData.friends || []).filter((id: string) => id !== userId);
               const myPending = (profileData.pendingFriendRequests || []).filter((id: string) => id !== userId);
               const myIncoming = (profileData.incomingFriendRequests || []).filter((id: string) => id !== userId);
-              
-              await updateDoc(myRef, { 
+
+              await updateDoc(myRef, {
                 friends: myFriends,
                 pendingFriendRequests: myPending,
                 incomingFriendRequests: myIncoming
               });
-              
+
               const targetSnap = await getDoc(targetRef);
               if (targetSnap.exists()) {
                 const tData = targetSnap.data();
                 const targetFriends = (tData.friends || []).filter((id: string) => id !== user.uid);
                 const targetPending = (tData.pendingFriendRequests || []).filter((id: string) => id !== user.uid);
                 const targetIncoming = (tData.incomingFriendRequests || []).filter((id: string) => id !== user.uid);
-                
-                await updateDoc(targetRef, { 
+
+                await updateDoc(targetRef, {
                   friends: targetFriends,
                   pendingFriendRequests: targetPending,
                   incomingFriendRequests: targetIncoming
                 });
               }
-              
-              setProfileData({ 
-                ...profileData, 
+
+              setProfileData({
+                ...profileData,
                 friends: myFriends,
                 pendingFriendRequests: myPending,
                 incomingFriendRequests: myIncoming
@@ -2448,7 +2454,7 @@ export default function App() {
     const currentFriends = profileData?.friends || [];
     const pendingSent = profileData?.pendingFriendRequests || [];
     const incomingRequests = profileData?.incomingFriendRequests || [];
-    
+
     if (currentFriends.includes(userId)) {
       handleRemoveFriend(userId);
       return;
@@ -2472,14 +2478,14 @@ export default function App() {
               try {
                 const myPending = pendingSent.filter((id: string) => id !== userId);
                 await updateDoc(doc(db, 'users', user.uid), { pendingFriendRequests: myPending });
-                
+
                 const targetRef = doc(db, 'users', userId);
                 const targetSnap = await getDoc(targetRef);
                 if (targetSnap.exists()) {
                   const targetIncoming = (targetSnap.data().incomingFriendRequests || []).filter((id: string) => id !== user.uid);
                   await updateDoc(targetRef, { incomingFriendRequests: targetIncoming });
                 }
-                
+
                 setProfileData({ ...profileData, pendingFriendRequests: myPending });
               } catch (e) { console.error("Error canceling request", e); }
             }
@@ -2520,14 +2526,14 @@ export default function App() {
           incomingFriendRequests: [...(targetData.incomingFriendRequests || []), user.uid]
         })
       ];
-      
+
       await Promise.all(batch);
-      
-      setProfileData({ 
-        ...profileData, 
-        pendingFriendRequests: [...pendingSent, userId] 
+
+      setProfileData({
+        ...profileData,
+        pendingFriendRequests: [...pendingSent, userId]
       });
-      
+
       Alert.alert(t('successTitle'), t('friendRequestSent') || 'Friend request sent! Waiting for acceptance.');
     } catch (e) {
       console.error("Error sending friend request:", e);
@@ -2837,7 +2843,7 @@ export default function App() {
       />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
-      case 'Detail': 
+      case 'Detail':
         if (!selectedProduct) return null;
         return <ProductDetailScreen
           product={selectedProduct}
@@ -2864,18 +2870,18 @@ export default function App() {
       case 'PaymentPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="securePayment" fieldKey="paymentPolicy" defaultText={t('paymentPolicyDefault')} Icon={Shield} />;
       case 'ReturnPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="easyReturns" fieldKey="returnPolicy" defaultText={t('returnPolicyDefault')} Icon={RotateCcw} />;
 
-      default: return <HomeScreen 
-        user={user} 
-        profileData={profileData} 
-        onProductPress={navigateToProduct} 
-        onCategoryPress={navigateToCategory} 
+      default: return <HomeScreen
+        user={user}
+        profileData={profileData}
+        onProductPress={navigateToProduct}
+        onCategoryPress={navigateToCategory}
         onCampaignPress={navigateToCampaign}
-        onNavigate={(screen: string) => setActiveTab(screen)} 
-        wishlist={wishlist} 
-        toggleWishlist={toggleWishlist} 
+        onNavigate={(screen: string) => setActiveTab(screen)}
+        wishlist={wishlist}
+        toggleWishlist={toggleWishlist}
         notifications={notifications}
         addToCart={(p: any) => setQuickAddProduct(p)}
-        t={t} 
+        t={t}
         language={language}
         setFilterBrand={setFilterBrand}
         onJoinLive={handleJoinLive}
@@ -3431,7 +3437,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
             )}
           </View>
         </TouchableOpacity>
-
+        {/* 
         <Text pointerEvents="none" style={[styles.modernLogo, {
           top: insets.top,
           height: 64,
@@ -3440,7 +3446,11 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           letterSpacing: 0.5,
           fontWeight: '900' as any,
           color: colors.foreground
-        }]}>TAMA CLOTHING</Text>
+        }]}>TAMA CLOTHING</Text> */}
+        <View>
+          <Image source={require("./assets/logo.png")} style={[styles.logo, { alignSelf: 'center', width: 200, height: 200 }]} />
+
+        </View>
 
         <TouchableOpacity style={[styles.searchCircle, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} activeOpacity={0.7} onPress={() => onNavigate('Notifications')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Bell size={20} color={colors.foreground} strokeWidth={2.5} />
@@ -7431,7 +7441,7 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
   const { colors, theme } = useAppTheme();
   const currentTheme = propTheme || theme;
   const currentLang = language || 'fr';
-  
+
   const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || 'M');
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || '');
   const [activeImg, setActiveImg] = useState(0);
@@ -7444,7 +7454,7 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });
-  
+
   const getName = (field: any) => {
     if (!field) return '';
     if (typeof field === 'string') return field;
@@ -7454,20 +7464,20 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
   const translateColor = (color: string) => {
     if (!color) return '';
     const colorsMap: any = {
-      red: {fr: 'Rouge', ar: 'أحمر', en: 'Red'},
-      blue: {fr: 'Bleu', ar: 'أزرق', en: 'Blue'},
-      green: {fr: 'Vert', ar: 'أخضر', en: 'Green'},
-      black: {fr: 'Noir', ar: 'أسود', en: 'Black'},
-      white: {fr: 'Blanc', ar: 'أبيض', en: 'White'},
-      yellow: {fr: 'Jaune', ar: 'أصفر', en: 'Yellow'},
-      grey: {fr: 'Gris', ar: 'رمادي', en: 'Grey'},
-      gray: {fr: 'Gris', ar: 'رمادي', en: 'Gray'},
-      purple: {fr: 'Violet', ar: 'بنفسجي', en: 'Purple'},
-      pink: {fr: 'Rose', ar: 'وردي', en: 'Pink'},
-      orange: {fr: 'Orange', ar: 'برتقالي', en: 'Orange'},
-      brown: {fr: 'Marron', ar: 'بني', en: 'Brown'},
-      beige: {fr: 'Beige', ar: 'بيج', en: 'Beige'},
-      olive: {fr: 'Olive', ar: 'زيتوني', en: 'Olive'},
+      red: { fr: 'Rouge', ar: 'أحمر', en: 'Red' },
+      blue: { fr: 'Bleu', ar: 'أزرق', en: 'Blue' },
+      green: { fr: 'Vert', ar: 'أخضر', en: 'Green' },
+      black: { fr: 'Noir', ar: 'أسود', en: 'Black' },
+      white: { fr: 'Blanc', ar: 'أبيض', en: 'White' },
+      yellow: { fr: 'Jaune', ar: 'أصفر', en: 'Yellow' },
+      grey: { fr: 'Gris', ar: 'رمادي', en: 'Grey' },
+      gray: { fr: 'Gris', ar: 'رمادي', en: 'Gray' },
+      purple: { fr: 'Violet', ar: 'بنفسجي', en: 'Purple' },
+      pink: { fr: 'Rose', ar: 'وردي', en: 'Pink' },
+      orange: { fr: 'Orange', ar: 'برتقالي', en: 'Orange' },
+      brown: { fr: 'Marron', ar: 'بني', en: 'Brown' },
+      beige: { fr: 'Beige', ar: 'بيج', en: 'Beige' },
+      olive: { fr: 'Olive', ar: 'زيتوني', en: 'Olive' },
     };
     const key = color.toLowerCase();
     const langKey = currentLang === 'ar-tn' ? 'ar' : (currentLang || 'fr');
@@ -8939,7 +8949,7 @@ function SizeGuideScreen({ onBack, t, language }: any) {
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });
-  
+
   const tr = (fr: string, ar: string, en: string) => {
     return language === 'ar' ? ar : (language === 'fr' ? fr : en);
   };
@@ -9015,11 +9025,11 @@ function SizeGuideScreen({ onBack, t, language }: any) {
         <View style={{ marginTop: 40, padding: 20, backgroundColor: theme === 'dark' ? '#121218' : '#FAFAFA', borderRadius: 25, borderWidth: 1, borderColor: colors.border }}>
           <Text style={{ fontSize: 14, fontWeight: '900', marginBottom: 15, color: colors.foreground }}>{tr('COMMENT MESURER ?', 'كيفية القياس؟', 'HOW TO MEASURE?')}</Text>
           <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 20, marginBottom: 10 }}>
-            {language === 'ar' 
+            {language === 'ar'
               ? '• الصدر: قس أفقياً عند أوسع نقطة من الصدر.\n• الخصر: قس حول أضيق جزء من خصرك.\n• الوركين: قس عند أوسع نقطة من وركيك.'
               : language === 'fr'
-              ? '• Poitrine : Mesurez horizontalement au point le plus large de la poitrine.\n• Taille : Mesurez autour de la partie la plus étroite de votre taille.\n• Hanches : Mesurez au point le plus large de vos hanches.'
-              : '• Chest: Measure horizontally at the widest point of the chest.\n• Waist: Measure around the narrowest part of your waist.\n• Hips: Measure at the widest point of your hips.'}
+                ? '• Poitrine : Mesurez horizontalement au point le plus large de la poitrine.\n• Taille : Mesurez autour de la partie la plus étroite de votre taille.\n• Hanches : Mesurez au point le plus large de vos hanches.'
+                : '• Chest: Measure horizontally at the widest point of the chest.\n• Waist: Measure around the narrowest part of your waist.\n• Hips: Measure at the widest point of your hips.'}
           </Text>
         </View>
       </Animated.ScrollView>

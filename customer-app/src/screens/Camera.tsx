@@ -9,22 +9,27 @@ import {
     Image,
     ActivityIndicator,
     Alert,
+    Platform,
 } from "react-native";
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     CameraType,
     CameraView,
     useCameraPermissions,
     type CameraMode,
+    FlashMode,
 } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
-import { Video } from "expo-av";
+import { Video, ResizeMode } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Theme } from "../theme";
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import Svg, { Circle } from 'react-native-svg';
+import * as Animatable from 'react-native-animatable';
+import * as Device from 'expo-device';
+import { Camera, RotateCcw, Zap, ZapOff, Video as VideoIcon, Camera as CameraIcon, Check, X, ChevronLeft, Download, Send, MonitorOff } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get("window");
 
@@ -40,14 +45,18 @@ interface CameraScreenProps {
 }
 
 export default function CameraScreen({ onBack, onNavigate, t, language, theme, user }: CameraScreenProps) {
+    const insets = useSafeAreaInsets();
     const colors = theme === "dark" ? Theme.dark.colors : Theme.light.colors;
     const cameraRef = useRef<CameraView>(null);
 
     const [camPermission, requestCamPermission] = useCameraPermissions();
     const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
 
+    const [isCameraReady, setIsCameraReady] = useState(false);
     const [cameraType, setCameraType] = useState<CameraType>("back");
     const [mode, setMode] = useState<CameraMode>("video");
+    const [flash, setFlash] = useState<FlashMode>("off");
+    const [zoom, setZoom] = useState(0);
     const [durationMode, setDurationMode] = useState<DurationMode>(30);
     const [isRecording, setIsRecording] = useState(false);
     const [countdown, setCountdown] = useState<number | null>(null);
@@ -77,9 +86,15 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
     };
 
     const getDurationLabel = (duration: DurationMode) => {
-        if (duration === 30) return t('timer30s') || '30s';
-        if (duration === 60) return t('timer60s') || '60s';
-        return t('timerUnlimited') || '∞';
+        if (duration === 30) return '30s';
+        if (duration === 60) return '60s';
+        return '∞';
+    };
+
+    const tr = (fr: string, ar: string, en: string) => {
+        if (language === 'ar') return ar;
+        if (language === 'fr') return fr;
+        return en;
     };
 
     useEffect(() => {
@@ -95,7 +110,7 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
             startCapture();
             return;
         }
-        const timer = setTimeout(() => setCountdown((c) => (c ?? 0) - 1), 650);
+        const timer = setTimeout(() => setCountdown((c) => (c ?? 0) - 1), 1000);
         return () => clearTimeout(timer);
     }, [countdown]);
 
@@ -115,6 +130,10 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         setCameraType((prev) => (prev === "back" ? "front" : "back"));
     };
 
+    const toggleFlash = () => {
+        setFlash(prev => prev === "off" ? "on" : "off");
+    };
+
     const startTimer = () => {
         setElapsed(0);
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -130,27 +149,48 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
     const startCapture = async () => {
         try {
-            if (!cameraRef.current) return;
-            if (mode === "picture") {
-                const photo = await cameraRef.current.takePictureAsync({
-                    quality: 0.9,
-                    skipProcessing: false,
-                });
-                setCapturedPhoto(photo.uri);
-                setCapturedVideo(null);
+            if (!cameraRef.current || !isCameraReady) {
+                console.log("Camera not ready or ref null", { isCameraReady, ref: !!cameraRef.current });
                 return;
             }
+
+            if (mode === "picture") {
+                const photo = await cameraRef.current.takePictureAsync({
+                    quality: 0.8,
+                    skipProcessing: Platform.OS === 'android',
+                });
+                if (photo) {
+                    setCapturedPhoto(photo.uri);
+                    setCapturedVideo(null);
+                }
+                return;
+            }
+
+            // For Video recording
             setIsRecording(true);
+            setElapsed(0);
+
+            // Small delay to ensure UI handles 'isRecording' state before native recording starts
+            await new Promise(resolve => setTimeout(resolve, 150));
+
             startTimer();
+            console.log("Starting video recording...");
+
             const video = await cameraRef.current.recordAsync({
-                maxDuration: maxDuration,
+                maxDuration: maxDuration || undefined,
             });
-            if (!video?.uri) return;
-            setCapturedVideo(video.uri);
-            setCapturedPhoto(null);
+
+            if (video?.uri) {
+                console.log("Video captured:", video.uri);
+                setCapturedVideo(video.uri);
+                setCapturedPhoto(null);
+            }
         } catch (e) {
-            console.log("Capture error:", e);
-            Alert.alert(t('error') || 'Error', t('cameraNotSupported') || 'Camera recording not supported on simulator');
+            console.log("Capture error detail:", e);
+            Alert.alert(
+                tr('Erreur', 'خطأ', 'Error'),
+                tr('Échec de la capture', 'فشل في التقاط الفيديو', 'Camera operation failed. Please try again.')
+            );
         } finally {
             stopTimer();
             setIsRecording(false);
@@ -172,6 +212,7 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         setCapturedPhoto(null);
         setCapturedVideo(null);
         setElapsed(0);
+        setUploading(false);
     };
 
     const uploadToWork = async (uri: string, type: 'image' | 'video') => {
@@ -196,9 +237,12 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
             await setDoc(doc(db, 'users', user.uid, 'works', workId), workData);
             await MediaLibrary.saveToLibraryAsync(uri);
-            
+
             setUploading(false);
-            Alert.alert(t('successTitle'), t('workUploaded') || 'Added to your works!');
+            Alert.alert(
+                tr('Succès', 'نجاح', 'Success'),
+                tr('Ajouté à vos travaux !', 'تمت الإضافة لتجاربك', 'Added to your works!')
+            );
             reset();
             return true;
         } catch (e) {
@@ -209,217 +253,298 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         }
     };
 
-    const saveToGallery = async () => {
+    const publishToWorks = async () => {
         const uri = capturedPhoto || capturedVideo;
         if (!uri) return;
         const type = capturedPhoto ? 'image' : 'video';
         await uploadToWork(uri, type);
     };
 
+    const saveToGalleryOnly = async () => {
+        const uri = capturedPhoto || capturedVideo;
+        if (!uri) return;
+
+        setUploading(true);
+        try {
+            await MediaLibrary.saveToLibraryAsync(uri);
+            Alert.alert(
+                tr('Succès', 'نجاح', 'Success'),
+                tr('Enregistré dans la galerie', 'تم حفظ الملف في معرض الصور', 'Saved to your gallery!')
+            );
+            reset();
+        } catch (e) {
+            console.log("Save error:", e);
+            Alert.alert(t('error'), 'Failed to save');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     if (!camPermission?.granted) {
         return (
-            <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-                <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: colors.muted }]}>
-                    <Ionicons name="chevron-back" size={26} color={colors.foreground} />
+            <View style={[styles.center, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+                <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: colors.muted, top: insets.top + 16 }]}>
+                    <ChevronLeft size={24} color={colors.foreground} />
                 </TouchableOpacity>
-                <Ionicons name="camera-outline" size={64} color={colors.textMuted} />
+                <Camera size={64} color={colors.textMuted} />
                 <Text style={[styles.permissionTitle, { color: colors.text }]}>{t('cameraPermission')}</Text>
                 <TouchableOpacity onPress={requestCamPermission} style={[styles.primaryBtn, { backgroundColor: colors.foreground }]}>
                     <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>{t('allowCamera')}</Text>
                 </TouchableOpacity>
-            </SafeAreaView>
-        );
-    }
-
-    if (capturedPhoto) {
-        return (
-            <View style={styles.previewWrap}>
-                <Image source={{ uri: capturedPhoto }} style={styles.previewImage} resizeMode="cover" />
-                <SafeAreaView style={styles.previewTopBar}>
-                    <TouchableOpacity onPress={reset} style={styles.glassBtn}>
-                        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                        <Ionicons name="chevron-back" size={26} color="white" style={{ zIndex: 1 }} />
-                    </TouchableOpacity>
-                    <View style={styles.glassPill}>
-                        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                        <Text style={styles.previewTitle}>{t('photoPreview')}</Text>
-                    </View>
-                </SafeAreaView>
-                <SafeAreaView style={styles.previewActionsSafe}>
-                    <View style={styles.previewActions}>
-                        <TouchableOpacity onPress={reset} style={styles.actionBtn} disabled={uploading}>
-                            <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
-                            <Text style={styles.actionText}>{t('retake')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={saveToGallery} style={styles.saveBtn} disabled={uploading}>
-                            {uploading ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <>
-                                    <Ionicons name="checkmark" size={20} color="white" style={{ marginRight: 8 }} />
-                                    <Text style={styles.saveBtnText}>{t('saveMedia')}</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
             </View>
         );
     }
 
-    if (capturedVideo) {
+    if (capturedPhoto || capturedVideo) {
         return (
             <View style={styles.previewWrap}>
-                <Video source={{ uri: capturedVideo }} style={{ width, height }} shouldPlay isLooping />
-                <SafeAreaView style={styles.previewTopBar}>
-                    <TouchableOpacity onPress={reset} style={styles.glassBtn}>
+                {capturedPhoto ? (
+                    <Image source={{ uri: capturedPhoto }} style={styles.previewImage} resizeMode="cover" />
+                ) : (
+                    <Video
+                        source={{ uri: capturedVideo! }}
+                        style={styles.previewImage}
+                        shouldPlay
+                        isLooping
+                        resizeMode={ResizeMode.COVER}
+                    />
+                )}
+
+                <View style={[styles.previewTopBar, { paddingTop: insets.top + 10 }]}>
+                    <TouchableOpacity onPress={reset} style={styles.iconBtn}>
                         <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                        <Ionicons name="chevron-back" size={26} color="white" style={{ zIndex: 1 }} />
+                        <X size={24} color="white" />
                     </TouchableOpacity>
-                    <View style={styles.glassPill}>
-                        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                        <Text style={styles.previewTitle}>{t('videoPreview')}</Text>
+                    <View style={styles.previewHeaderTitle}>
+                        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
+                        <Text style={styles.previewTitleText}>{capturedPhoto ? t('photoPreview') : t('videoPreview')}</Text>
                     </View>
-                </SafeAreaView>
-                <SafeAreaView style={styles.previewActionsSafe}>
-                    <View style={styles.previewActions}>
-                        <TouchableOpacity onPress={reset} style={styles.actionBtn} disabled={uploading}>
-                            <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
-                            <Text style={styles.actionText}>{t('retake')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={saveToGallery} style={styles.saveBtn} disabled={uploading}>
+                    <View style={{ width: 44 }} />
+                </View>
+
+                <View style={[styles.previewBottomContent, { paddingBottom: insets.bottom + 30 }]}>
+                    <Animatable.View animation="fadeInUp" duration={600} style={styles.previewButtonsContainer}>
+                        <View style={styles.previewMainButtons}>
+                            <TouchableOpacity onPress={reset} style={styles.retakeBtn} disabled={uploading}>
+                                <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
+                                <RotateCcw size={20} color="white" />
+                                <Text style={styles.previewBtnText}>{t('retake')}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity onPress={saveToGalleryOnly} style={styles.saveBtn} disabled={uploading}>
+                                <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
+                                <Download size={20} color="white" />
+                                <Text style={styles.previewBtnText}>{tr('Enregistrer', 'حفظ بالجهاز', 'Save to Device')}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity onPress={publishToWorks} style={styles.publishBtn} disabled={uploading}>
                             {uploading ? (
                                 <ActivityIndicator color="white" />
                             ) : (
                                 <>
-                                    <Ionicons name="checkmark" size={20} color="white" style={{ marginRight: 8 }} />
-                                    <Text style={styles.saveBtnText}>{t('saveMedia')}</Text>
+                                    <Send size={20} color="white" style={{ marginRight: 8 }} />
+                                    <Text style={styles.publishBtnText}>{tr('Publier', 'نشر', 'Publish')}</Text>
                                 </>
                             )}
                         </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
+                    </Animatable.View>
+                </View>
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
-            <CameraView ref={cameraRef} style={styles.camera} facing={cameraType} mode={mode} />
+            <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={cameraType}
+                mode={mode}
+                flash={flash}
+                zoom={zoom}
+                onCameraReady={() => {
+                    console.log("Camera component ready");
+                    setIsCameraReady(true);
+                }}
+                onMountError={(error) => {
+                    console.error("Camera mount error:", error);
+                    Alert.alert(tr("Erreur", "خطأ", "Error"), tr("Erreur de caméra", "خطأ في الكاميرا", "Camera failed to initialize"));
+                }}
+            />
 
-            <SafeAreaView style={styles.topBar}>
-                <TouchableOpacity onPress={onBack} style={styles.glassBtn} disabled={isRecording}>
-                    <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                    <Ionicons name="chevron-back" size={26} color="white" style={{ zIndex: 1 }} />
-                </TouchableOpacity>
-                <View style={styles.headerTitleWrap}>
-                    <Text style={styles.headerTitle}>{t('cameraTitle')}</Text>
-                </View>
-                <TouchableOpacity onPress={flipCamera} style={styles.glassBtn} disabled={isRecording || isStarting}>
-                    <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
-                    <Ionicons name="camera-reverse" size={24} color="white" style={{ zIndex: 1 }} />
-                </TouchableOpacity>
-            </SafeAreaView>
-
-            {mode === "video" && !isRecording && (
-                <View style={styles.durationRow}>
-                    <DurationButton label={getDurationLabel(30)} active={durationMode === 30} onPress={() => setDurationMode(30)} />
-                    <DurationButton label={getDurationLabel(60)} active={durationMode === 60} onPress={() => setDurationMode(60)} />
-                    <DurationButton label={getDurationLabel("unlimited")} active={durationMode === "unlimited"} onPress={() => setDurationMode("unlimited")} />
-                </View>
-            )}
-
-            {/* Timer on right side of screen */}
-            {isRecording && (
-                <View style={styles.timerBadge}>
-                    <View style={styles.timerDot} />
-                    <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
-                </View>
-            )}
-
-            {countdown !== null && (
-                <View style={styles.countdownOverlay}>
-                    <Text style={styles.countdownText}>{countdown}</Text>
-                    <Pressable onPress={cancelCountdown} style={styles.cancelHint}>
-                        <Text style={styles.cancelHintText}>{t('tapToCancel')}</Text>
-                    </Pressable>
+            {!Device.isDevice && (
+                <View style={[StyleSheet.absoluteFill, styles.simulatorNotice]}>
+                    <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+                    <MonitorOff size={64} color="rgba(255,255,255,0.3)" />
+                    <Text style={styles.simulatorText}>
+                        {tr("Caméra indisponible", "الكاميرا غير متوفرة", "Camera Unavailable")}
+                    </Text>
+                    <Text style={styles.simulatorSubtext}>
+                        {tr("Veuillez tester sur un appareil réel.", "يرجى التجربة على جهاز حقيقي", "Please test on a physical device to use the camera.")}
+                    </Text>
+                    <TouchableOpacity onPress={onBack} style={styles.simulatorBackBtn}>
+                        <Text style={{ color: '#FFF', fontWeight: '700' }}>{tr("Retour", "رجوع", "Back")}</Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
-            <View style={styles.bottomControls}>
-                <Text style={styles.hintText}>
-                    {mode === "picture" ? t('tapToPhoto') : isRecording ? t('recording') : t('tapToRecord')}
-                </Text>
+            <View style={styles.overlay}>
+                {/* Header Section */}
+                <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+                    <View style={styles.headerSide}>
+                        <TouchableOpacity onPress={onBack} style={styles.iconBtn} disabled={isRecording}>
+                            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                            <ChevronLeft size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
 
-                <View style={styles.captureContainer}>
-                    {/* Progress Ring using SVG */}
-                    {isRecording && durationMode !== "unlimited" && (
-                        <View style={styles.progressRing}>
-                            <Svg width={92} height={92}>
-                                <Circle
-                                    cx={46}
-                                    cy={46}
-                                    r={42}
-                                    stroke="rgba(255,255,255,0.3)"
-                                    strokeWidth={3}
-                                    fill="transparent"
-                                />
-                                <Circle
-                                    cx={46}
-                                    cy={46}
-                                    r={42}
-                                    stroke="#FF3B30"
-                                    strokeWidth={3}
-                                    fill="transparent"
-                                    strokeDasharray={264}
-                                    strokeDashoffset={264 - (progress * 264)}
-                                    strokeLinecap="round"
-                                    rotation="-90"
-                                    originX={46}
-                                    originY={46}
-                                />
-                            </Svg>
+                    <View style={styles.headerCenter}>
+                        {isRecording ? (
+                            <Animatable.View animation="pulse" iterationCount="infinite">
+                                <View style={[styles.timerBadge, { height: 36 }]}>
+                                    <View style={styles.liveDot} />
+                                    <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
+                                </View>
+                            </Animatable.View>
+                        ) : (
+                            <View style={styles.modeIndicator}>
+                                <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                                <Text style={styles.modeIndicatorText}>{mode === "video" ? t('videoTitle') : t('photoTitle')}</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    <View style={styles.headerSide}>
+                        <TouchableOpacity onPress={toggleFlash} style={styles.iconBtn} disabled={isRecording}>
+                            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                            {flash === "on" ? <Zap size={20} color="#FFCC00" /> : <ZapOff size={20} color="white" />}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Secondary Actions (Floating on right) */}
+                {!isRecording && !isStarting && (
+                    <View style={[styles.secondaryActions, { top: insets.top + 66 }]}>
+                        <TouchableOpacity onPress={flipCamera} style={styles.iconBtn}>
+                            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                            <RotateCcw size={20} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Duration Picker for Video Mode */}
+                {mode === "video" && !isRecording && (
+                    <Animatable.View animation="fadeIn" style={[styles.durationContainer, { top: insets.top + 70 }]}>
+                        <View style={styles.durationPill}>
+                            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                            <DurationButton label="30s" active={durationMode === 30} onPress={() => setDurationMode(30)} />
+                            <DurationButton label="60s" active={durationMode === 60} onPress={() => setDurationMode(60)} />
+                            <DurationButton label="∞" active={durationMode === "unlimited"} onPress={() => setDurationMode("unlimited")} />
                         </View>
-                    )}
-                    
-                    <TouchableOpacity
-                        activeOpacity={0.85}
-                        disabled={isStarting}
-                        onPress={() => {
-                            if (mode === "picture") {
-                                safeStartCountdown();
-                                return;
-                            }
-                            if (mode === "video") {
-                                if (isRecording) stopRecording();
-                                else safeStartCountdown();
-                            }
-                        }}
-                    >
-                        <View style={[isRecording ? styles.stopBtn : styles.captureBtn, isRecording && durationMode !== "unlimited" && { borderWidth: 0 }]}>
-                            <View style={isRecording ? styles.stopIcon : styles.captureIcon} />
+                    </Animatable.View>
+                )}
+
+                {/* Bottom Controls */}
+                <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 40) }]}>
+                    {/* Capture Section */}
+                    <View style={styles.captureSection}>
+                        <View style={styles.captureWrapper}>
+                            {isRecording && durationMode !== "unlimited" && (
+                                <View style={styles.progressRing}>
+                                    <Svg width={96} height={96}>
+                                        <Circle
+                                            cx={48}
+                                            cy={48}
+                                            r={44}
+                                            stroke="rgba(255,255,255,0.2)"
+                                            strokeWidth={4}
+                                            fill="transparent"
+                                        />
+                                        <Circle
+                                            cx={48}
+                                            cy={48}
+                                            r={44}
+                                            stroke="#FF3B30"
+                                            strokeWidth={4}
+                                            fill="transparent"
+                                            strokeDasharray={2 * Math.PI * 44}
+                                            strokeDashoffset={2 * Math.PI * 44 * (1 - progress)}
+                                            strokeLinecap="round"
+                                            rotation="-90"
+                                            originX={48}
+                                            originY={48}
+                                        />
+                                    </Svg>
+                                </View>
+                            )}
+
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={() => {
+                                    if (mode === "picture") {
+                                        startCapture();
+                                    } else {
+                                        if (isRecording) stopRecording();
+                                        else safeStartCountdown();
+                                    }
+                                }}
+                                disabled={isStarting}
+                                style={[
+                                    styles.captureOuter,
+                                    isRecording && { borderColor: '#FF3B30' }
+                                ]}
+                            >
+                                <Animatable.View
+                                    animation={isRecording ? "pulse" : undefined}
+                                    iterationCount="infinite"
+                                    style={[
+                                        styles.captureInner,
+                                        isRecording ? styles.captureInnerRecording : { backgroundColor: 'white' }
+                                    ]}
+                                />
+                            </TouchableOpacity>
                         </View>
-                    </TouchableOpacity>
+                    </View>
+
+                    {/* Mode Selector */}
+                    <View style={styles.modeSelectorWrap}>
+                        <View style={styles.modeSelectorPill}>
+                            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+                            <TouchableOpacity
+                                onPress={() => !isRecording && !isStarting && setMode("video")}
+                                style={[styles.modeItem, mode === "video" && styles.modeItemActive]}
+                            >
+                                <VideoIcon size={16} color={mode === "video" ? "black" : "white"} />
+                                <Text style={[styles.modeText, mode === "video" && styles.modeTextActive]}>{t('videoMode')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => !isRecording && !isStarting && setMode("picture")}
+                                style={[styles.modeItem, mode === "picture" && styles.modeItemActive]}
+                            >
+                                <CameraIcon size={16} color={mode === "picture" ? "black" : "white"} />
+                                <Text style={[styles.modeText, mode === "picture" && styles.modeTextActive]}>{t('photoMode')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </View>
 
-                <View style={styles.modeSwitcher}>
-                    <TouchableOpacity
-                        onPress={() => !isRecording && !isStarting && setMode("video")}
-                        style={[styles.modeTab, mode === "video" && styles.modeTabActive]}
-                        disabled={isRecording || isStarting}
-                    >
-                        <Ionicons name="videocam" size={16} color={mode === "video" ? "white" : "rgba(255,255,255,0.6)"} />
-                        <Text style={[styles.modeTabText, mode === "video" && styles.modeTabTextActive]}>{t('videoMode')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => !isRecording && !isStarting && setMode("picture")}
-                        style={[styles.modeTab, mode === "picture" && styles.modeTabActive]}
-                        disabled={isRecording || isStarting}
-                    >
-                        <Ionicons name="camera" size={16} color={mode === "picture" ? "white" : "rgba(255,255,255,0.6)"} />
-                        <Text style={[styles.modeTabText, mode === "picture" && styles.modeTabTextActive]}>{t('photoMode')}</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* Countdown Overlay */}
+                {countdown !== null && (
+                    <Animatable.View animation="fadeIn" duration={200} style={styles.countdownOverlay}>
+                        <Animatable.Text
+                            key={countdown}
+                            animation="zoomIn"
+                            duration={500}
+                            style={styles.countdownNumber}
+                        >
+                            {countdown}
+                        </Animatable.Text>
+                        <Pressable onPress={cancelCountdown} style={styles.cancelCountdown}>
+                            <Text style={styles.cancelCountdownText}>{t('tapToCancel')}</Text>
+                        </Pressable>
+                    </Animatable.View>
+                )}
             </View>
         </View>
     );
@@ -427,8 +552,11 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
 function DurationButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
     return (
-        <TouchableOpacity onPress={onPress} style={[styles.durationBtn, active && styles.durationBtnActive]}>
-            <Text style={[styles.durationText, active && styles.durationTextActive]}>{label}</Text>
+        <TouchableOpacity
+            onPress={onPress}
+            style={[styles.durationItem, active && styles.durationItemActive]}
+        >
+            <Text style={[styles.durationLabel, active && styles.durationLabelActive]}>{label}</Text>
         </TouchableOpacity>
     );
 }
@@ -436,243 +564,289 @@ function DurationButton({ label, active, onPress }: { label: string; active: boo
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "black" },
     camera: { flex: 1 },
-    
-    topBar: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'space-between',
+    },
+    header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: 20,
-        paddingBottom: 16,
+        zIndex: 10,
     },
-    
-    glassBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    headerSide: {
+        width: 44,
+        alignItems: 'center',
+    },
+    headerCenter: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    iconBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         overflow: "hidden",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(255,255,255,0.15)",
+        backgroundColor: "rgba(0,0,0,0.3)",
     },
-    
-    headerTitleWrap: {
-        backgroundColor: "rgba(0,0,0,0.5)",
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: Theme.radius.pill,
+    secondaryActions: {
+        position: 'absolute',
+        right: 20,
+        alignItems: 'center',
+        gap: 12,
+        zIndex: 10,
     },
-    headerTitle: { color: "white", fontSize: 17, fontWeight: "700", letterSpacing: 0.3 },
-    
-    durationRow: {
-        position: "absolute",
-        top: 120,
+    modeIndicator: {
+        height: 36,
+        paddingHorizontal: 16,
+        borderRadius: 18,
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.3)",
+    },
+    modeIndicatorText: {
+        color: "white",
+        fontSize: 14,
+        fontWeight: "700",
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    durationContainer: {
+        position: 'absolute',
         left: 0,
         right: 0,
-        flexDirection: "row",
-        justifyContent: "center",
-        gap: 12,
+        alignItems: 'center',
     },
-    
-    durationBtn: {
+    durationPill: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderRadius: 20,
+        overflow: 'hidden',
+        padding: 4,
+    },
+    durationItem: {
         paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: Theme.radius.pill,
-        backgroundColor: "rgba(255,255,255,0.15)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.2)",
-    },
-    durationBtnActive: {
-        backgroundColor: "white",
-        borderColor: "white",
-    },
-    durationText: { color: "white", fontWeight: "600", fontSize: 13 },
-    durationTextActive: { color: "black" },
-    
-    timerBadge: {
-        position: "absolute",
-        top: 120,
-        right: 20,
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "#FF3B30",
-        paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
+    },
+    durationItemActive: {
+        backgroundColor: 'white',
+    },
+    durationLabel: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    durationLabelActive: {
+        color: 'black',
+    },
+    timerBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 16,
+        borderRadius: 18,
         gap: 6,
     },
-    timerDot: {
+    liveDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: "white",
+        backgroundColor: 'white',
     },
     timerText: {
-        color: "white",
-        fontSize: 12,
-        fontWeight: "700",
+        color: 'white',
+        fontSize: 13,
+        fontWeight: '800',
         fontVariant: ['tabular-nums'],
     },
-    
-    countdownOverlay: {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(0,0,0,0.6)",
+    footer: {
+        alignItems: 'center',
     },
-    countdownText: { color: "white", fontSize: 120, fontWeight: "800" },
-    cancelHint: {
-        marginTop: 24,
-        paddingHorizontal: 24,
-        paddingVertical: 14,
-        borderRadius: Theme.radius.pill,
-        backgroundColor: "rgba(255,255,255,0.15)",
+    captureSection: {
+        marginBottom: 30,
     },
-    cancelHintText: { color: "white", fontWeight: "600", fontSize: 15 },
-    
-    bottomControls: {
-        position: "absolute",
-        bottom: 50,
-        left: 0,
-        right: 0,
-        alignItems: "center",
-        gap: 20,
+    captureWrapper: {
+        width: 96,
+        height: 96,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    
-    hintText: { color: "white", fontWeight: "600", fontSize: 13, opacity: 0.85 },
-    
-    captureContainer: {
-        alignItems: "center",
-        justifyContent: "center",
-        width: 88,
-        height: 88,
-    },
-    
     progressRing: {
-        position: "absolute",
-        width: 92,
-        height: 92,
+        position: 'absolute',
+        zIndex: 1,
     },
-    
-    captureBtn: {
+    captureOuter: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: "rgba(255,255,255,0.2)",
-        alignItems: "center",
-        justifyContent: "center",
         borderWidth: 4,
-        borderColor: "white",
+        borderColor: 'white',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.1)',
     },
-    captureIcon: { 
-        width: 60, 
-        height: 60, 
-        borderRadius: 30, 
-        backgroundColor: "white" 
+    captureInner: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
     },
-    
-    stopBtn: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: "rgba(255,59,48,0.3)",
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: 4,
-        borderColor: "#FF3B30",
+    captureInnerRecording: {
+        width: 32,
+        height: 32,
+        borderRadius: 6,
+        backgroundColor: '#FF3B30',
     },
-    stopIcon: { 
-        width: 32, 
-        height: 32, 
-        borderRadius: 8, 
-        backgroundColor: "#FF3B30" 
+    modeSelectorWrap: {
+        alignItems: 'center',
     },
-    
-    modeSwitcher: {
-        flexDirection: "row",
-        backgroundColor: "rgba(0,0,0,0.4)",
-        borderRadius: Theme.radius.pill,
-        overflow: "hidden",
+    modeSelectorPill: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderRadius: 25,
+        overflow: 'hidden',
+        padding: 4,
     },
-    modeTab: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        paddingVertical: 10,
+    modeItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
         paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
     },
-    modeTabActive: { backgroundColor: "rgba(255,255,255,0.2)" },
-    modeTabText: { color: "rgba(255,255,255,0.6)", fontWeight: "600", fontSize: 13 },
-    modeTabTextActive: { color: "white", fontWeight: "700" },
-    
-    previewWrap: { flex: 1, backgroundColor: "black" },
-    previewImage: { flex: 1, width: "100%" },
+    modeItemActive: {
+        backgroundColor: 'white',
+    },
+    modeText: {
+        color: 'white',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    modeTextActive: {
+        color: 'black',
+    },
+    countdownOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+    countdownNumber: {
+        color: 'white',
+        fontSize: 180,
+        fontWeight: '900',
+    },
+    cancelCountdown: {
+        marginTop: 40,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 25,
+    },
+    cancelCountdownText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    previewWrap: {
+        flex: 1,
+        backgroundColor: 'black'
+    },
+    previewImage: {
+        flex: 1,
+        width: "100%"
+    },
     previewTopBar: {
         position: "absolute",
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 2,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: 20,
-        paddingBottom: 16,
-        gap: 12,
+        zIndex: 10,
     },
-    glassPill: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: Theme.radius.pill,
-        overflow: "hidden",
-        alignItems: "center",
-        backgroundColor: "rgba(0,0,0,0.3)",
+    previewHeaderTitle: {
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        borderRadius: 20,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(0,0,0,0.3)',
     },
-    previewTitle: { color: "white", fontSize: 17, fontWeight: "700", zIndex: 1 },
-    previewActionsSafe: {
-        position: "absolute",
+    previewTitleText: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700',
+        zIndex: 1,
+    },
+    previewBottomContent: {
+        position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
+        paddingHorizontal: 20,
     },
-    previewActions: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        padding: 24,
-        gap: 16,
+    previewButtonsContainer: {
+        gap: 12,
     },
-    actionBtn: {
+    previewMainButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    retakeBtn: {
         flex: 1,
-        paddingVertical: 18,
-        borderRadius: Theme.radius.md,
-        overflow: "hidden",
-        alignItems: "center",
-        backgroundColor: "rgba(255,255,255,0.1)",
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: 28,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        gap: 8,
     },
-    actionText: { color: "white", fontWeight: "700", fontSize: 16, zIndex: 1 },
     saveBtn: {
         flex: 1,
-        flexDirection: "row",
-        paddingVertical: 18,
-        borderRadius: Theme.radius.md,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#FF3B30",
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: 28,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        gap: 8,
     },
-    saveBtnText: { color: "white", fontWeight: "700", fontSize: 16 },
-    
+    publishBtn: {
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FF3B30',
+        ...Theme.shadow.md,
+    },
+    previewBtnText: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700',
+        zIndex: 1,
+    },
+    publishBtnText: {
+        color: 'white',
+        fontSize: 17,
+        fontWeight: '800',
+    },
     center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
     permissionTitle: { fontSize: 18, fontWeight: "600", textAlign: "center", marginTop: 16, marginBottom: 8 },
     primaryBtn: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: Theme.radius.md },
     primaryBtnText: { fontWeight: "700", fontSize: 16 },
-    
     backBtn: {
         width: 48,
         height: 48,
@@ -683,4 +857,29 @@ const styles = StyleSheet.create({
         top: 16,
         left: 20,
     },
+    simulatorNotice: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+        padding: 40,
+    },
+    simulatorText: {
+        color: '#FFF',
+        fontSize: 20,
+        fontWeight: '800',
+        textAlign: 'center',
+    },
+    simulatorSubtext: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    simulatorBackBtn: {
+        marginTop: 20,
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 25,
+    }
 });
