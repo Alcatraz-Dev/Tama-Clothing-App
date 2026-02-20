@@ -104,7 +104,8 @@ import {
   MessageSquare,
   MoreVertical,
   DownloadCloud,
-  ArrowRightLeft
+  ArrowRightLeft,
+  ArrowRight
 } from 'lucide-react-native';
 import { Share } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -435,6 +436,14 @@ const Translations: any = {
     adminConsole: 'CONSOLE ADMIN',
     broadcast: 'DIFFUSION',
     products: 'PRODUITS',
+    onboardTitle1: 'REDÉFINIR L\'ÉLÉGANCE MODERNE',
+    onboardDesc1: 'Découvrez une sélection exclusive conçue pour ceux qui osent.',
+    onboardTitle2: 'COLLABORATIONS EXCLUSIVES',
+    onboardDesc2: 'Explorez l\'union parfaite entre la mode et l\'art créatif.',
+    onboardTitle3: 'SHOPPING EN DIRECT',
+    onboardDesc3: 'Rejoignez nos lives et achetez vos pièces préférées en temps réel.',
+    onboardGetStarted: 'COMMENCER L\'AVENTURE',
+    onboardNext: 'SUIVANT',
     dashboard: 'TABLEAU DE BORD',
     users: 'UTILISATEURS',
     banners: 'BANNIÈRES',
@@ -902,6 +911,14 @@ const Translations: any = {
     broadcast: 'البث',
     products: 'المنتجات',
     dashboard: 'لوحة التحكم',
+    onboardTitle1: 'إعادة تعريف الأناقة الحديثة',
+    onboardDesc1: 'اكتشف مجموعة حصرية مصممة لأولئك الذين يجرؤون.',
+    onboardTitle2: 'تعاونات حصرية',
+    onboardDesc2: 'استكشف الاتحاد المثالي بين الموضة والفن الإبداعي.',
+    onboardTitle3: 'تسوق مباشر',
+    onboardDesc3: 'انضم إلى بثنا المباشر واشترِ قطعك المفضلة في الوقت الفعلي.',
+    onboardGetStarted: 'ابدأ المغامرة',
+    onboardNext: 'التالي',
     users: 'المستخدمين',
     banners: 'البانرات',
     totalSales: 'إجمالي المبيعات',
@@ -2003,6 +2020,9 @@ export default function App() {
     AsyncStorage.getItem('tama_lang').then(lang => {
       if (lang && (lang === 'fr' || lang === 'ar')) setLanguage(lang);
     });
+    AsyncStorage.getItem('tama_onboarding_seen').then(val => {
+      if (val === 'true') setAppState('Auth');
+    });
 
     registerForPushNotificationsAsync().then(token => {
       if (token) setExpoPushToken(token);
@@ -3019,38 +3039,136 @@ export default function App() {
 // --- COMPONENTS ---
 
 function OnboardingScreen({ onFinish, t }: any) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
   const { colors, theme } = useAppTheme();
-  return (
-    <View style={styles.fullScreen}>
+
+  const slides = [
+    {
+      id: '1',
+      title: t('onboardTitle1'),
+      desc: t('onboardDesc1'),
+      video: 'https://videos.pexels.com/video-files/3205916/3205916-hd_1080_1920_25fps.mp4',
+    },
+    {
+      id: '2',
+      title: t('onboardTitle2'),
+      desc: t('onboardDesc2'),
+      video: 'https://videos.pexels.com/video-files/3971343/3971343-hd_1080_1920_25fps.mp4',
+    },
+    {
+      id: '3',
+      title: t('onboardTitle3'),
+      desc: t('onboardDesc3'),
+      video: 'https://videos.pexels.com/video-files/5192131/5192131-hd_1080_1800_25fps.mp4',
+    }
+  ];
+
+  const handleNext = () => {
+    if (currentIndex < slides.length - 1) {
+      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+    } else {
+      AsyncStorage.setItem('tama_onboarding_seen', 'true');
+      onFinish();
+    }
+  };
+
+  const renderSlide = ({ item, index }: any) => (
+    <View style={{ width, height }}>
       <Video
-        source={{ uri: 'https://videos.pexels.com/video-files/3205916/3205916-hd_1080_1920_25fps.mp4' }}
+        source={{ uri: item.video }}
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
         isLooping
-        shouldPlay
+        shouldPlay={currentIndex === index}
         isMuted
       />
-      <View style={[styles.onboardOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-        <View style={[styles.onboardGlass, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.85)', paddingVertical: 50, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)' }]}>
-          <Animatable.View animation="fadeInDown" delay={300} duration={1000} style={{ alignItems: 'center' }}>
-            <Image source={APP_ICON} style={styles.logoLarge} />
-            <Text style={[styles.glassBrand, { marginTop: 20, fontSize: 32, color: '#FFF' }]}>TAMA CLOTHING</Text>
-          </Animatable.View>
+      <LinearGradient
+        colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']}
+        style={StyleSheet.absoluteFill}
+      />
 
-          <Animatable.Text animation="fadeInUp" delay={800} duration={1000} style={[styles.glassTagline, { marginVertical: 20, fontSize: 16, lineHeight: 24, color: '#FFF' }]}>
-            {t('onboardTitle')}
-          </Animatable.Text>
+      <View style={{ flex: 1, justifyContent: 'flex-end', paddingHorizontal: 30, paddingBottom: 160 }}>
+        <Animatable.View
+          key={`slide-${index}-${item.title}`}
+          animation="fadeInUp"
+          duration={800}
+        >
+          <Text style={{ color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -1, lineHeight: 38 }}>
+            {item.title}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16, fontWeight: '600', marginTop: 15, lineHeight: 24 }}>
+            {item.desc}
+          </Text>
+        </Animatable.View>
+      </View>
+    </View>
+  );
 
-          <Animatable.View animation="zoomIn" delay={1200} duration={800} style={{ width: '100%' }}>
-            <TouchableOpacity
-              style={[styles.glassBtn, { backgroundColor: '#FFF', marginTop: 20, height: 60, borderRadius: 30 }]}
-              onPress={onFinish}
-              activeOpacity={0.9}
-            >
-              <Text style={[styles.glassBtnText, { color: '#000', fontSize: 14, letterSpacing: 2 }]}>{t('onboardBtn')}</Text>
-            </TouchableOpacity>
-          </Animatable.View>
+  return (
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
+      <FlatList
+        ref={flatListRef}
+        data={slides}
+        renderItem={renderSlide}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => {
+          const index = Math.round(e.nativeEvent.contentOffset.x / width);
+          setCurrentIndex(index);
+        }}
+        keyExtractor={(item) => item.id}
+      />
+
+      {/* Pagination & CTA */}
+      <View style={{ position: 'absolute', bottom: 60, left: 30, right: 30 }}>
+        <View style={{ flexDirection: 'row', marginBottom: 30 }}>
+          {slides.map((_, i) => (
+            <View
+              key={i}
+              style={{
+                height: 4,
+                width: i === currentIndex ? 30 : 6,
+                borderRadius: 2,
+                backgroundColor: i === currentIndex ? '#FFF' : 'rgba(255,255,255,0.3)',
+                marginRight: 6
+              }}
+            />
+          ))}
         </View>
+
+        <TouchableOpacity
+          onPress={handleNext}
+          activeOpacity={0.8}
+          style={{
+            height: 64,
+            backgroundColor: '#FFF',
+            borderRadius: 32,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.3,
+            shadowRadius: 20,
+            elevation: 10
+          }}
+        >
+          <Text style={{ color: '#000', fontSize: 15, fontWeight: '800', letterSpacing: 1 }}>
+            {currentIndex === slides.length - 1 ? t('onboardGetStarted') : t('onboardNext')}
+          </Text>
+          <ArrowRight size={20} color="#000" strokeWidth={3} style={{ marginLeft: 10 }} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Top Logo */}
+      <View style={{ position: 'absolute', top: 60, left: 0, right: 0, alignItems: 'center' }}>
+        <Animatable.Image
+          animation="fadeInDown"
+          source={APP_ICON}
+          style={{ width: 50, height: 50, borderRadius: 12 }}
+        />
       </View>
     </View>
   );
