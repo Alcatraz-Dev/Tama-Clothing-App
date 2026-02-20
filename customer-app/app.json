@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/AppIcons/appstore.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff",
+      "backgroundColor": "#eeeeee",
       "hideAppName": true
     },
     "ios": {
@@ -27,7 +27,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/AppIcons/playstore.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#eeeeee"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
