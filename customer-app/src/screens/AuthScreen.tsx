@@ -103,8 +103,8 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
         <View style={[styles.authContainer, { backgroundColor: colors.background }]}>
             <View style={[styles.authTopDecoration, { opacity: theme === 'dark' ? 0.4 : 1, backgroundColor: colors.foreground }]} />
             <View style={[styles.authContent, { backgroundColor: colors.background }]}>
-                <Image source={APP_ICON} style={[styles.logo, { alignSelf: 'center', width: 180, height: 180 }]} />
                 <Text style={[styles.authTitle, { color: colors.foreground }]}>{isLogin ? t('welcomeBack') : t('createAccount')}</Text>
+                <Image source={APP_ICON} style={[styles.logo, { alignSelf: 'center', width: 180, height: 180 }]} />
 
                 <View style={[styles.formCard, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
                     {error ? <Text style={{ color: colors.error, fontSize: 13, marginBottom: 15, textAlign: 'center', fontWeight: '600' }}>{error}</Text> : null}
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     logo: {
-        marginBottom: 20,
+        marginBottom: 0,
     },
     authTitle: {
         fontSize: 28,

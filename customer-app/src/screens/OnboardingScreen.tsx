@@ -151,7 +151,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
                 <Animatable.Image
                     animation="fadeInDown"
                     source={APP_ICON}
-                    style={{ width: 50, height: 50, borderRadius: 12 }}
+                    style={{ width: 180, height: 180, borderRadius: 12 }}
                 />
             </View>
         </View>
