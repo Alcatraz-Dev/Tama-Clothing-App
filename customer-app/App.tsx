@@ -8944,6 +8944,12 @@ function SizeGuideScreen({ onBack, t, language }: any) {
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // Size Calculator State
+  const [chest, setChest] = useState('');
+  const [waist, setWaist] = useState('');
+  const [hip, setHip] = useState('');
+  const [recommendedSize, setRecommendedSize] = useState<string | null>(null);
+
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 50],
     outputRange: [0, 1],
@@ -9020,6 +9026,97 @@ function SizeGuideScreen({ onBack, t, language }: any) {
               <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.foreground, textAlign: 'center' }}>{s.hip}</Text>
             </View>
           ))}
+        </View>
+
+        {/* Size Calculator Section */}
+        <View style={[styles.settingsSectionPremium, { marginTop: 20, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
+          <Text style={[styles.settingsLabel, { marginBottom: 20, color: colors.foreground }]}>
+            {tr('TROUVER MA TAILLE', 'ابحث عن مقاسي', 'FIND MY SIZE')}
+          </Text>
+
+          <View style={{ gap: 15 }}>
+            <View>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>
+                {tr('POITRINE (CM)', 'الصدر (سم)', 'CHEST (CM)')}
+              </Text>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Ex: 92"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={chest}
+                onChangeText={setChest}
+              />
+            </View>
+
+            <View>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>
+                {tr('TAILLE (CM)', 'الخصر (سم)', 'WAIST (CM)')}
+              </Text>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Ex: 74"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={waist}
+                onChangeText={setWaist}
+              />
+            </View>
+
+            <View>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 8, marginLeft: 4 }}>
+                {tr('HANCHES (CM)', 'الوركين (سم)', 'HIPS (CM)')}
+              </Text>
+              <TextInput
+                style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Ex: 100"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={hip}
+                onChangeText={setHip}
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                if (!chest || !waist || !hip) return;
+                const cVal = parseFloat(chest);
+                const wVal = parseFloat(waist);
+                const hVal = parseFloat(hip);
+
+                const getIdx = (v: number, key: 'chest' | 'waist' | 'hip') => {
+                  for (let i = 0; i < sizes.length; i++) {
+                    const [min, max] = sizes[i][key].split('-').map(Number);
+                    if (v <= max) return i;
+                  }
+                  return sizes.length - 1;
+                };
+
+                const idx = Math.max(getIdx(cVal, 'chest'), getIdx(wVal, 'waist'), getIdx(hVal, 'hip'));
+                setRecommendedSize(sizes[idx].label);
+              }}
+              style={{
+                backgroundColor: colors.foreground,
+                paddingVertical: 15,
+                borderRadius: 15,
+                alignItems: 'center',
+                marginTop: 10
+              }}
+            >
+              <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '900', fontSize: 13 }}>
+                {tr('CALCULER', 'حساب', 'CALCULATE')}
+              </Text>
+            </TouchableOpacity>
+
+            {recommendedSize && (
+              <Animatable.View animation="fadeInUp" duration={500} style={{ marginTop: 20, padding: 20, backgroundColor: colors.accent + '15', borderRadius: 20, alignItems: 'center', borderWidth: 1, borderColor: colors.accent + '30' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.foreground, marginBottom: 5 }}>
+                  {tr('VOTRE TAILLE RECOMMANDÉE EST :', 'مقاسك الموصى به هو:', 'YOUR RECOMMENDED SIZE IS:')}
+                </Text>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: colors.accent }}>{recommendedSize}</Text>
+              </Animatable.View>
+            )}
+          </View>
         </View>
 
         <View style={{ marginTop: 40, padding: 20, backgroundColor: theme === 'dark' ? '#121218' : '#FAFAFA', borderRadius: 25, borderWidth: 1, borderColor: colors.border }}>

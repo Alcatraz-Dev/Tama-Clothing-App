@@ -1,7 +1,7 @@
 export const Theme = {
     light: {
         colors: {
-            background: "#FFFFFF",
+            background: "#eeeeee",
             foreground: "#0A0A0A",
 
             card: "#FFFFFF",

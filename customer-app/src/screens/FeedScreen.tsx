@@ -95,7 +95,7 @@ export default function FeedScreen(props: FeedScreenProps) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [feedFilter, setFeedFilter] = useState<'default' | 'viral' | 'comments'>('default');
-    const [feedTab, setFeedTab] = useState<'all' | 'friends' | 'following'>('all');
+    const [feedTab, setFeedTab] = useState<'all' | 'following'>('all');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [lives, setLives] = useState<FeedItem[]>([]);
     const [works, setWorks] = useState<FeedItem[]>([]);
@@ -166,12 +166,7 @@ export default function FeedScreen(props: FeedScreenProps) {
     const sortedFeedItems = useMemo(() => {
         let items = [...feedItemsCombined];
 
-        if (feedTab === 'friends') {
-            items = items.filter(item => {
-                if (item.type !== 'work') return false;
-                return profileData?.friends?.includes(item.data.userId);
-            });
-        } else if (feedTab === 'following') {
+        if (feedTab === 'following') {
             items = items.filter(item => {
                 if (item.type !== 'work') return false;
                 // Check if following the user directly OR following their brand's collaboration
@@ -188,7 +183,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             return items.sort((a, b) => (b.data.commentsCount || 0) - (a.data.commentsCount || 0));
         }
         return items;
-    }, [feedItemsCombined, feedFilter, feedTab, profileData?.friends, profileData?.following]);
+    }, [feedItemsCombined, feedFilter, feedTab, profileData?.following, followedCollabs]);
 
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -317,7 +312,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     createdAt: data.createdAt || { seconds: Date.now() / 1000 }
                 };
             });
-            setWorks(workItems);
+            setWorks(workItems.filter(w => w.data.isCollab));
             setLoading(false);
             setRefreshing(false);
         });
@@ -1039,7 +1034,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                             onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
                             style={{
                                 width: 50, height: 50,
-                                marginRight: 15,
+                                marginRight: 8,
                                 position: 'relative'
                             }}
                         >
@@ -1336,23 +1331,6 @@ export default function FeedScreen(props: FeedScreenProps) {
                             fontWeight: feedTab === 'all' ? '800' : '600'
                         }}>
                             {t('forYou')}
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setFeedTab('friends')}
-                        style={{
-                            paddingHorizontal: 20,
-                            paddingVertical: 8,
-                            borderBottomWidth: feedTab === 'friends' ? 2 : 0,
-                            borderBottomColor: tabActiveColor
-                        }}
-                    >
-                        <Text style={{
-                            color: feedTab === 'friends' ? tabActiveColor : tabInactiveColor,
-                            fontSize: 15,
-                            fontWeight: feedTab === 'friends' ? '800' : '600'
-                        }}>
-                            {t('friendsTab')}
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
