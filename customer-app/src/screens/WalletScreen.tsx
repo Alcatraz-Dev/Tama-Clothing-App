@@ -138,17 +138,17 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
     const handleRecharge = async (pack: any) => {
         if (!user?.uid) {
-            Alert.alert('Error', tr('Please log in to recharge.', 'Veuillez vous connecter pour recharger.', 'يرجى تسجيل الدخول لإعادة الشحن.'));
+            Alert.alert('Error', tr('Please log in to recharge.', 'Veuillez vous connecter pour recharger.', 'أمان ادخل للكونط باش تشحن رصيدك.'));
             return;
         }
 
         Alert.alert(
-            tr('Confirm Purchase', 'Confirmer l\'Achat', 'تأكيد الشراء'),
-            `${tr('Buy', 'Acheter', 'شراء')} ${pack.coins} ${tr('Coins for', 'Pièces pour', 'عملات مقابل')} ${pack.priceDisplay}?`,
+            tr('Confirm Purchase', 'Confirmer l\'Achat', 'أكد الشراية'),
+            `${tr('Buy', 'Acheter', 'اشري')} ${pack.coins} ${tr('Coins for', 'Pièces pour', 'عملة بـ')} ${pack.priceDisplay}?`,
             [
-                { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
+                { text: tr('Cancel', 'Annuler', 'بطل'), style: 'cancel' },
                 {
-                    text: tr('Buy', 'Acheter', 'شراء'),
+                    text: tr('Buy', 'Acheter', 'اشري'),
                     onPress: async () => {
                         setLoading(true);
                         try {
@@ -172,7 +172,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                 status: 'completed'
                             });
 
-                            Alert.alert(tr('Success', 'Succès', 'ناجح'), `${tr('You purchased', 'Vous avez acheté', 'لقد اشتريت')} ${pack.coins + pack.bonus} ${tr('coins!', 'pièces!', 'عملات!')}`);
+                            Alert.alert(tr('Success', 'Succès', 'سلكت!'), `${tr('You purchased', 'Vous avez acheté', 'شريت')} ${pack.coins + pack.bonus} ${tr('coins!', 'pièces!', 'عملة!')}`);
                         } catch (error) {
                             console.error("Recharge Error:", error);
                             Alert.alert('Error', 'Transaction failed');
@@ -189,13 +189,13 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
         if (!user?.uid || !exchangeAmount) return;
         const amount = parseInt(exchangeAmount);
         if (isNaN(amount) || amount <= 0) {
-            Alert.alert('Error', tr('Invalid amount', 'Montant invalide', 'مبلغ غير صحيح'));
+            Alert.alert('Error', tr('Invalid amount', 'Montant invalide', 'مبلغ مش صحيح'));
             return;
         }
 
         const maxBalance = exchangeType === 'diamondsToCoins' ? diamondBalance : coinBalance;
         if (amount > maxBalance) {
-            Alert.alert(tr('Insufficient Balance', 'Solde Insuffisant', 'رصيد غير كافي'), tr('Insufficient balance for this exchange.', 'Solde insuffisant pour cet échange.', 'رصيد غير كافي لهذا التبادل.'));
+            Alert.alert(tr('Insufficient Balance', 'Solde Insuffisant', 'الرصيد ما يزيش'), tr('Insufficient balance for this exchange.', 'Solde insuffisant pour cet échange.', 'رصيدك ما يزيش باش تعمل التبادل هذا.'));
             return;
         }
 
@@ -242,7 +242,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
             setShowExchangeModal(false);
             setExchangeAmount('');
-            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Exchange completed successfully!', 'Échange terminé avec succès !', 'تم التبادل بنجاح!'));
+            Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Exchange completed successfully!', 'Échange terminé avec succès !', 'التبادل صار بنجاح!'));
         } catch (error) {
             console.error("Exchange Error:", error);
             Alert.alert('Error', 'Exchange failed');
@@ -285,11 +285,11 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
         const isFriend = profileData?.friends?.includes(selectedUserForTransfer.uid);
         if (!isFriend) {
             Alert.alert(
-                tr('Restriction', 'Restriction', 'قيود'),
+                tr('Restriction', 'Restriction', 'ممنوع'),
                 tr(
                     'You can only transfer funds to confirmed friends.',
                     'Vous ne pouvez transférer des fonds qu\'à des amis confirmés.',
-                    'يمكنك فقط تحويل الأموال للأصدقاء المؤكدين.'
+                    'تنجم تحول الفلوس كان للأصحاب اللي وافقت عليهم.'
                 )
             );
             return;
@@ -297,13 +297,13 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
         const amount = parseInt(transferAmount);
         if (isNaN(amount) || amount <= 0) {
-            Alert.alert('Error', tr('Invalid amount', 'Montant invalide', 'مبلغ غير صحيح'));
+            Alert.alert('Error', tr('Invalid amount', 'Montant invalide', 'مبلغ مش صحيح'));
             return;
         }
 
         const maxBalance = transferType === 'coins' ? coinBalance : diamondBalance;
         if (amount > maxBalance) {
-            Alert.alert(tr('Insufficient Balance', 'Solde Insuffisant', 'رصيد غير كافي'), tr('Insufficient balance for this transfer.', 'Solde insuffisant pour ce transfert.', 'رصيد غير كافي لهذا التحويل.'));
+            Alert.alert(tr('Insufficient Balance', 'Solde Insuffisant', 'الرصيد ما يزيش'), tr('Insufficient balance for this transfer.', 'Solde insuffisant pour ce transfert.', 'رصيدك ما يزيش باش تحول المبلغ هذا.'));
             return;
         }
 
@@ -364,7 +364,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                 });
             });
 
-            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Transfer completed successfully!', 'Transfert réussi !', 'تم التحويل بنجاح!'));
+            Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Transfer completed successfully!', 'Transfert réussi !', 'التحويل صار بنجاح!'));
             setShowTransferModal(false);
             setTransferAmount('');
             setSelectedUserForTransfer(null);
@@ -386,7 +386,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
         // Already sent?
         if (sentRequests.some(r => r.receiverId === targetUser.uid)) {
-            Alert.alert(tr('Info', 'Info', 'معلومات'), tr('Request already sent.', 'Demande déjà envoyée.', 'تم إرسال الطلب بالفعل.'));
+            Alert.alert(tr('Info', 'Info', 'معلومات'), tr('Request already sent.', 'Demande déjà envoyée.', 'الطلب تبعث ديجا.'));
             return;
         }
 
@@ -409,7 +409,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             // Also add to receiver's incoming sub-collection for easier notifications/UI
             await setDoc(doc(db, 'users', targetUser.uid, 'friendRequests', requestRef.id), requestData);
 
-            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend request sent!', 'Demande d\'ami envoyée !', 'تم إرسال طلب الصداقة!'));
+            Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Friend request sent!', 'Demande d\'ami envoyée !', 'طلب الصداقة تبعث!'));
         } catch (error) {
             console.error("Friend Request Error:", error);
             Alert.alert('Error', 'Failed to send request');
@@ -436,7 +436,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                 transaction.update(globalRequestRef, { status: 'accepted' });
                 transaction.delete(myRequestRef);
             });
-            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend request accepted!', 'Demande d\'ami acceptée !', 'تم قبول طلب الصداقة!'));
+            Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Friend request accepted!', 'Demande d\'ami acceptée !', 'قبلت طلب الصداقة!'));
         } catch (error) {
             console.error("Accept Friend Error:", error);
             Alert.alert('Error', 'Failed to accept request');
@@ -449,8 +449,8 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
         if (!user?.uid) return;
 
         Alert.alert(
-            tr('Remove Friend', 'Supprimer l\'ami', 'حذف الصديق'),
-            `${tr('Are you sure you want to remove', 'Êtes-vous sûr de vouloir supprimer', 'هل أنت متأكد أنك تريد حذف')} ${friendName} ${tr('from your friends list?', 'de votre liste d\'amis ?', 'من قائمة أصدقائك؟')}`,
+            tr('Remove Friend', 'Supprimer l\'ami', 'نحي الصاحب'),
+            `${tr('Are you sure you want to remove', 'Êtes-vous sûr de vouloir supprimer', 'متأكد تحب تنحي')} ${friendName} ${tr('from your friends list?', 'de votre liste d\'amis ?', 'من قائمة صحابك؟')}`,
             [
                 { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
                 {
@@ -466,7 +466,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                 transaction.update(meRef, { friends: arrayRemove(friendId) });
                                 transaction.update(themRef, { friends: arrayRemove(user.uid) });
                             });
-                            Alert.alert(tr('Success', 'Succès', 'ناجح'), tr('Friend removed successfully.', 'Ami supprimé avec succès.', 'تم حذف الصديق بنجاح.'));
+                            Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Friend removed successfully.', 'Ami supprimé avec succès.', 'نحيت الصاحب بنجاح.'));
                         } catch (error) {
                             console.error("Remove Friend Error:", error);
                             Alert.alert('Error', 'Failed to remove friend');
@@ -545,7 +545,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     style={styles.balanceCard}
                 >
                     <View>
-                        <Text style={styles.balanceLabel}>{activeTab === 'recharge' ? tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات') : tr('Diamond Balance', 'Solde de Diamants', 'رصيد الألماس')}</Text>
+                        <Text style={styles.balanceLabel}>{activeTab === 'recharge' ? tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات') : tr('Diamond Balance', 'Solde de Diamants', 'رصيد الجواهر')}</Text>
                         <View style={styles.balanceRow}>
                             {activeTab === 'recharge' ? <Coins size={28} color="#FFF" style={{ marginRight: 8 }} /> : <Gem size={28} color="#FFF" style={{ marginRight: 8 }} />}
                             <Text style={styles.balanceAmount}>
@@ -573,13 +573,13 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     style={[styles.tab, activeTab === 'recharge' && { backgroundColor: colors.card }]}
                     onPress={() => setActiveTab('recharge')}
                 >
-                    <Text style={[styles.tabText, { color: activeTab === 'recharge' ? colors.foreground : colors.textMuted }]}>{tr('Recharge', 'Recharger', 'إعادة شحن')}</Text>
+                    <Text style={[styles.tabText, { color: activeTab === 'recharge' ? colors.foreground : colors.textMuted }]}>{tr('Recharge', 'Recharger', 'شحن')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'earnings' && { backgroundColor: colors.card }]}
                     onPress={() => setActiveTab('earnings')}
                 >
-                    <Text style={[styles.tabText, { color: activeTab === 'earnings' ? colors.foreground : colors.textMuted }]}>{tr('Earnings', 'Gains', 'الأرباح')}</Text>
+                    <Text style={[styles.tabText, { color: activeTab === 'earnings' ? colors.foreground : colors.textMuted }]}>{tr('Earnings', 'Gains', 'المرابيح')}</Text>
                 </TouchableOpacity>
             </View>
         </View >
@@ -587,7 +587,41 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
     const renderRecharge = () => (
         <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{tr('Top Up Coins', 'Recharger des Pièces', 'شحن العملات')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>{tr('Top Up Coins', 'Recharger des Pièces', 'اشحن العملات')}</Text>
+                {/* <TouchableOpacity
+                    onPress={async () => {
+                        if (!user?.uid) return;
+                        setLoading(true);
+                        try {
+                            const userRef = doc(db, 'users', user.uid);
+                            await setDoc(userRef, {
+                                wallet: {
+                                    coins: increment(1000),
+                                    diamonds: increment(500)
+                                }
+                            }, { merge: true });
+
+                            await addDoc(collection(db, 'users', user.uid, 'transactions'), {
+                                type: 'recharge',
+                                amountCoins: 1000,
+                                amountDiamonds: 500,
+                                description: 'Simulated Charge (Dev Only)',
+                                timestamp: serverTimestamp(),
+                                status: 'completed'
+                            });
+                            Alert.alert('Success', 'Simulated 1000 Coins & 500 Diamonds');
+                        } catch (err) {
+                            console.error(err);
+                        } finally {
+                            setLoading(false);
+                        }
+                    }}
+                    style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
+                >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6' }}>{tr('Simulate', 'Simuler', 'محاكاة')}</Text>
+                </TouchableOpacity> */}
+            </View>
             <View style={styles.gridContainer}>
                 {RECHARGE_PACKAGES.map((pack) => (
                     <TouchableOpacity
@@ -602,7 +636,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         </View>
                         <Text style={[styles.coinAmount, { color: colors.foreground }]}>{pack.coins}</Text>
                         {pack.bonus > 0 && (
-                            <Text style={styles.bonusText}>+{pack.bonus} {tr('Bonus', 'Bonus', 'إضافي')}</Text>
+                            <Text style={styles.bonusText}>+{pack.bonus} {tr('Bonus', 'Bonus', 'زيادة')}</Text>
                         )}
                         <View style={[styles.priceButton, { backgroundColor: '#F59E0B' }]}>
                             <Text style={styles.priceText}>{pack.priceDisplay}</Text>
@@ -620,7 +654,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
             <View style={styles.sectionContainer}>
                 <View style={[styles.infoBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
                     <Text style={{ color: colors.foreground, fontSize: 13, textAlign: 'center' }}>
-                        {tr('Diamonds are earned from gifts received during live streams. You can withdraw them as cash (Min 50 TND) or exchange them for Coins.', 'Les diamants sont gagnés grâce aux cadeaux reçus lors des directs. Vous pouvez les retirer en espèces (Min 50 TND) ou les échanger contre des pièces.', 'يتم كسب الألماس من الهدايا المستلمة أثناء البث المباشر. يمكنك سحبها نقدًا (50 د.ت كحد أدنى) أو استبدالها بعملات.')}
+                        {tr('Diamonds are earned from gifts received during live streams. You can withdraw them as cash (Min 50 TND) or exchange them for Coins.', 'Les diamants sont gagnés grâce aux cadeaux reçus lors des directs. Vous pouvez les retirer en espèces (Min 50 TND) ou les échanger contre des pièces.', 'الجواهر تربحهم مالهدايا اللي يبعثوهملك في اللايف. تنجم تجبدهم فلوس (أقل حاجة 50 دينار) وإلا تبدلهم بعملات.')}
                     </Text>
                 </View>
 
@@ -636,26 +670,26 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             const amountTND = parseFloat(tndValue);
                             if (amountTND < 50) {
                                 Alert.alert(
-                                    tr('Minimum Amount', 'Montant Minimum', 'المبلغ الأدنى'),
+                                    tr('Minimum Amount', 'Montant Minimum', 'أقل مبلغ'),
                                     tr(
                                         'The minimum withdrawal amount is 50.00 TND.',
                                         'Le montant minimum de retrait est de 50,00 TND.',
-                                        'المبلغ الأدنى للسحب هو 50.00 دينار.'
+                                        'أقل مبلغ تنجم تجبدو هو 50 دينار.'
                                     )
                                 );
                                 return;
                             }
                             Alert.alert(
-                                tr('Confirm Withdrawal', 'Confirmer le Retrait', 'تأكيد السحب'),
+                                tr('Confirm Withdrawal', 'Confirmer le Retrait', 'أكد الجبدان'),
                                 tr(
                                     `Do you want to request a withdrawal for ${tndValue} TND?`,
                                     `Voulez-vous demander un retrait de ${tndValue} TND ?`,
-                                    `هل تريد طلب سحب بقيمة ${tndValue} دينار؟`
+                                    `تحب تجبد ${tndValue} دينار؟`
                                 ),
                                 [
-                                    { text: tr('Cancel', 'Annuler', 'إلغاء'), style: 'cancel' },
+                                    { text: tr('Cancel', 'Annuler', 'بطل'), style: 'cancel' },
                                     {
-                                        text: tr('Request', 'Demander', 'طلب'),
+                                        text: tr('Request', 'Demander', 'أعمل طلب'),
                                         onPress: async () => {
                                             setLoading(true);
                                             try {
@@ -673,7 +707,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                     status: 'pending'
                                                 });
 
-                                                Alert.alert(tr('Success', 'Succès', 'نجاح'), tr('Withdrawal request sent', 'Demande de retrait envoyée', 'تم إرسال طلب السحب'));
+                                                Alert.alert(tr('Success', 'Succès', 'سلكت!'), tr('Withdrawal request sent', 'Demande de retrait envoyée', 'طلب الجبدان تبعث'));
                                             } catch (error) {
                                                 Alert.alert('Error', 'Withdrawal request failed');
                                             } finally {
@@ -688,7 +722,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.2)', marginBottom: 8 }]}>
                             <ArrowUpRight size={22} color="#10B981" />
                         </View>
-                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Withdraw', 'Retirer', 'سحب')}</Text>
+                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Withdraw', 'Retirer', 'اجبد')}</Text>
                         <Text style={{ fontSize: 11, color: colors.textMuted }}>{tndValue} TND</Text>
                     </TouchableOpacity>
 
@@ -704,8 +738,8 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.2)', marginBottom: 8 }]}>
                             <Repeat size={22} color="#F59E0B" />
                         </View>
-                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Exchange', 'Échanger', 'تبادل')}</Text>
-                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{tr('Coins/Diamonds', 'Pièces/Diamants', 'عملات/ماس')}</Text>
+                        <Text style={[styles.actionBtnTitle, { color: colors.foreground }]}>{tr('Exchange', 'Échanger', 'بدل')}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{tr('Coins/Diamonds', 'Pièces/Diamants', 'عملات/جواهر')}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -727,19 +761,19 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             <Send size={18} color="#FFF" />
                         </View>
                         <View style={{ marginLeft: 12, flex: 1 }}>
-                            <Text style={[styles.transferBannerTitle, { color: colors.foreground, fontSize: 15 }]}>{tr('Transfer to Friend', 'Transférer à un ami', 'تحويل لصديق')}</Text>
-                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 1 }}>{tr('Send Coins or Diamonds instantly', 'Envoyer des pièces ou diamants instantanément', 'أرسل عملات أو ماس فوراً')}</Text>
+                            <Text style={[styles.transferBannerTitle, { color: colors.foreground, fontSize: 15 }]}>{tr('Transfer to Friend', 'Transférer à un ami', 'حول لصاحبك')}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 1 }}>{tr('Send Coins or Diamonds instantly', 'Envoyer des pièces ou diamants instantanément', 'ابعث عملات وإلا جواهر في وقتها')}</Text>
                         </View>
                         <ArrowRight size={20} color={colors.textMuted} />
                     </View>
                 </TouchableOpacity>
 
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 30 }]}>{tr('Recent Transaction', 'Trans. Récentes', 'المعاملات الأخيرة')}</Text>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 30 }]}>{tr('Recent Transaction', 'Trans. Récentes', 'آخر المعاملات')}</Text>
                 <View style={{ marginTop: 10 }}>
                     {transactions.length === 0 ? (
                         <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.5 }}>
                             <History size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
-                            <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No recent transactions', 'Pas de transactions récentes', 'لا توجد معاملات حديثة')}</Text>
+                            <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No recent transactions', 'Pas de transactions récentes', 'ما ثماش معاملات توا')}</Text>
                         </View>
                     ) : (
                         transactions.map((tx: any) => (
@@ -761,28 +795,28 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                 <View style={styles.transactionInfo}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <Text style={[styles.transactionTitle, { color: colors.foreground }]}>
-                                            {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'إعادة شحن') :
-                                                tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'سحب') :
-                                                    tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل مرسل') :
-                                                        tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'تحويل مستلم') :
+                                            {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'شحن') :
+                                                tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'جبدان') :
+                                                    tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل تبعث') :
+                                                        tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'وصلك تحويل') :
                                                             tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
-                                                                tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
-                                                                    tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
-                                                                        tr('Transaction', 'Transaction', 'معاملة')}
+                                                                tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'وصلتك هدية') :
+                                                                    tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'بعثت هدية') :
+                                                                        tr('Transaction', 'Transaction', 'عملية')}
                                         </Text>
                                         <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '#EF4444' : '#10B981' }]}>
                                             {(tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '-' : '+'}
                                             {tx.type === 'recharge' ? `${tx.amountCoins || tx.amount || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                                 tx.type === 'withdrawal' ? `${(tx.amountTND || 0).toFixed(2)} TND` :
                                                     tx.type === 'exchange' ? `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
-                                                        tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'ماس')}` :
-                                                            tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'ماس')}` :
+                                                        tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'جوهرة')}` :
+                                                            tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'جوهرة')}` :
                                                                 `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
                                         </Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                                         <Text style={[styles.transactionDate, { color: colors.textMuted }]}>
-                                            {tx.description || (tx.type === 'gift_received' ? `${tx.giftName} ${tr('from', 'de', 'من')} ${tx.senderName}` : tx.type === 'gift_sent' ? `${tx.giftName} ${tr('to', 'à', 'إلى')} ${tx.recipientName}` : '')}
+                                            {tx.description || (tx.type === 'gift_received' ? `${tx.giftName} ${tr('from', 'de', 'من')} ${tx.senderName}` : tx.type === 'gift_sent' ? `${tx.giftName} ${tr('to', 'à', 'لـ')} ${tx.recipientName}` : '')}
                                         </Text>
                                         <Text style={[styles.transactionDate, { color: colors.textMuted, fontSize: 10 }]}>
                                             {tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleDateString() : '...'}
@@ -799,11 +833,11 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
     const renderHistory = () => (
         <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{tr('Transaction History', 'Historique', 'سجل المعاملات')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{tr('Transaction History', 'Historique', 'تاريخ العمليات')}</Text>
             {transactions.length === 0 ? (
                 <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.5 }}>
                     <History size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
-                    <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No transactions yet', 'Aucune transaction', 'لا توجد معاملات بعد')}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 14 }}>{tr('No transactions yet', 'Aucune transaction', 'ما عملت حتى عملية لتوا')}</Text>
                 </View>
             ) : (
                 transactions.map((tx: any) => (
@@ -825,28 +859,28 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                         <View style={styles.transactionInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Text style={[styles.transactionTitle, { color: colors.foreground }]}>
-                                    {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'إعادة شحن') :
-                                        tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'سحب') :
-                                            tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل مرسل') :
-                                                tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'تحويل مستلم') :
+                                    {tx.type === 'recharge' ? tr('Recharge', 'Rechargement', 'شحن') :
+                                        tx.type === 'withdrawal' ? tr('Withdrawal', 'Retrait', 'جبدان') :
+                                            tx.type === 'transfer_sent' ? tr('Transfer Sent', 'Transfert Envoyé', 'تحويل تبعث') :
+                                                tx.type === 'transfer_received' ? tr('Transfer Received', 'Transfert Reçu', 'وصلك تحويل') :
                                                     tx.type === 'exchange' ? tr('Exchange', 'Échange', 'تبادل') :
-                                                        tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'هدية مستلمة') :
-                                                            tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'هدية مرسلة') :
-                                                                tr('Transaction', 'Transaction', 'معاملة')}
+                                                        tx.type === 'gift_received' ? tr('Gift Received', 'Cadeau Reçu', 'وصلتك هدية') :
+                                                            tx.type === 'gift_sent' ? tr('Gift Sent', 'Cadeau Envoyé', 'بعثت هدية') :
+                                                                tr('Transaction', 'Transaction', 'عملية')}
                                 </Text>
                                 <Text style={[styles.transactionAmount, { color: (tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '#EF4444' : '#10B981' }]}>
                                     {(tx.type === 'withdrawal' || tx.type === 'gift_sent' || tx.type === 'transfer_sent') ? '-' : '+'}
                                     {tx.type === 'recharge' ? `${tx.amountCoins || tx.amount || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
                                         tx.type === 'withdrawal' ? `${(tx.amountTND || 0).toFixed(2)} TND` :
                                             tx.type === 'exchange' ? `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}` :
-                                                tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'ماس')}` :
-                                                    tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'ماس')}` :
+                                                tx.type === 'gift_received' ? `${tx.amountDiamonds || 0} ${tr('Diamonds', 'Diamants', 'جوهرة')}` :
+                                                    tx.type === 'transfer_sent' || tx.type === 'transfer_received' ? `${tx.amount || 0} ${tx.currency === 'coins' ? tr('Coins', 'Pièces', 'عملة') : tr('Diamonds', 'Diamants', 'جوهرة')}` :
                                                         `${tx.amountCoins || 0} ${tr('Coins', 'Pièces', 'عملة')}`}
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                                 <Text style={[styles.transactionDate, { color: colors.textMuted }]}>
-                                    {tx.description || (tx.type === 'gift_received' ? `${tx.giftName} ${tr('from', 'de', 'من')} ${tx.senderName}` : tx.type === 'gift_sent' ? `${tx.giftName} ${tr('to', 'à', 'إلى')} ${tx.recipientName}` : '')}
+                                    {tx.description || (tx.type === 'gift_received' ? `${tx.giftName} ${tr('from', 'de', 'من')} ${tx.senderName}` : tx.type === 'gift_sent' ? `${tx.giftName} ${tr('to', 'à', 'لـ')} ${tx.recipientName}` : '')}
                                 </Text>
                                 <Text style={[styles.transactionDate, { color: colors.textMuted, fontSize: 10 }]}>
                                     {tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleDateString() : '...'}
@@ -894,7 +928,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { maxHeight: keyboardOpen ? "95%" : "65%" }, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Exchange Assets', 'Échanger des Actifs', 'تبادل الأصول')}</Text>
+                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Exchange Assets', 'Échanger des Actifs', 'تبديل الرصيد')}</Text>
                             <TouchableOpacity onPress={() => setShowExchangeModal(false)}>
                                 <X size={24} color={colors.foreground} />
                             </TouchableOpacity>
@@ -939,7 +973,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                     >
                                         <View>
                                             <Text style={[styles.balanceLabel, { fontSize: 12, marginBottom: 4 }]}>
-                                                {exchangeType === 'diamondsToCoins' ? tr('Diamond Balance', 'Solde de Diamants', 'رصيد الألماس') : tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات')}
+                                                {exchangeType === 'diamondsToCoins' ? tr('Diamond Balance', 'Solde de Diamants', 'رصيد الجواهر') : tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات')}
                                             </Text>
                                             <View style={styles.balanceRow}>
                                                 {exchangeType === 'diamondsToCoins' ? <Gem size={22} color="#FFF" style={{ marginRight: 6 }} /> : <Coins size={22} color="#FFF" style={{ marginRight: 6 }} />}
@@ -956,7 +990,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
                                 <View style={{ marginBottom: 20 }}>
                                     <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
-                                        {exchangeType === 'diamondsToCoins' ? tr('Amount of Diamonds to Send', 'Montant de Diamants à Envoyer', 'مبلغ الألماس للإرسال') : tr('Amount of Coins to Send', 'Montant de Pièces à Envoyer', 'مبلغ العملات للإرسال')}
+                                        {exchangeType === 'diamondsToCoins' ? tr('Amount of Diamonds to Send', 'Montant de Diamants à Envoyer', 'قداش من جوهرة تحب تبعث') : tr('Amount of Coins to Send', 'Montant de Pièces à Envoyer', 'قداش من عملة تحب تبعث')}
                                     </Text>
                                     <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
                                         <TextInput
@@ -975,7 +1009,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
                                 <View style={[styles.exchangeReview, { padding: 15, marginBottom: 15 }]}>
                                     <View style={{ alignItems: 'center', flex: 1 }}>
-                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('From', 'De', 'من')}</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('From', 'De', 'مـ')}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.foreground }}>{exchangeAmount || '0'}</Text>
                                             {exchangeType === 'diamondsToCoins' ? <Gem size={14} color="#8B5CF6" style={{ marginLeft: 4 }} /> : <Coins size={14} color="#F59E0B" style={{ marginLeft: 4 }} />}
@@ -985,7 +1019,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                     <ArrowRight size={18} color={colors.textMuted} />
 
                                     <View style={{ alignItems: 'center', flex: 1 }}>
-                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('You Get', 'Vous recevez', 'سوف تستلم')}</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 4 }}>{tr('You Get', 'Vous recevez', 'باش تاخو')}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#10B981' }}>
                                                 {exchangeType === 'diamondsToCoins' ? (parseInt(exchangeAmount) || 0) : Math.ceil((parseInt(exchangeAmount) || 0) * 0.7)}
@@ -998,7 +1032,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                 {exchangeType === 'coinsToDiamonds' && (
                                     <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', padding: 10, borderRadius: 12, marginBottom: 20 }}>
                                         <Text style={{ color: '#EF4444', fontSize: 10, textAlign: 'center', lineHeight: 14 }}>
-                                            ⚠️ {tr('30% conversion fee applied when converting Coins to Diamonds.', 'Frais de conversion de 30% appliqués lors de la conversion de pièces en diamants.', 'يتم تطبيق رسوم تحويل بنسبة 30٪ عند تحويل العملات إلى ماس.')}
+                                            ⚠️ {tr('30% conversion fee applied when converting Coins to Diamonds.', 'Frais de conversion de 30% appliqués lors de la conversion de pièces en diamants.', 'فما 30% معاليم كي تبدل العملات لجوهرات.')}
                                         </Text>
                                     </View>
                                 )}
@@ -1008,7 +1042,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                     onPress={handleConfirmExchange}
                                     disabled={loading || !exchangeAmount}
                                 >
-                                    <Text style={[styles.confirmBtnText, { fontSize: 15 }]}>{loading ? tr('Processing...', 'Traitement...', 'جاري التحميل...') : tr('Confirm Exchange', 'Confirmer l\'Échange', 'تأكيد التبادل')}</Text>
+                                    <Text style={[styles.confirmBtnText, { fontSize: 15 }]}>{loading ? tr('Processing...', 'Traitement...', 'يصب...') : tr('Confirm Exchange', 'Confirmer l\'Échange', 'أكد التبديل')}</Text>
                                 </TouchableOpacity>
                             </ScrollView>
                         </KeyboardAvoidingView>
@@ -1027,7 +1061,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
                     <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', maxHeight: keyboardOpen ? "97%" : "75%" }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Transfer Sold', 'Transférer Solde', 'تحويل الرصيد')}</Text>
+                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{tr('Transfer Balance', 'Transférer Solde', 'حول رصيدك')}</Text>
                             <TouchableOpacity onPress={() => {
                                 setShowTransferModal(false);
                                 setSelectedUserForTransfer(null);
@@ -1047,19 +1081,19 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         style={[styles.tab, { height: '100%' }, transferModalTab === 'search' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
                                         onPress={() => setTransferModalTab('search')}
                                     >
-                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'search' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Search', 'Chercher', 'بحث')}</Text>
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'search' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Search', 'Chercher', 'لوج')}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[styles.tab, { height: '100%' }, transferModalTab === 'friends' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
                                         onPress={() => setTransferModalTab('friends')}
                                     >
-                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'friends' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Friends', 'Amis', 'أصدقاء')}</Text>
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'friends' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Friends', 'Amis', 'الأصحاب')}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[styles.tab, { height: '100%' }, transferModalTab === 'requests' && { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#FFF' }]}
                                         onPress={() => setTransferModalTab('requests')}
                                     >
-                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'requests' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Requests', 'Demandes', 'طلبات')}</Text>
+                                        <Text style={[styles.tabText, { fontSize: 13, color: transferModalTab === 'requests' ? colors.foreground : (isDark ? '#BBB' : '#666') }]}>{tr('Requests', 'Demandes', 'الطلبات')}</Text>
                                         {incomingRequests.length > 0 && (
                                             <View style={{ position: 'absolute', top: 8, right: 12, backgroundColor: '#EF4444', width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: isDark ? '#1C1C1E' : '#FFF' }} />
                                         )}
@@ -1072,7 +1106,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                             <Search size={20} color={colors.textMuted} />
                                             <TextInput
                                                 style={[styles.searchInput, { color: colors.foreground }]}
-                                                placeholder={tr('Search user by name...', 'Rechercher par nom...', 'بحث عن طريق الاسم...')}
+                                                placeholder={tr('Search user by name...', 'Rechercher par nom...', 'لوج بالاسم...')}
                                                 placeholderTextColor={colors.textMuted}
                                                 value={transferSearchQuery}
                                                 onChangeText={handleSearchUsers}
@@ -1082,7 +1116,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
                                         <ScrollView style={{ marginTop: 10 }}>
                                             {transferSearchResults.length === 0 && transferSearchQuery.length >= 2 && !isSearching ? (
-                                                <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 20 }}>{tr('No users found', 'Aucun utilisateur trouvé', 'لم يتم العثور على مستخدمين')}</Text>
+                                                <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 20 }}>{tr('No users found', 'Aucun utilisateur trouvé', 'ما لقينا حد')}</Text>
                                             ) : (
                                                 transferSearchResults.map((u) => (
                                                     <TouchableOpacity
@@ -1114,7 +1148,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         {friendsList.length === 0 ? (
                                             <View style={{ alignItems: 'center', marginTop: 40 }}>
                                                 <Users size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
-                                                <Text style={{ color: colors.textMuted }}>{tr('No friends yet', 'Aucun ami pour le moment', 'لا يوجد أصدقاء بعد')}</Text>
+                                                <Text style={{ color: colors.textMuted }}>{tr('No friends yet', 'Aucun ami pour le moment', 'ما عندكش أصحاب توا')}</Text>
                                             </View>
                                         ) : (
                                             friendsList.map((u) => (
@@ -1161,7 +1195,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         {incomingRequests.length === 0 ? (
                                             <View style={{ alignItems: 'center', marginTop: 40 }}>
                                                 <User size={48} color={colors.textMuted} strokeWidth={1} style={{ marginBottom: 12 }} />
-                                                <Text style={{ color: colors.textMuted }}>{tr('No pending requests', 'Aucune demande en attente', 'لا توجد طلبات معلقة')}</Text>
+                                                <Text style={{ color: colors.textMuted }}>{tr('No pending requests', 'Aucune demande en attente', 'ما فمة حتى طلب')}</Text>
                                             </View>
                                         ) : (
                                             incomingRequests.map((req) => (
@@ -1176,7 +1210,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                         </View>
                                                         <View style={{ marginLeft: 12 }}>
                                                             <Text style={[styles.userNameText, { color: colors.foreground }]}>{req.senderName}</Text>
-                                                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{tr('Wants to be your friend', 'Veut être votre ami', 'يريد أن يكون صديقك')}</Text>
+                                                            <Text style={{ fontSize: 11, color: colors.textMuted }}>{tr('Wants to be your friend', 'Veut être votre ami', 'يحب يولي صاحبك')}</Text>
                                                         </View>
                                                     </View>
                                                     <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1226,7 +1260,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         >
                                             <User size={18} color="#3B82F6" />
                                             <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6', marginLeft: 8 }}>
-                                                {tr('View Profile', 'Voir Profil', 'عرض الملف')}
+                                                {tr('View Profile', 'Voir Profil', 'شوف البروفايل')}
                                             </Text>
                                         </TouchableOpacity>
 
@@ -1236,12 +1270,12 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                 onPress={() => handleDeleteFriend(selectedUserForTransfer.uid, selectedUserForTransfer.fullName)}
                                             >
                                                 <Trash size={18} color="#EF4444" />
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444', marginLeft: 8 }}>{tr('Unfriend', 'Supprimer', 'حذف')}</Text>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444', marginLeft: 8 }}>{tr('Unfriend', 'Supprimer', 'نحي الصاحب')}</Text>
                                             </TouchableOpacity>
                                         ) : sentRequests.some(r => r.receiverId === selectedUserForTransfer.uid) ? (
                                             <View style={[styles.profileActionBtn, { backgroundColor: 'rgba(100, 100, 100, 0.1)' }]}>
                                                 <RefreshCw size={18} color={colors.textMuted} />
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>{tr('Requested', 'Demandé', 'تم الطلب')}</Text>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, marginLeft: 8 }}>{tr('Requested', 'Demandé', 'بعثتلو طلب')}</Text>
                                             </View>
                                         ) : (
                                             <TouchableOpacity
@@ -1249,16 +1283,16 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                 onPress={() => handleSendFriendRequest(selectedUserForTransfer)}
                                             >
                                                 <Users size={18} color="#F59E0B" />
-                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 8 }}>{tr('Add Friend', 'Ajouter Ami', 'إضافة صديق')}</Text>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 8 }}>{tr('Add Friend', 'Ajouter Ami', 'زيد صاحب')}</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>
 
                                     {showTargetProfile && (
                                         <Animatable.View animation="fadeIn" style={[styles.profileDetailsBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
-                                            <Text style={[styles.profileDetailsTitle, { color: colors.foreground }]}>{tr('User Info', 'Infos Utilisateur', 'معلومات المستخدم')}</Text>
+                                            <Text style={[styles.profileDetailsTitle, { color: colors.foreground }]}>{tr('User Info', 'Infos Utilisateur', 'معلومات الحريف')}</Text>
                                             <View style={styles.profileDetailRow}>
-                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{tr('Member Since', 'Membre depuis', 'عضو منذ')}</Text>
+                                                <Text style={{ fontSize: 12, color: colors.textMuted }}>{tr('Member Since', 'Membre منذ', 'عضو مـ')}</Text>
                                                 <Text style={{ fontSize: 12, fontWeight: '700', color: colors.foreground }}>
                                                     {selectedUserForTransfer.createdAt ? new Date(selectedUserForTransfer.createdAt.seconds * 1000).toLocaleDateString() : '---'}
                                                 </Text>
@@ -1286,12 +1320,12 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                 onPress={() => setTransferType('diamonds')}
                                             >
                                                 <Gem size={18} color={transferType === 'diamonds' ? '#FFF' : '#8B5CF6'} fill={transferType === 'diamonds' ? '#FFF' : 'transparent'} />
-                                                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: '700', color: transferType === 'diamonds' ? '#FFF' : '#8B5CF6' }}>{tr('Diamonds', 'Diamants', 'ماس')}</Text>
+                                                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: '700', color: transferType === 'diamonds' ? '#FFF' : '#8B5CF6' }}>{tr('Diamonds', 'Diamants', 'جواهر')}</Text>
                                             </TouchableOpacity>
                                         </View>
 
                                         <Text style={[styles.inputLabel, { color: colors.textMuted, marginTop: 25 }]}>
-                                            {tr('Amount to Transfer', 'Montant à Transférer', 'المبلغ المراد تحويله')}
+                                            {tr('Amount to Transfer', 'Montant à Transférer', 'قداش باش تحول')}
                                         </Text>
                                         <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginTop: 8 }]}>
                                             <TextInput
@@ -1329,8 +1363,8 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                         <Send size={18} color="#FFF" style={{ marginRight: 10 }} />
                                                         <Text style={[styles.confirmBtnText, { color: loading || !transferAmount || !profileData?.friends?.includes(selectedUserForTransfer.uid) ? colors.textMuted : '#FFF' }]}>
                                                             {!profileData?.friends?.includes(selectedUserForTransfer.uid)
-                                                                ? tr('Friends Only', 'Amis Uniquement', 'للأصدقاء فقط')
-                                                                : tr('Confirm Transfer', 'Confirmer Transfert', 'تأكيد التحويل')
+                                                                ? tr('Friends Only', 'Amis Uniquement', 'للصحاب بركة')
+                                                                : tr('Confirm Transfer', 'Confirmer Transfert', 'أكد التحويل')
                                                             }
                                                         </Text>
                                                     </>
@@ -1342,7 +1376,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                             style={{ alignSelf: 'center', marginTop: 20 }}
                                             onPress={() => setSelectedUserForTransfer(null)}
                                         >
-                                            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{tr('Back to Search', 'Retour à la recherche', 'العودة للبحث')}</Text>
+                                            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{tr('Back to Search', 'Retour à la recherche', 'ارجع فركس')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>

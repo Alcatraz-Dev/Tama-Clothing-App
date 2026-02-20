@@ -105,7 +105,8 @@ import {
   MoreVertical,
   DownloadCloud,
   ArrowRightLeft,
-  ArrowRight
+  ArrowRight,
+  Gem
 } from 'lucide-react-native';
 import { Share } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -125,6 +126,7 @@ import AdminKYCScreen from './src/screens/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
 import FeedScreen from './src/screens/FeedScreen';
+import FriendsScreen from './src/screens/FriendsScreen';
 import CameraScreen from './src/screens/Camera';
 
 // New extracted imports
@@ -137,6 +139,8 @@ import { updateProductRating } from './src/utils/productUtils';
 import Translations from './src/translations';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import MessagesScreen from './src/screens/MessagesScreen';
+import DirectMessageScreen from './src/screens/DirectMessageScreen';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 if (!(isExpoGo && Platform.OS === 'android')) {
@@ -201,6 +205,7 @@ export default function App() {
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [ads, setAds] = useState<any[]>([]);
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
@@ -590,6 +595,18 @@ export default function App() {
         count += (doc.data()[`unreadCount_${user.uid}`] || 0);
       });
       setTotalUnread(count);
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db, 'users', user.uid, 'friendRequests'),
+      where('status', '==', 'pending')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingRequestsCount(snapshot.size);
     });
     return () => unsubscribe();
   }, [user?.uid]);
@@ -1274,6 +1291,27 @@ export default function App() {
       case 'Settings': return <SettingsScreen onBack={() => setActiveTab('Profile')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(screen: string) => setActiveTab(screen)} t={t} user={user} />;
       case 'KYC': return <KYCScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} updateProfile={updateProfileData} theme={theme} t={t} language={language} />;
       case 'Camera': return <CameraScreen onBack={() => setActiveTab('Feed')} onNavigate={(screen: string) => setActiveTab(screen)} t={t} language={language} theme={theme} user={user} />;
+      case 'Messages': return <MessagesScreen
+        user={user}
+        onBack={() => setActiveTab('Profile')}
+        onSelectChat={async (chat: any, otherId: string) => {
+          const userDoc = await getDoc(doc(db, 'users', otherId));
+          if (userDoc.exists()) {
+            setSelectedChatUser({ uid: otherId, ...userDoc.data() });
+            setActiveTab('DirectMessage');
+          }
+        }}
+        t={t}
+        tr={tr}
+      />;
+      case 'DirectMessage': return <DirectMessageScreen
+        user={user}
+        targetUser={selectedChatUser}
+        onBack={() => setActiveTab('Messages')}
+        t={t}
+        language={language}
+        currentUserData={profileData}
+      />;
       case 'Wallet': return <WalletScreen onBack={() => setActiveTab('Profile')} theme={theme} t={t} profileData={profileData} user={user} language={language} onNavigate={(screen, params) => {
         if (screen === 'PublicProfile') {
           setTargetUserProfile(params);
@@ -1283,6 +1321,23 @@ export default function App() {
           setActiveTab(screen);
         }
       }} />;
+      case 'Friends': return <FriendsScreen
+        onBack={() => setActiveTab('Profile')}
+        user={user}
+        profileData={profileData}
+        theme={theme}
+        t={t}
+        language={language}
+        onNavigate={(screen, params) => {
+          if (screen === 'PublicProfile') {
+            setTargetUserProfile(params);
+            setPreviousTab('Friends');
+            setActiveTab('PublicProfile');
+          } else {
+            setActiveTab(screen);
+          }
+        }}
+      />;
       case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} />;
       case 'PrivacyPolicy': return <PrivacyPolicyScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'TermsOfService': return <TermsOfServiceScreen onBack={() => setActiveTab('Settings')} t={t} />;
@@ -1377,6 +1432,7 @@ export default function App() {
           setSelectedCollab(collab);
           setActiveTab('CollabDetail');
         }}
+        onBack={() => setActiveTab('Home')}
       />;
       case 'CollabDetail': return <CollaborationDetailScreen
         collab={selectedCollab}
@@ -1394,6 +1450,7 @@ export default function App() {
         profileData={profileData}
         onJoinLive={handleJoinLive}
         onStartLive={handleStartLive}
+        tr={tr}
       />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
@@ -1459,7 +1516,7 @@ export default function App() {
               <>
                 {renderMainContent()}
 
-                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && (
+                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'Messages' && activeTab !== 'DirectMessage' && (
                   <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
                     <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
                       <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
@@ -1489,7 +1546,7 @@ export default function App() {
                       <TouchableOpacity onPress={() => setActiveTab('Profile')} style={styles.tabItem}>
                         <View>
                           <User size={22} color={activeTab === 'Profile' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Profile' ? 2.5 : 2} />
-                          {totalUnread > 0 && <View style={[styles.cartBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.cartBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text></View>}
+                          {(totalUnread + pendingRequestsCount) > 0 && <View style={[styles.cartBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.cartBadgeText}>{(totalUnread + pendingRequestsCount) > 99 ? '99+' : (totalUnread + pendingRequestsCount)}</Text></View>}
                         </View>
                         <Text style={[styles.tabLabel, activeTab === 'Profile' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('me')}</Text>
                       </TouchableOpacity>
@@ -2671,6 +2728,101 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   const [expandedReplies, setExpandedReplies] = useState<string[]>([]);
   const profileScrollRef = useRef<any>(null);
 
+  // Quick Wallet States
+  const [showQuickExchange, setShowQuickExchange] = useState(false);
+  const [exchangeType, setExchangeType] = useState<'diamondsToCoins' | 'coinsToDiamonds'>('diamondsToCoins');
+  const [exchangeAmount, setExchangeAmount] = useState('');
+  const [isProcessingExchange, setIsProcessingExchange] = useState(false);
+  const [transferSearchQuery, setTransferSearchQuery] = useState('');
+  const [transferSearchResults, setTransferSearchResults] = useState<any[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [selectedTransferUser, setSelectedTransferUser] = useState<any>(null);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [friendRequestCount, setFriendRequestCount] = useState(0);
+
+  const handleConfirmQuickExchange = async () => {
+    const amount = parseInt(exchangeAmount);
+    if (!amount || amount <= 0) {
+      Alert.alert(t('error'), tr('Veuillez entrer un montant valide', 'يرجى إدخال مبلغ صحيح', 'Please enter a valid amount'));
+      return;
+    }
+    if (!user?.uid) return;
+    setIsProcessingExchange(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) throw "User does not exist!";
+        const data = userDoc.data();
+        const wallet = data.wallet || { coins: 0, diamonds: 0 };
+        if (exchangeType === 'diamondsToCoins') {
+          if ((wallet.diamonds || 0) < amount) throw tr("Diamants insuffisants", "الألماس غير كافٍ", "Insufficient diamonds");
+          transaction.update(userRef, {
+            'wallet.diamonds': increment(-amount),
+            'wallet.coins': increment(amount)
+          });
+        } else {
+          const totalRequired = Math.ceil(amount * 1.3);
+          if ((wallet.coins || 0) < totalRequired) throw tr("Pièces insuffisantes", "العملات غير كافية", "Insufficient coins");
+          transaction.update(userRef, {
+            'wallet.coins': increment(-totalRequired),
+            'wallet.diamonds': increment(amount)
+          });
+        }
+        const transactionRef = doc(collection(db, 'users', user.uid, 'transactions'));
+        transaction.set(transactionRef, {
+          type: 'exchange',
+          exchangeType,
+          amount,
+          description: exchangeType === 'diamondsToCoins' ? 'Diamonds to Coins' : 'Coins to Diamonds',
+          timestamp: serverTimestamp(),
+          status: 'completed'
+        });
+      });
+      Alert.alert(t('successTitle'), tr('Échange réussi !', 'تم التبادل بنجاح!', 'Exchange successful!'));
+      setShowQuickExchange(false);
+      setExchangeAmount('');
+    } catch (err: any) {
+      Alert.alert(t('error'), err.toString());
+    } finally { setIsProcessingExchange(false); }
+  };
+
+  const handleSearchUsers = async (q: string) => {
+    setTransferSearchQuery(q);
+    if (q.length < 3) { setTransferSearchResults([]); return; }
+    setIsSearchingUsers(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const qSnap = await getDocs(query(usersRef, where('fullName', '>=', q), where('fullName', '<=', q + '\uf8ff'), limit(20)));
+      setTransferSearchResults(qSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(u => u.id !== user?.uid));
+    } catch (e) { console.error(e); } finally { setIsSearchingUsers(false); }
+  };
+
+  const handleQuickTransfer = async () => {
+    const amount = parseInt(transferAmount);
+    if (!amount || amount <= 0 || !selectedTransferUser) return;
+    setIsProcessingExchange(true);
+    try {
+      const senderRef = doc(db, 'users', user.uid);
+      const receiverRef = doc(db, 'users', selectedTransferUser.id);
+      await runTransaction(db, async (transaction) => {
+        const senderDoc = await transaction.get(senderRef);
+        if (((senderDoc.data()?.wallet?.diamonds || 0)) < amount) throw "Insufficient diamonds";
+        transaction.update(senderRef, { 'wallet.diamonds': increment(-amount) });
+        transaction.update(receiverRef, { 'wallet.diamonds': increment(amount) });
+        const sTrans = doc(collection(db, 'users', user.uid, 'transactions'));
+        transaction.set(sTrans, { type: 'transfer_out', recipientId: selectedTransferUser.id, recipientName: selectedTransferUser.fullName, amount, timestamp: serverTimestamp(), status: 'completed' });
+        const rTrans = doc(collection(db, 'users', selectedTransferUser.id, 'transactions'));
+        transaction.set(rTrans, { type: 'transfer_in', senderId: user.uid, senderName: currentUserProfileData?.fullName || user.displayName, amount, timestamp: serverTimestamp(), status: 'completed' });
+      });
+      Alert.alert("Success", "Transfer completed");
+      setShowTransferModal(false);
+      setSelectedTransferUser(null);
+      setTransferAmount('');
+    } catch (e: any) { Alert.alert("Error", e.toString()); } finally { setIsProcessingExchange(false); }
+  };
+
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(
@@ -2807,6 +2959,15 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
       return () => unsubscribe();
     }
   }, [selectedWork, targetUidProp, profileData?.uid, profileData?.id, isOwnProfile, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !isOwnProfile) return;
+    const q = query(collection(db, 'users', user.uid, 'friendRequests'), where('status', '==', 'pending'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setFriendRequestCount(snapshot.size);
+    });
+    return () => unsubscribe();
+  }, [user?.uid, isOwnProfile]);
 
   const handleComment = async () => {
     if (!user || !commentText.trim() || !selectedWork) return;
@@ -3428,7 +3589,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setProfileTab('Messages')}
+              onPress={() => setActiveTab('Messages')}
               style={{
                 flex: 1,
                 flexDirection: 'row',
@@ -3476,6 +3637,62 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
           {profileTab === 'Menu' && isOwnProfile && (
             <View>
+              {/* Wallet Hero Card */}
+              <View style={{ marginBottom: 25, marginTop: 10 }}>
+                <LinearGradient
+                  colors={theme === 'dark' ? ['#1A1A24', '#0D0D14'] : ['#FFFFFF', '#F9F9FB']}
+                  style={{ borderRadius: 28, padding: 24, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
+                    <View>
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: colors.textMuted, letterSpacing: 1.5, marginBottom: 8 }}>{tr('SOLDE DU PORTEFEUILLE', 'رصيد المحفظة', 'WALLET BALANCE').toUpperCase()}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 32, fontWeight: '900', color: colors.foreground }}>{((profileData?.wallet?.coins || 0) + (profileData?.wallet?.diamonds || 0)).toLocaleString()}</Text>
+                        <Sparkles size={20} color="#F59E0B" style={{ marginLeft: 12 }} />
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setActiveTab('Wallet')}
+                      style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                    >
+                      <Wallet size={22} color={colors.foreground} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+                    <View style={{ flex: 1, backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.05)', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.15)' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <Coins size={18} color="#F59E0B" fill="#F59E0B" />
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: colors.foreground }}>{profileData?.wallet?.coins || 0}</Text>
+                      </View>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>{tr('PIÈCES', 'عملات', 'COINS')}</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: theme === 'dark' ? 'rgba(139, 92, 246, 0.08)' : 'rgba(139, 92, 246, 0.05)', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.15)' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <Gem size={18} color="#8B5CF6" fill="#8B5CF6" />
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: colors.foreground }}>{profileData?.wallet?.diamonds || 0}</Text>
+                      </View>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5 }}>{tr('DIAMANTS', 'ألماس', 'DIAMONDS')}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity
+                      onPress={() => setShowQuickExchange(true)}
+                      style={{ flex: 1, height: 50, borderRadius: 16, backgroundColor: colors.foreground, alignItems: 'center', justifyContent: 'center', shadowColor: colors.foreground, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}
+                    >
+                      <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>{tr('ÉCHANGER', 'تبادل', 'EXCHANGE')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setShowTransferModal(true)}
+                      style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}
+                    >
+                      <Send size={20} color={colors.foreground} />
+                    </TouchableOpacity>
+                  </View>
+                </LinearGradient>
+              </View>
+
               {followedList.length > 0 && (
                 <View style={{ marginTop: 10, marginBottom: 25 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 5, marginBottom: 15 }}>
@@ -3684,6 +3901,54 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                     <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('savedItems')}</Text>
                   </View>
                   <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
+                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+                  {tr('CONNEXIONS', 'علاقات', 'CONNECTIONS')}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                  onPress={() => setActiveTab('Messages')}
+                >
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                      <MessageCircle size={20} color={colors.foreground} strokeWidth={2} />
+                    </View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                      {tr('Messages', 'الرسائل', 'Messages')}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {totalUnread > 0 && (
+                      <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                      </View>
+                    )}
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                  onPress={() => onNavigate('Friends')}
+                >
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                      <UsersIcon size={20} color={colors.foreground} strokeWidth={2} />
+                    </View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                      {tr('Amis & Demandes', 'أصحابي و الطلبات', 'Friends & Requests')}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {friendRequestCount > 0 && (
+                      <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{friendRequestCount}</Text>
+                      </View>
+                    )}
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </View>
                 </TouchableOpacity>
 
                 <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
@@ -4078,47 +4343,6 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             </View>
           )}
 
-          {profileTab === 'Messages' && (
-            <View style={{ marginBottom: 20 }}>
-              {isOwnProfile ? (
-                selectedChatUser ? (
-                  <View>
-                    <TouchableOpacity
-                      onPress={() => setSelectedChatUser(null)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginBottom: 15,
-                        gap: 8,
-                        paddingHorizontal: 5,
-                        marginTop: 5
-                      }}
-                    >
-                      <ChevronLeft size={18} color={colors.accent} />
-                      <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>{tr('RETOUR', 'رجوع', 'BACK')}</Text>
-                    </TouchableOpacity>
-                    <DirectChatView user={user} targetUser={selectedChatUser} theme={theme} colors={colors} t={t} language={language} currentUserData={profileData} profileScrollRef={profileScrollRef} />
-                  </View>
-                ) : (
-                  <DirectInboxView
-                    user={user}
-                    theme={theme}
-                    colors={colors}
-                    t={t}
-                    tr={tr}
-                    onSelectChat={async (chat: any, otherId: string) => {
-                      const userDoc = await getDoc(doc(db, 'users', otherId));
-                      if (userDoc.exists()) {
-                        setSelectedChatUser({ uid: otherId, ...userDoc.data() });
-                      }
-                    }}
-                  />
-                )
-              ) : (
-                <DirectChatView user={user} targetUser={profileData} theme={theme} colors={colors} t={t} language={language} />
-              )}
-            </View>
-          )}
         </Animatable.View>
       </Animated.ScrollView>
 
@@ -4563,6 +4787,135 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             )}
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Quick Exchange Modal */}
+      <Modal visible={showQuickExchange} transparent animationType="fade">
+        <BlurView intensity={20} style={StyleSheet.absoluteFill} tint="dark" />
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: colors.background, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground }}>{tr('Échanger des actifs', 'تبادل الأصول', 'Exchange Assets')}</Text>
+              <TouchableOpacity onPress={() => setShowQuickExchange(false)}><X size={20} color={colors.foreground} /></TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7', borderRadius: 15, padding: 4, marginBottom: 20 }}>
+              <TouchableOpacity
+                onPress={() => setExchangeType('diamondsToCoins')}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: exchangeType === 'diamondsToCoins' ? colors.foreground : 'transparent', alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: exchangeType === 'diamondsToCoins' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted }}>{tr('DIAMANTS → PIÈCES', 'ألماس ← عملات', 'DIAMONDS → COINS')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setExchangeType('coinsToDiamonds')}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: exchangeType === 'coinsToDiamonds' ? colors.foreground : 'transparent', alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: exchangeType === 'coinsToDiamonds' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted }}>{tr('PIÈCES → DIAMANTS', 'عملات ← ألماس', 'COINS → DIAMONDS')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={{ backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7', borderRadius: 15, padding: 15, color: colors.foreground, fontSize: 16, fontWeight: '700', marginBottom: 15 }}
+              placeholder={tr('Montant à échanger', 'المبلغ للتبادل', 'Amount to exchange')}
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={exchangeAmount}
+              onChangeText={setExchangeAmount}
+            />
+
+            {exchangeType === 'coinsToDiamonds' && exchangeAmount !== '' && (
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 15, textAlign: 'center' }}>
+                {tr('Coût total (avec 30% frais):', 'التكلفة الإجمالية (مع 30% رسوم):', 'Total cost (incl. 30% fee):')} <Text style={{ color: colors.foreground, fontWeight: '900' }}>{Math.ceil(parseInt(exchangeAmount) * 1.3) || 0} {tr('Coins', 'عملات', 'Coins')}</Text>
+              </Text>
+            )}
+
+            <TouchableOpacity
+              disabled={isProcessingExchange || !exchangeAmount}
+              onPress={handleConfirmQuickExchange}
+              style={{ backgroundColor: colors.foreground, borderRadius: 15, paddingVertical: 15, alignItems: 'center' }}
+            >
+              {isProcessingExchange ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '900' }}>{tr('CONFIRMER', 'تأكيد', 'CONFIRM')}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Transfer Diamonds Modal */}
+      <Modal visible={showTransferModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, minHeight: height * 0.7 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: colors.foreground }}>{tr('Transférer des Diamants', 'تحويل الألماس', 'Transfer Diamonds')}</Text>
+              <TouchableOpacity onPress={() => setShowTransferModal(false)}><X size={24} color={colors.foreground} /></TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7', borderRadius: 15, paddingHorizontal: 15, height: 50, alignItems: 'center', marginBottom: 20 }}>
+              <Search size={20} color={colors.textMuted} />
+              <TextInput
+                style={{ flex: 1, marginLeft: 10, color: colors.foreground, fontWeight: '600' }}
+                placeholder={tr('Rechercher un utilisateur...', 'بحث عن مستخدم...', 'Search user...')}
+                placeholderTextColor={colors.textMuted}
+                value={transferSearchQuery}
+                onChangeText={handleSearchUsers}
+              />
+            </View>
+
+            {selectedTransferUser ? (
+              <View style={{ backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Image source={selectedTransferUser.avatarUrl ? { uri: selectedTransferUser.avatarUrl } : APP_ICON} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                    <View>
+                      <Text style={{ color: colors.foreground, fontWeight: '800' }}>{selectedTransferUser.fullName}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 11 }}>{selectedTransferUser.displayName}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedTransferUser(null)}><X size={18} color="#EF4444" /></TouchableOpacity>
+                </View>
+                <View style={{ marginTop: 20 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '800', marginBottom: 10 }}>{tr('MONTANT À TRANSFÉRER', 'المبلغ للتحويل', 'AMOUNT TO TRANSFER').toUpperCase()}</Text>
+                  <TextInput
+                    style={{ fontSize: 24, fontWeight: '900', color: colors.foreground, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 }}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={transferAmount}
+                    onChangeText={setTransferAmount}
+                  />
+                  <TouchableOpacity
+                    disabled={isProcessingExchange || !transferAmount}
+                    onPress={handleQuickTransfer}
+                    style={{ backgroundColor: colors.foreground, borderRadius: 15, paddingVertical: 15, alignItems: 'center', marginTop: 30 }}
+                  >
+                    <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '900' }}>{tr('ENVOYER DIAMANTS', 'إرسال الألماس', 'SEND DIAMONDS')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <FlatList
+                data={transferSearchResults}
+                keyExtractor={item => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => setSelectedTransferUser(item)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                  >
+                    <Image source={item.avatarUrl ? { uri: item.avatarUrl } : APP_ICON} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                    <View>
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>{item.fullName}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 11 }}>{item.displayName}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={() => (
+                  <View style={{ alignItems: 'center', marginTop: 50 }}>
+                    {isSearchingUsers ? <ActivityIndicator color={colors.accent} /> : <Text style={{ color: colors.textMuted }}>{transferSearchQuery ? tr('Aucun utilisateur trouvé', 'لم يتم العثور على مستخدم', 'No user found') : tr('Tapez au moins 3 caractères', 'اكتب 3 أحرف على الأقل', 'Type at least 3 characters')}</Text>}
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -12648,549 +13001,3 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
   );
 }
 
-
-function DirectChatView({ user, targetUser, theme, colors, t, language, currentUserData, profileScrollRef }: any) {
-  const [messages, setMessages] = useState<any[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  const chatId = [user?.uid, targetUser?.uid].sort().join('_');
-
-  useEffect(() => {
-    if (!chatId || !user?.uid) return;
-
-    const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
-
-    const unsubscribe = onSnapshot(q,
-      async (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setMessages(msgs);
-        setLoading(false);
-
-        // Mark unread messages as read
-        let hasUnread = false;
-        snapshot.docs.forEach(async (mDoc) => {
-          const data = mDoc.data();
-          if (data.senderId !== user.uid && !data.read) {
-            hasUnread = true;
-            try {
-              await updateDoc(doc(db, 'direct_chats', chatId, 'messages', mDoc.id), { read: true });
-            } catch (e) { }
-          }
-        });
-
-        // Reset unread count on the chat document
-        try {
-          await setDoc(doc(db, 'direct_chats', chatId), {
-            [`unreadCount_${user.uid}`]: 0
-          }, { merge: true });
-        } catch (e) { }
-
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-      },
-      (err) => {
-        console.error("DirectChatView Error:", err);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [chatId, user?.uid]);
-
-  const sendMessage = async () => {
-    if (!inputText.trim() || !user?.uid || !targetUser?.uid) return;
-    setSending(true);
-    const text = inputText.trim();
-    setInputText('');
-
-    try {
-      const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
-      const senderName = currentUserData?.fullName || currentUserData?.displayName || user.displayName || 'User';
-
-      await addDoc(messagesRef, {
-        text: text,
-        senderId: user.uid,
-        senderName: senderName,
-        timestamp: serverTimestamp(),
-        read: false
-      });
-
-      const chatDocRef = doc(db, 'direct_chats', chatId);
-      await setDoc(chatDocRef, {
-        lastMessage: text,
-        lastMessageTime: serverTimestamp(),
-        participants: [user.uid, targetUser.uid],
-        participantData: {
-          [user.uid]: { name: senderName, photo: currentUserData?.photoURL || currentUserData?.avatarUrl || user.photoURL || null },
-          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || targetUser.avatarUrl || null }
-        },
-        [`unreadCount_${targetUser.uid}`]: increment(1)
-      }, { merge: true });
-
-      // Notify target user
-      if (targetUser.expoPushToken) {
-        sendPushNotification(
-          targetUser.expoPushToken,
-          `Message de ${senderName}`,
-          text
-        );
-      }
-    } catch (e) {
-      console.error('Error sending DM:', e);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const pickMedia = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets && result.assets[0].uri) {
-      handleMediaUpload(result.assets[0].uri);
-    }
-  };
-
-  const handleMediaUpload = async (uri: string) => {
-    setUploading(true);
-    try {
-      const fileType = uri.split('.').pop()?.toLowerCase();
-      const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-      const cloudinaryUrl = await uploadImageToCloudinary(uri);
-
-      const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
-      const senderName = currentUserData?.fullName || currentUserData?.displayName || user.displayName || 'User';
-      const messageData: any = {
-        senderId: user.uid,
-        senderName: senderName,
-        timestamp: serverTimestamp(),
-        read: false
-      };
-
-      if (isVideo) messageData.videoUrl = cloudinaryUrl;
-      else messageData.imageUrl = cloudinaryUrl;
-
-      await addDoc(messagesRef, messageData);
-
-      const chatDocRef = doc(db, 'direct_chats', chatId);
-      await setDoc(chatDocRef, {
-        lastMessage: isVideo ? 'Vidéo 📹' : 'Image 📸',
-        lastMessageTime: serverTimestamp(),
-        participants: [user.uid, targetUser.uid],
-        participantData: {
-          [user.uid]: { name: senderName, photo: currentUserData?.photoURL || currentUserData?.avatarUrl || user.photoURL || null },
-          [targetUser.uid]: { name: targetUser.fullName || targetUser.displayName || 'User', photo: targetUser.photoURL || targetUser.avatarUrl || null }
-        },
-        [`unreadCount_${targetUser.uid}`]: increment(1)
-      }, { merge: true });
-
-      // Notify target user
-      if (targetUser.expoPushToken) {
-        sendPushNotification(
-          targetUser.expoPushToken,
-          `Message de ${senderName}`,
-          isVideo ? 'Vidéo 📹' : 'Image 📸'
-        );
-      }
-
-    } catch (error) {
-      console.error('DM media upload error:', error);
-      alert('Failed to upload media');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      style={{ height: 760, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 25, overflow: 'hidden', marginTop: 10 }}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={{ padding: 15, paddingBottom: 20 }}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        showsVerticalScrollIndicator={false}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
-        ) : messages.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: 100, paddingHorizontal: 40 }}>
-            <MessageCircle size={40} color={colors.textMuted} strokeWidth={1.5} />
-            <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 15, fontSize: 13, fontWeight: '600' }}>
-              Dites bonjour à {targetUser.fullName || targetUser.displayName || 'votre ami'} !
-            </Text>
-          </View>
-        ) : messages.map((m: any) => {
-          const isOwn = m.senderId === user.uid;
-          return (
-            <View key={m.id} style={{
-              flexDirection: 'row',
-              justifyContent: isOwn ? 'flex-end' : 'flex-start',
-              marginBottom: 15,
-              paddingHorizontal: 0
-            }}>
-              {!isOwn && (
-                <View style={{ marginRight: 8, alignSelf: 'flex-end' }}>
-                  {targetUser.avatarUrl || targetUser.photoURL ? (
-                    <Image source={{ uri: targetUser.avatarUrl || targetUser.photoURL }} style={{ width: 28, height: 28, borderRadius: 14 }} />
-                  ) : (
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted }}>
-                        {(targetUser.fullName || targetUser.displayName || 'A')[0].toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              <View style={{ maxWidth: '75%' }}>
-                <View style={{
-                  backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderRadius: 20,
-                  borderBottomRightRadius: isOwn ? 4 : 20,
-                  borderBottomLeftRadius: isOwn ? 20 : 4,
-                  borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
-                  borderColor: '#F2F2F7',
-                }}>
-                  {m.imageUrl ? (
-                    <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
-                      <Image source={{ uri: m.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
-                    </TouchableOpacity>
-                  ) : m.videoUrl ? (
-                    <View style={{ width: 200, height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
-                      <Video source={{ uri: m.videoUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
-                    </View>
-                  ) : (
-                    <Text style={{ color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 14, lineHeight: 20 }}>{m.text}</Text>
-                  )}
-                </View>
-                <Text style={{
-                  fontSize: 9,
-                  color: colors.textMuted,
-                  marginTop: 4,
-                  textAlign: isOwn ? 'right' : 'left',
-                  marginLeft: isOwn ? 0 : 4,
-                  marginRight: isOwn ? 4 : 0,
-                  opacity: 0.7
-                }}>
-                  {m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-        <View style={{
-          flexDirection: 'row',
-          paddingHorizontal: 16,
-          paddingTop: 12,
-          backgroundColor: theme === 'dark' ? '#121218' : '#FFF',
-          alignItems: 'center',
-          borderTopWidth: 1,
-          borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
-        }}>
-          <TouchableOpacity onPress={pickMedia} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-            {uploading ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <ImagePlay size={20} color={colors.textMuted} />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <View style={{
-            flex: 1,
-            flexDirection: 'row',
-            backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
-            borderRadius: 25,
-            alignItems: 'center',
-            paddingHorizontal: 15,
-            marginRight: 10,
-            borderWidth: 1,
-            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'transparent'
-          }}>
-            <TextInput
-              style={{
-                flex: 1,
-                backgroundColor: 'transparent',
-                color: colors.foreground,
-                fontSize: 14,
-                maxHeight: 80,
-                paddingVertical: 8
-              }}
-              placeholder="Écrire..."
-              placeholderTextColor={colors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              onFocus={() => {
-                setTimeout(() => {
-                  scrollViewRef.current?.scrollToEnd({ animated: true });
-                  profileScrollRef?.current?.scrollToEnd({ animated: true });
-                }, 100);
-              }}
-              multiline
-              maxLength={500}
-            />
-          </View>
-
-          <TouchableOpacity
-            onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'),
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: colors.accent,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: inputText.trim() ? 0.3 : 0,
-              shadowRadius: 6,
-              elevation: inputText.trim() ? 4 : 0
-            }}
-          >
-            {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-
-
-      <Modal visible={!!fullScreenImage} transparent onRequestClose={() => setFullScreenImage(null)}>
-        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
-          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setFullScreenImage(null)}><X size={30} color="white" /></TouchableOpacity>
-          {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
-        </View>
-      </Modal>
-    </KeyboardAvoidingView>
-  );
-}
-
-function DirectInboxView({ user, theme, colors, t, tr, onSelectChat }: any) {
-  const [chats, setChats] = useState<any[]>([]);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [usersCache, setUsersCache] = useState<Record<string, any>>({});
-
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    // Fetch Friends List
-    const fetchFriends = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const friendIds = userDoc.data().friends || [];
-          if (friendIds.length > 0) {
-            const friendsData: any[] = [];
-            // Fetch each friend's details (limited to 10 for performance in preview, can be adjusted)
-            for (const fid of friendIds.slice(0, 10)) {
-              const fDoc = await getDoc(doc(db, 'users', fid));
-              if (fDoc.exists()) {
-                friendsData.push({ uid: fid, ...fDoc.data() });
-              }
-            }
-            setFriends(friendsData);
-          }
-        }
-      } catch (e) {
-        console.error("Error fetching friends:", e);
-      }
-    };
-
-    fetchFriends();
-
-    // Removing server-side orderBy to fix indexing blocker, sorting client-side instead
-    const q = query(
-      collection(db, 'direct_chats'),
-      where('participants', 'array-contains', user.uid)
-    );
-    const unsubscribe = onSnapshot(q,
-      async (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // Fetch missing participant data
-        const newCache: Record<string, any> = {};
-        const missingUserIds = new Set<string>();
-
-        msgs.forEach((chat: any) => {
-          const otherId = chat.participants.find((id: string) => id !== user.uid);
-          if (otherId && !chat.participantData?.[otherId] && !usersCache[otherId]) {
-            missingUserIds.add(otherId);
-          }
-        });
-
-        if (missingUserIds.size > 0) {
-          await Promise.all(Array.from(missingUserIds).map(async (uid) => {
-            try {
-              const uDoc = await getDoc(doc(db, 'users', uid));
-              if (uDoc.exists()) {
-                newCache[uid] = uDoc.data();
-              }
-            } catch (e) { console.error('Error fetching user for chat', uid, e) }
-          }));
-          setUsersCache(prev => ({ ...prev, ...newCache }));
-        }
-
-        // Client-side sort to ensure immediate functionality
-        const sorted = msgs.sort((a: any, b: any) => {
-          const timeA = a.lastMessageTime?.toMillis?.() || a.lastMessageTime || 0;
-          const timeB = b.lastMessageTime?.toMillis?.() || b.lastMessageTime || 0;
-          return timeB - timeA;
-        });
-        setChats(sorted);
-        setLoading(false);
-        setError(null);
-      },
-      (error) => {
-        console.error("DirectInboxView Firestore Error:", error);
-        setError(error.message);
-        setLoading(false);
-      }
-    );
-    return () => unsubscribe();
-  }, [user?.uid]);
-
-  if (loading) return (
-    <View style={{ marginTop: 40, alignItems: 'center' }}>
-      <ActivityIndicator color={colors.accent} />
-      <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 10 }}>Chargement des messages...</Text>
-    </View>
-  );
-
-  if (error) return (
-    <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 40 }}>
-      <Shield size={40} color={colors.error} strokeWidth={1.5} />
-      <Text style={{ color: colors.foreground, marginTop: 15, fontWeight: '800', textAlign: 'center' }}>Configuration requise</Text>
-      <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 12, textAlign: 'center' }}>
-        L'index Firestore est en cours de création. Cela peut prendre 2 à 5 minutes.
-      </Text>
-    </View>
-  );
-
-  return (
-    <View style={{ marginTop: 10 }}>
-      {/* Horizontal Friends List */}
-      {friends.length > 0 && (
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '900', marginLeft: 5, marginBottom: 12, letterSpacing: 0.5 }}>
-            {tr('AMIS', 'الأصدقاء', 'FRIENDS')}
-          </Text>
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={friends}
-            keyExtractor={(item) => item.uid}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => onSelectChat(null, item.uid)}
-                style={{ alignItems: 'center', marginRight: 20, width: 60 }}
-              >
-                <View style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: colors.accent,
-                  borderWidth: 2,
-                  borderColor: theme === 'dark' ? '#1c1c1e' : '#F2F2F7',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  marginBottom: 6
-                }}>
-                  {item.avatarUrl ? (
-                    <Image source={{ uri: item.avatarUrl }} style={{ width: '100%', height: '100%' }} />
-                  ) : (
-                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 18 }}>
-                      {(item.fullName || item.displayName || 'A')[0].toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-                <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 10, fontWeight: '700', textAlign: 'center' }}>
-                  {(item.fullName || item.displayName || 'Ami').split(' ')[0]}
-                </Text>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={{ paddingLeft: 5 }}
-          />
-        </View>
-      )}
-
-      {chats.length === 0 ? (
-        <View style={{ alignItems: 'center', marginTop: friends.length > 0 ? 30 : 60, opacity: 0.5 }}>
-          <MessageCircle size={50} color={colors.textMuted} strokeWidth={1} />
-          <Text style={{ color: colors.textMuted, marginTop: 15, fontWeight: '600' }}>Aucun message pour l'instant</Text>
-        </View>
-      ) : (
-        chats.map(chat => {
-          const otherId = chat.participants.find((id: string) => id !== user.uid);
-          const cachedUser = usersCache[otherId] || {};
-          const fallbackData = chat.participantData?.[otherId] || { name: 'Ami' };
-          const otherData = { ...fallbackData, ...cachedUser };
-
-          return (
-            <TouchableOpacity
-              key={chat.id}
-              onPress={() => onSelectChat(chat, otherId)}
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.03)' : '#FFF', borderRadius: 18, marginBottom: 10, borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7' }}
-            >
-              <View style={{ width: 45, height: 45, borderRadius: 22.5, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {(otherData.photo || otherData.avatarUrl || otherData.photoURL) ? (
-                  <Image source={{ uri: otherData.photo || otherData.avatarUrl || otherData.photoURL }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <Text style={{ color: '#FFF', fontWeight: '800' }}>{(otherData.name || otherData.fullName || otherData.displayName || 'A')[0]?.toUpperCase()}</Text>
-                )}
-              </View>
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{otherData.name || otherData.fullName || otherData.displayName}</Text>
-                <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{chat.lastMessage}</Text>
-              </View>
-              {chat[`unreadCount_${user.uid}`] > 0 && (
-                <View style={{ backgroundColor: '#FF3B30', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{chat[`unreadCount_${user.uid}`]}</Text>
-                </View>
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  Alert.alert(
-                    tr('SUPPRIMER_CONVERSATION', 'حذف المحادثة', 'DELETE CONVERSATION'),
-                    tr('Etes-vous sûr de vouloir supprimer cette conversation ?', 'هل أنت متأكد أنك تريد حذف هذه المحادثة؟', 'Are you sure you want to delete this conversation?'),
-                    [
-                      { text: tr('ANNULER', 'إلغاء', 'CANCEL'), style: 'cancel' },
-                      {
-                        text: tr('SUPPRIMER', 'حذف', 'DELETE'),
-                        style: 'destructive',
-                        onPress: async () => {
-                          try {
-                            await deleteDoc(doc(db, 'direct_chats', chat.id));
-                          } catch (e) {
-                            console.error('Error deleting chat:', e);
-                          }
-                        }
-                      }
-                    ]
-                  );
-                }}
-                style={{ padding: 5 }}
-              >
-                <X size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          );
-        }))}
-    </View>
-  );
-}

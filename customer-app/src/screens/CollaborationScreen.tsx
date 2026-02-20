@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import {
     CheckCircle2,
+    ChevronLeft
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { LiveSessionService } from '../services/LiveSessionService';
@@ -35,6 +36,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { APP_ICON, APP_ICON_2 } from '../constants/layout';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -131,9 +133,10 @@ interface CollaborationScreenProps {
     language: string;
     onNavigate: (screen: string) => void;
     onCollabPress: (collab: Collaboration) => void;
+    onBack: () => void;
 }
 
-export default function CollaborationScreen({ t, theme, language, onNavigate, onCollabPress }: CollaborationScreenProps) {
+export default function CollaborationScreen({ t, theme, language, onNavigate, onCollabPress, onBack }: CollaborationScreenProps) {
     const [collaborations, setCollaborations] = useState<Collaboration[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -354,8 +357,20 @@ export default function CollaborationScreen({ t, theme, language, onNavigate, on
 
                         {/* Bottom Half: Text Content */}
                         <View style={styles.bottomContainer}>
-                            <Animated.Text entering={FadeIn.delay(500).springify()} style={[styles.bottomTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>{t('collabWelcome')}</Animated.Text>
-                            <Animated.Text entering={FadeIn.delay(700).springify()} style={[styles.bottomLargeText, { color: isDark ? '#FFF' : '#000' }]}>{t('collabAppName')}</Animated.Text>
+                            <Animated.Text entering={FadeIn.delay(500).springify()} style={[styles.bottomTitle, { marginTop: 10, marginBottom: 0, color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>{t('collabWelcome')}</Animated.Text>
+                            <Animated.View entering={FadeIn.delay(600).springify()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: -25, marginRight: 30 }}>
+                                <Animated.Image
+                                    entering={FadeIn.delay(700).springify()}
+                                    style={{ width: 300, height: 160, resizeMode: 'contain', marginRight: -70 }}
+                                    source={APP_ICON_2}
+                                />
+                                <Animated.Text
+                                    entering={FadeIn.delay(800).springify()}
+                                    style={[{ color: isDark ? '#FFF' : '#000', fontSize: 40, fontWeight: '900', marginBottom: 0 }]}
+                                >
+                                    {t('collabAppName2')}
+                                </Animated.Text>
+                            </Animated.View>
                             <Animated.Text entering={FadeIn.delay(1000).springify()} style={[styles.bottomSubText, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
                                 {t('collabSubText')}
                             </Animated.Text>
@@ -398,9 +413,9 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     marqueeContainer: {
-        height: SCREEN_HEIGHT * 0.6, // Increased height
+        height: SCREEN_HEIGHT * 0.52, // Reduced height to push elements up
         justifyContent: 'center',
-        paddingVertical: 20,
+        paddingVertical: 10,
     },
     marqueeItem: {
         position: 'absolute',
@@ -418,7 +433,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.5,
         shadowRadius: 15,
         elevation: 10,
-        marginBottom: 80,
+        marginBottom: 20,
     },
     cardBlurOverlay: {
         position: 'absolute',
@@ -493,16 +508,18 @@ const styles = StyleSheet.create({
     // Bottom Section
     bottomContainer: {
         flex: 1,
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         paddingHorizontal: 30,
         paddingBottom: 40,
         alignItems: 'center',
-        gap: 8,
+        marginTop: -20, // Negative margin to pull elements up
     },
     bottomTitle: {
-        fontSize: 22,
+        fontSize: 14,
         fontWeight: '700',
         textAlign: 'center',
+        letterSpacing: 3,
+        textTransform: 'uppercase',
     },
     bottomLargeText: {
         fontSize: 42,
@@ -511,17 +528,16 @@ const styles = StyleSheet.create({
         letterSpacing: -1,
     },
     bottomSubText: {
-        fontSize: 16,
+        fontSize: 14,
         textAlign: 'center',
-        lineHeight: 24,
-        marginTop: 10,
-        marginBottom: 20,
+        lineHeight: 20,
+        marginBottom: 15,
+        paddingHorizontal: 10,
     },
     bottomCtaButton: {
         paddingVertical: 14,
         paddingHorizontal: 32,
         borderRadius: 30,
-        marginTop: 10,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -587,6 +603,21 @@ const styles = StyleSheet.create({
         height: 8,
         borderRadius: 4,
         backgroundColor: '#FFF',
+    },
+    backButton: {
+        position: 'absolute',
+        left: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        marginBottom: 20,
     },
 });
 

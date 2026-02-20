@@ -190,6 +190,7 @@ export const fr = {
   noCampaigns: 'Aucune campagne active',
   collabWelcome: 'Bienvenue sur',
   collabAppName: 'Tama Collabs',
+  collabAppName2: 'Collabs',
   collabSubText: 'Explorez des collections uniques et des lancements exclusifs de nos collaborateurs.',
   partnerWithUs: 'Devenir partenaire',
   editAd: 'MODIFIER L\'AD',

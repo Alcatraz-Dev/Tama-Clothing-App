@@ -90,6 +90,7 @@ interface CollaborationDetailScreenProps {
     profileData: any;
     onJoinLive: (info: any) => void;
     onStartLive: (collab: any) => void;
+    tr: (fr: string, ar: string, en: string) => string;
 }
 
 export default function CollaborationDetailScreen({
@@ -104,7 +105,8 @@ export default function CollaborationDetailScreen({
     toggleFollowCollab,
     profileData,
     onJoinLive,
-    onStartLive
+    onStartLive,
+    tr
 }: CollaborationDetailScreenProps) {
     const isDark = theme === 'dark';
     const insets = useSafeAreaInsets();
@@ -148,27 +150,27 @@ export default function CollaborationDetailScreen({
 
     // Dynamic Tabs based on Type
     const getTabs = () => {
-        const base = [{ id: 'about', label: t('about') }];
+        const base = [{ id: 'about', label: t('about') || tr('À PROPOS', 'حول', 'ABOUT') }];
 
         const hasSocials = collab.instagramUrl || collab.facebookUrl || collab.twitterUrl || collab.linkedinUrl || collab.tiktokUrl;
         const hasInfo = collab.websiteUrl || hasSocials;
 
         if (collab.type === 'Brand') {
             if (products.length > 0) {
-                base.push({ id: 'products', label: t('products') });
+                base.push({ id: 'products', label: t('products') || tr('PRODUITS', 'السلع', 'PRODUCTS') });
             }
         } else if (collab.type === 'Person') {
             if (hasSocials) {
-                base.push({ id: 'socials', label: t('socialMedia') });
+                base.push({ id: 'socials', label: t('socialMedia') || tr('SOCIALS', 'سوشيال ميديا', 'SOCIALS') });
             }
         } else if (collab.type === 'Company') {
             if (hasInfo) {
-                base.push({ id: 'info', label: t('info') || 'INFO' });
+                base.push({ id: 'info', label: t('info') || tr('INFOS', 'معلومات', 'INFO') });
             }
         }
 
         if (collab.type !== 'Brand') {
-            base.push({ id: 'reviews', label: t('reviews') });
+            base.push({ id: 'reviews', label: t('reviews') || tr('AVIS', 'لي ريفيو', 'REVIEWS') });
         }
         return base;
     };
@@ -1183,7 +1185,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     statLabel: {
-        fontSize: 8.5,
+        fontSize: 10,
         fontWeight: '700',
         letterSpacing: 0.5,
         textTransform: 'uppercase',
