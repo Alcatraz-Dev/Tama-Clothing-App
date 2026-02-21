@@ -21,6 +21,7 @@ import {
 } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { LiveSessionService } from '../services/LiveSessionService';
+import CollabBadge from '../components/CollabBadge';
 import Animated, {
     SharedValue,
     useAnimatedStyle,
@@ -357,16 +358,16 @@ export default function CollaborationScreen({ t, theme, language, onNavigate, on
 
                         {/* Bottom Half: Text Content */}
                         <View style={styles.bottomContainer}>
-                            <Animated.Text entering={FadeIn.delay(500).springify()} style={[styles.bottomTitle, { marginTop: 10, marginBottom: 0, color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>{t('collabWelcome')}</Animated.Text>
+                            <Animated.Text entering={FadeIn.delay(500).springify()} style={[styles.bottomTitle, { marginTop: 30, marginBottom: -40, color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>{t('collabWelcome')}</Animated.Text>
                             <Animated.View entering={FadeIn.delay(600).springify()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: -25, marginRight: 30 }}>
                                 <Animated.Image
                                     entering={FadeIn.delay(700).springify()}
-                                    style={{ width: 300, height: 160, resizeMode: 'contain', marginRight: -70 }}
+                                    style={{ width: 300, height: 160, resizeMode: 'contain', marginRight: -95, marginBottom: -20 }}
                                     source={APP_ICON_2}
                                 />
                                 <Animated.Text
                                     entering={FadeIn.delay(800).springify()}
-                                    style={[{ color: isDark ? '#FFF' : '#000', fontSize: 40, fontWeight: '900', marginBottom: 0 }]}
+                                    style={[{ color: isDark ? '#FFF' : '#000', fontSize: 40, fontWeight: '900', marginBottom: -15, marginRight: 20 }]}
                                 >
                                     {t('collabAppName2')}
                                 </Animated.Text>
@@ -382,6 +383,7 @@ export default function CollaborationScreen({ t, theme, language, onNavigate, on
 
                     </View>
                 </BlurView>
+
 
             </View>
         </GestureHandlerRootView>

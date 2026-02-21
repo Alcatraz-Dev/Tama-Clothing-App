@@ -435,4 +435,9 @@ export const en = {
   videoReady: 'videoReady',
   changeVideo: 'changeVideo',
   cameraTitle: 'Camera',
+  collabBadge: 'COLLAB BADGE',
+  scanToVisit: 'SCAN TO VISIT',
+  insights: 'INSIGHTS',
+  orderNow: 'ORDER NOW',
+  noDescription: 'No description available for this collaboration.',
 };

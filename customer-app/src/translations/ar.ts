@@ -444,5 +444,10 @@ export const ar = {
   videoReady: 'الفيديو حاضر!',
   changeVideo: 'بدل الفيديو',
   cameraTitle: 'الكاميرا',
+  collabBadge: 'بطاقة كولاب',
+  scanToVisit: 'امسح باش تزور',
+  insights: 'تفاصيل',
+  orderNow: 'اشري توا',
+  noDescription: 'ما ثماش وصف متوفر لهذا التعاون.',
 };
 

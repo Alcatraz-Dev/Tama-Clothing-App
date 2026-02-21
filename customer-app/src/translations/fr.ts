@@ -377,5 +377,10 @@ export const fr = {
   saveMedia: 'Enregistrer',
   workUploaded: 'Ajouté à vos travaux!',
   tapToCancel: 'Appuyez pour annuler',
-  femmes: 'Femmes', hommes: 'Hommes', enfants: 'Enfants', accessoires: 'Accessoires',
+  femmes: 'Femmes', hommes: 'Hommes', enfants: 'Enfants',  accessoires: 'Accessoires',
+  collabBadge: 'BADGE COLLAB',
+  scanToVisit: 'SCANNER POUR VISITER',
+  insights: 'STATISTIQUES',
+  orderNow: 'COMMANDER MAINTENANT',
+  noDescription: 'Aucune description disponible pour cette collaboration.',
 };

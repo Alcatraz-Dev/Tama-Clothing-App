@@ -40,9 +40,11 @@ import {
     Pencil,
     Trash2,
     Camera,
-    Eye
+    Eye,
+    QrCode
 } from 'lucide-react-native';
 import ProductCard from '../components/ProductCard';
+import CollabBadge from '../components/CollabBadge';
 import * as Animatable from 'react-native-animatable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -140,6 +142,7 @@ export default function CollaborationDetailScreen({
     const [submittingReview, setSubmittingReview] = React.useState(false);
     const [editingReviewId, setEditingReviewId] = React.useState<string | null>(null);
     const [liveSession, setLiveSession] = React.useState<LiveSession | null>(null);
+    const [showBadge, setShowBadge] = React.useState(false);
 
     const isAdmin = profileData?.role === 'admin' || profileData?.role === 'editor';
     const isOwner = (collab.brandId && profileData?.brandId === collab.brandId) ||
@@ -364,14 +367,7 @@ export default function CollaborationDetailScreen({
     };
 
     const handleShare = async () => {
-        try {
-            await Share.share({
-                message: `Check out ${collab.name} on Tama Clothing!`,
-                url: collab.websiteUrl || 'https://tamaclothing.com',
-            });
-        } catch (error) {
-            console.error(error);
-        }
+        setShowBadge(true);
     };
 
     const handleLiveAction = () => {
@@ -690,7 +686,7 @@ export default function CollaborationDetailScreen({
                     onPress={handleShare}
                 >
                     <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-                    <ShareIcon size={18} color="#FFF" />
+                    <QrCode size={18} color="#FFF" />
                 </TouchableOpacity>
             </View>
 
@@ -995,6 +991,16 @@ export default function CollaborationDetailScreen({
                     </View>
                 </View>
             </Modal>
+            {showBadge && (
+                <CollabBadge
+                    collab={collab as any}
+                    isDark={isDark}
+                    language={language}
+                    onClose={() => setShowBadge(false)}
+                    onVisitProfile={() => setShowBadge(false)}
+                    t={t}
+                />
+            )}
         </View>
     );
 }
