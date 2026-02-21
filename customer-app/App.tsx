@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView, Dimensions } from 'react-native';
+import { StyleSheet, Text as RNText, View, ScrollView, TouchableOpacity, Image, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
@@ -106,8 +106,13 @@ import {
   DownloadCloud,
   ArrowRightLeft,
   ArrowRight,
-  Gem
+  Gem,
+  QrCode,
+  Scan,
+  Gift
 } from 'lucide-react-native';
+import UserBadge from './src/components/UserBadge';
+import QRScanner from './src/components/QRScanner';
 import { Share } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -128,6 +133,7 @@ import WalletScreen from './src/screens/WalletScreen';
 import FeedScreen from './src/screens/FeedScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
 import CameraScreen from './src/screens/Camera';
+import FidelityScreen from './src/screens/FidelityScreen';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
@@ -172,11 +178,56 @@ const getName = (field: any, fallback = '') => getNameUtil(field, currentLang, f
 const translateColor = (color: string) => translateColorUtil(color, currentLang);
 const translateCategory = (cat: string) => translateCategoryUtil(cat, currentLang);
 
+import { useFonts, Rubik_300Light, Rubik_400Regular, Rubik_500Medium, Rubik_600SemiBold, Rubik_700Bold, Rubik_800ExtraBold, Rubik_900Black } from '@expo-google-fonts/rubik';
+
+export const AppText: any = React.forwardRef<any, any>((props, ref) => {
+  let fontFamily = 'Rubik_400Regular';
+  if (props.style) {
+    const flattened = StyleSheet.flatten(props.style);
+    if (flattened.fontWeight === '300') {
+      fontFamily = 'Rubik_300Light';
+    } else if (flattened.fontWeight === '500') {
+      fontFamily = 'Rubik_500Medium';
+    } else if (flattened.fontWeight === '600') {
+      fontFamily = 'Rubik_600SemiBold';
+    } else if (flattened.fontWeight === 'bold' || flattened.fontWeight === '700') {
+      fontFamily = 'Rubik_700Bold';
+    } else if (flattened.fontWeight === '800') {
+      fontFamily = 'Rubik_800ExtraBold';
+    } else if (flattened.fontWeight === '900') {
+      fontFamily = 'Rubik_900Black';
+    }
+  }
+  return (
+    <RNText
+      ref={ref}
+      {...props}
+      style={[
+        { fontFamily },
+        props.style
+      ]}
+    />
+  );
+});
+
+const Text = AppText;
+
+// Export Animated AppText for usage with global fonts
+export const AnimatedAppText = Animated.createAnimatedComponent(Text);
+
 // Multi-language Translations
 
-
 export default function App() {
-  const [language, setLanguage] = useState<'fr' | 'ar'>('fr'); // 'fr' or 'ar'
+  const [fontsLoaded] = useFonts({
+    Rubik_300Light,
+    Rubik_400Regular,
+    Rubik_500Medium,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
+    Rubik_800ExtraBold,
+    Rubik_900Black
+  });
+  const [language, setLanguage] = useState<'en' | 'fr' | 'ar'>('fr'); // 'en', 'fr' or 'ar'
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [appState, setAppState] = useState<'Onboarding' | 'Auth' | 'Main' | 'SizeGuide'>('Onboarding');
   const [activeTab, setActiveTab] = useState('Home');
@@ -206,6 +257,8 @@ export default function App() {
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [showScanner, setShowScanner] = useState(false);
+  const [showBadge, setShowBadge] = useState(false);
   const [ads, setAds] = useState<any[]>([]);
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
@@ -225,6 +278,95 @@ export default function App() {
   const tr = (fr: string, ar: string, en: string) => language === 'ar' ? ar : (language === 'fr' ? fr : en);
 
   const isOwnProfile = user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email);
+
+  const processScanReward = async (scannerUid: string, targetId: string, type: 'user' | 'collab') => {
+    if (scannerUid === targetId) return; // Prevent self-farming
+
+    try {
+      const scanRef = doc(db, 'scans', `${scannerUid}_${targetId}`);
+      const scanSnap = await getDoc(scanRef);
+
+      if (!scanSnap.exists()) {
+        await setDoc(scanRef, {
+          scannerUid,
+          targetId,
+          type,
+          timestamp: serverTimestamp()
+        });
+
+        let scannerReward = 10;
+        let targetReward = 50;
+        let targetDocRef = null;
+
+        if (type === 'user') {
+          targetDocRef = doc(db, 'users', targetId);
+        } else if (type === 'collab') {
+          const collabSnap = await getDoc(doc(db, 'collaborations', targetId));
+          if (collabSnap.exists() && collabSnap.data().brandId) {
+            targetDocRef = doc(db, 'users', collabSnap.data().brandId);
+            scannerReward = 20;
+            targetReward = 20;
+          }
+        }
+
+        // Award scanning user
+        const scannerRef = doc(db, 'users', scannerUid);
+        await updateDoc(scannerRef, {
+          'wallet.coins': increment(scannerReward)
+        });
+
+        // Award target affiliate user/brand
+        if (targetDocRef) {
+          try {
+            await updateDoc(targetDocRef, {
+              'wallet.coins': increment(targetReward)
+            });
+          } catch (e) {
+            console.log('Target affiliate wallet update error', e);
+          }
+        }
+
+        const successMsg = language === 'ar'
+          ? `مبروك! ربحت ${scannerReward} كوينز مالسكان!`
+          : language === 'fr'
+            ? `Félicitations! Vous avez gagné ${scannerReward} pièces grâce au scan!`
+            : `Congratulations! You earned ${scannerReward} coins from scanning!`;
+
+        Alert.alert(tr('Récompense de Fidélité', 'مكافأة وفاء', 'Fidelity Reward'), successMsg);
+      }
+    } catch (e) {
+      console.error('Error processing scan reward', e);
+    }
+  };
+
+  const handleScan = async (data: string) => {
+    setShowScanner(false);
+
+    if (data.startsWith('tama-clothing://user/')) {
+      const userId = data.replace('tama-clothing://user/', '');
+      if (user) await processScanReward(user.uid, userId, 'user');
+      setTargetUid(userId);
+      setPreviousTab(activeTab);
+      setActiveTab('PublicProfile');
+    } else if (data.startsWith('tama-clothing://collab/')) {
+      const collabId = data.replace('tama-clothing://collab/', '');
+      if (user) await processScanReward(user.uid, collabId, 'collab');
+      try {
+        const collabSnap = await getDoc(doc(db, 'collaborations', collabId));
+        if (collabSnap.exists()) {
+          setSelectedCollab({ id: collabId, ...collabSnap.data() });
+          setActiveTab('CollabDetail');
+        } else {
+          Alert.alert(t('error'), 'Collaboration not found');
+        }
+      } catch (e) {
+        console.error('Scan Error', e);
+        Alert.alert(t('error'), 'Failed to fetch collaboration');
+      }
+    } else {
+      Alert.alert(t('error'), 'Invalid QR Code');
+    }
+  };
 
   const getInitials = (name: string) => {
     if (!name) return '??';
@@ -654,7 +796,7 @@ export default function App() {
               createdAt: serverTimestamp(),
               lastLogin: serverTimestamp()
             });
-            setProfileData({ email: user.email, role: 'customer', fullName: user.displayName || 'User' });
+            setProfileData({ email: user.email, role: 'customer', fullName: user.displayName || 'User', uid: user.uid, id: user.uid });
           }
         } catch (e) {
           console.log('Error saving token:', e);
@@ -717,12 +859,12 @@ export default function App() {
         const unsubscribeUser = onSnapshot(doc(db, 'users', u.uid), (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            setProfileData(userData);
+            setProfileData({ ...userData, uid: u.uid, id: u.uid });
             if (userData.followedCollabs) setFollowedCollabs(userData.followedCollabs);
           } else if (u.email) {
             // Initial user setup if doc doesn't exist
             const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User', wallet: { coins: 0, diamonds: 0 } };
-            setProfileData(def);
+            setProfileData({ ...def, uid: u.uid, id: u.uid });
             setDoc(doc(db, 'users', u.uid), def, { merge: true });
           }
         });
@@ -1283,8 +1425,8 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} />;
-      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} />;
+      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} />;
+      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1321,6 +1463,7 @@ export default function App() {
           setActiveTab(screen);
         }
       }} />;
+      case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} user={user} t={t} theme={theme} />;
       case 'Friends': return <FriendsScreen
         onBack={() => setActiveTab('Profile')}
         user={user}
@@ -1360,20 +1503,20 @@ export default function App() {
 
       // Admin Routes
       case 'AdminMenu': return <AdminMenuScreen onBack={() => setActiveTab('Profile')} onNavigate={setActiveTab} profileData={profileData} t={t} />;
-      case 'AdminDashboard': return <AdminDashboardScreen onBack={() => setActiveTab('AdminMenu')} user={user} t={t} language={language} />;
-      case 'AdminProducts': return <AdminProductsScreen onBack={() => setActiveTab('AdminMenu')} user={user} t={t} />;
-      case 'AdminCategories': return <AdminCategoriesScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminBrands': return <AdminBrandsScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminAds': return <AdminAdsScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminFlashSale': return <AdminFlashSaleScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminPromoBanners': return <AdminPromoBannersScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminBanners': return <AdminBannersScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminOrders': return <AdminOrdersScreen onBack={() => setActiveTab('AdminMenu')} user={user} t={t} language={language} />;
-      case 'AdminUsers': return <AdminUsersScreen onBack={() => setActiveTab('AdminMenu')} t={t} language={language} />;
-      case 'AdminCoupons': return <AdminCouponsScreen onBack={() => setActiveTab('AdminMenu')} t={t} language={language} />;
-      case 'AdminSettings': return <AdminSettingsScreen onBack={() => setActiveTab('AdminMenu')} user={user} t={t} />;
-      case 'AdminNotifications': return <AdminNotificationsScreen onBack={() => setActiveTab('AdminMenu')} t={t} />;
-      case 'AdminKYC': return <AdminKYCScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
+      case 'AdminDashboard': return <AdminDashboardScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} language={language} />;
+      case 'AdminProducts': return <AdminProductsScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} />;
+      case 'AdminCategories': return <AdminCategoriesScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminBrands': return <AdminBrandsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminAds': return <AdminAdsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminFlashSale': return <AdminFlashSaleScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminPromoBanners': return <AdminPromoBannersScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminBanners': return <AdminBannersScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminOrders': return <AdminOrdersScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} language={language} />;
+      case 'AdminUsers': return <AdminUsersScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} language={language} />;
+      case 'AdminCoupons': return <AdminCouponsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} language={language} />;
+      case 'AdminSettings': return <AdminSettingsScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} />;
+      case 'AdminNotifications': return <AdminNotificationsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminKYC': return <AdminKYCScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} theme={theme} />;
       case 'AdminSupportList': return <AdminSupportListScreen onBack={() => setActiveTab('AdminMenu')} onChatPress={(chatId: string, customerName: string) => {
         setSelectedAdminChat({ chatId, customerName });
         setActiveTab('AdminSupportChat');
@@ -1499,6 +1642,7 @@ export default function App() {
       />;
     }
   };
+  if (!fontsLoaded) return null;
 
   return (
     <ThemeContext.Provider value={{ theme, colors: getAppColors(theme), setTheme }}>
@@ -1515,6 +1659,49 @@ export default function App() {
             ) : (
               <>
                 {renderMainContent()}
+
+                {/* USER BADGE MODAL */}
+                <Modal
+                  visible={showBadge}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={() => setShowBadge(false)}
+                >
+                  <UserBadge
+                    userProfile={{
+                      id: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.uid || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.id || '',
+                      fullName: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.fullName || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.displayName || 'USER',
+                      avatarUrl: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.avatarUrl || '',
+                      role: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.role || 'User',
+                      wallet: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.wallet
+                    }}
+                    isDark={theme === 'dark'}
+                    language={language}
+                    onClose={() => setShowBadge(false)}
+                    onVisitProfile={(uid: string) => {
+                      setShowBadge(false);
+                      setTargetUid(uid);
+                      setPreviousTab(activeTab);
+                      setActiveTab('PublicProfile');
+                    }}
+                    t={t}
+                  />
+                </Modal>
+
+                {/* QR SCANNER MODAL */}
+                <Modal
+                  visible={showScanner}
+                  transparent={false}
+                  animationType="slide"
+                  onRequestClose={() => setShowScanner(false)}
+                >
+                  <QRScanner
+                    onScan={handleScan}
+                    onClose={() => setShowScanner(false)}
+                    isDark={theme === 'dark'}
+                    t={t}
+                  />
+                </Modal>
 
                 {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'Messages' && activeTab !== 'DirectMessage' && (
                   <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
@@ -1874,9 +2061,10 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           color: colors.foreground
         }]}>TAMA CLOTHING</Text> */}
         <View>
-          <Image source={require("./assets/logo.png")} style={[styles.logo, { alignSelf: 'center', width: 200, height: 200 }]} />
+          <Image source={require("./assets/logo.png")} style={[styles.logo, { alignSelf: 'center', width: 200, height: 200, marginLeft: 20 }]} />
 
         </View>
+
 
         <TouchableOpacity style={[styles.searchCircle, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} activeOpacity={0.7} onPress={() => onNavigate('Notifications')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Bell size={20} color={colors.foreground} strokeWidth={2.5} />
@@ -2680,7 +2868,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner }: any) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -3359,19 +3547,41 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             <ChevronLeft size={24} color={colors.foreground} strokeWidth={2.5} />
           </TouchableOpacity>
 
-          <Animated.Text
+          <AnimatedAppText
             numberOfLines={1}
-            style={[styles.modernLogo, { flex: 1, textAlign: 'center', opacity: headerOpacity, color: colors.foreground, fontSize: 16 }]}
+            adjustsFontSizeToFit
+            style={[styles.modernLogo, { flex: 1, position: 'relative', left: 0, right: 0, marginHorizontal: 10, textAlign: 'left', opacity: headerOpacity, color: colors.foreground, fontSize: 16 }]}
           >
             {displayName.toUpperCase()}
-          </Animated.Text>
+          </AnimatedAppText>
 
-          <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
-            onPress={() => onNavigate('Settings')}
-          >
-            <Settings size={22} color={colors.foreground} strokeWidth={2} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.4)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+              onPress={onShowScanner}
+            >
+              <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Scan size={24} color={colors.foreground} strokeWidth={2} />
+                <View style={{ position: 'absolute' }}>
+                  <QrCode size={11} color={colors.foreground} strokeWidth={2.5} />
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.4)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+              onPress={onShowBadge}
+            >
+              <QrCode size={20} color={colors.foreground} strokeWidth={2.5} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.4)' : '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+              onPress={() => onNavigate('Settings')}
+            >
+              <Settings size={20} color={colors.foreground} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
 
@@ -3971,6 +4181,16 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   </View>
                 </TouchableOpacity>
 
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Fidelity')}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Gift size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                      {t('fidelityProgram')}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
 
                 <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
                   {language === 'ar' ? 'الأمان' : (language === 'fr' ? 'SÉCURITÉ' : 'SECURITY')}
@@ -4003,12 +4223,16 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                     <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('language')}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['fr', 'ar'] as const).map((l: 'fr' | 'ar') => (
+                    {(['en', 'fr', 'ar'] as const).map((l: 'en' | 'fr' | 'ar') => (
                       <TouchableOpacity
                         key={l}
                         onPress={() => {
                           setLanguage(l);
-                          Alert.alert(t('languageSelect') || 'Language Changed', l === 'fr' ? 'Français sélectionné' : 'تم اختيار اللغة العربية');
+                          let msg = 'Language Changed';
+                          if (l === 'fr') msg = 'Français sélectionné';
+                          if (l === 'ar') msg = 'تم اختيار اللغة العربية';
+                          if (l === 'en') msg = 'English selected';
+                          Alert.alert(t('languageSelect') || 'Language Changed', msg);
                         }}
                         style={{
                           paddingHorizontal: 12,
@@ -6240,12 +6464,12 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
             <X size={22} color={colors.foreground} strokeWidth={2.5} />
           </TouchableOpacity>
 
-          <Animated.Text
+          <AnimatedAppText
             numberOfLines={1}
             style={[styles.modernLogo, { flex: 1, textAlign: 'center', marginHorizontal: 15, opacity: headerOpacity, color: colors.foreground, fontSize: 16 }]}
           >
             {getName(product.name).toUpperCase()}
-          </Animated.Text>
+          </AnimatedAppText>
 
           <TouchableOpacity
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: currentTheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' }}
@@ -8567,13 +8791,15 @@ function NotificationsScreen({ notifications, language, onClear, onBack, t }: an
 
 function AdminNotificationsScreen({ onBack, t }: any) {
   const { colors, theme } = useAppTheme();
+  const [activeTab, setActiveTab] = useState<'send' | 'history'>('send');
   const [title, setTitle] = useState('');
   const [titleAr, setTitleAr] = useState('');
   const [message, setMessage] = useState('');
   const [messageAr, setMessageAr] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const handlePickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
@@ -8588,6 +8814,54 @@ function AdminNotificationsScreen({ onBack, t }: any) {
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
     }
+  };
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const q = query(
+        collection(db, 'notifications'),
+        where('type', '==', 'broadcast')
+      );
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        // Sort newest first in-memory to avoid requiring a composite Firestore index
+        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setNotifications(data);
+    } catch (error) {
+      console.error("Failed to fetch broadcast history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const handleDeleteNotification = async (id: string) => {
+    Alert.alert(
+      t('delete'),
+      t('areYouSure'),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'notifications', id));
+              setNotifications(prev => prev.filter(n => n.id !== id));
+            } catch (error) {
+              Alert.alert(t('error'), 'Failed to delete notification');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleSend = async () => {
@@ -8686,82 +8960,125 @@ function AdminNotificationsScreen({ onBack, t }: any) {
         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: colors.foreground }]}>{t('broadcast').toUpperCase()}</Text>
         <View style={{ width: 40 }} />
       </View>
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'send' ? colors.foreground : 'transparent' }}
+          onPress={() => setActiveTab('send')}
+        >
+          <Text style={{ fontWeight: '800', color: activeTab === 'send' ? colors.foreground : colors.textMuted }}>{t('sendBroadcast').toUpperCase()}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'history' ? colors.foreground : 'transparent' }}
+          onPress={() => setActiveTab('history')}
+        >
+          <Text style={{ fontWeight: '800', color: activeTab === 'history' ? colors.foreground : colors.textMuted }}>HISTORY</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView contentContainerStyle={{ padding: 25 }}>
-        <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
-          <Text style={[styles.inputLabelField, { color: colors.foreground }]}>{t('notificationImage').toUpperCase()} {t('optional').toUpperCase()}</Text>
-          <View style={{ marginBottom: 20 }}>
-            {image ? (
-              <View>
-                <Image source={{ uri: image }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0' }} resizeMode="cover" />
-                <TouchableOpacity
-                  onPress={() => setImage(null)}
-                  style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
-                >
-                  <X size={16} color="white" />
-                </TouchableOpacity>
+        {activeTab === 'send' ? (
+          <>
+            <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
+              <Text style={[styles.inputLabelField, { color: colors.foreground }]}>{t('notificationImage').toUpperCase()} {t('optional').toUpperCase()}</Text>
+              <View style={{ marginBottom: 20 }}>
+                {image ? (
+                  <View>
+                    <Image source={{ uri: image }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0' }} resizeMode="cover" />
+                    <TouchableOpacity
+                      onPress={() => setImage(null)}
+                      style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
+                    >
+                      <X size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={handlePickImage} style={{ width: '100%', height: 150, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA' }}>
+                    <ImageIcon size={32} color={colors.textMuted} />
+                    <Text style={{ marginTop: 10, color: colors.textMuted, fontSize: 11, fontWeight: '700' }}>{t('tapToUpload').toUpperCase()}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : (
-              <TouchableOpacity onPress={handlePickImage} style={{ width: '100%', height: 150, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA' }}>
-                <ImageIcon size={32} color={colors.textMuted} />
-                <Text style={{ marginTop: 10, color: colors.textMuted, fontSize: 11, fontWeight: '700' }}>{t('tapToUpload').toUpperCase()}</Text>
+
+              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (FR)</Text>
+              <TextInput
+                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground }]}
+                placeholder={t('flashSalePlaceholder')}
+                placeholderTextColor="#999"
+                value={title}
+                onChangeText={setTitle}
+              />
+
+              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (AR)</Text>
+              <TextInput
+                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, textAlign: 'right' }]}
+                placeholder={t('flashSalePlaceholder')}
+                placeholderTextColor="#999"
+                value={titleAr}
+                onChangeText={setTitleAr}
+              />
+
+              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (FR)</Text>
+              <TextInput
+                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15 }]}
+                placeholder={t('typeMessagePlaceholder')}
+                placeholderTextColor="#999"
+                value={message}
+                onChangeText={setMessage}
+                multiline
+              />
+
+              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (AR)</Text>
+              <TextInput
+                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15, textAlign: 'right' }]}
+                placeholder={t('typeMessagePlaceholder')}
+                placeholderTextColor="#999"
+                value={messageAr}
+                onChangeText={setMessageAr}
+                multiline
+              />
+
+              <TouchableOpacity
+                onPress={handleSend}
+                disabled={sending}
+                style={[styles.saveBtnPremium, { backgroundColor: colors.foreground, marginTop: 30 }]}
+              >
+                {sending ? <ActivityIndicator color={theme === 'dark' ? 'black' : 'white'} /> : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Megaphone size={18} color={theme === 'dark' ? 'black' : 'white'} />
+                    <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? 'black' : 'white' }]}>{t('sendBroadcast').toUpperCase()}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
+            </View>
+            <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textMuted, fontSize: 11 }}>
+              {t('broadcastHelpText')}
+            </Text>
+          </>
+        ) : (
+          <View>
+            {loadingHistory ? (
+              <ActivityIndicator color={colors.foreground} style={{ marginTop: 50 }} />
+            ) : notifications.length === 0 ? (
+              <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 50 }}>No notifications found.</Text>
+            ) : (
+              notifications.map((notif, idx) => (
+                <View key={notif.id || idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', padding: 15, borderRadius: 12, marginBottom: 15 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{notif.title || notif.titleAr}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>{notif.message || notif.messageAr}</Text>
+                    {notif.createdAt && (
+                      <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 5 }}>
+                        {new Date(notif.createdAt?.seconds * 1000).toLocaleDateString()}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeleteNotification(notif.id)} style={{ padding: 10 }}>
+                    <Trash2 size={20} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))
             )}
           </View>
-
-          <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (FR)</Text>
-          <TextInput
-            style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground }]}
-            placeholder={t('flashSalePlaceholder')}
-            placeholderTextColor="#999"
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (AR)</Text>
-          <TextInput
-            style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, textAlign: 'right' }]}
-            placeholder={t('flashSalePlaceholder')}
-            placeholderTextColor="#999"
-            value={titleAr}
-            onChangeText={setTitleAr}
-          />
-
-          <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (FR)</Text>
-          <TextInput
-            style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15 }]}
-            placeholder={t('typeMessagePlaceholder')}
-            placeholderTextColor="#999"
-            value={message}
-            onChangeText={setMessage}
-            multiline
-          />
-
-          <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (AR)</Text>
-          <TextInput
-            style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15, textAlign: 'right' }]}
-            placeholder={t('typeMessagePlaceholder')}
-            placeholderTextColor="#999"
-            value={messageAr}
-            onChangeText={setMessageAr}
-            multiline
-          />
-
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={sending}
-            style={[styles.saveBtnPremium, { backgroundColor: colors.foreground, marginTop: 30 }]}
-          >
-            {sending ? <ActivityIndicator color={theme === 'dark' ? 'black' : 'white'} /> : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Megaphone size={18} color={theme === 'dark' ? 'black' : 'white'} />
-                <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? 'black' : 'white' }]}>{t('sendBroadcast').toUpperCase()}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-        <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textMuted, fontSize: 11 }}>
-          {t('broadcastHelpText')}
-        </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -8777,18 +9094,18 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
   const role = profileData?.role || 'admin'; // Fallback to admin if not set
 
   const menuItems = [
-    { label: t('dashboard').toUpperCase(), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support'], color: '#5856D6' },
-    { label: t('products').toUpperCase(), icon: Package, route: 'AdminProducts', roles: ['admin'], color: '#FF2D55' },
+    { label: t('dashboard').toUpperCase(), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support', 'brand_owner'], color: '#5856D6' },
+    { label: t('products').toUpperCase(), icon: Package, route: 'AdminProducts', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
     { label: t('categories').toUpperCase(), icon: ListTree, route: 'AdminCategories', roles: ['admin'], color: '#AF52DE' },
     { label: t('brands').toUpperCase(), icon: Shield, route: 'AdminBrands', roles: ['admin'], color: '#007AFF' },
-    { label: t('orders').toUpperCase(), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support'], color: '#34C759' },
+    { label: t('orders').toUpperCase(), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support', 'brand_owner'], color: '#34C759' },
     { label: 'COLLABORATIONS', icon: Handshake, route: 'AdminCollaboration', roles: ['admin'], color: '#FF9500' },
-    { label: t('clients').toUpperCase(), icon: UsersIcon, route: 'AdminUsers', roles: ['admin'], color: '#5AC8FA' },
-    { label: t('banners').toUpperCase(), icon: ImageIcon, route: 'AdminBanners', roles: ['admin'], color: '#FF9500' },
-    { label: t('adsPromo').toUpperCase(), icon: Megaphone, route: 'AdminAds', roles: ['admin'], color: '#FF3B30' },
-    { label: t('coupons').toUpperCase(), icon: Ticket, route: 'AdminCoupons', roles: ['admin'], color: '#FF2D55' },
-    { label: t('flashSale').toUpperCase(), icon: Zap, route: 'AdminFlashSale', roles: ['admin'], color: '#FFCC00' },
-    { label: t('promotions').toUpperCase(), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin'], color: '#FF2D55' },
+    { label: t('clients').toUpperCase(), icon: UsersIcon, route: 'AdminUsers', roles: ['admin', 'support'], color: '#5AC8FA' },
+    { label: t('banners').toUpperCase(), icon: ImageIcon, route: 'AdminBanners', roles: ['admin', 'brand_owner'], color: '#FF9500' },
+    { label: t('adsPromo').toUpperCase(), icon: Megaphone, route: 'AdminAds', roles: ['admin', 'brand_owner'], color: '#FF3B30' },
+    { label: t('coupons').toUpperCase(), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
+    { label: t('flashSale').toUpperCase(), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner'], color: '#FFCC00' },
+    { label: t('promotions').toUpperCase(), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
     { label: t('support').toUpperCase(), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
     { label: (t('identityVerification') || 'VERIFICATIONS').toUpperCase(), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
     { label: t('broadcast').toUpperCase(), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
@@ -8858,7 +9175,7 @@ const getStatusColor = (status: any) => {
 };
 
 // --- ADMIN DASHBOARD ---
-function AdminDashboardScreen({ onBack, t, user: currentUser, language }: any) {
+function AdminDashboardScreen({ onBack, t, user: currentUser, profileData, language }: any) {
   const { colors, theme } = useAppTheme();
   const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, products: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -8877,13 +9194,13 @@ function AdminDashboardScreen({ onBack, t, user: currentUser, language }: any) {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [currentUser]);
+  }, [currentUser, profileData]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const isBrandOwner = currentUser?.role === 'brand_owner';
-      const myBrandId = currentUser?.brandId;
+      const isBrandOwner = profileData?.role === 'brand_owner';
+      const myBrandId = profileData?.brandId;
 
       // Orders & Sales
       const ordersSnap = await getDocs(collection(db, 'orders'));
@@ -9021,8 +9338,11 @@ function StatCard({ label, value, icon: Icon, color }: any) {
 
 // --- ADMIN PRODUCTS ---
 
-function AdminProductsScreen({ onBack, t }: any) {
+function AdminProductsScreen({ onBack, t, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -9038,7 +9358,7 @@ function AdminProductsScreen({ onBack, t }: any) {
   const [descriptionFr, setDescriptionFr] = useState('');
   const [descriptionAr, setDescriptionAr] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [brandId, setBrandId] = useState('');
+  const [brandId, setBrandId] = useState(isBrandOwner ? myBrandId : '');
   const [brands, setBrands] = useState<any[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
@@ -9056,7 +9376,9 @@ function AdminProductsScreen({ onBack, t }: any) {
   const fetchProducts = async () => {
     try {
       const snap = await getDocs(collection(db, 'products'));
-      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Brand owners only see their own brand's products
+      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   };
@@ -9463,7 +9785,7 @@ function AdminProductsScreen({ onBack, t }: any) {
 }
 
 // --- ADMIN ORDERS ---
-function AdminOrdersScreen({ onBack, t, user: currentUser, language }: any) {
+function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
   const { colors: appColors, theme } = useAppTheme();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -9482,12 +9804,12 @@ function AdminOrdersScreen({ onBack, t, user: currentUser, language }: any) {
 
   useEffect(() => {
     fetchOrders();
-  }, [currentUser]);
+  }, [currentUser, profileData]);
 
   const fetchOrders = async () => {
     try {
-      const isBrandOwner = currentUser?.role === 'brand_owner' || currentUser?.role === 'nor_kam';
-      const myBrandId = currentUser?.brandId;
+      const isBrandOwner = profileData?.role === 'brand_owner';
+      const myBrandId = profileData?.brandId;
 
       const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
@@ -10190,8 +10512,11 @@ function AdminBrandsScreen({ onBack, t }: any) {
 }
 
 // --- ADMIN ADS ---
-function AdminAdsScreen({ onBack, t }: any) {
+function AdminAdsScreen({ onBack, t, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const [ads, setAds] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -10214,12 +10539,15 @@ function AdminAdsScreen({ onBack, t }: any) {
 
   const fetchAds = async () => {
     const snap = await getDocs(collection(db, 'ads'));
-    setAds(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Brand owners only see their own ads
+    setAds(isBrandOwner && myBrandId ? all.filter((a: any) => a.brandId === myBrandId) : all);
   };
 
   const fetchTargets = async () => {
     const pSnap = await getDocs(collection(db, 'products'));
-    setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const allProducts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setProducts(isBrandOwner && myBrandId ? allProducts.filter((p: any) => p.brandId === myBrandId) : allProducts);
     const cSnap = await getDocs(collection(db, 'categories'));
     setCategories(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
@@ -10229,7 +10557,7 @@ function AdminAdsScreen({ onBack, t }: any) {
     setUploading(true);
     try {
       const mediaUrl = url.startsWith('http') ? url : await uploadToCloudinary(url);
-      const data = {
+      const data: any = {
         title: { fr: titleFr, "ar-tn": titleAr },
         description: { fr: descFr, "ar-tn": descAr },
         type,
@@ -10238,6 +10566,8 @@ function AdminAdsScreen({ onBack, t }: any) {
         targetId,
         updatedAt: serverTimestamp()
       };
+      // Tag with brandId so brand owners can only see their own ads
+      if (isBrandOwner && myBrandId) data.brandId = myBrandId;
       if (editingAd) {
         await updateDoc(doc(db, 'ads', editingAd.id), data);
       } else {
@@ -10395,8 +10725,11 @@ function AdminAdsScreen({ onBack, t }: any) {
 }
 
 // --- ADMIN BANNERS ---
-function AdminBannersScreen({ onBack, t }: any) {
+function AdminBannersScreen({ onBack, t, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const [banners, setBanners] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingBanner, setEditingBanner] = useState<any>(null);
@@ -10410,7 +10743,8 @@ function AdminBannersScreen({ onBack, t }: any) {
   useEffect(() => { fetchBanners(); }, []);
   const fetchBanners = async () => {
     const snap = await getDocs(collection(db, 'banners'));
-    setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
   };
 
   const handleSave = async () => {
@@ -10522,8 +10856,11 @@ function AdminBannersScreen({ onBack, t }: any) {
 }
 
 // --- ADMIN COUPONS ---
-function AdminCouponsScreen({ onBack, t, language }: any) {
+function AdminCouponsScreen({ onBack, t, language, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState('');
@@ -10540,13 +10877,16 @@ function AdminCouponsScreen({ onBack, t, language }: any) {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'coupons'), (snap) => {
-      setCoupons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Brand owners only see their own brand's coupons
+      setCoupons(isBrandOwner && myBrandId ? all.filter((c: any) => c.brandId === myBrandId) : all);
       setLoading(false);
     });
 
-    // Fetch products for bundle selection
+    // Fetch products for bundle selection (filtered by brand if brand_owner)
     getDocs(collection(db, 'products')).then(snap => {
-      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
     });
 
     return unsub;
@@ -10563,21 +10903,22 @@ function AdminCouponsScreen({ onBack, t, language }: any) {
       minOrder: minOrder ? parseFloat(minOrder) : 0,
     };
 
+    // Tag with brandId so brand owners can only see their own coupons
+    if (isBrandOwner && myBrandId) couponData.brandId = myBrandId;
+
     if (type === 'bundle_price') {
       if (!targetProductId) { Alert.alert(t('error'), t('selectProduct')); return; }
       const validTiers = tiers.filter(t => t.qty > 0 && t.price >= 0);
       if (validTiers.length === 0) { Alert.alert(t('error'), t('addPriceTier')); return; }
       couponData.targetProductId = targetProductId;
       couponData.tiers = validTiers;
-      couponData.value = 0; // Placeholder
+      couponData.value = 0;
     } else {
       couponData.value = value ? parseFloat(value) : 0;
     }
 
     try {
       await addDoc(collection(db, 'coupons'), couponData);
-
-      // Reset form
       setCode(''); setValue(''); setMinOrder('');
       setTargetProductId(''); setTiers([{ qty: 1, price: 0 }]);
       Alert.alert(t('successTitle'), t('couponCreated'));
@@ -11654,8 +11995,11 @@ const styles = StyleSheet.create({
   }
 });
 // --- ADMIN FLASH SALE ---
-function AdminFlashSaleScreen({ onBack, t }: any) {
+function AdminFlashSaleScreen({ onBack, t, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const [active, setActive] = useState(false);
   const [title, setTitle] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -11672,8 +12016,11 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
     init();
   }, []);
 
+  // Use a brand-specific flash sale doc for brand owners, shared admin doc for admin
+  const flashSaleDocId = isBrandOwner && myBrandId ? `flashSale_${myBrandId}` : 'flashSale';
+
   const fetchFlashSale = async () => {
-    const snap = await getDoc(doc(db, 'settings', 'flashSale'));
+    const snap = await getDoc(doc(db, 'settings', flashSaleDocId));
     if (snap.exists()) {
       const data = snap.data();
       setActive(data.active || false);
@@ -11687,7 +12034,9 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
     try {
       const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'), limit(100));
       const snap = await getDocs(q);
-      setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Brand owners only see their own products in the flash sale selector
+      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
     } catch (err) {
       console.error("Error fetching products for flash sale:", err);
     }
@@ -11695,29 +12044,26 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
 
   const handleSave = async () => {
     if (!title || !endTime) {
-      Alert.alert(t('error'), t('fillAllFields'));
+      Alert.alert(t('error'), t('fillAllFields') || t('requiredFields'));
       return;
     }
-
-    // Validate date format
     const testDate = new Date(endTime);
     if (isNaN(testDate.getTime())) {
-      Alert.alert(t('error'), t('invalidDateFormat'));
+      Alert.alert(t('error'), t('invalidDateFormat') || 'Invalid date format');
       return;
     }
-
     setLoading(true);
-    console.log("Saving flash sale...", { active, title, endTime, products: selectedProductIds.length });
-
     try {
-      await setDoc(doc(db, 'settings', 'flashSale'), {
+      const saveData: any = {
         active,
         title,
         endTime,
         productIds: selectedProductIds,
         updatedAt: serverTimestamp()
-      });
-      console.log("Flash sale saved successfully");
+      };
+      // Brand owners have their own flash sale config
+      if (isBrandOwner && myBrandId) saveData.brandId = myBrandId;
+      await setDoc(doc(db, 'settings', flashSaleDocId), saveData);
       Alert.alert(t('successTitle'), t('flashSaleUpdated'));
     } catch (e: any) {
       console.error("Error saving flash sale:", e);
@@ -11800,8 +12146,11 @@ function AdminFlashSaleScreen({ onBack, t }: any) {
 }
 
 // --- ADMIN PROMO BANNERS ---
-function AdminPromoBannersScreen({ onBack, t }: any) {
+function AdminPromoBannersScreen({ onBack, t, profileData }: any) {
   const { colors: appColors, theme } = useAppTheme();
+  const isBrandOwner = profileData?.role === 'brand_owner';
+  const myBrandId = profileData?.brandId;
+
   const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#5856D6', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
   const [banners, setBanners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11826,7 +12175,9 @@ function AdminPromoBannersScreen({ onBack, t }: any) {
     try {
       const q = query(collection(db, 'promoBanners'), orderBy('order', 'asc'));
       const snap = await getDocs(q);
-      setBanners(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Brand owners only see their own brand's promo banners
+      setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
     } catch (e) {
       console.error(e);
     } finally {
@@ -11883,12 +12234,13 @@ function AdminPromoBannersScreen({ onBack, t }: any) {
     }
     setSaving(true);
     try {
-      const data = {
+      const data: any = {
         ...form,
         order: parseInt(form.order) || 0,
         updatedAt: serverTimestamp()
       };
-
+      // Tag with brandId so brand owners only manage their own promo banners
+      if (isBrandOwner && myBrandId) data.brandId = myBrandId;
       if (editingId) {
         await updateDoc(doc(db, 'promoBanners', editingId), data);
       } else {

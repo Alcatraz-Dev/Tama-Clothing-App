@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 30,
         paddingBottom: 40,
         alignItems: 'center',
-        marginTop: -20, // Negative margin to pull elements up
+        // marginTop: -5, // Negative margin to pull elements up
     },
     bottomTitle: {
         fontSize: 14,

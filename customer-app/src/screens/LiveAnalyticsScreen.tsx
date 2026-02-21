@@ -35,7 +35,7 @@ type Props = {
     onBack?: () => void;
     onNavigate?: (screen: string, params?: any) => void;
     theme?: 'light' | 'dark';
-    language?: 'fr' | 'ar';
+    language?: 'fr' | 'ar' | 'en';
     t?: (key: string) => string;
 };
 

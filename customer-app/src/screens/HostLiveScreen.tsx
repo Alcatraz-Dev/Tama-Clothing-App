@@ -68,7 +68,7 @@ type Props = {
     hostAvatar?: string;
     onClose: () => void;
     t?: (key: string) => string;
-    language?: 'fr' | 'ar';
+    language?: 'fr' | 'ar' | 'en';
 };
 
 const styles = StyleSheet.create({

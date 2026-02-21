@@ -65,7 +65,7 @@ type Props = {
     userAvatar?: string;
     onClose: () => void;
     t?: (key: string) => string;
-    language?: 'fr' | 'ar';
+    language?: 'fr' | 'ar' | 'en';
     profileData?: any;
 };
 

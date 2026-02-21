@@ -7,52 +7,43 @@ import Animated, {
     withSpring,
     interpolate,
     useSharedValue,
-    withTiming,
-    Easing
 } from 'react-native-reanimated';
 import { APP_ICON_2 } from '../constants/layout';
 import { Share } from 'react-native';
-import { CheckCircle2, Instagram, Globe, MessageSquare, ShoppingBag, Users, Share2, Handshake, Star, ShieldCheck } from 'lucide-react-native';
+import { Star, ShieldCheck, Users, Share2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BADGE_WIDTH = SCREEN_WIDTH * 0.82;
 const BADGE_HEIGHT = BADGE_WIDTH * 1.4;
 
-interface Collaboration {
+interface UserProfile {
     id: string;
-    name: string;
-    description: string;
-    imageUrl: string;
-    type: string;
-    followersCount?: number;
-    worksCount?: number;
+    fullName: string;
+    avatarUrl: string;
+    role: string;
+    wallet?: {
+        coins: number;
+        diamonds: number;
+    };
 }
 
-interface CollabBadgeProps {
-    collab: Collaboration;
+interface UserBadgeProps {
+    userProfile: UserProfile;
     isDark: boolean;
     language: string;
     onClose: () => void;
-    onVisitProfile: () => void;
+    onVisitProfile: (uid: string) => void;
     t: (key: string) => string;
 }
 
-export default function CollabBadge({ collab, isDark, language, onClose, onVisitProfile, t }: CollabBadgeProps) {
-    const getName = (field: any, fallback = '') => {
-        if (!field) return fallback;
-        if (typeof field === 'string') return field;
-        return field[language] || field['en'] || field['fr'] || fallback;
-    };
-
+export default function UserBadge({ userProfile, isDark, language, onClose, onVisitProfile, t }: UserBadgeProps) {
     const [isFlipped, setIsFlipped] = useState(false);
     const flipAnim = useSharedValue(0);
 
     const getThemeColor = () => {
-        if (collab.type === 'Brand') return '#FFD700'; // Gold
-        if (collab.type === 'Person') return '#A855F7'; // Purple
-        if (collab.type === 'Company') return '#3B82F6'; // Blue
-        return '#22C55E'; // Green (default)
+        if (userProfile.role === 'admin') return '#EF4444'; // Red for admin
+        return '#00FF9D'; // Matrix Green for users
     };
 
     const themeColor = getThemeColor();
@@ -64,6 +55,10 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
             damping: 15,
             stiffness: 90,
         });
+    };
+
+    const tr = (fr: string, ar: string, en: string) => {
+        return language === 'ar' ? ar : (language === 'fr' ? fr : en);
     };
 
     const frontStyle = useAnimatedStyle(() => {
@@ -101,11 +96,15 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                     <View style={{ width: BADGE_WIDTH, height: BADGE_HEIGHT }}>
                         {/* FRONT SIDE */}
                         <Animated.View style={[styles.card, frontStyle, { backfaceVisibility: 'hidden' }]}>
-                            <Image
-                                source={{ uri: collab.imageUrl }}
-                                style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
-                            />
+                            {userProfile.avatarUrl ? (
+                                <Image
+                                    source={{ uri: userProfile.avatarUrl }}
+                                    style={StyleSheet.absoluteFillObject}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isDark ? '#111' : '#EEE' }]} />
+                            )}
                             <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFillObject} />
 
                             <View style={styles.frontContent}>
@@ -114,7 +113,7 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                         <Image source={APP_ICON_2} style={styles.cornerLogo} />
                                         <View style={[styles.badgeType, { borderColor: themeColor + '40', backgroundColor: themeColor + '15' }]}>
                                             <Text style={[styles.badgeTypeText, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]}>
-                                                {t(collab.type?.toLowerCase())?.toUpperCase() || (collab.type || 'COLLAB').toUpperCase()}
+                                                {t(userProfile.role?.toLowerCase() || 'customer').toUpperCase()}
                                             </Text>
                                         </View>
                                     </View>
@@ -123,32 +122,40 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                 <View style={styles.centerSection}>
                                     <View style={styles.badgeTopRow}>
                                         <View style={[styles.avatarWrapper, { borderColor: themeColor }]}>
-                                            <Image source={{ uri: collab.imageUrl }} style={styles.avatar} />
+                                            {userProfile.avatarUrl ? (
+                                                <Image source={{ uri: userProfile.avatarUrl }} style={styles.avatar} />
+                                            ) : (
+                                                <View style={[styles.avatar, { backgroundColor: themeColor + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                                                    <Text style={{ color: themeColor, fontWeight: 'bold' }}>{userProfile.fullName?.[0] || '?'}</Text>
+                                                </View>
+                                            )}
                                             <LinearGradient
                                                 colors={[themeColor, themeColor + 'CC']}
                                                 style={styles.avatarBadge}
                                             >
-                                                <Handshake size={10} color={collab.type === 'Brand' ? '#000' : '#FFF'} />
+                                                <Star size={10} color="#000" fill="#000" />
                                             </LinearGradient>
                                         </View>
                                         <View style={[styles.serialBox, { borderLeftColor: themeColor }]}>
-                                            <Text style={styles.serialLabel}>ID</Text>
-                                            <Text style={styles.serialNumber}>{collab.id.substring(0, 8).toUpperCase()}</Text>
+                                            <Text style={styles.serialLabel}>{t('name')}</Text>
+                                            <Text
+                                                style={[styles.serialNumber, { maxWidth: BADGE_WIDTH * 0.4 }]}
+                                                numberOfLines={1}
+                                                adjustsFontSizeToFit
+                                            >
+                                                {userProfile.fullName.toUpperCase()}
+                                            </Text>
                                         </View>
                                     </View>
 
-                                    <TouchableOpacity
-                                        activeOpacity={0.8}
-                                        onPress={onVisitProfile}
-                                        style={[styles.qrWrapper, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
-                                    >
+                                    <View style={[styles.qrWrapper, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}>
                                         <QRCode
-                                            value={`tama-clothing://collab/${collab.id}`}
+                                            value={`tama-clothing://user/${userProfile.id}`}
                                             size={BADGE_WIDTH * 0.4}
                                             backgroundColor="transparent"
                                             color={isDark ? '#FFF' : '#000'}
                                         />
-                                    </TouchableOpacity>
+                                    </View>
 
                                     <View style={styles.infoWrapper}>
                                         <Text
@@ -156,12 +163,12 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                             numberOfLines={1}
                                             adjustsFontSizeToFit
                                         >
-                                            {getName(collab.name)}
+                                            {(userProfile.fullName || 'User').toUpperCase()}
                                         </Text>
                                         <View style={[styles.verifiedContainer, { backgroundColor: themeColor + '20' }]}>
-                                            <CheckCircle2 size={14} color={themeColor} fill={themeColor} fillOpacity={0.2} />
+                                            <ShieldCheck size={14} color={themeColor} fill={themeColor} fillOpacity={0.2} />
                                             <Text style={[styles.verifiedText, { color: isDark ? themeColor : themeColor + 'CC' }]} numberOfLines={1}>
-                                                {t('officialPartner') || 'Official Partner'}
+                                                {t('verifiedIdentity')}
                                             </Text>
                                         </View>
                                     </View>
@@ -169,15 +176,12 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
 
                                 <View style={styles.footer}>
                                     <Text style={[styles.scanText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }]} numberOfLines={1} adjustsFontSizeToFit>
-                                        {t('scanToVisit') || 'SCAN TO VISIT'}
+                                        {t('scanToConnect')}
                                     </Text>
                                     <Image source={APP_ICON_2} style={styles.cornerLogoBottom} />
                                 </View>
-
-
                             </View>
 
-                            {/* Shimmer Effect */}
                             <View style={styles.shimmerContainer} pointerEvents="none">
                                 <LinearGradient
                                     colors={['transparent', isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)', 'transparent']}
@@ -190,11 +194,15 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
 
                         {/* BACK SIDE */}
                         <Animated.View style={[styles.card, backStyle, styles.backCard, { backfaceVisibility: 'hidden' }]}>
-                            <Image
-                                source={{ uri: collab.imageUrl }}
-                                style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
-                            />
+                            {userProfile.avatarUrl ? (
+                                <Image
+                                    source={{ uri: userProfile.avatarUrl }}
+                                    style={StyleSheet.absoluteFillObject}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isDark ? '#111' : '#EEE' }]} />
+                            )}
                             <BlurView intensity={100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFillObject} />
 
                             <View style={styles.backContent}>
@@ -208,16 +216,16 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                                     numberOfLines={1}
                                                     adjustsFontSizeToFit
                                                 >
-                                                    {t('insights') || 'Insights'}
+                                                    {t('memberCard')}
                                                 </Text>
                                             </View>
-                                            <Text style={styles.serialNumberBack}>#{collab.id.substring(0, 12).toUpperCase()}</Text>
+                                            <Text style={[styles.serialNumberBack, { color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }]}>ID: {userProfile.id.toUpperCase() || '---'}</Text>
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
                                             <Image source={APP_ICON_2} style={styles.cornerLogoSmall} />
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                                 <ShieldCheck size={12} color={themeColor} />
-                                                <Text style={{ fontSize: 8, color: themeColor, fontWeight: 'bold' }}>VERIFIED</Text>
+                                                <Text style={{ fontSize: 8, color: themeColor, fontWeight: 'bold' }}>{t('verified')}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -228,34 +236,32 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                 <View style={styles.detailsSection}>
                                     <View style={{ maxHeight: 100 }}>
                                         <Text style={[styles.description, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]} numberOfLines={4}>
-                                            {getName(collab.description) || t('noDescription') || 'No description available for this collaboration.'}
+                                            {tr('Membre de la communauté TAMA. Passionné par la mode et l\'élégance.', 'عضو في مجتمع تاما. شغوف بالأزياء والأناقة.', 'TAMA community member. Passionate about fashion and elegance.')}
                                         </Text>
                                     </View>
 
-                                    <View style={[styles.statsGrid, collab.type !== 'Brand' && { justifyContent: 'center' }]}>
+                                    <View style={[styles.statsGrid, { justifyContent: 'center' }]}>
                                         <LinearGradient
                                             colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
                                             style={styles.statBox}
                                         >
                                             <Users size={20} color={isDark ? '#FFF' : '#000'} />
                                             <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
-                                                {collab.followersCount ? collab.followersCount.toLocaleString() : '1.2k'}
+                                                {userProfile.wallet?.coins || 0}
                                             </Text>
-                                            <Text style={styles.statLabel}>{t('followers') || 'FOLLOWERS'}</Text>
+                                            <Text style={styles.statLabel}>{t('coins')}</Text>
                                         </LinearGradient>
 
-                                        {collab.type === 'Brand' && (
-                                            <LinearGradient
-                                                colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
-                                                style={styles.statBox}
-                                            >
-                                                <ShoppingBag size={20} color={isDark ? '#FFF' : '#000'} />
-                                                <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
-                                                    {collab.worksCount || Math.floor(Math.random() * 50) + 10}
-                                                </Text>
-                                                <Text style={styles.statLabel}>{t('products') || 'PRODUCTS'}</Text>
-                                            </LinearGradient>
-                                        )}
+                                        <LinearGradient
+                                            colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                                            style={styles.statBox}
+                                        >
+                                            <Star size={20} color={isDark ? '#FFF' : '#000'} />
+                                            <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
+                                                {userProfile.wallet?.diamonds || 0}
+                                            </Text>
+                                            <Text style={styles.statLabel}>{t('diamonds')}</Text>
+                                        </LinearGradient>
                                     </View>
                                 </View>
 
@@ -266,27 +272,26 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                             backgroundColor: themeColor + '10',
                                             flex: 1
                                         }]}
-                                        onPress={onVisitProfile}
+                                        onPress={() => onVisitProfile(userProfile.id)}
                                     >
                                         <Text
                                             style={[styles.visitProfileText, { color: isDark ? '#FFF' : '#000' }]}
                                             numberOfLines={1}
                                             adjustsFontSizeToFit
                                         >
-                                            {t('profile') || 'Profile'}
+                                            {t('viewDetails').toUpperCase()}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
 
                                 <View style={{ alignItems: 'center', opacity: 0.3 }}>
-                                    <Image source={APP_ICON_2} style={[styles.backCenterLogo, { marginTop: 50 }]} />
+                                    <Image source={APP_ICON_2} style={[styles.backCenterLogo, { marginTop: 50, marginBottom: 40 }]} />
                                 </View>
                             </View>
 
-                            {/* Watermark for authenticity */}
                             <View style={styles.watermarkContainer} pointerEvents="none">
                                 <Text style={[styles.watermarkText, { color: themeColor + (isDark ? '15' : '10') }]}>
-                                    AUTHENTIC COLLABORATION
+                                    {t('officialUserBadge')}
                                 </Text>
                             </View>
                         </Animated.View>
@@ -298,8 +303,8 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                     onPress={async () => {
                         try {
                             await Share.share({
-                                message: `Check out this collaboration: ${getName(collab.name)}\n\ntama-clothing://collab/${collab.id}`,
-                                url: `tama-clothing://collab/${collab.id}`
+                                message: `Check out my profile on TAMA: ${userProfile.fullName}\n\ntama-clothing://user/${userProfile.id}`,
+                                url: `tama-clothing://user/${userProfile.id}`
                             });
                         } catch (error) {
                             console.error('Error sharing:', error);
@@ -312,8 +317,8 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                     <Text style={styles.closeButtonText}>✕</Text>
                 </TouchableOpacity>
-            </View >
-        </View >
+            </View>
+        </View>
     );
 }
 
@@ -382,9 +387,6 @@ const styles = StyleSheet.create({
     badgeType: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        marginLeft: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
         borderRadius: 20,
         backgroundColor: 'rgba(120, 120, 120, 0.2)',
         borderWidth: 1,
@@ -465,7 +467,6 @@ const styles = StyleSheet.create({
     infoWrapper: {
         alignItems: 'center',
         gap: 8,
-        marginTop: -10,
     },
     collabName: {
         fontSize: 24,
@@ -526,10 +527,11 @@ const styles = StyleSheet.create({
         letterSpacing: -0.5,
     },
     serialNumberBack: {
-        fontSize: 9,
-        color: 'rgba(120,120,120,0.6)',
-        fontWeight: '700',
+        fontSize: 10,
+        color: 'rgba(150, 150, 150, 0.9)',
+        fontWeight: 'bold',
         fontFamily: 'Courier',
+        marginTop: 4,
     },
     divider: {
         width: 30,
@@ -571,19 +573,8 @@ const styles = StyleSheet.create({
         gap: 12,
         alignItems: 'center',
     },
-    actionButton: {
-        height: 50,
-        borderRadius: 25,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
     visitProfileButton: {
-        marginBottom: -100,
+        marginBottom: -120,
         height: 50,
         borderRadius: 25,
         borderWidth: 1.5,
@@ -595,32 +586,10 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         paddingHorizontal: 4,
     },
-    actionButtonText: {
-        fontSize: 13,
-        fontWeight: '800',
-        letterSpacing: 0.5,
-        paddingHorizontal: 4,
-    },
     backCenterLogo: {
         width: 120,
         height: 120,
         resizeMode: 'contain',
-        marginBottom: 80,
-    },
-    socialRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 20,
-    },
-    socialIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(120, 120, 120, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
     },
     closeButton: {
         position: 'absolute',

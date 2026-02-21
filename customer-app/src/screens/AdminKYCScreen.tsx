@@ -24,9 +24,10 @@ interface AdminKYCScreenProps {
     onBack: () => void;
     t: (key: string) => string;
     theme: 'light' | 'dark';
+    profileData?: any;
 }
 
-export default function AdminKYCScreen({ onBack, t, theme }: AdminKYCScreenProps) {
+export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminKYCScreenProps) {
     const isDark = theme === 'dark';
     const colors = isDark ? Theme.dark.colors : Theme.light.colors;
 
