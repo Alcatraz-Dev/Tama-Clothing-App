@@ -64,11 +64,17 @@ export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminK
         if (!selectedUser) return;
         setProcessing(true);
         try {
-            await updateDoc(doc(db, 'users', selectedUser.id), {
+            const updates: any = {
                 kycStatus: status,
                 'kycData.verifiedAt': new Date().toISOString(),
                 'kycData.status': status
-            });
+            };
+
+            if (status === 'approved' && selectedUser.kycData?.requestedRole) {
+                updates.role = selectedUser.kycData.requestedRole;
+            }
+
+            await updateDoc(doc(db, 'users', selectedUser.id), updates);
 
             Alert.alert(
                 status === 'approved' ? 'Approved' : 'Rejected',
@@ -153,6 +159,24 @@ export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminK
                                 <Calendar size={16} color={colors.textMuted} />
                                 <Text style={[styles.infoText, { color: colors.foreground }]}>{kyc.dob}</Text>
                             </View>
+                            {kyc.requestedRole && (
+                                <View style={styles.infoRow}>
+                                    <ShieldCheck size={16} color={'#5856D6'} />
+                                    <View>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700' }}>REQUESTED ROLE</Text>
+                                        <Text style={[styles.infoText, { color: colors.foreground, textTransform: 'uppercase' }]}>{kyc.requestedRole.replace('_', ' ')}</Text>
+                                    </View>
+                                </View>
+                            )}
+                            {kyc.vehicleType && (
+                                <View style={styles.infoRow}>
+                                    <CreditCard size={16} color={colors.textMuted} />
+                                    <View>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700' }}>VEHICLE TYPE</Text>
+                                        <Text style={[styles.infoText, { color: colors.foreground }]}>{kyc.vehicleType}</Text>
+                                    </View>
+                                </View>
+                            )}
                         </View>
 
                         {/* ID Images */}

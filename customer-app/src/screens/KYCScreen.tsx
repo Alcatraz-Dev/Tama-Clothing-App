@@ -43,6 +43,8 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
     const [fullName, setFullName] = useState(profileData?.fullName || user?.displayName || '');
     const [idNumber, setIdNumber] = useState(profileData?.kycData?.idNumber || '');
     const [dob, setDob] = useState(profileData?.kycData?.dob || '');
+    const [requestedRole, setRequestedRole] = useState<'user' | 'driver' | 'brand_owner'>(profileData?.kycData?.requestedRole || 'user');
+    const [vehicleType, setVehicleType] = useState(profileData?.kycData?.vehicleType || '');
 
     // Images
     const [idFront, setIdFront] = useState<string | null>(null);
@@ -119,6 +121,8 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                 fullName,
                 idNumber,
                 dob,
+                requestedRole,
+                vehicleType,
                 idFrontUrl: frontUrl,
                 idBackUrl: backUrl,
                 selfieUrl: selfieUrl,
@@ -230,6 +234,51 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                     />
                 </View>
             </View>
+
+            <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>ACCOUNT TYPE</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
+                    {['user', 'driver', 'brand_owner'].map((role) => (
+                        <TouchableOpacity
+                            key={role}
+                            style={{
+                                flex: 1,
+                                padding: 10,
+                                borderRadius: 10,
+                                borderWidth: 1,
+                                borderColor: requestedRole === role ? colors.foreground : colors.border,
+                                backgroundColor: requestedRole === role ? colors.foreground : 'transparent',
+                                alignItems: 'center'
+                            }}
+                            onPress={() => setRequestedRole(role as any)}
+                        >
+                            <Text style={{
+                                color: requestedRole === role ? colors.background : colors.foreground,
+                                fontWeight: '700',
+                                fontSize: 10,
+                                textTransform: 'uppercase'
+                            }}>
+                                {role.replace('_', ' ')}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+
+            {requestedRole === 'driver' && (
+                <View style={styles.inputGroup}>
+                    <Text style={[styles.label, { color: colors.textMuted }]}>VEHICLE TYPE</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1A1A1A' : '#F5F5F5', borderColor: colors.border }]}>
+                        <TextInput
+                            style={[styles.input, { color: colors.foreground }]}
+                            value={vehicleType}
+                            onChangeText={setVehicleType}
+                            placeholderTextColor={colors.textMuted}
+                            placeholder="e.g. Scooter, Car, Van"
+                        />
+                    </View>
+                </View>
+            )}
 
             <TouchableOpacity
                 style={[styles.nextBtn, { backgroundColor: colors.foreground }]}

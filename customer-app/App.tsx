@@ -8,6 +8,13 @@ import { Video, ResizeMode } from 'expo-av';
 import ProductCard from './src/components/ProductCard';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db, storage, auth } from './src/api/firebase';
+import ShipmentCreationScreen from './src/screens/ShipmentCreationScreen';
+import ShipmentTrackingScreen from './src/screens/ShipmentTrackingScreen';
+import ProofOfDeliveryScreen from './src/screens/ProofOfDeliveryScreen';
+import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
+import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import {
   collection,
   getDocs,
@@ -47,6 +54,7 @@ import {
   LogOut,
   MapPin,
   Package,
+  Truck,
   Settings,
   Trash2,
   Minus,
@@ -109,7 +117,7 @@ import {
   Gem,
   QrCode,
   Scan,
-  Gift
+  Gift,
 } from 'lucide-react-native';
 import UserBadge from './src/components/UserBadge';
 import QRScanner from './src/components/QRScanner';
@@ -260,6 +268,8 @@ export default function App() {
   const [showScanner, setShowScanner] = useState(false);
   const [showBadge, setShowBadge] = useState(false);
   const [ads, setAds] = useState<any[]>([]);
+  const [activeShipment, setActiveShipment] = useState<Shipment | null>(null);
+  const [activeTrackingId, setActiveTrackingId] = useState<string>('');
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
   const [works, setWorks] = useState<any[]>([]);
@@ -362,6 +372,44 @@ export default function App() {
       } catch (e) {
         console.error('Scan Error', e);
         Alert.alert(t('error'), 'Failed to fetch collaboration');
+      }
+    } else if (data.startsWith('TAMA-') || (activeShipment && data === activeShipment.trackingId)) {
+      // It's a shipment tracking ID
+      const trackingId = data;
+
+      if (profileData?.role === 'driver') {
+        try {
+          const shipmentsRef = collection(db, 'Shipments');
+          const q = query(shipmentsRef, where('trackingId', '==', trackingId));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const shipmentDoc = snap.docs[0];
+            const foundShipment = { id: shipmentDoc.id, ...shipmentDoc.data() } as any;
+
+            Alert.alert(
+              "Shipment Found",
+              `Ready to deliver shipment ${trackingId}?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Proof of Delivery",
+                  onPress: () => {
+                    setActiveShipment(foundShipment);
+                    setActiveTab('ProofOfDelivery');
+                  }
+                }
+              ]
+            );
+          } else {
+            Alert.alert(t('error') || 'Error', "Shipment not found in database.");
+          }
+        } catch (err) {
+          console.log(err);
+          Alert.alert(t('error') || 'Error', "Could not fetch shipment details.");
+        }
+      } else {
+        setActiveTrackingId(trackingId);
+        setActiveTab('ShipmentTracking');
       }
     } else {
       Alert.alert(t('error'), 'Invalid QR Code');
@@ -1425,8 +1473,8 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} />;
-      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} />;
+      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
+      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} t={t} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1531,6 +1579,40 @@ export default function App() {
         colors={getAppColors(theme)}
       />;
 
+      case 'AdminShipments': return <AdminShipmentsScreen
+        onBack={() => setActiveTab('AdminMenu')}
+        user={user}
+        profileData={profileData}
+        language={language}
+        t={t}
+      />;
+      case 'ShipmentTracking': return <ShipmentTrackingScreen
+        trackingId={activeTrackingId}
+        onBack={() => setActiveTab(previousTab || 'Profile')}
+        t={t}
+      />;
+      case 'ProofOfDelivery': return <ProofOfDeliveryScreen
+        shipment={activeShipment}
+        onBack={() => setActiveTab(profileData?.role === 'driver' ? 'DriverDashboard' : 'Orders')}
+        onComplete={() => setActiveTab(profileData?.role === 'driver' ? 'DriverDashboard' : 'Orders')}
+        t={t}
+      />;
+
+      case 'DriverDashboard': return <DriverDashboardScreen
+        user={user}
+        profileData={profileData}
+        onBack={() => setActiveTab('Profile')}
+        onOpenProof={(s: any) => { setActiveShipment(s); setActiveTab('ProofOfDelivery'); }}
+        onScanQR={(s: any) => { setActiveShipment(s); setShowScanner(true); }}
+        t={t}
+        language={language}
+      />;
+
+      case 'ShipmentCreation': return <ShipmentCreationScreen
+        onBack={() => setActiveTab('Profile')}
+        onComplete={() => setActiveTab('Profile')}
+        t={t}
+      />;
       case 'Feed': return <FeedScreen
         t={t}
         theme={theme}
@@ -2868,7 +2950,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId }: any) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -4078,15 +4160,147 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                 </TouchableOpacity>
               )}
 
-              <View style={{ gap: 8 }}>
-                <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
-                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
-                  <View style={styles.menuRowLeft}>
-                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Package size={20} color={colors.foreground} strokeWidth={2} /></View>
-                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('orderHistory')}</Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMuted} />
+              {profileData?.role !== 'driver' && (
+                <TouchableOpacity
+                  onPress={() => onStartLive && onStartLive()}
+                  style={{
+                    marginTop: 25,
+                    marginBottom: 10,
+                    borderRadius: 24,
+                    overflow: 'hidden',
+                    shadowColor: '#EF4444',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 15,
+                  }}
+                >
+                  <LinearGradient
+                    colors={['#EF4444', '#DC2626', '#B91C1C']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      padding: 20,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                      <View style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.3)'
+                      }}>
+                        <Camera size={22} color="#FFF" strokeWidth={2.5} />
+                      </View>
+                      <View>
+                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 2 }}>
+                          {t('broadcastCenter')}
+                        </Text>
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
+                          {t('startLiveSession')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: 'rgba(0,0,0,0.15)',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <ChevronRight size={18} color="#FFF" strokeWidth={3} />
+                    </View>
+
+                    {/* Subtle Decorative Glow */}
+                    <View style={{
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                    }} />
+                  </LinearGradient>
                 </TouchableOpacity>
+              )}
+
+              <View style={{ gap: 8 }}>
+                {profileData?.role !== 'driver' && (
+                  <>
+                    <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
+                    <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
+                      <View style={styles.menuRowLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                          <Package size={20} color={colors.foreground} strokeWidth={2} />
+                        </View>
+                        <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('myOrders')}</Text>
+                      </View>
+                      <ChevronRight size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        Alert.prompt(
+                          t('trackShipment'),
+                          t('enterTrackingId'),
+                          [
+                            { text: t('cancel'), style: "cancel" },
+                            {
+                              text: t('track'),
+                              onPress: (id?: string) => {
+                                if (id) {
+                                  setActiveTrackingId(id);
+                                  setActiveTab('ShipmentTracking');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <View style={styles.menuRowLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                          <Truck size={20} color={colors.foreground} strokeWidth={2} />
+                        </View>
+                        <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('trackShipment')}</Text>
+                      </View>
+                      <ChevronRight size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {profileData?.role === 'driver' && (
+                  <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('DriverDashboard')}>
+                    <View style={styles.menuRowLeft}>
+                      <View style={[styles.iconCircle, { backgroundColor: '#3B82F6' }]}>
+                        <Truck size={20} color="#FFF" />
+                      </View>
+                      <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{language === 'ar' ? 'لوحة السائق' : 'DRIVER DASHBOARD'}</Text>
+                    </View>
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+
+                {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && (
+                  <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('ShipmentCreation')}>
+                    <View style={styles.menuRowLeft}>
+                      <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                        <Package size={20} color="#10B981" />
+                      </View>
+                      <Text style={[styles.menuRowText, { color: colors.foreground }]}>{language === 'ar' ? 'إنشاء شحنة جديدة' : 'Create New Shipment'}</Text>
+                    </View>
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
 
                 {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
                   <TouchableOpacity
@@ -4105,61 +4319,67 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Wishlist')}>
-                  <View style={styles.menuRowLeft}>
-                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Heart size={20} color={colors.foreground} strokeWidth={2} /></View>
-                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('savedItems')}</Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
-                  {tr('CONNEXIONS', 'علاقات', 'CONNECTIONS')}
-                </Text>
-
-                <TouchableOpacity
-                  style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
-                  onPress={() => setActiveTab('Messages')}
-                >
-                  <View style={styles.menuRowLeft}>
-                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                      <MessageCircle size={20} color={colors.foreground} strokeWidth={2} />
+                {profileData?.role !== 'driver' && (
+                  <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('Wishlist')}>
+                    <View style={styles.menuRowLeft}>
+                      <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Heart size={20} color={colors.foreground} strokeWidth={2} /></View>
+                      <Text style={[styles.menuRowText, { color: colors.foreground }]}>{t('savedItems')}</Text>
                     </View>
-                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
-                      {tr('Messages', 'الرسائل', 'Messages')}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {totalUnread > 0 && (
-                      <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
-                      </View>
-                    )}
                     <ChevronRight size={18} color={colors.textMuted} />
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
-                  onPress={() => onNavigate('Friends')}
-                >
-                  <View style={styles.menuRowLeft}>
-                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                      <UsersIcon size={20} color={colors.foreground} strokeWidth={2} />
-                    </View>
-                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
-                      {tr('Amis & Demandes', 'أصحابي و الطلبات', 'Friends & Requests')}
+                {profileData?.role !== 'driver' && (
+                  <>
+                    <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
+                      {tr('CONNEXIONS', 'علاقات', 'CONNECTIONS')}
                     </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {friendRequestCount > 0 && (
-                      <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{friendRequestCount}</Text>
+
+                    <TouchableOpacity
+                      style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                      onPress={() => setActiveTab('Messages')}
+                    >
+                      <View style={styles.menuRowLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                          <MessageCircle size={20} color={colors.foreground} strokeWidth={2} />
+                        </View>
+                        <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                          {tr('Messages', 'الرسائل', 'Messages')}
+                        </Text>
                       </View>
-                    )}
-                    <ChevronRight size={18} color={colors.textMuted} />
-                  </View>
-                </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {totalUnread > 0 && (
+                          <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                          </View>
+                        )}
+                        <ChevronRight size={18} color={colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
+                      onPress={() => onNavigate('Friends')}
+                    >
+                      <View style={styles.menuRowLeft}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                          <UsersIcon size={20} color={colors.foreground} strokeWidth={2} />
+                        </View>
+                        <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                          {tr('Amis & Demandes', 'أصحابي و الطلبات', 'Friends & Requests')}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {friendRequestCount > 0 && (
+                          <View style={{ backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{friendRequestCount}</Text>
+                          </View>
+                        )}
+                        <ChevronRight size={18} color={colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                )}
 
                 <Text style={[styles.menuSectionLabel, { marginTop: 30, marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>
                   {language === 'ar' ? 'المالية' : (language === 'fr' ? 'FINANCE' : 'FINANCE')}
@@ -4737,13 +4957,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                       marginBottom: 25
                     }}>
                       {[
-                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('Amour', 'حب', 'Love') },
+                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('Amour', 'يهبل', 'Love') },
                         { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('Feu', 'نار', 'Fire') },
-                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('Drôle', 'مضحك', 'Haha') },
-                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('Bof', 'سيء', 'Bad') },
-                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('Moche', 'بشع', 'Ugly') },
-                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('Top', 'مثير', 'Cool') },
-                        ...(isViral(selectedWork) ? [{ type: 'trendy', Icon: Star, color: '#FFD700', label: tr('Viral', 'فيروس', 'Trendy') }] : [])
+                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('Drôle', 'يضحك', 'Haha') },
+                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('Bof', 'خايب', 'Bad') },
+                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('Moche', 'ماسط', 'Ugly') },
+                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('Top', 'طيارة', 'Cool') },
+                        ...(isViral(selectedWork) ? [{ type: 'trendy', Icon: Star, color: '#FFD700', label: tr('Viral', 'ترند', 'Trendy') }] : [])
                       ].map((btn) => {
                         const isSelected = selectedWork?.userReactions?.[user?.uid] === btn.type;
                         const count = selectedWork?.reactions?.[btn.type] || 0;
@@ -5141,7 +5361,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
           </View>
         </View>
       </Modal>
-    </View>
+    </View >
   );
 }
 
@@ -8363,6 +8583,7 @@ Tama Clothing ليست مسؤولة عن الأضرار غير المباشرة 
     { value: 'editor', label: t('editor').toUpperCase() },
     { value: 'support', label: t('support').toUpperCase() },
     { value: 'viewer', label: t('viewer').toUpperCase() },
+    { value: 'driver', label: t('driver') ? t('driver').toUpperCase() : 'DRIVER' },
   ];
 
   return (
@@ -9099,6 +9320,7 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
     { label: t('categories').toUpperCase(), icon: ListTree, route: 'AdminCategories', roles: ['admin'], color: '#AF52DE' },
     { label: t('brands').toUpperCase(), icon: Shield, route: 'AdminBrands', roles: ['admin'], color: '#007AFF' },
     { label: t('orders').toUpperCase(), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support', 'brand_owner'], color: '#34C759' },
+    { label: (t('shipments') || 'EXPÉDITIONS').toUpperCase(), icon: Truck, route: 'AdminShipments', roles: ['admin', 'support'], color: '#FF9500' },
     { label: 'COLLABORATIONS', icon: Handshake, route: 'AdminCollaboration', roles: ['admin'], color: '#FF9500' },
     { label: t('clients').toUpperCase(), icon: UsersIcon, route: 'AdminUsers', roles: ['admin', 'support'], color: '#5AC8FA' },
     { label: t('banners').toUpperCase(), icon: ImageIcon, route: 'AdminBanners', roles: ['admin', 'brand_owner'], color: '#FF9500' },
@@ -9827,16 +10049,11 @@ function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language
     finally { setLoading(false) }
   };
 
-  const updateStatus = async (id: string, currentStatus: string) => {
-    const statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-    const c = (currentStatus || 'pending').toLowerCase();
-    const nextIndex = (statuses.indexOf(c) + 1) % statuses.length;
-    const nextStatus = statuses[nextIndex];
-
+  const updateStatus = async (id: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'orders', id), { status: nextStatus });
+      await updateDoc(doc(db, 'orders', id), { status: newStatus });
       if (selectedOrder && selectedOrder.id === id) {
-        setSelectedOrder({ ...selectedOrder, status: nextStatus });
+        setSelectedOrder({ ...selectedOrder, status: newStatus });
 
         // Send Notification if userId exists
         if (selectedOrder.userId) {
@@ -9844,7 +10061,7 @@ function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language
             await addDoc(collection(db, 'notifications'), {
               userId: selectedOrder.userId,
               title: `Order Update`,
-              message: `Your order #${id.slice(0, 8)} is now ${nextStatus.toUpperCase()}.`,
+              message: `Your order #${id.slice(0, 8)} is now ${newStatus.toUpperCase()}.`,
               read: false,
               type: 'order_update',
               data: { orderId: id },
@@ -9855,6 +10072,39 @@ function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language
       }
       fetchOrders();
     } catch (err) { Alert.alert(t('error'), t('updateFailed')); }
+  };
+
+  const printOrderLabel = async () => {
+    if (!selectedOrder) return;
+    try {
+      const customer = getCustomer(selectedOrder);
+      const deliveryAddress = customer.address || 'Address not provided';
+      const itemsString = selectedOrder.items?.map((i: any) => `${i.name || 'Item'} (x${i.quantity || 1})`).join(', ') || 'Various Items';
+
+      const labelData = {
+        trackingId: selectedOrder.trackingId || selectedOrder.id,
+        senderName: profileData?.brandName || 'Tama Clothing',
+        receiverName: customer.fullName,
+        receiverPhone: customer.phone,
+        deliveryAddress: deliveryAddress,
+        items: [itemsString],
+        weight: 'Unknown',
+        serviceType: 'Standard delivery',
+        carrierName: 'Tama Logistics',
+        carrierPhone: '+216 71 000 000',
+      };
+
+      const html = generateShippingStickerHTML(labelData);
+
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (error: any) {
+      if (error.message && error.message.includes('ExpoPrint')) {
+        Alert.alert('Module Manquant', 'L\'application doit être reconstruite pour utiliser la fonctionnalité d\'impression. Veuillez patienter pour la fin de la compilation.');
+      } else {
+        Alert.alert(t('error') || 'Error', error.message);
+      }
+    }
   };
 
   const getCustomer = (order: any) => {
@@ -9952,10 +10202,9 @@ function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language
                     <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{t('orderNumber')}</Text>
                     <Text style={{ color: appColors.foreground, fontSize: 18, fontWeight: '900' }}>#{selectedOrder.id.slice(0, 8).toUpperCase()}</Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{t('date').toUpperCase()}</Text>
-                    <Text style={{ color: appColors.foreground, fontSize: 14, fontWeight: '700' }}>{new Date(selectedOrder.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}</Text>
-                  </View>
+                  <TouchableOpacity onPress={printOrderLabel} style={{ backgroundColor: theme === 'dark' ? '#FFF' : '#000', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}>
+                    <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 10, fontWeight: '800' }}>PRINT LABEL</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Status Section */}
@@ -10109,6 +10358,89 @@ const getSafeString = (val: any) => {
   if (val['ar-tn']) return val['ar-tn'];
   return '';
 };
+
+// --- ADMIN SHIPMENTS ---
+function AdminShipmentsScreen({ onBack, t, user, profileData, language }: any) {
+  const { colors: appColors, theme } = useAppTheme();
+  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (activeTab === 'list') {
+      fetchShipments();
+    }
+  }, [activeTab]);
+
+  const fetchShipments = async () => {
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'shipments'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setShipments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) { console.error(err) }
+    finally { setLoading(false) }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'created': return '#FF9500';
+      case 'in_transit': return '#5856D6';
+      case 'out_for_delivery': return '#007AFF';
+      case 'delivered': return '#34C759';
+      default: return '#8E8E93';
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+          <ChevronLeft size={20} color={appColors.foreground} />
+        </TouchableOpacity>
+        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{(t('shipments') || 'EXPÉDITIONS').toUpperCase()}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: appColors.border }}>
+        <TouchableOpacity onPress={() => setActiveTab('list')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'list' ? appColors.foreground : 'transparent' }}>
+          <Text style={{ fontWeight: '800', color: activeTab === 'list' ? appColors.foreground : appColors.textMuted }}>{(t('shipments') || 'LISTE').toUpperCase()}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setActiveTab('create')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'create' ? appColors.foreground : 'transparent' }}>
+          <Text style={{ fontWeight: '800', color: activeTab === 'create' ? appColors.foreground : appColors.textMuted }}>{(t('createShipment') || 'CRÉER').toUpperCase()}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'list' ? (
+        <FlatList
+          data={shipments}
+          keyExtractor={s => s.id}
+          contentContainerStyle={{ padding: 20 }}
+          refreshing={loading}
+          onRefresh={fetchShipments}
+          renderItem={({ item }) => (
+            <View style={{ padding: 15, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 16, marginBottom: 15, borderWidth: 1, borderColor: appColors.border }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ fontWeight: '900', color: appColors.foreground }}>#{item.trackingId || item.id.slice(0, 8).toUpperCase()}</Text>
+                <View style={{ backgroundColor: getStatusColor(item.status), paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{(item.status || 'CREATED').toUpperCase()}</Text>
+                </View>
+              </View>
+              <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><User size={12} color={appColors.textMuted} /> {item.receiverName}</Text>
+              <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><Phone size={12} color={appColors.textMuted} /> {item.receiverPhone}</Text>
+              <Text style={{ color: appColors.textMuted, fontSize: 13 }}><MapPin size={12} color={appColors.textMuted} /> {item.deliveryAddress}</Text>
+            </View>
+          )}
+          ListEmptyComponent={!loading ? <Text style={{ textAlign: 'center', color: appColors.textMuted, marginTop: 50 }}>{(t('noData') || 'Aucune donnée')}</Text> : null}
+        />
+      ) : (
+        <View style={{ flex: 1 }}>
+          <ShipmentCreationScreen onBack={() => setActiveTab('list')} onComplete={() => setActiveTab('list')} t={t} hideHeader={true} />
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
 
 // --- ADMIN CATEGORIES ---
 function AdminCategoriesScreen({ onBack, t }: any) {
@@ -11662,6 +11994,14 @@ function PlaceholderAdminScreen({ title, onBack, t }: any) {
   );
 }
 const styles = StyleSheet.create({
+  shippingIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
   // Admin Menu
   adminMenuCard: { width: (width - 55) / 2, backgroundColor: 'transparent', padding: 25, borderRadius: 24, marginBottom: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F2F2F7', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   adminIconBox: { width: 54, height: 54, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
@@ -11675,6 +12015,7 @@ const styles = StyleSheet.create({
   statIconBox: { width: 48, height: 48, borderRadius: 20, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   statValue: { fontSize: 18, fontWeight: '900', color: Colors.foreground, marginBottom: 4 },
   statLabel: { fontSize: 9, fontWeight: '800', color: Colors.textMuted, marginTop: 2, letterSpacing: 1.5 },
+
 
   productAdminCard: { flexDirection: 'row', backgroundColor: 'transparent', padding: 18, borderRadius: 22, marginBottom: 15, borderWidth: 1, borderColor: '#F2F2F7', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
   inputLabel: { fontSize: 10, fontWeight: '800', color: Colors.textMuted, marginBottom: 8, marginLeft: 5, marginTop: 15 },
@@ -11934,7 +12275,7 @@ const styles = StyleSheet.create({
   menuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
   menuRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   iconCircle: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center' },
-  menuRowText: { fontSize: 11.5, fontWeight: '700', color: Colors.foreground, letterSpacing: 0.5 },
+  menuRowText: { fontSize: 11.5, fontWeight: '700', color: Colors.foreground, letterSpacing: 0.5, textTransform: 'uppercase' },
   socialCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EEE' },
 
   // Settings Premium

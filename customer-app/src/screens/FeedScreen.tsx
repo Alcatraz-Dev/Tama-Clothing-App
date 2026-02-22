@@ -1189,12 +1189,12 @@ export default function FeedScreen(props: FeedScreenProps) {
                     zIndex: 20
                 }}>
                     {[
-                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('AMOUR', 'حب', 'LOVE') },
+                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('AMOUR', 'يهبل', 'LOVE') },
                         { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('FEU', 'نار', 'FIRE') },
-                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('DRÔLE', 'مضحك', 'HAHA') },
-                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('BOF', 'سيء', 'BAD') },
-                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('MOCHE', 'بشع', 'UGLY') },
-                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('TOP', 'مثير', 'COOL') }
+                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('DRÔLE', 'يضحك', 'HAHA') },
+                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('BOF', 'خايب', 'BAD') },
+                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('MOCHE', 'ماسط', 'UGLY') },
+                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('TOP', 'طيارة', 'COOL') }
                     ].map((btn) => {
                         const isSelected = work.userReactions?.[user?.uid] === btn.type;
                         const count = work.reactions?.[btn.type] || 0;

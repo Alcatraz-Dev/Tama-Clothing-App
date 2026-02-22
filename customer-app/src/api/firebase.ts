@@ -1,15 +1,9 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import {
-    getAuth,
-    initializeAuth,
-    Auth,
-    // @ts-ignore
-    getReactNativePersistence
-} from 'firebase/auth';
+import { getDatabase } from "firebase/database";
+import * as FirebaseAuth from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
 const firebaseConfig = {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -23,21 +17,15 @@ const firebaseConfig = {
 // Singleton pattern for Firebase initialization
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-let auth: Auth;
-if (Platform.OS === 'web') {
-    auth = getAuth(app);
-} else {
-    try {
-        auth = initializeAuth(app, {
-            persistence: getReactNativePersistence(AsyncStorage)
-        });
-    } catch (e: any) {
-        auth = getAuth(app);
-    }
-}
+// Use casting to bypass TypeScript errors if the member is not in the type definition
+const { initializeAuth, getReactNativePersistence } = FirebaseAuth as any;
+
+export const auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+});
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const rtdb = getDatabase(app);
 
-export { auth };
 export default app;

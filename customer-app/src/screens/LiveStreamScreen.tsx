@@ -14,7 +14,7 @@ import {
     Modal,
 } from "react-native";
 import Constants from "expo-constants";
-import { getAuth } from "firebase/auth";
+import { auth, db } from "../api/firebase";
 import {
     addDoc,
     collection,
@@ -22,7 +22,6 @@ import {
     doc,
     getDoc,
     getDocs,
-    getFirestore,
     limit,
     onSnapshot,
     orderBy,
@@ -216,8 +215,8 @@ function LiveDevBuildOnly({
         );
     }
 
-    const auth = getAuth();
-    const db = getFirestore();
+    // Using centralized auth and db imports
+
     const user = auth.currentUser;
 
     const userId = user?.uid || `guest_${Math.random().toString(16).slice(2)}`;
