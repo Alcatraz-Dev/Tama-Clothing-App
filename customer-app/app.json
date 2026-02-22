@@ -1,22 +1,23 @@
 {
   "expo": {
-    "name": "Tama Clothing",
+    "name": "BEY3A",
     "slug": "tama-clothing",
     "scheme": "tama-clothing",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/AppIcons/appstore.png",
+    "icon": "./assets/expo-icons/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/AppIcons/appstore.png",
+      "image": "./assets/expo-icons/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#eeeeee",
-      "hideAppName": true
+      "backgroundColor": "#010100"
+
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.alcatrazdev.tamaclothing",
       "infoPlist": {
+        "CFBundleDisplayName": "BEY3A",
         "ITSAppUsesNonExemptEncryption": false,
         "ZPNsAppDelegateProxyEnabled": false,
         "ZPNsProxyEnabled": false,
@@ -27,8 +28,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/AppIcons/playstore.png",
-        "backgroundColor": "#eeeeee"
+        "foregroundImage": "./assets/expo-icons/adaptive-icon.png",
+        "backgroundColor": "#010100"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -44,7 +45,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/expo-icons/favicon.png"
     },
     "extra": {
       "eas": {
@@ -69,7 +70,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/AppIcons/appstore.png",
+          "icon": "./assets/expo-icons/icon.png",
           "color": "#ffffff"
         }
       ],
@@ -103,6 +104,18 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for real-time delivery tracking."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#010100",
+          "image": "./assets/expo-icons/splash-icon.png",
+          "dark": {
+            "image": "./assets/expo-icons/splash-icon.png",
+            "backgroundColor": "#010100"
+          },
+          "imageWidth": 200
         }
       ]
     ]

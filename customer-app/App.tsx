@@ -4085,9 +4085,9 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               <View style={[styles.campaignDivider, { marginTop: 10, marginBottom: 25, backgroundColor: colors.border, height: 1, width: '100%' }]} />
 
               {/* Start Live Floating Card - Premium UI */}
-              {(profileData?.role === 'brand_owner' || profileData?.role === 'admin') && profileData?.brandId && (
+              {['admin', 'brand_owner', 'editor', 'nor_kam', 'support'].includes(profileData?.role || '') && (
                 <TouchableOpacity
-                  onPress={() => onStartLive && onStartLive(brandInfo)}
+                  onPress={() => onStartLive && onStartLive(profileData?.brandId ? brandInfo : undefined)}
                   activeOpacity={0.9}
                   style={{
                     marginHorizontal: 0,
@@ -4160,82 +4160,22 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                 </TouchableOpacity>
               )}
 
-              {profileData?.role !== 'driver' && (
-                <TouchableOpacity
-                  onPress={() => onStartLive && onStartLive()}
-                  style={{
-                    marginTop: 25,
-                    marginBottom: 10,
-                    borderRadius: 24,
-                    overflow: 'hidden',
-                    shadowColor: '#EF4444',
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 15,
-                  }}
-                >
-                  <LinearGradient
-                    colors={['#EF4444', '#DC2626', '#B91C1C']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{
-                      padding: 20,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                      <View style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: 'rgba(255,255,255,0.2)',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.3)'
-                      }}>
-                        <Camera size={22} color="#FFF" strokeWidth={2.5} />
-                      </View>
-                      <View>
-                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 2 }}>
-                          {t('broadcastCenter')}
-                        </Text>
-                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
-                          {t('startLiveSession')}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: 'rgba(0,0,0,0.15)',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <ChevronRight size={18} color="#FFF" strokeWidth={3} />
-                    </View>
-
-                    {/* Subtle Decorative Glow */}
-                    <View style={{
-                      position: 'absolute',
-                      top: -20,
-                      right: -20,
-                      width: 100,
-                      height: 100,
-                      borderRadius: 50,
-                      backgroundColor: 'rgba(255,255,255,0.1)',
-                    }} />
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
 
               <View style={{ gap: 8 }}>
                 {profileData?.role !== 'driver' && (
                   <>
                     <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
+                    {['admin', 'support', 'brand_owner'].includes(profileData?.role) && (
+                      <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('AdminDashboard')}>
+                        <View style={styles.menuRowLeft}>
+                          <View style={[styles.iconCircle, { backgroundColor: '#5856D6' }]}>
+                            <LayoutDashboard size={20} color="#FFF" />
+                          </View>
+                          <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{t('dashboard') ? t('dashboard').toUpperCase() : tr('TABLEAU DE BORD', 'لوحة القيادة', 'DASHBOARD')}</Text>
+                        </View>
+                        <ChevronRight size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
                       <View style={styles.menuRowLeft}>
                         <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
