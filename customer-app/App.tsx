@@ -12,6 +12,7 @@ import ShipmentCreationScreen from './src/screens/ShipmentCreationScreen';
 import ShipmentTrackingScreen from './src/screens/ShipmentTrackingScreen';
 import ProofOfDeliveryScreen from './src/screens/ProofOfDeliveryScreen';
 import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
+import AdminProductsScreen from './src/screens/admin/AdminProductsScreen';
 import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -2142,9 +2143,11 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
           fontWeight: '900' as any,
           color: colors.foreground
         }]}>TAMA CLOTHING</Text> */}
-        <View>
-          <Image source={require("./assets/logo.png")} style={[styles.logo, { alignSelf: 'center', width: 200, height: 200, marginLeft: 20 }]} />
-
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 90 }}>
+          <Image
+            source={require("./assets/logo.png")}
+            style={{ width: 300, height: 200, resizeMode: 'contain' }}
+          />
         </View>
 
 
@@ -4166,12 +4169,12 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   <>
                     <Text style={[styles.menuSectionLabel, { marginBottom: 15, marginLeft: 5, color: colors.textMuted }]}>{t('myStudio')}</Text>
                     {['admin', 'support', 'brand_owner'].includes(profileData?.role) && (
-                      <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('AdminDashboard')}>
+                      <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('AdminMenu')}>
                         <View style={styles.menuRowLeft}>
-                          <View style={[styles.iconCircle, { backgroundColor: '#5856D6' }]}>
-                            <LayoutDashboard size={20} color="#FFF" />
+                          <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                            <LayoutDashboard size={20} color="#5856D6" />
                           </View>
-                          <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{t('dashboard') ? t('dashboard').toUpperCase() : tr('TABLEAU DE BORD', 'لوحة القيادة', 'DASHBOARD')}</Text>
+                          <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{t('adminConsole') ? t('adminConsole').toUpperCase() : tr('CONSOLE ADMIN', 'وحدة تحكم المسؤول', 'ADMIN CONSOLE')}</Text>
                         </View>
                         <ChevronRight size={18} color={colors.textMuted} />
                       </TouchableOpacity>
@@ -4441,7 +4444,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                     <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => onNavigate('AdminMenu')}>
                       <View style={styles.menuRowLeft}>
                         <View style={[styles.iconCircle, { backgroundColor: colors.foreground }]}><Shield size={20} color={theme === 'dark' ? '#000' : '#FFF'} strokeWidth={2} /></View>
-                        <Text style={[styles.menuRowText, { fontWeight: '900', color: colors.foreground }]}>{t('adminDash')}</Text>
+                        <Text style={[styles.menuRowText, { fontWeight: '900', color: colors.foreground }]}>{t('adminConsole').toUpperCase()}</Text>
                       </View>
                       <ChevronRight size={18} color={colors.textMuted} />
                     </TouchableOpacity>
@@ -9275,13 +9278,13 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
   ].filter(item => item.roles.includes(role));
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { marginTop: 40, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
           <ChevronLeft size={20} color={colors.foreground} />
         </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: colors.foreground }]}>{t('adminConsole').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
+        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { marginTop: 40, color: colors.foreground }]}>{t('adminConsole').toUpperCase()}</Text>
+
       </View>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
@@ -9300,7 +9303,7 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
           ))}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View >
   );
 }
 
@@ -9498,453 +9501,7 @@ function StatCard({ label, value, icon: Icon, color }: any) {
   );
 }
 
-// --- ADMIN PRODUCTS ---
-
-function AdminProductsScreen({ onBack, t, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
-
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<any>(null);
-
-  // Form State
-  const [nameFr, setNameFr] = useState('');
-  const [nameAr, setNameAr] = useState('');
-  const [price, setPrice] = useState('');
-  const [discountPrice, setDiscountPrice] = useState('');
-  const [deliveryPrice, setDeliveryPrice] = useState('7');
-  const [descriptionFr, setDescriptionFr] = useState('');
-  const [descriptionAr, setDescriptionAr] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [brandId, setBrandId] = useState(isBrandOwner ? myBrandId : '');
-  const [brands, setBrands] = useState<any[]>([]);
-  const [images, setImages] = useState<string[]>([]);
-  const [sizes, setSizes] = useState<string[]>([]);
-  const [colors, setColors] = useState<string[]>([]);
-  const [colorInput, setColorInput] = useState('');
-  const [isSoldOut, setIsSoldOut] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-    fetchBrands();
-  }, []);
-
-  const fetchProducts = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'products'));
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Brand owners only see their own brand's products
-      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'categories'));
-      setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err) }
-  };
-
-  const fetchBrands = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'brands'));
-      setBrands(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err) }
-  };
-
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setImages([...images, result.assets[0].uri]);
-    }
-  };
-
-  const handleSaveProduct = async () => {
-    if (!nameFr || !price || images.length === 0) {
-      Alert.alert(t('error'), t('requiredFields'));
-      return;
-    }
-
-    setUploading(true);
-    try {
-      // Upload images via admin panel API
-      const uploadedImages = await Promise.all(images.map(async (img) => {
-        return await uploadImageToCloudinary(img);
-      }));
-
-      const productData = {
-        name: { fr: nameFr, "ar-tn": nameAr },
-        price: parseFloat(price),
-        discountPrice: discountPrice ? parseFloat(discountPrice) : null,
-        deliveryPrice: parseFloat(deliveryPrice || '7'),
-        description: { fr: descriptionFr, "ar-tn": descriptionAr },
-        categoryId,
-        category: categories.find(c => c.id === categoryId)?.name?.fr || t('uncategorized'),
-        brandId,
-        brandName: brands.find(b => b.id === brandId)?.name?.fr || '',
-        images: uploadedImages,
-        mainImage: uploadedImages[0],
-        sizes: sizes.length > 0 ? sizes : ['S', 'M', 'L', 'XL'],
-        colors,
-        status: isSoldOut ? 'sold_out' : 'in_stock',
-        updatedAt: serverTimestamp(),
-      };
-
-      console.log('Saving product with colors:', colors);
-      console.log('Product data:', productData);
-
-      if (editingProduct) {
-        await updateDoc(doc(db, 'products', editingProduct.id), productData);
-        Alert.alert(t('successTitle'), t('productUpdated'));
-      } else {
-        await addDoc(collection(db, 'products'), { ...productData, createdAt: serverTimestamp() });
-        Alert.alert(t('successTitle'), t('productCreated'));
-      }
-
-      setModalVisible(false);
-      fetchProducts();
-      resetForm();
-
-    } catch (err: any) {
-      console.error('Save product error:', err);
-      Alert.alert(t('error'), t('failedToSave'));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDelete = (id: string) => {
-    Alert.alert('Delete', 'Are you sure?', [
-      { text: 'Cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          await deleteDoc(doc(db, 'products', id));
-          fetchProducts();
-        }
-      }
-    ]);
-  };
-
-  const resetForm = () => {
-    setEditingProduct(null); setNameFr(''); setNameAr(''); setPrice(''); setDiscountPrice(''); setDeliveryPrice('7');
-    setDescriptionFr(''); setDescriptionAr(''); setCategoryId(''); setBrandId(''); setImages([]); setSizes([]); setColors([]);
-    setIsSoldOut(false);
-  };
-
-  const openEdit = (p: any) => {
-    setEditingProduct(p);
-    setNameFr(p.name?.fr || getString(p.name));
-    setNameAr(p.name?.['ar-tn'] || '');
-    setPrice(String(p.price));
-    setDiscountPrice(p.discountPrice ? String(p.discountPrice) : '');
-    setDeliveryPrice(String(p.deliveryPrice || '7'));
-    setDescriptionFr(p.description?.fr || getString(p.description));
-    setDescriptionAr(p.description?.['ar-tn'] || '');
-    setCategoryId(p.categoryId || '');
-    setBrandId(p.brandId || '');
-    setImages(p.images || (p.image ? [p.image] : []));
-    setSizes(p.sizes || []);
-    setColors(p.colors || []);
-    setIsSoldOut(p.status === 'sold_out');
-    setModalVisible(true);
-  };
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 100, right: 100 }]}>{t('products').toUpperCase()}</Text>
-        <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Plus size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={products}
-        contentContainerStyle={{ padding: 20 }}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Image source={{ uri: item.images?.[0] }} style={{ width: 70, height: 90, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
-            <View style={{ flex: 1, marginLeft: 16, justifyContent: 'center' }}>
-              <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground, marginBottom: 4 }} numberOfLines={2}>{getString(item.name)}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <View style={{ backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{getString(item.category).toUpperCase()}</Text>
-                  {item.brandName ? (
-                    <>
-                      <Text style={{ color: appColors.border, fontSize: 10 }}>|</Text>
-                      <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{item.brandName.toUpperCase()}</Text>
-                    </>
-                  ) : null}
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {item.discountPrice ? (
-                  <>
-                    <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{item.discountPrice} TND</Text>
-                    <Text style={{ fontSize: 11, color: appColors.textMuted, textDecorationLine: 'line-through' }}>{item.price} TND</Text>
-                  </>
-                ) : (
-                  <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{item.price} TND</Text>
-                )}
-              </View>
-            </View>
-            <View style={{ gap: 12 }}>
-              <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-
-      {/* Add/Edit Modal */}
-      {/* Add/Edit Modal */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#000' : 'white' }}>
-            <View style={{ height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white' }}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingProduct ? t('editProduct').toUpperCase() : t('newProduct').toUpperCase()}</Text>
-              <TouchableOpacity onPress={handleSaveProduct} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-          <ScrollView contentContainerStyle={{ padding: 25, paddingBottom: 100 }}>
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('images').toUpperCase()}</Text>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', padding: 15, borderRadius: 15 }}>
-              <View>
-                <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 13 }}>{t('soldOutStatus')}</Text>
-                <Text style={{ color: appColors.textMuted, fontSize: 11 }}>{t('markUnavailable')}</Text>
-              </View>
-              <Switch
-                value={isSoldOut}
-                onValueChange={setIsSoldOut}
-                trackColor={{ false: '#767577', true: appColors.error }}
-                thumbColor={isSoldOut ? '#fff' : '#f4f3f4'}
-              />
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-              <TouchableOpacity onPress={handlePickImage} style={{ width: 100, height: 133, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 10, borderWidth: 1, borderColor: appColors.border, borderStyle: 'dashed' }}>
-                <Camera size={24} color="#ccc" />
-                <Text style={{ color: '#999', marginTop: 5, fontWeight: '700', fontSize: 9 }}>ADD</Text>
-              </TouchableOpacity>
-              {images.map((img, index) => (
-                <View key={index} style={{ marginRight: 10 }}>
-                  <Image source={{ uri: img }} style={{ width: 100, height: 133, borderRadius: 15 }} />
-                  <TouchableOpacity onPress={() => setImages(images.filter((_, i) => i !== index))} style={{ position: 'absolute', top: -5, right: -5, backgroundColor: appColors.error, borderRadius: 10, padding: 4 }}>
-                    <X size={12} color="white" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('productNameFr')}</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={nameFr} onChangeText={setNameFr} placeholder={t('frenchName')} placeholderTextColor="#666" />
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('productNameAr')}</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={nameAr} onChangeText={setNameAr} placeholder={t('arabicName')} placeholderTextColor="#666" />
-
-            <View style={{ flexDirection: 'row', gap: 15 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('price')}</Text>
-                <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="0.000" placeholderTextColor="#666" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('discountPrice')}</Text>
-                <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={discountPrice} onChangeText={setDiscountPrice} keyboardType="numeric" placeholder="0.000" placeholderTextColor="#666" />
-              </View>
-            </View>
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('deliveryPrice')}</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={deliveryPrice} onChangeText={setDeliveryPrice} keyboardType="numeric" placeholder="7.000" placeholderTextColor="#666" />
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('category')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={{
-                    paddingHorizontal: 20, paddingVertical: 10,
-                    backgroundColor: categoryId === cat.id ? appColors.foreground : (theme === 'dark' ? '#171720' : 'white'),
-                    borderRadius: 20, marginRight: 10,
-                    borderWidth: 1, borderColor: categoryId === cat.id ? appColors.foreground : appColors.border
-                  }}
-                >
-                  <Text style={{ color: categoryId === cat.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600' }}>
-                    {cat.name?.fr || cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('brand')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-              {brands.map((b) => (
-                <TouchableOpacity
-                  key={b.id}
-                  onPress={() => setBrandId(b.id)}
-                  style={{
-                    paddingHorizontal: 20, paddingVertical: 10,
-                    backgroundColor: brandId === b.id ? appColors.foreground : (theme === 'dark' ? '#171720' : 'white'),
-                    borderRadius: 20, marginRight: 10,
-                    borderWidth: 1, borderColor: brandId === b.id ? appColors.foreground : appColors.border
-                  }}
-                >
-                  <Text style={{ color: brandId === b.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600' }}>
-                    {b.name?.fr || b.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={[styles.inputLabel, { marginBottom: 0, color: appColors.foreground }]}>{t('sizesLabel')}</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => setSizes(['XS', 'S', 'M', 'L', 'XL', 'XXL'])}
-                  style={{ paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', borderRadius: 8 }}
-                >
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.foreground }}>+ ALPHA</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setSizes(['36', '38', '40', '42', '44', '46'])}
-                  style={{ paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', borderRadius: 8 }}
-                >
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.foreground }}>+ NUMERIC</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-              {['TU', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '36', '38', '40', '42', '44', '46'].map(s => (
-                <TouchableOpacity
-                  key={s}
-                  onPress={() => setSizes(sizes.includes(s) ? sizes.filter(sz => sz !== s) : [...sizes, s])}
-                  style={{
-                    width: 45, height: 45, borderRadius: 25,
-                    backgroundColor: sizes.includes(s) ? appColors.foreground : (theme === 'dark' ? '#171720' : 'white'),
-                    borderWidth: 1, borderColor: appColors.border,
-                    alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <Text style={{ color: sizes.includes(s) ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600', fontSize: 11 }}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('colorsLabel')}</Text>
-            <View style={{ marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                <TextInput
-                  style={[styles.adminInput, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#121218' : 'white', color: appColors.foreground, borderColor: appColors.border }]}
-                  placeholder={t('colorPlaceholder')}
-                  placeholderTextColor="#666"
-                  value={colorInput}
-                  onChangeText={setColorInput}
-                  onSubmitEditing={() => {
-                    const trimmed = colorInput.trim();
-                    if (trimmed) {
-                      if (!colors.includes(trimmed)) {
-                        console.log('Adding color:', trimmed);
-                        setColors([...colors, trimmed]);
-                        setColorInput('');
-                      } else {
-                        Alert.alert(t('duplicate'), t('duplicateColor'));
-                      }
-                    }
-                  }}
-                />
-                <TouchableOpacity
-                  onPress={() => {
-                    const trimmed = colorInput.trim();
-                    if (trimmed) {
-                      if (!colors.includes(trimmed)) {
-                        console.log('Adding color:', trimmed);
-                        setColors([...colors, trimmed]);
-                        setColorInput('');
-                      } else {
-                        Alert.alert(t('duplicate'), t('duplicateColor'));
-                      }
-                    }
-                  }}
-                  style={{
-                    backgroundColor: appColors.foreground,
-                    borderRadius: 15,
-                    paddingHorizontal: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 60
-                  }}
-                >
-                  <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '800', fontSize: 12 }}>ADD</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                {colors.map((c, i) => {
-                  const displayColor = c.startsWith('#') ? c : c.toLowerCase();
-                  return (
-                    <TouchableOpacity
-                      key={i}
-                      onPress={() => setColors(colors.filter(col => col !== c))}
-                      style={{
-                        padding: 8,
-                        backgroundColor: theme === 'dark' ? '#171720' : 'white',
-                        borderRadius: 8,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 5,
-                        borderWidth: 1,
-                        borderColor: appColors.border
-                      }}
-                    >
-                      <View style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        backgroundColor: displayColor,
-                        borderWidth: 1,
-                        borderColor: appColors.border
-                      }} />
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: appColors.foreground }}>{c}</Text>
-                      <X size={12} color={appColors.textMuted} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('descriptionFr')}</Text>
-            <TextInput style={[styles.adminInput, { height: 80, paddingTop: 15, backgroundColor: theme === 'dark' ? '#121218' : 'white', color: appColors.foreground, borderColor: appColors.border }]} multiline value={descriptionFr} onChangeText={setDescriptionFr} placeholder={t('frenchDesc')} placeholderTextColor="#666" />
-
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('descriptionAr')}</Text>
-            <TextInput style={[styles.adminInput, { height: 80, textAlign: 'right', paddingTop: 15, backgroundColor: theme === 'dark' ? '#121218' : 'white', color: appColors.foreground, borderColor: appColors.border }]} multiline value={descriptionAr} onChangeText={setDescriptionAr} placeholder={t('arabicDesc')} placeholderTextColor="#666" />
-
-          </ScrollView>
-        </View>
-      </Modal >
-    </SafeAreaView >
-  );
-}
+// --- ADMIN PRODUCTS is now imported from './src/screens/admin/AdminProductsScreen.tsx' ---
 
 // --- ADMIN ORDERS ---
 function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
@@ -12030,12 +11587,12 @@ const styles = StyleSheet.create({
 
   // Header (Compact)
   // Header Modern
-  modernHeader: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 1000 },
+  modernHeader: { height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 1000, paddingHorizontal: 20 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   logo: { width: 28, height: 28, borderRadius: 8, marginRight: 10 },
   logoLarge: { width: 80, height: 80, borderRadius: 20, marginBottom: 20 },
   headerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.foreground, marginRight: 12 },
-  modernLogo: { fontSize: 13, fontWeight: '900', letterSpacing: 1, position: 'absolute', left: 50, right: 50, textAlign: 'center', textAlignVertical: 'center', zIndex: 1 },
+  modernLogo: { fontSize: 13, fontWeight: '900', letterSpacing: 1, position: 'absolute', left: 70, right: 70, textAlign: 'center', zIndex: 1, height: 60, lineHeight: 60 },
   searchCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   headerAvatarContainer: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', zIndex: 10 },
   headerAvatar: { width: 42, height: 42, borderRadius: 21 },

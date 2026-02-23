@@ -11,7 +11,8 @@ const firebaseConfig = {
     projectId: "tama-clothing-v2-alcatraz",
     storageBucket: "tama-clothing-v2-alcatraz.firebasestorage.app",
     messagingSenderId: "32411249289",
-    appId: "1:32411249289:web:fd4b30ad0233dec21df458"
+    appId: "1:32411249289:web:fd4b30ad0233dec21df458",
+    databaseURL: "https://tama-clothing-v2-alcatraz-default-rtdb.europe-west1.firebasedatabase.app/"
 };
 
 // Singleton pattern for Firebase initialization
