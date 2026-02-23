@@ -2,17 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
+    TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
     Animated,
     Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon, ChevronLeft } from 'lucide-react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2;
@@ -49,6 +50,7 @@ function StatCard({ label, value, icon: Icon, color }: StatCardProps) {
 
 export default function AdminDashboardScreen({ onBack, t, profileData, language }: any) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
     const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, products: 0 });
     const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -139,11 +141,22 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
     }, []);
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            <AdminHeader title={t('dashboard')} onBack={onBack} scrollY={scrollY} />
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+                
+                <View style={sc.headerRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('dashboard')}</Text>
+                    <View style={{ width: 42 }} />
+                </View>
+                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <Animated.ScrollView
-                contentContainerStyle={sc.scrollContent}
+                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
                 showsVerticalScrollIndicator={false}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                 scrollEventThrottle={16}
@@ -211,14 +224,17 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
                     </>
                 )}
             </Animated.ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const sc = StyleSheet.create({
-    root: {
-        flex: 1
-    },
+    root: { flex: 1 },
+    header: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
+    headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+    headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    separator: { height: StyleSheet.hairlineWidth },
     scrollContent: {
         padding: 20,
         paddingTop: 10,

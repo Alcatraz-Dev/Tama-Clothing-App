@@ -13,7 +13,7 @@ import {
     Modal,
     ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     ChevronLeft,
     Plus,
@@ -34,11 +34,10 @@ import {
     serverTimestamp,
 } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
-import { BlurView } from 'expo-blur';
+
 import UniversalVideoPlayer from "../../components/common/UniversalVideoPlayer";
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader';
 import {
     AdminCard,
     SectionLabel,
@@ -55,6 +54,8 @@ const { width } = Dimensions.get('window');
 
 export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr' }: any) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const isDark = theme === 'dark';
     const isBrandOwner = profileData?.role === 'brand_owner';
     const myBrandId = profileData?.brandId;
 
@@ -186,20 +187,24 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            <AdminHeader
-                title={t('adsCampaigns')}
-                onBack={onBack}
-                scrollY={scrollY}
-                rightElement={
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+                
+                <View style={sc.hdrRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('adsCampaigns')}</Text>
                     <TouchableOpacity
                         onPress={() => { resetForm(); setModalVisible(true); }}
-                        style={[sc.addBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
+                        style={[sc.addBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
                     >
                         <Plus size={20} color={colors.foreground} />
                     </TouchableOpacity>
-                }
-            />
+                </View>
+                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <Animated.FlatList
                 data={ads}
@@ -208,7 +213,7 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                     { useNativeDriver: false }
                 )}
                 scrollEventThrottle={16}
-                contentContainerStyle={sc.listContent}
+                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
                 ListEmptyComponent={<EmptyState message={t('noCampaigns')} />}
                 renderItem={({ item }) => (
                     <AdminCard style={sc.adCard}>
@@ -383,12 +388,17 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                     </ScrollView>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
+    hdr: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
+    hdrRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+    hdrTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    hSep: { height: StyleSheet.hairlineWidth },
     addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     listContent: { padding: 20, paddingBottom: 120, paddingTop: 10 },
     adCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },

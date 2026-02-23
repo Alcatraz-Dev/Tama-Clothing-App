@@ -7,7 +7,7 @@ import {
     Animated,
     ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     ChevronLeft,
     User,
@@ -15,15 +15,17 @@ import {
     MapPin,
     Package,
 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader';
+import { AdminHeader } from '../../components/admin/AdminHeader'; // keep for now
 import ShipmentCreationScreen from '../ShipmentCreationScreen';
 
 export default function AdminShipmentsScreen({ onBack, t, language }: any) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const isDark = theme === 'dark';
     const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
     const [shipments, setShipments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,8 +59,19 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            <AdminHeader title={t('shipments')} onBack={onBack} scrollY={scrollY} />
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+                
+                <View style={sc.headerRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('shipments')}</Text>
+                    <View style={{ width: 42 }} />
+                </View>
+                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <View style={[sc.nav, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity
@@ -85,7 +98,7 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
                     scrollEventThrottle={16}
                     data={shipments}
                     keyExtractor={s => s.id}
-                    contentContainerStyle={sc.listContent}
+                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
                     refreshing={loading}
                     onRefresh={fetchShipments}
                     renderItem={({ item }) => (
@@ -117,12 +130,17 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
                     <ShipmentCreationScreen onBack={() => setActiveTab('list')} onComplete={() => setActiveTab('list')} t={t} hideHeader={true} />
                 </View>
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
+    header: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
+    headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+    headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    separator: { height: StyleSheet.hairlineWidth },
     nav: { flexDirection: 'row', borderBottomWidth: 1 },
     navItem: { flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
     navText: { fontWeight: '800', fontSize: 10 },

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "BEY3A",
+    "name": "Bey3a",
     "slug": "tama-clothing",
     "scheme": "tama-clothing",
     "version": "1.0.0",
@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.alcatrazdev.tamaclothing",
       "infoPlist": {
-        "CFBundleDisplayName": "BEY3A",
+        "CFBundleDisplayName": "Bey3a",
         "ITSAppUsesNonExemptEncryption": false,
         "ZPNsAppDelegateProxyEnabled": false,
         "ZPNsProxyEnabled": false,

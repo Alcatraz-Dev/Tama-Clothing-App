@@ -197,7 +197,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                             <ChevronLeft size={24} color={iconColor} />
                         </TouchableOpacity>
                         <View style={{ flex: 1, alignItems: 'center' }}>
-                            <Text style={styles.headerTitle}>Live Analytics</Text>
+                            <Text style={styles.headerTitle}>{t('liveAnalytics')}</Text>
                         </View>
                         <View style={{ width: 40 }} />
                     </View>

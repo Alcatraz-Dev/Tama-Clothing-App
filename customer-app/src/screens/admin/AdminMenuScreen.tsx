@@ -7,7 +7,8 @@ import {
     Animated,
     Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import {
     LayoutDashboard,
     Package,
@@ -25,9 +26,9 @@ import {
     ShieldCheck,
     Bell,
     Settings,
+    ChevronLeft,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2; // 2 columns with 20px side padding + 12px gap
@@ -49,6 +50,7 @@ type MenuItem = {
 
 export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: AdminMenuScreenProps) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
     const scrollY = useRef(new Animated.Value(0)).current;
     const isDark = theme === 'dark';
     const role = profileData?.role || 'admin';
@@ -74,11 +76,23 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
     ].filter(item => item.roles.includes(role));
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            <AdminHeader title={t('adminConsole')} onBack={onBack} scrollY={scrollY} />
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            {/* Analytics-style header */}
+            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+
+                <View style={sc.headerRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('adminConsole')}</Text>
+                    <View style={{ width: 42 }} />
+                </View>
+                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <Animated.ScrollView
-                contentContainerStyle={sc.scrollContent}
+                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
                 showsVerticalScrollIndicator={false}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -127,7 +141,7 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
                     })}
                 </View>
             </Animated.ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -135,6 +149,48 @@ const sc = StyleSheet.create({
     root: {
         flex: 1,
     },
+    // ── Analytics-style header ──────────────────────────────────────────
+    header: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        overflow: 'hidden',
+        zIndex: 100,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        gap: 10,
+    },
+    headerTitle: {
+        flex: 1,
+        fontSize: 20,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+        textAlign: 'center',
+    },
+    backBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        flexShrink: 0,
+    },
+    separator: {
+        height: StyleSheet.hairlineWidth,
+        marginHorizontal: 0,
+    },
+    // ─────────────────────────────────────────────────────────────────────
     scrollContent: {
         padding: 20,
         paddingBottom: 120,

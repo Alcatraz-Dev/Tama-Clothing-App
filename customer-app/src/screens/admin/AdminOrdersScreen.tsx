@@ -3,23 +3,17 @@ import {
     View, Text, TextInput, TouchableOpacity, Image, Modal, ScrollView,
     Alert, ActivityIndicator, StyleSheet, Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import {
     ChevronLeft, X, Search, MapPin, Phone, Mail, User, ShoppingBag, PackageOpen,
 } from 'lucide-react-native';
-import { AdminHeader } from '../../components/admin/AdminHeader';
-import {
-    AdminSearchBar,
-    EmptyState,
-    adminStyles,
-    DS,
-} from '../../components/admin/AdminUI';
+import { useAppTheme } from '../../context/ThemeContext';
+import { AdminSearchBar, EmptyState, adminStyles, DS } from '../../components/admin/AdminUI';
 import {
     collection, getDocs, query, orderBy, addDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../api/firebase';
-import { useAppTheme } from '../../context/ThemeContext';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateShippingStickerHTML } from '../../utils/shipping';
@@ -59,6 +53,8 @@ function CustomerRow({ icon: Icon, label, value, colors, theme }: any) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const isDark = theme === 'dark';
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -163,13 +159,19 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
 
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            {/* Header */}
-            <AdminHeader
-                title={t('orders')}
-                onBack={onBack}
-                scrollY={scrollY}
-            />
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+                
+                <View style={sc.hdrRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('orders')}</Text>
+                    <View style={{ width: 42 }} />
+                </View>
+                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <AdminSearchBar
                 value={searchQuery}
@@ -185,7 +187,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                 <Animated.FlatList
                     data={filteredOrders}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={sc.listContent}
+                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
                     onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                     scrollEventThrottle={16}
                     ListEmptyComponent={
@@ -352,13 +354,18 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                     </ScrollView>
                 </View>
             </Modal>
-        </SafeAreaView >
+        </View>
     );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const sc = StyleSheet.create({
     root: { flex: 1 },
+    hdr: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
+    hdrRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+    hdrTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    hSep: { height: StyleSheet.hairlineWidth },
 
     // Header
     header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 100, overflow: 'hidden' },

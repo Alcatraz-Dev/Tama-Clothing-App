@@ -11,7 +11,9 @@ import {
     ActivityIndicator,
     Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAppTheme } from '../../context/ThemeContext';
 import {
     ChevronLeft,
     User,
@@ -45,8 +47,6 @@ import {
     EmailAuthProvider,
 } from 'firebase/auth';
 import { db } from '../../api/firebase';
-import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader';
 import {
     AdminCard,
     InputLabel,
@@ -57,6 +57,8 @@ import {
 
 export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const isDark = theme === 'dark';
     const auth = getAuth();
     const [activeTab, setActiveTab] = useState<'account' | 'team' | 'socials' | 'legal'>('account');
     const [team, setTeam] = useState<any[]>([]);
@@ -200,8 +202,19 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
-            <AdminHeader title={t('settings')} onBack={onBack} scrollY={scrollY} />
+        <View style={[sc.root, { backgroundColor: colors.background }]}>
+            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
+                
+                <View style={sc.headerRow}>
+                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
+                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('settings')}</Text>
+                    <View style={{ width: 42 }} />
+                </View>
+                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
+            </View>
 
             <View style={[sc.nav, { borderBottomColor: colors.border }]}>
                 {[
@@ -225,7 +238,7 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
 
             <Animated.ScrollView
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                contentContainerStyle={sc.scrollContent}
+                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
             >
                 {activeTab === 'account' && (
                     <AdminCard>
@@ -389,12 +402,17 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
 
                 <View style={{ height: 100 }} />
             </Animated.ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
+    header: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
+    headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+    headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    hSep: { height: StyleSheet.hairlineWidth },
     nav: { flexDirection: 'row', borderBottomWidth: 1 },
     navItem: { flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', gap: 6 },
     navText: { fontSize: 8, fontWeight: '900' },

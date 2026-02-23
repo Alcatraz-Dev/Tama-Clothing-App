@@ -7310,12 +7310,10 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
-
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [0, 1],
-    extrapolate: 'clamp'
-  });
+  // Stable card height - computed once to prevent rerender-induced crashes
+  const CARD_HEIGHT = useRef(height - (190 + insets.top + (Platform.OS === 'ios' ? 130 : 80))).current;
+  const ITEM_HEIGHT = CARD_HEIGHT + 20; // card height + marginBottom
+  const HEADER_HEIGHT = 190 + insets.top;
 
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -7329,7 +7327,7 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const CARD_HEIGHT = height - (190 + insets.top + (Platform.OS === 'ios' ? 130 : 80));
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     setSelectedCat(initialCategory || null);
@@ -7396,23 +7394,20 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      {/* Animated Blur Header */}
-      <Animated.View style={[{
+      {/* Fixed Solid Header — no BlurView animation to avoid crash */}
+      <View style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         zIndex: 1000,
-        height: 190 + insets.top,
+        height: HEADER_HEIGHT,
         paddingTop: insets.top,
-        borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-        elevation: 10, // Ensure header is above scroll content on Android
-      }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
-        </Animated.View>
+        backgroundColor: colors.background,
+        borderBottomWidth: scrolled ? 1 : 0,
+        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+        elevation: 10,
+      }}>
 
         <View style={styles.modernHeader}>
           <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
@@ -7552,26 +7547,41 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
             <View style={{ width: 40 }} />
           </ScrollView>
         </View>
-      </Animated.View>
+      </View>
 
-      <Animated.FlatList
+      <FlatList
         data={sortedProducts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: any) => item.id}
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          setScrolled(y > 10);
+          scrollY.setValue(y);
+        }}
+        scrollEventThrottle={32}
         keyboardShouldPersistTaps="handled"
-        snapToInterval={CARD_HEIGHT + 20}
+        snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
         snapToAlignment="start"
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        initialNumToRender={3}
+        getItemLayout={(_data, index) => ({
+          length: ITEM_HEIGHT,
+          offset: ITEM_HEIGHT * index,
+          index,
+        })}
         contentContainerStyle={{
-          paddingTop: 190 + insets.top,
+          paddingTop: HEADER_HEIGHT,
           paddingHorizontal: 20,
           paddingBottom: 120
         }}
+        ListHeaderComponent={
+          loading ? (
+            <View style={{ height: 20 }} />
+          ) : null
+        }
         ListEmptyComponent={
           loading ? (
             <View style={{ marginTop: 100 }}>
@@ -9471,17 +9481,58 @@ function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
     { label: t('broadcast').toUpperCase(), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
     { label: t('settings').toUpperCase(), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
   ].filter(item => item.roles.includes(role));
-
+  const iconColor = theme === 'dark' ? '#FFF' : '#000';
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { marginTop: 40, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { marginTop: 40, color: colors.foreground }]}>{t('adminConsole').toUpperCase()}</Text>
 
+
+    <View style={[{ flex: 1, backgroundColor: theme === 'dark' ? '#000' : '#FFF' }]}>
+      {/* Header with Blur Effect */}
+      <View style={[{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        overflow: 'hidden',
+      }]}>
+        <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+          paddingVertical: 15,
+        }}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={[{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              marginTop: 30,
+              alignItems: 'center',
+              justifyContent: 'center', backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+            }]}
+          >
+            <ChevronLeft size={24} color={iconColor} />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1, alignItems: 'center', marginTop: 30 }}>
+            <Text style={[{
+              fontSize: 20,
+              fontWeight: '800',
+              letterSpacing: -0.5, color: theme === 'dark' ? '#FFF' : '#000'
+            }]}>
+              {t('adminConsole')}
+            </Text>
+
+          </View>
+
+          <View style={{ width: 40 }} />
+        </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120, marginTop: 100 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
           {menuItems.map((item, index) => (
             <TouchableOpacity
@@ -11012,7 +11063,7 @@ function AdminCouponsScreen({ onBack, t, language, profileData }: any) {
                 onPress={() => setType(tOpt as any)}
                 style={[styles.catChip, { backgroundColor: type === tOpt ? appColors.foreground : (theme === 'dark' ? '#171720' : '#f0f0f0') }, type === tOpt && styles.activeCatChip]}
               >
-                <Text style={[styles.catChipText, { color: type === tOpt ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground }, type === tOpt && styles.activeCatChipText]}>
+                <Text style={[styles.catChipText, { color: type === tOpt ? (theme === 'dark' ? '#fff' : '#000') : appColors.foreground }, type === tOpt && (theme === 'dark' ? '#FFF' : '#000')]}>
                   {tOpt === 'free_shipping' ? t('freeShip') : tOpt === 'bundle_price' ? t('bundle') : t(tOpt).toUpperCase()}
                 </Text>
               </TouchableOpacity>
