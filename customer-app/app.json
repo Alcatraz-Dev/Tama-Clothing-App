@@ -27,7 +27,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/expo-icons/adaptive-icon.png",
+        "foregroundImage": "./assets/expo-icons/splash-icon.png",
         "backgroundColor": "#010100"
       },
       "edgeToEdgeEnabled": true,

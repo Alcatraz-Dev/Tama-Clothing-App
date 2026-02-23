@@ -6,16 +6,30 @@ import {
     TouchableOpacity,
     ScrollView,
     Dimensions,
-    ActivityIndicator
+    ActivityIndicator,
+    Linking
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { ArrowLeft, Package, Truck, MapPin, CheckCircle, Clock, User } from 'lucide-react-native';
+import { ArrowLeft, Package, Truck, MapPin, CheckCircle, Clock, User, Navigation } from 'lucide-react-native';
 import { useAppTheme } from '../context/ThemeContext';
-import { subscribeToTracking, ShipmentStatus } from '../utils/shipping';
+import { subscribeToTracking, ShipmentStatus, calculateETA } from '../utils/shipping';
 import * as Animatable from 'react-native-animatable';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { db } from '../api/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { db, rtdb } from '../api/firebase';
+import {
+    collection,
+    query,
+    where,
+    getDocs,
+    updateDoc,
+    doc,
+    serverTimestamp,
+    getDoc,
+    limit,
+    onSnapshot,
+    or
+} from 'firebase/firestore';
+import { ref, onValue } from 'firebase/database';
 import { Star, Image as ImageIcon } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -29,6 +43,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const [fsShipment, setFsShipment] = useState<any>(null);
     const [rating, setRating] = useState(0);
     const [submittingRating, setSubmittingRating] = useState(false);
+    const [driverLocation, setDriverLocation] = useState<{ latitude: number, longitude: number } | null>(null);
+    const [eta, setEta] = useState<string>('');
 
     const translate = t || ((k: string) => k);
 
@@ -38,19 +54,60 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
             setLoading(false);
         });
 
+        // Subscribe to driver location in real-time
+        const driverLocationRef = ref(rtdb, `tracking/${trackingId}/location`);
+        const unsubscribeLocation = onValue(driverLocationRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const loc = snapshot.val();
+                setDriverLocation({ latitude: loc.latitude, longitude: loc.longitude });
+            }
+        });
+
         // Also subscribe to Firestore to get proofOfDeliveryUrl and rating
-        const q = query(collection(db, 'Shipments'), where('trackingId', '==', trackingId));
+        const q = query(
+            collection(db, 'Shipments'),
+            or(
+                where('trackingId', '==', trackingId),
+                where('orderId', '==', trackingId)
+            )
+        );
         const unsubscribeFs = onSnapshot(q, (snap) => {
             if (!snap.empty) {
-                setFsShipment({ id: snap.docs[0].id, ...snap.docs[0].data() });
+                const shipmentData: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                setFsShipment(shipmentData);
+
+                // Calculate ETA if we have delivery location and driver location
+                if (shipmentData.deliveryLocation && driverLocation) {
+                    const etaText = calculateETA(
+                        driverLocation.latitude,
+                        driverLocation.longitude,
+                        shipmentData.deliveryLocation.latitude,
+                        shipmentData.deliveryLocation.longitude
+                    );
+                    setEta(etaText);
+                }
             }
         });
 
         return () => {
             unsubscribe();
             unsubscribeFs();
+            unsubscribeLocation();
         };
     }, [trackingId]);
+
+    const openMaps = () => {
+        if (fsShipment?.deliveryAddress) {
+            const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fsShipment.deliveryAddress)}`;
+            Linking.openURL(url);
+        }
+    };
+
+    const callDriver = () => {
+        if (fsShipment?.driverPhone) {
+            Linking.openURL(`tel:${fsShipment.driverPhone}`);
+        }
+    };
 
     const submitRating = async (selectedRating: number) => {
         if (!fsShipment) return;
@@ -69,6 +126,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
 
     const getStatusIndex = (status: ShipmentStatus) => STATUS_STEPS.indexOf(status);
     const currentStep = statusData ? getStatusIndex(statusData.status) : 0;
+
+    const isInTransit = statusData?.status === 'In Transit' || statusData?.status === 'in_transit' || statusData?.status === 'Out for Delivery' || statusData?.status === 'out_for_delivery';
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -91,6 +150,15 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             <Text style={[styles.statusText, { color: colors.accent }]}>{statusData?.status || '...'}</Text>
                         </View>
                     </View>
+
+                    {eta && isInTransit && (
+                        <View style={[styles.etaContainer, { backgroundColor: colors.accent + '15' }]}>
+                            <Clock size={18} color={colors.accent} />
+                            <Text style={[styles.etaText, { color: colors.accent }]}>
+                                {translate('arrivingIn') || 'Arriving in'}: {eta}
+                            </Text>
+                        </View>
+                    )}
 
                     <View style={styles.timeline}>
                         {STATUS_STEPS.map((step, index) => {
@@ -134,37 +202,100 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     </View>
                 </Animatable.View>
 
-                {statusData?.status === 'Out for Delivery' && statusData?.location && (
-                    <Animatable.View animation="fadeInUp" duration={800} style={[styles.card, { height: 350, overflow: 'hidden', padding: 0, borderColor: colors.border }]}>
+                {(isInTransit || statusData?.status === 'Out for Delivery') && (driverLocation || statusData?.location) && (
+                    <Animatable.View animation="fadeInUp" duration={800} style={[styles.card, { height: 300, overflow: 'hidden', padding: 0, borderColor: colors.border }]}>
                         <MapView
                             provider={PROVIDER_GOOGLE}
                             style={StyleSheet.absoluteFill}
                             initialRegion={{
-                                latitude: statusData.location.latitude,
-                                longitude: statusData.location.longitude,
-                                latitudeDelta: 0.01,
-                                longitudeDelta: 0.01,
-                            }}
-                            region={{
-                                latitude: statusData.location.latitude,
-                                longitude: statusData.location.longitude,
-                                latitudeDelta: 0.01,
-                                longitudeDelta: 0.01,
+                                latitude: (driverLocation || statusData?.location)?.latitude || 36.8065,
+                                longitude: (driverLocation || statusData?.location)?.longitude || 10.1815,
+                                latitudeDelta: 0.02,
+                                longitudeDelta: 0.02,
                             }}
                         >
-                            <Marker
-                                coordinate={{
-                                    latitude: statusData.location.latitude,
-                                    longitude: statusData.location.longitude,
-                                }}
-                                title="Delivery Driver"
-                                description="Your order is on the way!"
-                            >
-                                <View style={[styles.markerContainer, { backgroundColor: colors.accent }]}>
-                                    <Truck size={18} color="#FFF" />
-                                </View>
-                            </Marker>
+                            {(driverLocation || statusData?.location) && (
+                                <Marker
+                                    coordinate={{
+                                        latitude: (driverLocation || statusData?.location)?.latitude || 36.8065,
+                                        longitude: (driverLocation || statusData?.location)?.longitude || 10.1815,
+                                    }}
+                                    title={translate('driver') || 'Driver'}
+                                    description={translate('driverOnTheWay') || 'Your driver is on the way!'}
+                                >
+                                    <View style={[styles.markerContainer, { backgroundColor: colors.accent }]}>
+                                        <Truck size={18} color="#FFF" />
+                                    </View>
+                                </Marker>
+                            )}
+
+                            {fsShipment?.deliveryLocation && (
+                                <Marker
+                                    coordinate={{
+                                        latitude: fsShipment.deliveryLocation.latitude,
+                                        longitude: fsShipment.deliveryLocation.longitude,
+                                    }}
+                                    title={translate('deliveryAddress') || 'Destination'}
+                                >
+                                    <View style={[styles.markerContainer, { backgroundColor: '#10B981' }]}>
+                                        <MapPin size={18} color="#FFF" />
+                                    </View>
+                                </Marker>
+                            )}
                         </MapView>
+
+                        <View style={[styles.mapOverlay, { backgroundColor: colors.surface }]}>
+                            <TouchableOpacity style={[styles.mapButton, { backgroundColor: colors.accent }]} onPress={openMaps}>
+                                <Navigation size={16} color="#FFF" />
+                                <Text style={styles.mapButtonText}>{translate('openMaps') || 'Open in Maps'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Animatable.View>
+                )}
+
+                {fsShipment?.driverName && isInTransit && (
+                    <Animatable.View animation="fadeInUp" delay={200} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <View style={styles.driverCardHeader}>
+                            <Truck size={24} color={colors.accent} />
+                            <Text style={[styles.driverTitle, { color: colors.foreground }]}>
+                                {translate('yourDriver') || 'Your Driver'}
+                            </Text>
+                        </View>
+
+                        <View style={styles.driverInfo}>
+                            <View style={styles.driverAvatar}>
+                                <User size={24} color={colors.accent} />
+                            </View>
+                            <View style={styles.driverDetails}>
+                                <Text style={[styles.driverName, { color: colors.foreground }]}>
+                                    {fsShipment.driverName || 'Driver'}
+                                </Text>
+                                {fsShipment.driverPhone && (
+                                    <TouchableOpacity onPress={callDriver}>
+                                        <Text style={[styles.driverPhone, { color: colors.accent }]}>
+                                            {fsShipment.driverPhone}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+
+                        <View style={styles.driverActions}>
+                            <TouchableOpacity style={[styles.driverActionBtn, { backgroundColor: colors.accent }]} onPress={openMaps}>
+                                <Navigation size={18} color="#FFF" />
+                                <Text style={[styles.driverActionText, { color: '#FFF' }]}>
+                                    {translate('navigate') || 'Navigate'}
+                                </Text>
+                            </TouchableOpacity>
+                            {fsShipment.driverPhone && (
+                                <TouchableOpacity style={[styles.driverActionBtn, { backgroundColor: '#10B981' }]} onPress={callDriver}>
+                                    <MapPin size={18} color="#FFF" />
+                                    <Text style={[styles.driverActionText, { color: '#FFF' }]}>
+                                        {translate('call') || 'Call'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </Animatable.View>
                 )}
 
@@ -364,5 +495,93 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 4,
         elevation: 5,
-    }
+    },
+    etaContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 16,
+        gap: 10,
+    },
+    etaText: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    mapOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+    },
+    mapButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
+        gap: 8,
+    },
+    mapButtonText: {
+        color: '#FFF',
+        fontWeight: '800',
+        fontSize: 14,
+    },
+    driverCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 16,
+    },
+    driverTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    driverInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        marginBottom: 16,
+    },
+    driverAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    driverDetails: {
+        flex: 1,
+    },
+    driverName: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    driverPhone: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginTop: 2,
+    },
+    driverActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    driverActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 8,
+    },
+    driverActionText: {
+        fontSize: 14,
+        fontWeight: '800',
+    },
 });

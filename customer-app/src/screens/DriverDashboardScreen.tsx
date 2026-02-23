@@ -7,7 +7,8 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
-    Linking
+    Linking,
+    RefreshControl
 } from 'react-native';
 import {
     Truck,
@@ -75,7 +76,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
     useEffect(() => {
         if (!user?.uid) return;
 
-        // My Deliveries
+        // My Deliveries - all shipments assigned to this driver
         const qMy = query(
             collection(db, 'Shipments'),
             where('driverId', '==', user.uid)
@@ -90,19 +91,41 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
             setLoading(false);
         });
 
-        // Available Broadcasted Orders
+        // Available Pending Orders - show ALL shipments without a driver assigned
         const qAvail = query(
-            collection(db, 'Shipments'),
-            where('status', '==', 'Pending')
+            collection(db, 'Shipments')
         );
 
         const unsubscribeAvail = onSnapshot(qAvail, (snapshot) => {
-            let list = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })).filter((s: any) => !s.driverId);
+            console.log('Total shipments in DB:', snapshot.size);
 
-            setAvailableShipments(list);
+            const allShipments = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    trackingId: data.trackingId || '',
+                    receiverName: data.receiverName || '',
+                    receiverPhone: data.receiverPhone || '',
+                    deliveryAddress: data.deliveryAddress || '',
+                    items: data.items || [],
+                    weight: data.weight || '',
+                    status: data.status || 'Pending',
+                    driverId: data.driverId || null,
+                    senderName: data.senderName || '',
+                    createdAt: data.createdAt,
+                };
+            });
+
+            // Show ALL shipments that don't have a driver assigned to them
+            const available = allShipments.filter((s: any) => {
+                const hasNoDriver = !s.driverId;
+                return hasNoDriver;
+            });
+
+            console.log('Shipments without driver:', available.length);
+            console.log('Sample shipment:', available[0]);
+
+            setAvailableShipments(available);
         });
 
         return () => {
@@ -311,16 +334,26 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                     )}
 
                     <FlatList
-                        data={activeTab === 'available' ? availableShipments.filter(s => !driverCity || (s.deliveryAddress && s.deliveryAddress.toLowerCase().includes(driverCity.toLowerCase()))) : shipments}
+                        data={activeTab === 'available' ? availableShipments : shipments}
                         renderItem={renderShipment}
                         keyExtractor={item => item.id}
                         contentContainerStyle={styles.list}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={loading}
+                                onRefresh={() => {
+                                    setAvailableShipments([]);
+                                    setShipments([]);
+                                }}
+                                tintColor={colors.accent}
+                            />
+                        }
                         ListEmptyComponent={
                             <View style={styles.emptyContainer}>
                                 <Truck size={64} color={colors.border} />
                                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                                     {activeTab === 'available'
-                                        ? (translate('noAssignedShipmentsIn').replace('{{city}}', driverCity || 'your area'))
+                                        ? translate('noAvailableOrders') || 'No available orders'
                                         : translate('noDeliveries')}
                                 </Text>
                             </View>

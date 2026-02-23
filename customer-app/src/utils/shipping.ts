@@ -1,4 +1,5 @@
 import { Image } from 'react-native';
+import * as Location from 'expo-location';
 import { db, rtdb } from '../api/firebase';
 import { sendPushNotification } from './notifications';
 import { 
@@ -23,9 +24,16 @@ export interface Shipment {
     trackingId: string;
     senderId: string;
     senderName: string;
+    senderPhone?: string;
+    senderAddress?: string;
     receiverName: string;
     receiverPhone: string;
     deliveryAddress: string;
+    deliveryLocation?: {
+        latitude: number;
+        longitude: number;
+    };
+    zoneId?: string;
     status: ShipmentStatus;
     items: any[];
     weight: string;
@@ -34,6 +42,8 @@ export interface Shipment {
     carrierPhone: string;
     stickerUrl?: string;
     driverId?: string;
+    driverName?: string;
+    driverPhone?: string;
     createdAt: any;
     updatedAt: any;
     currentLocation?: {
@@ -47,42 +57,231 @@ export interface Shipment {
     ratingComment?: string;
     shippingPrice?: number;
     totalPrice?: number;
-    senderAddress?: string;
-    senderPhone?: string;
     brandLogoUrl?: string;
+    orderId?: string;
+    isFromOrder?: boolean;
 }
 
 export const generateTrackingId = () => {
     const chars = '0123456789';
-    let result = 'TAMA-';
+    let result = 'BEY3A-';
     for (let i = 0; i < 10; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
 };
 
-export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'trackingId' | 'status' | 'createdAt' | 'updatedAt'>) => {
+interface OrderShipmentData {
+    customerId?: string;
+    customerName: string;
+    phone: string;
+    address: string;
+    items: string[];
+    total: number;
+    deliveryCost?: number;
+    orderId?: string;
+}
+
+export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
     const trackingId = generateTrackingId();
+    console.log('Creating automatic shipment from order:', trackingId);
     
-    // 1. Create in Firestore for permanent record
-    const docRef = await addDoc(collection(db, 'Shipments'), {
+    let deliveryLocation: { latitude: number; longitude: number } | undefined;
+    let zoneId = 'Tunis';
+
+    try {
+        const geocode = await Location.geocodeAsync(orderData.address);
+        if (geocode && geocode.length > 0) {
+            deliveryLocation = {
+                latitude: geocode[0].latitude,
+                longitude: geocode[0].longitude,
+            };
+            const reverseGeocode = await Location.reverseGeocodeAsync(deliveryLocation);
+            if (reverseGeocode && reverseGeocode.length > 0) {
+                zoneId = reverseGeocode[0].city || reverseGeocode[0].region || 'Tunis';
+            }
+        }
+    } catch (e) {
+        console.log('Could not geocode address:', e);
+    }
+
+    const shipmentData = {
+        senderId: orderData.customerId || 'anonymous',
+        senderName: orderData.customerName || 'Customer',
+        senderPhone: orderData.phone || '',
+        senderAddress: orderData.address,
+        receiverName: orderData.customerName,
+        receiverPhone: orderData.phone,
+        deliveryAddress: orderData.address,
+        items: orderData.items,
+        weight: '1kg',
+        serviceType: 'Standard',
+        carrierName: 'Tama Logistics',
+        carrierPhone: '+216 71 000 000',
+        shippingPrice: orderData.deliveryCost || 0,
+        totalPrice: orderData.total,
+    };
+
+    const shipmentDocData = {
         ...shipmentData,
         trackingId,
         status: 'Pending',
+        driverId: null,
+        deliveryLocation,
+        zoneId,
+        orderId: orderData.orderId,
+        isFromOrder: true,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-    });
+        updatedAt: serverTimestamp(),
+    };
+    
+    console.log('Auto Shipment data:', JSON.stringify(shipmentDocData));
 
-    // 2. Initialize in Realtime Database for live tracking
+    const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
+    console.log('Auto Shipment created with ID:', shipmentDoc.id);
+
     const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
     await set(rtdbRef, {
-        status: 'Pending',
+        status: 'pending',
         updatedAt: Date.now(),
         location: null,
-        driverId: null
+        driverId: null,
+        zoneId
     });
 
-    return { id: docRef.id, trackingId };
+    await addDoc(collection(db, 'Deliveries'), {
+        id: shipmentDoc.id,
+        trackingId,
+        orderId: orderData.orderId,
+        senderId: orderData.customerId || 'anonymous',
+        senderName: orderData.customerName,
+        senderPhone: orderData.phone || '',
+        senderAddress: orderData.address,
+        receiverName: orderData.customerName,
+        receiverPhone: orderData.phone,
+        deliveryAddress: orderData.address,
+        deliveryLocation,
+        zoneId,
+        items: orderData.items.map((name: string) => ({ name, quantity: 1 })),
+        weight: 1,
+        status: 'pending',
+        priority: 'normal',
+        pricing: {
+            basePrice: 8,
+            distancePrice: 0,
+            timeWindowCost: 0,
+            priorityCost: 0,
+            total: orderData.deliveryCost || 8,
+        },
+        timeline: [{
+            status: 'pending',
+            timestamp: new Date(),
+        }],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+
+    console.log('Delivery record also created');
+    return { id: shipmentDoc.id, trackingId };
+};
+
+export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'trackingId' | 'status' | 'createdAt' | 'updatedAt'>) => {
+    const trackingId = generateTrackingId();
+    console.log('Creating shipment:', trackingId);
+    
+    let deliveryLocation: { latitude: number; longitude: number } | undefined;
+    let zoneId = 'Tunis';
+
+    try {
+        const geocode = await Location.geocodeAsync(shipmentData.deliveryAddress);
+        if (geocode && geocode.length > 0) {
+            deliveryLocation = {
+                latitude: geocode[0].latitude,
+                longitude: geocode[0].longitude,
+            };
+            const reverseGeocode = await Location.reverseGeocodeAsync(deliveryLocation);
+            if (reverseGeocode && reverseGeocode.length > 0) {
+                zoneId = reverseGeocode[0].city || reverseGeocode[0].region || 'Tunis';
+            }
+        }
+    } catch (e) {
+        console.log('Could not geocode address:', e);
+    }
+
+    const shipmentDocData = {
+        ...shipmentData,
+        trackingId,
+        status: 'Pending',
+        driverId: null,
+        deliveryLocation,
+        zoneId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+    
+    console.log('Shipment data:', JSON.stringify(shipmentDocData));
+
+    const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
+    console.log('Shipment created with ID:', shipmentDoc.id);
+
+    const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
+    await set(rtdbRef, {
+        status: 'pending',
+        updatedAt: Date.now(),
+        location: null,
+        driverId: null,
+        zoneId
+    });
+
+    await addDoc(collection(db, 'Deliveries'), {
+        id: shipmentDoc.id,
+        trackingId,
+        orderId: shipmentDoc.id,
+        senderId: shipmentData.senderId,
+        senderName: shipmentData.senderName,
+        senderPhone: shipmentData.senderPhone || '',
+        senderAddress: shipmentData.senderAddress || '',
+        receiverName: shipmentData.receiverName,
+        receiverPhone: shipmentData.receiverPhone,
+        deliveryAddress: shipmentData.deliveryAddress,
+        deliveryLocation,
+        zoneId,
+        items: shipmentData.items?.map((name: string) => ({ name, quantity: 1 })) || [],
+        weight: parseFloat(shipmentData.weight) || 1,
+        status: 'pending',
+        priority: 'normal',
+        pricing: {
+            basePrice: 8,
+            distancePrice: 0,
+            timeWindowCost: 0,
+            priorityCost: 0,
+            total: shipmentData.shippingPrice || shipmentData.totalPrice || 8,
+        },
+        timeline: [{
+            status: 'pending',
+            timestamp: new Date(),
+        }],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+
+    setTimeout(async () => {
+        try {
+            const autoAssignResult = await import('../services/deliveryService').then(m => 
+                m.deliveryService.autoAssignDelivery(shipmentDoc.id)
+            );
+            if (autoAssignResult) {
+                await updateDoc(doc(db, 'Shipments', shipmentDoc.id), {
+                    driverId: autoAssignResult.driver.id,
+                    driverName: autoAssignResult.driver.fullName,
+                });
+            }
+        } catch (e) {
+            console.log('Auto-assign failed:', e);
+        }
+    }, 2000);
+
+    return { id: shipmentDoc.id, trackingId };
 };
 
 export const generateShippingStickerHTML = (shipment: Partial<Shipment>) => {
@@ -489,25 +688,51 @@ body {
 `;
 };
 export const updateShipmentStatus = async (shipmentId: string, trackingId: string, status: ShipmentStatus, extraData: any = {}) => {
-    // 1. Update Firestore
-    const docRef = doc(db, 'Shipments', shipmentId);
-    await updateDoc(docRef, {
+    const statusMap: Record<string, string> = {
+        'Pending': 'pending',
+        'In Transit': 'in_transit',
+        'Out for Delivery': 'out_for_delivery',
+        'Delivered': 'delivered',
+        'Cancelled': 'cancelled',
+    };
+
+    const deliveryStatus = statusMap[status] || status.toLowerCase();
+
+    await updateDoc(doc(db, 'Shipments', shipmentId), {
         status,
         updatedAt: serverTimestamp(),
         ...extraData
     });
 
-    // 2. Update RTDB
+    const deliveryQuery = query(collection(db, 'Deliveries'), where('trackingId', '==', trackingId));
+    const deliverySnap = await getDocs(deliveryQuery);
+    
+    if (!deliverySnap.empty) {
+        const deliveryDoc = deliverySnap.docs[0];
+        const timeline = deliveryDoc.data().timeline || [];
+        timeline.push({
+            status: deliveryStatus,
+            timestamp: new Date(),
+            notes: extraData.notes || '',
+        });
+        
+        await updateDoc(doc(db, 'Deliveries', deliveryDoc.id), {
+            status: deliveryStatus,
+            timeline,
+            updatedAt: serverTimestamp(),
+            ...extraData,
+        });
+    }
+
     const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
     await set(rtdbRef, {
-        status,
+        status: deliveryStatus,
         updatedAt: Date.now(),
         ...extraData
     });
 
-    // 3. Send Push Notification to Customer
     try {
-        const shipmentSnap = await getDoc(docRef);
+        const shipmentSnap = await getDoc(doc(db, 'Shipments', shipmentId));
         if (shipmentSnap.exists()) {
             const shipmentData = shipmentSnap.data();
             const senderId = shipmentData.senderId;
@@ -587,4 +812,101 @@ export const subscribeToTracking = (trackingId: string, onUpdate: (data: any) =>
         onUpdate(snapshot.val());
     });
     return () => off(rtdbRef);
+};
+
+export const subscribeToUserShipments = (userId: string, onUpdate: (shipments: Shipment[]) => void) => {
+    const q = query(
+        collection(db, 'Shipments'),
+        where('senderId', '==', userId),
+        orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+        const shipments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Shipment[];
+        onUpdate(shipments);
+    });
+};
+
+export const subscribeToUserDeliveries = (userId: string, onUpdate: (deliveries: any[]) => void) => {
+    const q = query(
+        collection(db, 'Deliveries'),
+        where('senderId', '==', userId),
+        orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+        const deliveries = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        onUpdate(deliveries);
+    });
+};
+
+export const getShipmentByTrackingId = async (trackingId: string): Promise<Shipment | null> => {
+    const q = query(collection(db, 'Shipments'), where('trackingId', '==', trackingId));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return null;
+    
+    return {
+        id: snapshot.docs[0].id,
+        ...snapshot.docs[0].data()
+    } as Shipment;
+};
+
+export const notifyDriversOfNewDelivery = async (deliveryZone: string, deliveryId: string) => {
+    const driversQuery = query(
+        collection(db, 'Drivers'),
+        where('serviceAreas', 'array-contains', deliveryZone),
+        where('isAvailable', '==', true)
+    );
+    
+    const snapshot = await getDocs(driversQuery);
+    
+    for (const driverDoc of snapshot.docs) {
+        const driverData = driverDoc.data();
+        if (driverData.expoPushToken) {
+            await sendPushNotification(
+                driverData.expoPushToken,
+                'New Delivery Available! 🚚',
+                'A new delivery in your area is waiting. Tap to accept.',
+                { deliveryId, screen: 'DriverDashboard' }
+            );
+        }
+    }
+};
+
+export const subscribeToDriverNotifications = (driverId: string, onUpdate: (notification: any) => void) => {
+    const rtdbRef = ref(rtdb, `driverNotifications/${driverId}`);
+    onValue(rtdbRef, (snapshot) => {
+        if (snapshot.val()) {
+            onUpdate(snapshot.val());
+        }
+    });
+    return () => off(rtdbRef);
+};
+
+export const getDriverDeliveriesInZone = async (zoneId: string, driverId?: string) => {
+    let q = query(
+        collection(db, 'Deliveries'),
+        where('status', '==', 'pending'),
+        where('zoneId', '==', zoneId)
+    );
+    
+    if (driverId) {
+        q = query(
+            collection(db, 'Deliveries'),
+            where('status', '==', 'pending'),
+            where('zoneId', '==', zoneId),
+            orderBy('priority', 'desc'),
+            orderBy('createdAt', 'asc')
+        );
+    }
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };

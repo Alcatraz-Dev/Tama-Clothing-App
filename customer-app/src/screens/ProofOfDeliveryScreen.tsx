@@ -124,7 +124,6 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
                         </View>
                     </CameraView>
                     <View style={styles.cameraFooter}>
-                        <Text style={[styles.hint, { color: colors.foreground, opacity: 0.7 }]}>Take a photo of the package at destination</Text>
                         <TouchableOpacity style={[styles.captureBtn, { backgroundColor: colors.foreground }]} onPress={takePhoto}>
                             <View style={[styles.captureBtnInner, { borderColor: theme === 'dark' ? '#000' : '#FFF' }]} />
                         </TouchableOpacity>

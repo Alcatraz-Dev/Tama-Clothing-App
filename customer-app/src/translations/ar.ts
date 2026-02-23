@@ -487,6 +487,8 @@ export const ar = {
   currentLocation: 'الموقع الحالي',
   shipmentStatus: 'حالة الشحنة',
   createShipment: 'إنشاء شحنة',
+  createNewShipment: 'إنشاء شحنة جديدة',
+  myShipments: 'شحناتي',
   proofOfDelivery: 'إثبات التسليم',
   uploadProof: 'رفع الإثبات',
   deliveryPhoto: 'صورة التسليم',
