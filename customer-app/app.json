@@ -11,7 +11,6 @@
       "image": "./assets/expo-icons/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#010100"
-
     },
     "ios": {
       "supportsTablet": true,
@@ -117,7 +116,9 @@
           },
           "imageWidth": 200
         }
-      ]
+      ],
+      "expo-video",
+      "expo-audio"
     ]
   }
 }

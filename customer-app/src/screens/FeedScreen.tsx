@@ -22,7 +22,7 @@ import {
     Linking
 } from 'react-native';
 import { collection, query, where, getDocs, onSnapshot, collectionGroup, orderBy, limit, doc, getDoc, updateDoc, increment, addDoc, serverTimestamp, deleteField } from 'firebase/firestore';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 import { db } from '../api/firebase';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,7 +52,8 @@ import {
     Ghost,
     Sparkles,
     Pause,
-    Plus
+    Plus,
+    Video as VideoIcon
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
@@ -64,7 +65,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface FeedItem {
     id: string;
-    type: 'live' | 'work' | 'ad';
+    type: 'live' | 'work' | 'ad' | 'reel';
     data: any;
     score: number;
     createdAt: any;
@@ -87,18 +88,20 @@ interface FeedScreenProps {
     profileData?: any;
     ads?: any[];
     followedCollabs?: string[];
+    onlyReels?: boolean;
 }
 
 export default function FeedScreen(props: FeedScreenProps) {
-    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, onCampaignPress, onAddFriend, onFollowCollab, onCollabPress, user, profileData, ads = [], followedCollabs = [] } = props;
+    const { t, theme, language, onNavigate, onJoinLive, onWorkPress, onCommentPress, onUserPress, onCampaignPress, onAddFriend, onFollowCollab, onCollabPress, user, profileData, ads = [], followedCollabs = [], onlyReels } = props;
     const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [feedFilter, setFeedFilter] = useState<'default' | 'viral' | 'comments'>('default');
-    const [feedTab, setFeedTab] = useState<'all' | 'following'>('all');
+    const [feedTab, setFeedTab] = useState<'all' | 'following' | 'reels'>('all');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [lives, setLives] = useState<FeedItem[]>([]);
     const [works, setWorks] = useState<FeedItem[]>([]);
+    const [reels, setReels] = useState<FeedItem[]>([]);
     const [pausedItems, setPausedItems] = useState<string[]>([]);
 
     const togglePlayPause = (id: string) => {
@@ -118,7 +121,7 @@ export default function FeedScreen(props: FeedScreenProps) {
     }).current;
 
     const feedItemsCombined = useMemo(() => {
-        let combined = [...lives, ...works];
+        let combined = (onlyReels || feedTab === 'reels') ? [...reels] : [...lives, ...works, ...reels];
         combined.sort((a, b) => {
             const aUrgent = (a.type === 'live' && a.score >= 50) || (a.type === 'work' && a.score >= 100);
             const bUrgent = (b.type === 'live' && b.score >= 50) || (b.type === 'work' && b.score >= 100);
@@ -161,16 +164,16 @@ export default function FeedScreen(props: FeedScreenProps) {
         }
 
         return combined;
-    }, [lives, works, ads]);
+    }, [lives, works, reels, ads, feedTab, onlyReels]);
 
     const sortedFeedItems = useMemo(() => {
         let items = [...feedItemsCombined];
 
         if (feedTab === 'following') {
             items = items.filter(item => {
-                if (item.type !== 'work') return false;
+                const userId = item.data.userId;
                 // Check if following the user directly OR following their brand's collaboration
-                const isFollowingUser = profileData?.following?.includes(item.data.userId);
+                const isFollowingUser = profileData?.following?.includes(userId);
                 const isFollowingCollab = item.data.collabId && followedCollabs.includes(item.data.collabId);
                 return isFollowingUser || isFollowingCollab;
             });
@@ -317,9 +320,54 @@ export default function FeedScreen(props: FeedScreenProps) {
             setRefreshing(false);
         });
 
+        // 3. Real-time Listener for Global Reels
+        const reelsQuery = query(
+            collection(db, 'global_reels'),
+            orderBy('createdAt', 'desc'),
+            limit(30)
+        );
+
+        const unsubscribeReels = onSnapshot(reelsQuery, async (snapshot) => {
+            const reelDocs = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return { id: doc.id, ...data } as any;
+            });
+
+            // Fetch missing profiles
+            const missingUids = [...new Set(reelDocs.filter((r: any) => !userProfiles[r.userId]).map((r: any) => r.userId))];
+            if (missingUids.length > 0) {
+                await Promise.all(missingUids.map(async (uid: any) => {
+                    try {
+                        const snap = await getDoc(doc(db, 'users', uid));
+                        if (snap.exists()) {
+                            userProfiles[uid] = snap.data();
+                        }
+                    } catch (e) { }
+                }));
+            }
+
+            const reelItems: FeedItem[] = reelDocs.map((data: any) => {
+                const profile = userProfiles[data.userId];
+                return {
+                    id: data.id,
+                    type: 'reel' as const,
+                    data: {
+                        ...data,
+                        userName: profile?.displayName || profile?.fullName || 'User',
+                        userPhoto: profile?.avatarUrl || profile?.photoURL || null,
+                        type: 'video'
+                    },
+                    score: getTotalStats(data),
+                    createdAt: data.createdAt || { seconds: Date.now() / 1000 }
+                };
+            });
+            setReels(reelItems);
+        });
+
         return () => {
             unsubscribeLives();
             unsubscribeWorks();
+            unsubscribeReels();
         };
     }, []);
 
@@ -336,10 +384,10 @@ export default function FeedScreen(props: FeedScreenProps) {
         return (
             <View style={styles.liveCard}>
                 {liveUrl ? (
-                    <Video
+                    <UniversalVideoPlayer
                         source={{ uri: liveUrl }}
                         style={StyleSheet.absoluteFillObject}
-                        resizeMode={ResizeMode.COVER}
+                        resizeMode="cover"
                         shouldPlay={isActive}
                         isLooping
                         isMuted={false}
@@ -727,10 +775,10 @@ export default function FeedScreen(props: FeedScreenProps) {
                     style={StyleSheet.absoluteFillObject}
                 >
                     {isVideo ? (
-                        <Video
+                        <UniversalVideoPlayer
                             source={{ uri: ad.url }}
                             style={StyleSheet.absoluteFillObject}
-                            resizeMode={ResizeMode.COVER}
+                            resizeMode="cover"
                             shouldPlay={isActive && !pausedItems.includes(item.id)}
                             isLooping
                             isMuted
@@ -896,10 +944,10 @@ export default function FeedScreen(props: FeedScreenProps) {
                     style={StyleSheet.absoluteFillObject}
                 >
                     {isVideo && work.imageUrl ? (
-                        <Video
+                        <UniversalVideoPlayer
                             source={{ uri: work.imageUrl }}
                             style={StyleSheet.absoluteFillObject}
-                            resizeMode={ResizeMode.COVER}
+                            resizeMode="cover"
                             shouldPlay={isActive && !pausedItems.includes(item.id)}
                             isLooping
                             isMuted={false}
@@ -956,6 +1004,13 @@ export default function FeedScreen(props: FeedScreenProps) {
                     <View style={styles.viralBadge}>
                         <TrendingUp size={14} color="#FFF" />
                         <Text style={styles.viralText}>{tr('VIRAL', 'فيروسي', 'VIRAL')}</Text>
+                    </View>
+                )}
+
+                {item.type === 'reel' && (
+                    <View style={[styles.viralBadge, { backgroundColor: 'rgba(168, 85, 247, 0.8)', top: viral ? 100 : 70 }]}>
+                        <VideoIcon size={14} color="#FFF" />
+                        <Text style={styles.viralText}>{tr('REEL', 'ريل', 'REEL')}</Text>
                     </View>
                 )}
 
@@ -1336,7 +1391,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                     <TouchableOpacity
                         onPress={() => setFeedTab('following')}
                         style={{
-                            paddingHorizontal: 20,
+                            paddingHorizontal: 15,
                             paddingVertical: 8,
                             borderBottomWidth: feedTab === 'following' ? 2 : 0,
                             borderBottomColor: tabActiveColor
@@ -1348,6 +1403,23 @@ export default function FeedScreen(props: FeedScreenProps) {
                             fontWeight: feedTab === 'following' ? '800' : '600'
                         }}>
                             {t('followingTab')}
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setFeedTab('reels')}
+                        style={{
+                            paddingHorizontal: 15,
+                            paddingVertical: 8,
+                            borderBottomWidth: feedTab === 'reels' ? 2 : 0,
+                            borderBottomColor: tabActiveColor
+                        }}
+                    >
+                        <Text style={{
+                            color: feedTab === 'reels' ? tabActiveColor : tabInactiveColor,
+                            fontSize: 15,
+                            fontWeight: feedTab === 'reels' ? '800' : '600'
+                        }}>
+                            {t('reels') || 'Reels'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -1374,7 +1446,10 @@ export default function FeedScreen(props: FeedScreenProps) {
                         <Animatable.View animation="fadeInUp" duration={800} style={{ alignItems: 'center' }}>
                             <Clock size={48} color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'} style={{ marginBottom: 16 }} />
                             <Text style={[styles.emptyText, { color: isDark ? 'rgba(255,255,255,0.5)' : '#666', textAlign: 'center', paddingHorizontal: 40 }]}>
-                                {tr('Rien de nouveau pour le moment', 'لا يوجد شيء جديد حاليا', 'Nothing new right now')}
+                                {feedTab === 'reels'
+                                    ? tr('Aucun Reel pour le moment', 'لا يوجد ريلز حاليا', 'No Reels at the moment')
+                                    : tr('Rien de nouveau pour le moment', 'لا يوجد شيء جديد حاليا', 'Nothing new right now')
+                                }
                             </Text>
                             <TouchableOpacity
                                 onPress={onRefresh}

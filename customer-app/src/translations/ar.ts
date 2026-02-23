@@ -537,4 +537,10 @@ export const ar = {
   videoLabel: 'فيديو',
   uploadingVideo: 'قاعد نزيد في الفيديو...',
   removeVideo: 'نحي الفيديو',
+  chooseMedia: 'اختار الميديا',
+  openCamera: 'حل الكاميرا',
+  takePhotoVideo: 'صور فيديو وإلا تصويرة',
+  importVideo: 'جيب فيديو م الغاليري',
+  importPhoto: 'جيب تصويرة م الغاليري',
+  fromGallery: 'م التصاور متاعك',
 };

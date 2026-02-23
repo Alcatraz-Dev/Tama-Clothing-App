@@ -24,7 +24,7 @@ import {
     serverTimestamp,
     increment
 } from 'firebase/firestore';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, X, Send, Image as ImagePlay, MessageCircle } from 'lucide-react-native';
 import { db } from '../api/firebase';
@@ -288,7 +288,13 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                                             </TouchableOpacity>
                                         ) : m.videoUrl ? (
                                             <View style={{ width: 220, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' }}>
-                                                <Video source={{ uri: m.videoUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
+                                                <UniversalVideoPlayer
+                                                    source={{ uri: m.videoUrl }}
+                                                    style={{ width: '100%', height: '100%' }}
+                                                    useNativeControls
+                                                    resizeMode="cover"
+                                                    isLooping
+                                                />
                                             </View>
                                         ) : (
                                             <Text style={{

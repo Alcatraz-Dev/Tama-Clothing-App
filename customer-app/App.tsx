@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, EmailAuthProvider, reauthenticateWithCredential, updateEmail, updatePassword, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from './src/components/common/UniversalVideoPlayer';
 import ProductCard from './src/components/ProductCard';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db, storage, auth } from './src/api/firebase';
@@ -189,35 +189,7 @@ const translateCategory = (cat: string) => translateCategoryUtil(cat, currentLan
 
 import { useFonts, Rubik_300Light, Rubik_400Regular, Rubik_500Medium, Rubik_600SemiBold, Rubik_700Bold, Rubik_800ExtraBold, Rubik_900Black } from '@expo-google-fonts/rubik';
 
-export const AppText: any = React.forwardRef<any, any>((props, ref) => {
-  let fontFamily = 'Rubik_400Regular';
-  if (props.style) {
-    const flattened = StyleSheet.flatten(props.style);
-    if (flattened.fontWeight === '300') {
-      fontFamily = 'Rubik_300Light';
-    } else if (flattened.fontWeight === '500') {
-      fontFamily = 'Rubik_500Medium';
-    } else if (flattened.fontWeight === '600') {
-      fontFamily = 'Rubik_600SemiBold';
-    } else if (flattened.fontWeight === 'bold' || flattened.fontWeight === '700') {
-      fontFamily = 'Rubik_700Bold';
-    } else if (flattened.fontWeight === '800') {
-      fontFamily = 'Rubik_800ExtraBold';
-    } else if (flattened.fontWeight === '900') {
-      fontFamily = 'Rubik_900Black';
-    }
-  }
-  return (
-    <RNText
-      ref={ref}
-      {...props}
-      style={[
-        { fontFamily },
-        props.style
-      ]}
-    />
-  );
-});
+import { AppText } from './src/components/common/AppText';
 
 const Text = AppText;
 
@@ -271,6 +243,7 @@ export default function App() {
   const [ads, setAds] = useState<any[]>([]);
   const [activeShipment, setActiveShipment] = useState<Shipment | null>(null);
   const [activeTrackingId, setActiveTrackingId] = useState<string>('');
+  const [activeTabParams, setActiveTabParams] = useState<any>(null);
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
   const [works, setWorks] = useState<any[]>([]);
@@ -1365,11 +1338,12 @@ export default function App() {
   };
 
 
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: string, params: any = null) => {
     if (tab === 'Shop') {
       setFilterCategory(null);
     }
     setActiveTab(tab);
+    setActiveTabParams(params);
   };
 
   const handleClearNotifications = async () => {
@@ -1447,6 +1421,14 @@ export default function App() {
   };
 
   const renderMainContent = () => {
+    const commonProps = {
+      t,
+      theme,
+      language,
+      user,
+      profileData,
+    };
+
     switch (activeTab) {
       case 'Home': return (
         <HomeScreen
@@ -1502,7 +1484,23 @@ export default function App() {
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
       case 'Settings': return <SettingsScreen onBack={() => setActiveTab('Profile')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={(screen: string) => setActiveTab(screen)} t={t} user={user} />;
       case 'KYC': return <KYCScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} updateProfile={updateProfileData} theme={theme} t={t} language={language} />;
-      case 'Camera': return <CameraScreen onBack={() => setActiveTab('Feed')} onNavigate={(screen: string) => setActiveTab(screen)} t={t} language={language} theme={theme} user={user} />;
+      case 'Camera': return <CameraScreen
+        onBack={() => { setActiveTab('Feed'); setActiveTabParams(null); }}
+        onNavigate={handleTabChange}
+        t={t}
+        language={language}
+        theme={theme}
+        user={user}
+        initialFile={activeTabParams?.initialFile}
+        fileType={activeTabParams?.fileType}
+      />;
+      case 'Feed': return <FeedScreen
+        {...commonProps}
+        onJoinLive={handleJoinLive}
+        onNavigate={handleTabChange}
+        ads={ads}
+        followedCollabs={followedCollabs}
+      />;
       case 'Messages': return <MessagesScreen
         user={user}
         onBack={() => setActiveTab('Profile')}
@@ -1513,6 +1511,7 @@ export default function App() {
             setActiveTab('DirectMessage');
           }
         }}
+        onNavigate={handleTabChange}
         t={t}
         tr={tr}
       />;
@@ -2570,10 +2569,10 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                 {ads.map((ad: any) => (
                   <View key={ad.id} style={[styles.adCard, { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#F2F2F7' }]}>
                     {ad.type === 'video' ? (
-                      <Video
+                      <UniversalVideoPlayer
                         source={{ uri: ad.url }}
                         style={styles.adMedia}
-                        resizeMode={ResizeMode.COVER}
+                        resizeMode="cover"
                         shouldPlay
                         isLooping
                         isMuted
@@ -2665,6 +2664,7 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                     language={language}
                     t={t}
                     isFeaturedHero={true}
+                    colors={colors}
                   />
                 </Animated.View>
               );
@@ -4716,10 +4716,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                     >
                       {work.type === 'video' ? (
                         <View style={{ flex: 1 }}>
-                          <Video
+                          <UniversalVideoPlayer
                             source={{ uri: work.url }}
                             style={{ flex: 1 }}
-                            resizeMode={ResizeMode.COVER}
+                            resizeMode="cover"
                             shouldPlay={false}
                           />
                           <View style={{
@@ -4945,10 +4945,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   {/* Media Content - Full Width with black background to make media pop */}
                   <View style={{ width: width, height: height * 0.5, backgroundColor: '#000', justifyContent: 'center' }}>
                     {selectedWork?.type === 'video' ? (
-                      <Video
+                      <UniversalVideoPlayer
                         source={{ uri: selectedWork.url }}
                         style={{ width: width, height: height * 0.5 }}
-                        resizeMode={ResizeMode.CONTAIN}
+                        resizeMode="contain"
                         shouldPlay={true}
                         isLooping={true}
                         useNativeControls
@@ -5743,6 +5743,7 @@ function WishlistScreen({ onBack, onProductPress, wishlist, toggleWishlist, addT
                     t={t}
                     theme={theme}
                     language={language}
+                    colors={colors}
                     isFeaturedHero={true}
                   />
                 </Animated.View>
@@ -6838,11 +6839,11 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
           >
             {product.videoUrl && (
               <View style={styles.detailFullVideo}>
-                <Video
+                <UniversalVideoPlayer
                   source={{ uri: product.videoUrl }}
                   style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}
                   useNativeControls
-                  resizeMode={ResizeMode.COVER}
+                  resizeMode="cover"
                   isLooping
                   shouldPlay
                 />
@@ -7082,10 +7083,10 @@ function CampaignDetailScreen({ campaign, onBack, onProductPress, onCategoryPres
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         <View style={{ height: height * 0.7, width: '100%' }}>
           {campaign.type === 'video' ? (
-            <Video
+            <UniversalVideoPlayer
               source={{ uri: campaign.url }}
               style={{ width: '100%', height: '100%' }}
-              resizeMode={ResizeMode.COVER}
+              resizeMode="cover"
               shouldPlay
               isLooping
               isMuted
@@ -7328,6 +7329,7 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const CARD_HEIGHT = height - (190 + insets.top + (Platform.OS === 'ios' ? 130 : 80));
 
   useEffect(() => {
     setSelectedCat(initialCategory || null);
@@ -7552,7 +7554,9 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
         </View>
       </Animated.View>
 
-      <Animated.ScrollView
+      <Animated.FlatList
+        data={sortedProducts}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -7560,41 +7564,46 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
         )}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: 190 + insets.top }}
-      >
-        <View style={{ height: 1, backgroundColor: colors.border }} />
-
-        {loading ? (
-          <View style={{ marginTop: 100 }}>
-            <ActivityIndicator color={colors.foreground} />
-          </View>
-        ) : sortedProducts.length === 0 ? (
-          <View style={[styles.centered, { marginTop: 100, backgroundColor: colors.background }]}>
-            <ShoppingBag size={64} color={theme === 'dark' ? '#222' : '#EEE'} strokeWidth={1.5} />
-            <Text style={[styles.modernSectionTitle, { marginTop: 20, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 40 }]}>
-              {t('noProductsInCategory')}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.modernGrid, { marginTop: 25 }]}>
-            {sortedProducts.map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={wishlist?.includes(p.id)}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                theme={theme}
-                language={language}
-                t={t}
-              />
-            ))}
+        snapToInterval={CARD_HEIGHT + 20}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        contentContainerStyle={{
+          paddingTop: 190 + insets.top,
+          paddingHorizontal: 20,
+          paddingBottom: 120
+        }}
+        ListEmptyComponent={
+          loading ? (
+            <View style={{ marginTop: 100 }}>
+              <ActivityIndicator color={colors.foreground} />
+            </View>
+          ) : (
+            <View style={[styles.centered, { marginTop: 100, backgroundColor: colors.background }]}>
+              <ShoppingBag size={64} color={theme === 'dark' ? '#222' : '#EEE'} strokeWidth={1.5} />
+              <Text style={[styles.modernSectionTitle, { marginTop: 20, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 40 }]}>
+                {t('noProductsInCategory')}
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item: p }) => (
+          <View style={{ height: CARD_HEIGHT, marginBottom: 20 }}>
+            <ProductCard
+              product={p}
+              onPress={() => onProductPress(p)}
+              isWishlisted={wishlist?.includes(p.id)}
+              onToggleWishlist={() => toggleWishlist(p.id)}
+              onAddToCart={() => addToCart(p)}
+              showRating={true}
+              theme={theme}
+              language={language}
+              t={t}
+              colors={colors}
+              isFeaturedHero={true}
+            />
           </View>
         )}
-        <View style={{ height: 120 }} />
-      </Animated.ScrollView>
+      />
 
       {/* Sort Sheet Modal */}
       <Modal visible={showSortSheet} transparent animationType="slide">
@@ -10634,7 +10643,7 @@ function AdminAdsScreen({ onBack, t, profileData }: any) {
         renderItem={({ item }) => (
           <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
             <View style={{ width: 100, height: 70, borderRadius: 12, backgroundColor: '#000', overflow: 'hidden', borderWidth: 1, borderColor: appColors.border }}>
-              {item.type === 'video' ? <Video source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} isMuted shouldPlay isLooping resizeMode={ResizeMode.COVER} /> : <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} />}
+              {item.type === 'video' ? <UniversalVideoPlayer source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} isMuted shouldPlay isLooping resizeMode="cover" /> : <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} />}
             </View>
             <View style={{ flex: 1, marginLeft: 16 }}>
               <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground }} numberOfLines={2}>{getSafeString(item.title)}</Text>
@@ -10681,7 +10690,7 @@ function AdminAdsScreen({ onBack, t, profileData }: any) {
               const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: type === 'video' ? ['videos'] : ['images'], allowsEditing: true, quality: 0.5 });
               if (!r.canceled) setUrl(r.assets[0].uri);
             }} style={{ width: '100%', height: 200, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: url ? 'solid' : 'dashed' }}>
-              {url ? (type === 'video' ? <Video source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} isMuted shouldPlay resizeMode={ResizeMode.COVER} /> : <Image source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} />) : (
+              {url ? (type === 'video' ? <UniversalVideoPlayer source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} isMuted shouldPlay resizeMode="cover" /> : <Image source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} />) : (
                 <View style={{ alignItems: 'center', gap: 10 }}>
                   <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA', alignItems: 'center', justifyContent: 'center' }}>
                     <Camera size={24} color={appColors.textMuted} />
@@ -11815,7 +11824,7 @@ const styles = StyleSheet.create({
   adBtnText: { color: 'white', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
 
   // Grid & Product Cards (Refined)
-  modernGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, justifyContent: 'space-between' },
+  modernGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-between' },
   modernProductCard: { width: (width - 44) / 2, marginBottom: 20, position: 'relative' },
   modernProductImg: { width: '100%', aspectRatio: 1.1, backgroundColor: '#F9F9FB', overflow: 'hidden' },
   modernProductInfo: { padding: 12 },
@@ -12990,6 +12999,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
   const [chatData, setChatData] = useState<any>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -13083,12 +13093,35 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
     }
   };
 
-  const pickMedia = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+  const openCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Camera permission required');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       quality: 0.7,
     });
+
+    if (!result.canceled && result.assets && result.assets[0].uri) {
+      handleMediaUpload(result.assets[0].uri);
+    }
+  };
+
+  const pickMedia = async (type: 'image' | 'video' | 'all' = 'all') => {
+    const mediaTypes = type === 'image'
+      ? ImagePicker.MediaTypeOptions.Images
+      : (type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.All);
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
     if (!result.canceled && result.assets && result.assets[0].uri) {
       handleMediaUpload(result.assets[0].uri);
     }
@@ -13254,11 +13287,11 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
                   </TouchableOpacity>
                 ) : m.videoUrl ? (
                   <View style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, overflow: 'hidden', backgroundColor: '#000' }}>
-                    <Video
+                    <UniversalVideoPlayer
                       source={{ uri: m.videoUrl }}
                       style={{ width: '100%', height: '100%' }}
                       useNativeControls
-                      resizeMode={ResizeMode.COVER}
+                      resizeMode="cover"
                       isLooping
                     />
                   </View>
@@ -13297,6 +13330,110 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
           </View>
         </Modal>
 
+        {/* Media Choice Modal */}
+        <Modal
+          visible={isMediaModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsMediaModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+            onPress={() => setIsMediaModalVisible(false)}
+            activeOpacity={1}
+          >
+            <View style={{
+              backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingBottom: 40,
+              paddingHorizontal: 20
+            }}>
+              <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
+                <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
+                  {t('chooseMedia')}
+                </Text>
+                <TouchableOpacity onPress={() => setIsMediaModalVisible(false)} style={{ padding: 4 }}>
+                  <X size={24} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => { setIsMediaModalVisible(false); openCamera(); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                    padding: 16,
+                    borderRadius: 16
+                  }}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                    <Camera size={22} color={colors.accentForeground || "#FFF"} />
+                  </View>
+                  <View>
+                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                      {t('openCamera')}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                      {t('takePhotoVideo')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => { setIsMediaModalVisible(false); pickMedia('video'); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                    padding: 16,
+                    borderRadius: 16
+                  }}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                    <VideoIcon size={22} color="#FFF" />
+                  </View>
+                  <View>
+                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                      {t('importVideo')}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                      {t('fromGallery')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => { setIsMediaModalVisible(false); pickMedia('image'); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                    padding: 16,
+                    borderRadius: 16
+                  }}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                    <ImageIcon size={22} color="#FFF" />
+                  </View>
+                  <View>
+                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                      {t('importPhoto')}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                      {t('fromGallery')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         {/* Improved Input Area */}
         <View style={{
           flexDirection: 'row',
@@ -13309,7 +13446,7 @@ function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, 
           alignItems: 'center'
         }}>
           <TouchableOpacity
-            onPress={pickMedia}
+            onPress={() => setIsMediaModalVisible(true)}
             disabled={uploading}
             activeOpacity={0.7}
             style={{

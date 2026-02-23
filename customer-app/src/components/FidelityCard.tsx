@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
-import { AppText as Text } from '../../App';
+import { AppText as Text } from './common/AppText';
 import Animated, {
     interpolate,
     useAnimatedStyle,

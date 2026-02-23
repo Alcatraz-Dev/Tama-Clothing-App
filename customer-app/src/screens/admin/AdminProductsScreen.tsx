@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { ChevronLeft, Plus, Settings, Trash2, Camera, X, Package2 } from 'lucide-react-native';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from '../../components/common/UniversalVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
 import {
     collection, getDocs, addDoc, updateDoc, deleteDoc,
@@ -371,7 +371,7 @@ export default function AdminProductsScreen({ onBack, t, profileData }: any) {
                             </TouchableOpacity>
                         ) : (
                             <View style={sc.videoWrapper}>
-                                <Video source={{ uri: videoUrl }} style={StyleSheet.absoluteFill} useNativeControls resizeMode={ResizeMode.COVER} isLooping />
+                                <UniversalVideoPlayer source={{ uri: videoUrl }} style={StyleSheet.absoluteFill} useNativeControls resizeMode="cover" isLooping />
                                 <TouchableOpacity onPress={() => setVideoUrl('')} style={sc.removeVideoBtn}>
                                     <X size={14} color="white" />
                                 </TouchableOpacity>

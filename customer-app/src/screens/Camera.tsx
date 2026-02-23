@@ -20,7 +20,7 @@ import {
     FlashMode,
 } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
-import { Video, ResizeMode } from "expo-av";
+import UniversalVideoPlayer from "../components/common/UniversalVideoPlayer";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Theme } from "../theme";
@@ -37,14 +37,16 @@ type DurationMode = 30 | 60 | "unlimited";
 
 interface CameraScreenProps {
     onBack: () => void;
-    onNavigate: (screen: string) => void;
+    onNavigate: (screen: string, params?: any) => void;
     t: (key: string) => string;
     language: string;
     theme: string;
     user?: any;
+    initialFile?: string;
+    fileType?: 'image' | 'video';
 }
 
-export default function CameraScreen({ onBack, onNavigate, t, language, theme, user }: CameraScreenProps) {
+export default function CameraScreen({ onBack, onNavigate, t, language, theme, user, initialFile, fileType }: CameraScreenProps) {
     const insets = useSafeAreaInsets();
     const colors = theme === "dark" ? Theme.dark.colors : Theme.light.colors;
     const cameraRef = useRef<CameraView>(null);
@@ -61,8 +63,8 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
     const [isRecording, setIsRecording] = useState(false);
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isStarting, setIsStarting] = useState(false);
-    const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
-    const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
+    const [capturedPhoto, setCapturedPhoto] = useState<string | null>(initialFile && fileType === 'image' ? initialFile : null);
+    const [capturedVideo, setCapturedVideo] = useState<string | null>(initialFile && fileType === 'video' ? initialFile : null);
     const [elapsed, setElapsed] = useState(0);
     const [uploading, setUploading] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -96,6 +98,18 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         if (language === 'fr') return fr;
         return en;
     };
+
+    useEffect(() => {
+        if (initialFile) {
+            if (fileType === 'image') {
+                setCapturedPhoto(initialFile);
+                setCapturedVideo(null);
+            } else {
+                setCapturedVideo(initialFile);
+                setCapturedPhoto(null);
+            }
+        }
+    }, [initialFile, fileType]);
 
     useEffect(() => {
         if (!camPermission?.granted) requestCamPermission();
@@ -253,11 +267,61 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         }
     };
 
+    const uploadToReel = async (uri: string, type: 'image' | 'video') => {
+        if (!user?.uid) {
+            Alert.alert(t('error'), t('loginRequired'));
+            return false;
+        }
+
+        setUploading(true);
+        try {
+            const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const reelData = {
+                id: reelId,
+                url: uri,
+                type: type,
+                text: '',
+                createdAt: serverTimestamp(),
+                userId: user.uid,
+                reactions: {},
+                commentsCount: 0,
+                totalLikes: 0
+            };
+
+            await setDoc(doc(db, 'global_reels', reelId), reelData);
+            await MediaLibrary.saveToLibraryAsync(uri);
+
+            setUploading(false);
+            Alert.alert(
+                tr('Succès', 'نجاح', 'Success'),
+                tr(
+                    type === 'video' ? 'Reel publié avec succès !' : 'Photo publiée en tant que Reel !',
+                    type === 'video' ? 'تم نشر الريل بنجاح' : 'تم نشر الصورة كـ ريل بنجاح',
+                    type === 'video' ? 'Reel published successfully!' : 'Photo published as Reel successfully!'
+                )
+            );
+            reset();
+            return true;
+        } catch (e) {
+            console.log("Reel Upload error:", e);
+            setUploading(false);
+            Alert.alert(t('error'), 'Failed to publish reel');
+            return false;
+        }
+    };
+
     const publishToWorks = async () => {
         const uri = capturedPhoto || capturedVideo;
         if (!uri) return;
         const type = capturedPhoto ? 'image' : 'video';
         await uploadToWork(uri, type);
+    };
+
+    const publishAsReel = async () => {
+        const uri = capturedPhoto || capturedVideo;
+        if (!uri) return;
+        const type = capturedPhoto ? 'image' : 'video';
+        await uploadToReel(uri, type);
     };
 
     const saveToGalleryOnly = async () => {
@@ -301,12 +365,12 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
                 {capturedPhoto ? (
                     <Image source={{ uri: capturedPhoto }} style={styles.previewImage} resizeMode="cover" />
                 ) : (
-                    <Video
+                    <UniversalVideoPlayer
                         source={{ uri: capturedVideo! }}
                         style={styles.previewImage}
                         shouldPlay
                         isLooping
-                        resizeMode={ResizeMode.COVER}
+                        resizeMode="cover"
                     />
                 )}
 
@@ -344,10 +408,27 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
                             ) : (
                                 <>
                                     <Send size={20} color="white" style={{ marginRight: 8 }} />
-                                    <Text style={styles.publishBtnText}>{tr('Publier', 'نشر', 'Publish')}</Text>
+                                    <Text style={styles.publishBtnText}>{tr('Publier comme Travail', 'نشر كعمل', 'Publish to Works')}</Text>
                                 </>
                             )}
                         </TouchableOpacity>
+
+                        {(capturedPhoto || capturedVideo) && (
+                            <TouchableOpacity
+                                onPress={publishAsReel}
+                                style={[styles.publishBtn, { backgroundColor: '#A855F7', marginTop: 10 }]}
+                                disabled={uploading}
+                            >
+                                {uploading ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <>
+                                        <VideoIcon size={20} color="white" style={{ marginRight: 8 }} />
+                                        <Text style={styles.publishBtnText}>{tr('Publier comme Reel', 'نشر كريم ريل', 'Publish as Reel')}</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </Animatable.View>
                 </View>
             </View>

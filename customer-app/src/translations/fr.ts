@@ -472,4 +472,10 @@ export const fr = {
   videoLabel: 'VIDÉO',
   uploadingVideo: 'Téléchargement vidéo en cours...',
   removeVideo: 'Supprimer la vidéo',
+  chooseMedia: 'Choisir le média',
+  openCamera: 'Ouvrir la caméra',
+  takePhotoVideo: 'Prendre une photo ou vidéo',
+  importVideo: 'Importer une vidéo',
+  importPhoto: 'Importer une photo',
+  fromGallery: 'Depuis votre galerie',
 };

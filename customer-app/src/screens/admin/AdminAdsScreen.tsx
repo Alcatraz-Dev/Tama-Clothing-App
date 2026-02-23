@@ -35,7 +35,7 @@ import {
 } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from "../../components/common/UniversalVideoPlayer";
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminHeader';
@@ -214,13 +214,13 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                     <AdminCard style={sc.adCard}>
                         <View style={[sc.adMediaWrap, { borderColor: colors.border }]}>
                             {item.type === 'video' ? (
-                                <Video
+                                <UniversalVideoPlayer
                                     source={{ uri: item.url }}
                                     style={sc.adMedia}
                                     isMuted
                                     shouldPlay
                                     isLooping
-                                    resizeMode={ResizeMode.COVER}
+                                    resizeMode="cover"
                                 />
                             ) : (
                                 <Image source={{ uri: item.url }} style={sc.adMedia} />
@@ -285,7 +285,7 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                         <TouchableOpacity onPress={pickMedia} style={[sc.mediaPicker, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border, borderStyle: url ? 'solid' : 'dashed' }]}>
                             {url ? (
                                 type === 'video' ? (
-                                    <Video source={{ uri: url }} style={sc.pickerMedia} isMuted shouldPlay resizeMode={ResizeMode.COVER} />
+                                    <UniversalVideoPlayer source={{ uri: url }} style={sc.pickerMedia} isMuted shouldPlay resizeMode="cover" />
                                 ) : (
                                     <Image source={{ uri: url }} style={sc.pickerMedia} />
                                 )

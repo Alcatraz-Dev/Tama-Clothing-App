@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
-import { AppText as Text } from '../../App';
+import { AppText as Text } from '../components/common/AppText';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { ChevronLeft } from 'lucide-react-native';

@@ -37,7 +37,7 @@ import {
 } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
-import { ResizeMode, Video as ExpoVideo } from 'expo-av';
+import UniversalVideoPlayer from "../../components/common/UniversalVideoPlayer";
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
@@ -253,10 +253,10 @@ export default function AdminSupportChatScreen({ onBack, chatId, customerName, u
                                     )}
                                     {m.videoUrl && (
                                         <TouchableOpacity onPress={() => setFullScreenMedia({ type: 'video', uri: m.videoUrl })}>
-                                            <ExpoVideo
+                                            <UniversalVideoPlayer
                                                 source={{ uri: m.videoUrl }}
                                                 style={sc.msgVideo}
-                                                resizeMode={ResizeMode.COVER}
+                                                resizeMode="cover"
                                                 shouldPlay={false}
                                                 isMuted={true}
                                             />
@@ -301,10 +301,10 @@ export default function AdminSupportChatScreen({ onBack, chatId, customerName, u
                         <Image source={{ uri: fullScreenMedia.uri }} style={sc.fullImg} resizeMode="contain" />
                     )}
                     {fullScreenMedia?.type === 'video' && (
-                        <ExpoVideo
+                        <UniversalVideoPlayer
                             source={{ uri: fullScreenMedia.uri }}
                             style={sc.fullImg}
-                            resizeMode={ResizeMode.CONTAIN}
+                            resizeMode="contain"
                             useNativeControls
                             shouldPlay
                         />

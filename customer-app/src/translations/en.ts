@@ -523,4 +523,10 @@ export const en = {
   videoLabel: 'VIDEO',
   uploadingVideo: 'Uploading video...',
   removeVideo: 'Remove video',
+  chooseMedia: 'Choose Media',
+  openCamera: 'Open Camera',
+  takePhotoVideo: 'Take a Photo or Video',
+  importVideo: 'Import Video',
+  importPhoto: 'Import Photo',
+  fromGallery: 'From your gallery',
 };

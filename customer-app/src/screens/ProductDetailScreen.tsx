@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Dimensions
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../theme';
 import { ChevronLeft, ShoppingBag, Heart, Share2 } from 'lucide-react-native';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 // import { useCart, CartItem } from '../context/CartContext';
 
 
@@ -50,11 +50,11 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 {/* Image Gallery */}
                 <View style={styles.imageGallery}>
                     {product.videoUrl ? (
-                        <Video
+                        <UniversalVideoPlayer
                             source={{ uri: product.videoUrl }}
                             style={styles.fullImage}
                             useNativeControls
-                            resizeMode={ResizeMode.COVER}
+                            resizeMode="cover"
                             isLooping
                             shouldPlay
                         />

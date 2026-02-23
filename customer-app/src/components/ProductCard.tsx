@@ -7,7 +7,7 @@ import {
     TouchableOpacity,
     Dimensions,
 } from 'react-native';
-import { Heart, ShoppingBag, Star } from 'lucide-react-native';
+import { Heart, ShoppingBag, Star, Play } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -24,6 +24,7 @@ interface ProductCardProps {
     t?: (key: string) => string;
     colors?: any;
     isFeaturedHero?: boolean;
+    horizontal?: boolean;
 }
 
 export default function ProductCard({
@@ -38,6 +39,7 @@ export default function ProductCard({
     t,
     colors: extraColors,
     isFeaturedHero = false,
+    horizontal = false,
 }: ProductCardProps) {
     const isDark = theme === 'dark';
 
@@ -122,11 +124,11 @@ export default function ProductCard({
                         {/* Price Row for Hero Card */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                             <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }}>
-                                {product.discountPrice ? product.discountPrice.toFixed(2) : product.price.toFixed(2)} TND
+                                {(Number(product.discountPrice || 0) > 0 ? Number(product.discountPrice).toFixed(2) : Number(product.price || 0).toFixed(2))} TND
                             </Text>
-                            {product.discountPrice && (
+                            {Number(product.discountPrice || 0) > 0 && (
                                 <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600', textDecorationLine: 'line-through' }}>
-                                    {product.price.toFixed(2)} TND
+                                    {Number(product.price || 0).toFixed(2)} TND
                                 </Text>
                             )}
                         </View>
@@ -158,6 +160,96 @@ export default function ProductCard({
         );
     }
 
+    if (horizontal) {
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.horizontalCard,
+                    { backgroundColor: colors.background, borderColor: colors.border }
+                ]}
+                onPress={onPress}
+                activeOpacity={0.9}
+            >
+                <View style={styles.horizontalImageContainer}>
+                    <Image
+                        source={{ uri: product.mainImage || product.image || product.imageUrl || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400' }}
+                        style={[styles.horizontalImage, { opacity: product.status === 'sold_out' ? 0.6 : 1 }]}
+                    />
+                    {product.videoUrl && (
+                        <View style={styles.videoIndicator}>
+                            <Play size={10} color="#FFF" fill="#FFF" />
+                        </View>
+                    )}
+                    {product.discountPrice && (
+                        <View style={styles.horizontalDiscountBadge}>
+                            <Text style={styles.discountText}>
+                                -{Math.round((1 - product.discountPrice / product.price) * 100)}%
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.horizontalInfo}>
+                    <View>
+                        <Text style={[styles.horizontalBrand, { color: colors.textMuted }]}>
+                            {String(getName(product.brandName) || 'TAMA').toUpperCase()}
+                        </Text>
+                        <Text style={[styles.horizontalName, { color: colors.foreground }]} numberOfLines={1}>
+                            {getName(product.name)}
+                        </Text>
+                    </View>
+
+                    <View style={styles.horizontalPricing}>
+                        <Text style={[styles.horizontalPrice, { color: colors.foreground }]}>
+                            {(Number(product.discountPrice || 0) > 0 ? Number(product.discountPrice).toFixed(2) : Number(product.price || 0).toFixed(2))} TND
+                        </Text>
+                        {Number(product.discountPrice || 0) > 0 && (
+                            <Text style={styles.horizontalOriginalPrice}>
+                                {Number(product.price || 0).toFixed(2)} TND
+                            </Text>
+                        )}
+                    </View>
+
+                    {showRating && (
+                        <View style={styles.horizontalRating}>
+                            <Star size={10} color="#FFD700" fill="#FFD700" />
+                            <Text style={[styles.horizontalRatingText, { color: colors.foreground }]}>
+                                {product.rating || '5.0'}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.horizontalActions}>
+                    {onToggleWishlist && (
+                        <TouchableOpacity
+                            style={[styles.actionCircle, { backgroundColor: isWishlisted ? colors.error + '15' : (isDark ? '#27272A' : '#F2F2F7') }]}
+                            onPress={(e) => { e.stopPropagation(); onToggleWishlist(); }}
+                        >
+                            <Heart size={16} color={isWishlisted ? colors.error : colors.foreground} fill={isWishlisted ? colors.error : 'none'} />
+                        </TouchableOpacity>
+                    )}
+
+                    {onAddToCart && (
+                        <TouchableOpacity
+                            style={[styles.actionCircle, { backgroundColor: colors.foreground }]}
+                            onPress={(e) => { e.stopPropagation(); onAddToCart(); }}
+                            disabled={product.status === 'sold_out'}
+                        >
+                            <ShoppingBag size={16} color={isDark ? '#000' : '#FFF'} strokeWidth={2.5} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {product.status === 'sold_out' && (
+                    <View style={styles.horizontalSoldOutOverlay}>
+                        <Text style={styles.horizontalSoldOutText}>{translate('soldOut').toUpperCase()}</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
+    }
+
     return (
         <TouchableOpacity
             style={[
@@ -173,7 +265,11 @@ export default function ProductCard({
                     style={[styles.modernProductImg, { opacity: product.status === 'sold_out' ? 0.6 : 1 }]}
                 />
 
-
+                {product.videoUrl && (
+                    <View style={[styles.videoIndicator, { top: 12, left: 12 }]}>
+                        <Play size={12} color="#FFF" fill="#FFF" />
+                    </View>
+                )}
 
                 <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.85)']}
@@ -207,11 +303,11 @@ export default function ProductCard({
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '900' }}>
-                            {product.discountPrice ? product.discountPrice.toFixed(2) : product.price.toFixed(2)} TND
+                            {(Number(product.discountPrice || 0) > 0 ? Number(product.discountPrice).toFixed(2) : (product.price ? Number(product.price).toFixed(2) : '0.00'))} TND
                         </Text>
-                        {product.discountPrice && (
+                        {Number(product.discountPrice || 0) > 0 && (
                             <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600', textDecorationLine: 'line-through' }}>
-                                {product.price.toFixed(2)} TND
+                                {product.price ? Number(product.price).toFixed(2) : '0.00'} TND
                             </Text>
                         )}
                     </View>
@@ -258,6 +354,129 @@ export default function ProductCard({
 }
 
 const styles = StyleSheet.create({
+    horizontalCard: {
+        flexDirection: 'row',
+        padding: 12,
+        borderRadius: 24,
+        marginBottom: 16,
+        alignItems: 'center',
+        borderWidth: 1,
+        // Dribbble-like subtle shadow
+        shadowColor: 'rgba(0,0,0,0.4)',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 15,
+        elevation: 5,
+    },
+    horizontalImageContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 18,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    horizontalImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    videoIndicator: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 5,
+    },
+    horizontalDiscountBadge: {
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    discountText: {
+        color: '#FFF',
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    horizontalInfo: {
+        flex: 1,
+        marginLeft: 16,
+        justifyContent: 'space-between',
+        height: 90,
+    },
+    horizontalBrand: {
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    horizontalName: {
+        fontSize: 16,
+        fontWeight: '900',
+        letterSpacing: -0.5,
+    },
+    horizontalPricing: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    horizontalPrice: {
+        fontSize: 16,
+        fontWeight: '900',
+    },
+    horizontalOriginalPrice: {
+        fontSize: 11,
+        color: 'rgba(0,0,0,0.3)',
+        textDecorationLine: 'line-through',
+        fontWeight: '600',
+    },
+    horizontalRating: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+
+    horizontalActions: {
+        paddingLeft: 12,
+        gap: 12,
+        alignItems: 'center',
+    },
+    actionCircle: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    horizontalSoldOutOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 20,
+    },
+    horizontalSoldOutText: {
+        backgroundColor: '#000',
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '900',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    horizontalRatingText: {
+        fontSize: 11,
+        fontWeight: '800',
+    },
     modernProductCard: {
         width: (SCREEN_WIDTH - 50) / 2, // Accounting for paddings and gaps
         borderRadius: 20,
@@ -283,14 +502,14 @@ const styles = StyleSheet.create({
         height: '100%',
         resizeMode: 'cover',
     },
-    soldOutOverlay: {
+    modernSoldOutOverlay: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 25,
         backgroundColor: 'rgba(0, 0, 0, 0.25)', // slightly darker to make text pop
     },
-    soldOutBadge: {
+    modernSoldOutBadge: {
         backgroundColor: 'rgba(20, 20, 24, 0.95)', // premium dark badge
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -298,14 +517,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    soldOutDot: {
+    modernSoldOutDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
         backgroundColor: '#FF3B30',
         marginRight: 6,
     },
-    soldOutText: {
+    modernSoldOutText: {
         color: '#FFFFFF',
         fontSize: 9,
         fontWeight: '900',
@@ -384,10 +603,7 @@ const styles = StyleSheet.create({
         gap: 3,
         marginLeft: 4,
     },
-    ratingText: {
-        fontSize: 11,
-        fontWeight: '900',
-    },
+
     // Hero Product Card Styles (for TripGlide-style slider)
     heroProductCard: {
         width: '100%',

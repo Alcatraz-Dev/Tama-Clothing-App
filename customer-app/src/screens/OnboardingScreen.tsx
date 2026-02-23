@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, Dimensions } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import { ArrowRight } from 'lucide-react-native';
@@ -49,10 +49,10 @@ export default function OnboardingScreen({ onFinish, t }: any) {
 
     const renderSlide = ({ item, index }: any) => (
         <View style={{ width, height }}>
-            <Video
+            <UniversalVideoPlayer
                 source={{ uri: item.video }}
                 style={StyleSheet.absoluteFill}
-                resizeMode={ResizeMode.COVER}
+                resizeMode="cover"
                 isLooping
                 shouldPlay={currentIndex === index}
                 isMuted

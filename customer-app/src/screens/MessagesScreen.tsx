@@ -8,7 +8,11 @@ import {
     Alert,
     Image,
     TextInput,
-    StyleSheet
+    ScrollView,
+    StyleSheet,
+    Modal,
+    Pressable,
+    Dimensions
 } from 'react-native';
 import {
     getDoc,
@@ -17,15 +21,19 @@ import {
     query,
     where,
     onSnapshot,
+    limit,
     deleteDoc
 } from 'firebase/firestore';
-import { MessageCircle, Shield, Trash2, ChevronLeft, Search, Camera, Edit } from 'lucide-react-native';
+import { MessageCircle, Shield, Trash2, ChevronLeft, Search, Camera, Edit, Plus, Video, X, Image as ImageIcon } from 'lucide-react-native';
 import { db } from '../api/firebase';
 import { useAppTheme } from '../context/ThemeContext';
 import { width } from '../constants/layout';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: any) {
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate, t, tr }: any) {
     const { colors, theme } = useAppTheme();
     const [chats, setChats] = useState<any[]>([]);
     const [friends, setFriends] = useState<any[]>([]);
@@ -33,6 +41,8 @@ export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: an
     const [error, setError] = useState<string | null>(null);
     const [usersCache, setUsersCache] = useState<Record<string, any>>({});
     const [searchQuery, setSearchQuery] = useState('');
+    const [reels, setReels] = useState<any[]>([]);
+    const [isReelModalVisible, setIsReelModalVisible] = useState(false);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -106,8 +116,54 @@ export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: an
                 setLoading(false);
             }
         );
-        return () => unsubscribe();
+        // Fetch Global Reels for the bar
+        const reelsQuery = query(collection(db, 'global_reels'), limit(20));
+        const unsubscribeReels = onSnapshot(reelsQuery, async (snapshot) => {
+            const reelsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Fetch profiles for reels if not in cache
+            const missingUids = [...new Set(reelsList.filter((r: any) => !usersCache[r.userId]).map((r: any) => r.userId))];
+            if (missingUids.length > 0) {
+                const newCache: Record<string, any> = {};
+                await Promise.all(missingUids.map(async (uid: any) => {
+                    try {
+                        const snap = await getDoc(doc(db, 'users', uid));
+                        if (snap.exists()) newCache[uid] = snap.data();
+                    } catch (e) { }
+                }));
+                setUsersCache(prev => ({ ...prev, ...newCache }));
+            }
+            setReels(reelsList);
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribeReels();
+        };
     }, [user?.uid]);
+
+    const handlePickReelMedia = async (type: 'image' | 'video') => {
+        setIsReelModalVisible(false);
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [9, 16],
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                const asset = result.assets[0];
+                onNavigate?.('Camera', {
+                    initialFile: asset.uri,
+                    fileType: type
+                });
+            }
+        } catch (error) {
+            console.error("Error picking reel media:", error);
+            Alert.alert("Erreur", "Impossible d'accéder à la galerie");
+        }
+    };
 
     const filteredChats = chats.filter(chat => {
         const otherId = chat.participants.find((id: string) => id !== user.uid);
@@ -134,7 +190,19 @@ export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: an
                         Chats
                     </Text>
                 </View>
-                <View />
+                <TouchableOpacity
+                    onPress={() => onNavigate?.('Camera')}
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
+                    <Camera size={20} color={colors.foreground} />
+                </TouchableOpacity>
             </View>
 
             {/* Search Bar */}
@@ -175,59 +243,124 @@ export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: an
                     keyExtractor={(item) => item.id}
                     showsVerticalScrollIndicator={false}
                     ListHeaderComponent={() => (
-                        <View>
-                            {/* Stories/Active Friends Bar */}
-                            {friends.length > 0 && (
-                                <View style={{ paddingLeft: 16, marginBottom: 20 }}>
-                                    <FlatList
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        data={friends}
-                                        keyExtractor={(item) => item.uid}
-                                        renderItem={({ item }) => (
-                                            <TouchableOpacity
-                                                onPress={() => onSelectChat(null, item.uid)}
-                                                style={{ alignItems: 'center', marginRight: 16, width: 68 }}
-                                            >
-                                                <View style={{ position: 'relative' }}>
-                                                    <View style={{
-                                                        width: 62,
-                                                        height: 62,
-                                                        borderRadius: 31,
-                                                        backgroundColor: colors.accent,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        overflow: 'hidden'
-                                                    }}>
-                                                        {item.avatarUrl || item.photoURL ? (
-                                                            <Image source={{ uri: item.avatarUrl || item.photoURL }} style={{ width: '100%', height: '100%' }} />
-                                                        ) : (
-                                                            <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 22 }}>
-                                                                {(item.fullName || item.displayName || 'A')[0].toUpperCase()}
-                                                            </Text>
-                                                        )}
-                                                    </View>
-                                                    {/* Active Status Dot */}
-                                                    <View style={{
-                                                        position: 'absolute',
-                                                        bottom: 2,
-                                                        right: 2,
-                                                        width: 16,
-                                                        height: 16,
-                                                        borderRadius: 8,
-                                                        backgroundColor: '#31A24C',
-                                                        borderWidth: 2,
-                                                        borderColor: colors.background
-                                                    }} />
+                        <View style={{ marginBottom: 5 }}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ paddingLeft: 16, paddingVertical: 10 }}
+                            >
+                                {/* Your Reel / Create Button */}
+                                <TouchableOpacity
+                                    onPress={() => setIsReelModalVisible(true)}
+                                    style={{ alignItems: 'center', marginRight: 15, width: 72 }}
+                                >
+                                    <View style={{ position: 'relative', width: 68, height: 68 }}>
+                                        <View style={{
+                                            width: 68,
+                                            height: 68,
+                                            borderRadius: 34,
+                                            backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            overflow: 'hidden',
+                                            borderWidth: 1.5,
+                                            borderColor: colors.border
+                                        }}>
+                                            {user.photoURL || user.avatarUrl ? (
+                                                <Image source={{ uri: user.photoURL || user.avatarUrl }} style={{ width: '100%', height: '100%' }} />
+                                            ) : (
+                                                <View style={{ width: '100%', height: '100%', backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 24 }}>
+                                                        {(user.displayName || 'u')[0].toUpperCase()}
+                                                    </Text>
                                                 </View>
-                                                <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 12, marginTop: 6, textAlign: 'center' }}>
-                                                    {(item.fullName || item.displayName || 'User').split(' ')[0]}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    />
-                                </View>
-                            )}
+                                            )}
+                                        </View>
+                                        <View style={{
+                                            position: 'absolute',
+                                            bottom: 0,
+                                            right: 0,
+                                            width: 24,
+                                            height: 24,
+                                            borderRadius: 12,
+                                            backgroundColor: '#0084ff', // standard messenger blue
+                                            borderWidth: 3,
+                                            borderColor: colors.background,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.2,
+                                            shadowRadius: 3,
+                                            elevation: 3
+                                        }}>
+                                            <Plus size={14} color="#FFF" strokeWidth={3} />
+                                        </View>
+                                    </View>
+                                    <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 11, fontWeight: '700', marginTop: 10, textAlign: 'center', opacity: 1 }}>
+                                        {tr('Ton Reel', 'الريل الخاص بك', 'Your Reel')}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* Friends / Reels Bar */}
+                                {reels.slice(0, 15).map((reel: any) => {
+                                    const profile = usersCache[reel.userId] || {};
+                                    return (
+                                        <TouchableOpacity
+                                            key={reel.id}
+                                            onPress={() => onNavigate?.('Feed', { initialTab: 'reels' })}
+                                            style={{ alignItems: 'center', marginRight: 15, width: 68 }}
+                                        >
+                                            <View style={{
+                                                width: 68,
+                                                height: 68,
+                                                borderRadius: 34,
+                                                borderWidth: 2,
+                                                borderColor: colors.accent,
+                                                padding: 2,
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                <View style={{
+                                                    width: 60,
+                                                    height: 60,
+                                                    borderRadius: 30,
+                                                    backgroundColor: colors.accent,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {profile.avatarUrl || profile.photoURL ? (
+                                                        <Image source={{ uri: profile.avatarUrl || profile.photoURL }} style={{ width: '100%', height: '100%' }} />
+                                                    ) : (
+                                                        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 22 }}>
+                                                            {(profile.fullName || profile.displayName || 'A')[0].toUpperCase()}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                                <View style={{
+                                                    position: 'absolute',
+                                                    bottom: 0,
+                                                    right: 0,
+                                                    width: 20,
+                                                    height: 20,
+                                                    borderRadius: 10,
+                                                    backgroundColor: '#000',
+                                                    borderWidth: 1,
+                                                    borderColor: '#FFF',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}>
+                                                    <Video size={10} color="#FFF" fill="#FFF" />
+                                                </View>
+                                            </View>
+                                            <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 11, marginTop: 6, textAlign: 'center' }}>
+                                                {(profile.fullName || profile.displayName || 'User').split(' ')[0]}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
                         </View>
                     )}
                     renderItem={({ item }) => {
@@ -328,6 +461,114 @@ export default function MessagesScreen({ user, onBack, onSelectChat, t, tr }: an
                     )}
                 />
             )}
+
+            {/* Reel Action Choice Modal */}
+            <Modal
+                visible={isReelModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsReelModalVisible(false)}
+            >
+                <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+                    onPress={() => setIsReelModalVisible(false)}
+                >
+                    <Pressable style={{
+                        backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        paddingBottom: useSafeAreaInsets().bottom + 20,
+                        paddingHorizontal: 20
+                    }}>
+                        {/* Modal Handle */}
+                        <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
+                            <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
+                                {tr('Créer un Reel', 'إنشاء ريل', 'Create a Reel')}
+                            </Text>
+                            <TouchableOpacity onPress={() => setIsReelModalVisible(false)} style={{ padding: 4 }}>
+                                <X size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ gap: 12 }}>
+                            <TouchableOpacity
+                                onPress={() => { setIsReelModalVisible(false); onNavigate?.('Camera'); }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <Camera size={22} color={colors.accentForeground || "#FFF"} />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Ouvrir la caméra', 'فتح الكاميرا', 'Open Camera')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Enregistrer maintenant', 'سجل الآن', 'Record now')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => handlePickReelMedia('video')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <Video size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Importer une vidéo', 'استيراد فيديو', 'Import Video')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Depuis votre galerie', 'من المعرض الخاص بك', 'From your gallery')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => handlePickReelMedia('image')}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <ImageIcon size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Importer une photo', 'استيراد صورة', 'Import Photo')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Utiliser une image', 'استخدم صورة', 'Use an image')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
+
+const styles = StyleSheet.create({
+    // (Styles are mostly the same, I can omit or keep them. Since I'm using write_to_file, I must include all or the file will be truncated)
+});
