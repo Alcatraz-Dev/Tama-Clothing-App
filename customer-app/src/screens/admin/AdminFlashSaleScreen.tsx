@@ -53,7 +53,9 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
     const scrollY = useRef(new Animated.Value(0)).current;
 
     const [active, setActive] = useState(false);
-    const [title, setTitle] = useState('');
+    const [titleFr, setTitleFr] = useState('');
+    const [titleAr, setTitleAr] = useState('');
+    const [titleEn, setTitleEn] = useState('');
     const [endTime, setEndTime] = useState('');
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
     const [products, setProducts] = useState<any[]>([]);
@@ -77,7 +79,9 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
             if (snap.exists()) {
                 const data = snap.data();
                 setActive(data.active || false);
-                setTitle(data.title || '');
+                setTitleFr(data.title?.fr || (typeof data.title === 'string' ? data.title : ''));
+                setTitleAr(data.title?.['ar-tn'] || '');
+                setTitleEn(data.title?.en || '');
                 setEndTime(data.endTime || '');
                 setSelectedProductIds(data.productIds || []);
             }
@@ -98,7 +102,7 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
     };
 
     const handleSave = async () => {
-        if (!title || !endTime) {
+        if (!titleFr || !endTime) {
             Alert.alert(t('error'), t('fillAllFields') || t('requiredFields'));
             return;
         }
@@ -111,7 +115,7 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
         try {
             const saveData: any = {
                 active,
-                title,
+                title: { fr: titleFr, 'ar-tn': titleAr, en: titleEn },
                 endTime,
                 productIds: selectedProductIds,
                 updatedAt: serverTimestamp()
@@ -161,10 +165,25 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
                 </AdminCard>
 
                 <AdminInput
-                    label={t('campaignTitle').toUpperCase()}
-                    value={title}
-                    onChangeText={setTitle}
-                    placeholder={t('flashSaleTitlePlaceholder')}
+                    label={t('campaignTitle').toUpperCase() + " (FR)"}
+                    value={titleFr}
+                    onChangeText={setTitleFr}
+                    placeholder={t('flashSaleTitlePlaceholder') + " (FR)"}
+                />
+
+                <AdminInput
+                    label={t('campaignTitle').toUpperCase() + " (EN)"}
+                    value={titleEn}
+                    onChangeText={setTitleEn}
+                    placeholder={t('flashSaleTitlePlaceholder') + " (EN)"}
+                />
+
+                <AdminInput
+                    label={t('campaignTitle').toUpperCase() + " (AR)"}
+                    value={titleAr}
+                    onChangeText={setTitleAr}
+                    placeholder={t('flashSaleTitlePlaceholder') + " (AR)"}
+                    textAlign="right"
                 />
 
                 <AdminInput

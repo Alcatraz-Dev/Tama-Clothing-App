@@ -4394,7 +4394,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                       <View style={[styles.iconCircle, { backgroundColor: '#3B82F6' }]}>
                         <Truck size={20} color="#FFF" />
                       </View>
-                      <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{language === 'ar' ? 'لوحة السائق' : 'DRIVER DASHBOARD'}</Text>
+                      <Text style={[styles.menuRowText, { color: colors.foreground, fontWeight: '800' }]}>{t('driverDashboard')}</Text>
                     </View>
                     <ChevronRight size={18} color={colors.textMuted} />
                   </TouchableOpacity>

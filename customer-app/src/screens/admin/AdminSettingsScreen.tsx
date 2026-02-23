@@ -99,7 +99,14 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const [socialsLoading, setSocialsLoading] = useState(false);
 
     // Legal State
-    const [legal, setLegal] = useState({ privacy: "", privacyAr: "", terms: "", termsAr: "" });
+    const [legal, setLegal] = useState({
+        privacy: "",
+        privacyAr: "",
+        privacyEn: "",
+        terms: "",
+        termsAr: "",
+        termsEn: ""
+    });
     const [legalLoading, setLegalLoading] = useState(false);
 
     useEffect(() => {
@@ -192,8 +199,10 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                 setLegal({
                     privacy: data.privacy || "",
                     privacyAr: data.privacyAr || "",
+                    privacyEn: data.privacyEn || "",
                     terms: data.terms || "",
-                    termsAr: data.termsAr || ""
+                    termsAr: data.termsAr || "",
+                    termsEn: data.termsEn || ""
                 });
             }
         } catch (err) {
@@ -490,6 +499,15 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                             />
                         </View>
                         <View style={sc.inputGroup}>
+                            <InputLabel text={t('privacyPolicy') + " (EN)"} />
+                            <TextInput
+                                style={[sc.textArea, { borderColor: colors.border, color: colors.foreground }]}
+                                value={legal.privacyEn}
+                                onChangeText={(t) => setLegal({ ...legal, privacyEn: t })}
+                                multiline
+                            />
+                        </View>
+                        <View style={sc.inputGroup}>
                             <InputLabel text={t('privacyPolicy') + " (AR)"} />
                             <TextInput
                                 style={[sc.textArea, { borderColor: colors.border, color: colors.foreground, textAlign: 'right' }]}
@@ -504,6 +522,15 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                                 style={[sc.textArea, { borderColor: colors.border, color: colors.foreground }]}
                                 value={legal.terms}
                                 onChangeText={(t) => setLegal({ ...legal, terms: t })}
+                                multiline
+                            />
+                        </View>
+                        <View style={sc.inputGroup}>
+                            <InputLabel text={t('termsOfService') + " (EN)"} />
+                            <TextInput
+                                style={[sc.textArea, { borderColor: colors.border, color: colors.foreground }]}
+                                value={legal.termsEn}
+                                onChangeText={(t) => setLegal({ ...legal, termsEn: t })}
                                 multiline
                             />
                         </View>

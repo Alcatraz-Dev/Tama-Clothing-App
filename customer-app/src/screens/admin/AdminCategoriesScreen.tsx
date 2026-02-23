@@ -57,6 +57,7 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
     const [editingCategory, setEditingCategory] = useState<any>(null);
     const [nameFr, setNameFr] = useState('');
     const [nameAr, setNameAr] = useState('');
+    const [nameEn, setNameEn] = useState('');
     const [image, setImage] = useState('');
     const [uploading, setUploading] = useState(false);
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -84,7 +85,7 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
             }
 
             const data = {
-                name: { fr: nameFr, "ar-tn": nameAr },
+                name: { fr: nameFr, "ar-tn": nameAr, en: nameEn },
                 image: imgUrl,
                 updatedAt: serverTimestamp()
             };
@@ -126,6 +127,7 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
         setEditingCategory(null);
         setNameFr('');
         setNameAr('');
+        setNameEn('');
         setImage('');
     };
 
@@ -133,6 +135,7 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
         setEditingCategory(c);
         setNameFr(c.name?.fr || (typeof c.name === 'string' ? c.name : ''));
         setNameAr(c.name?.['ar-tn'] || '');
+        setNameEn(c.name?.en || '');
         setImage(c.image || '');
         setModalVisible(true);
     };
@@ -223,6 +226,17 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
                                 value={nameFr}
                                 onChangeText={setNameFr}
                                 placeholder={t('frenchName')}
+                                placeholderTextColor={colors.textMuted}
+                            />
+                        </View>
+
+                        <View style={sc.inputWrap}>
+                            <InputLabel text={t('category').toUpperCase() + " (EN)"} />
+                            <TextInput
+                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                                value={nameEn}
+                                onChangeText={setNameEn}
+                                placeholder={t('englishName')}
                                 placeholderTextColor={colors.textMuted}
                             />
                         </View>

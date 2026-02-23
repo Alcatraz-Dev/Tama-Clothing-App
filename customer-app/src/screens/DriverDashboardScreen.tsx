@@ -47,6 +47,11 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
 
     useEffect(() => {
         const initDriverLocation = async () => {
+            if (profileData?.city) {
+                setDriverCity(profileData.city);
+                return;
+            }
+
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status === 'granted') {
@@ -65,7 +70,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
         if (user?.uid) {
             initDriverLocation();
         }
-    }, [user?.uid]);
+    }, [user?.uid, profileData?.city]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -113,10 +118,10 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 status: 'In Transit',
                 updatedAt: serverTimestamp()
             });
-            Alert.alert("Success", "You have accepted this delivery request!");
+            Alert.alert(translate('success'), translate('orderAccepted') || 'Order Accepted!');
             setActiveTab('my_deliveries');
         } catch (error: any) {
-            Alert.alert("Error", error.message);
+            Alert.alert(translate('error'), error.message);
         }
     };
 
@@ -139,7 +144,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
 
             Alert.alert(translate('success'), translate('deliveryStarted') || 'Delivery started! Tracking is live.');
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert(translate('error'), error.message);
         }
     };
 
@@ -177,6 +182,16 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
         Linking.openURL(url);
     };
 
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case 'Pending': return translate('statusPending');
+            case 'In Transit': return translate('statusInTransit');
+            case 'Out for Delivery': return translate('statusOutForDelivery');
+            case 'Delivered': return translate('statusDelivered');
+            default: return status;
+        }
+    };
+
     const renderShipment = ({ item }: { item: any }) => (
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardHeader}>
@@ -185,7 +200,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 }]}>
                     <Text style={[styles.statusText, {
                         color: item.status === 'Out for Delivery' ? '#3B82F6' : '#F59E0B'
-                    }]}>{item.status.toUpperCase()}</Text>
+                    }]}>{getStatusLabel(item.status).toUpperCase()}</Text>
                 </View>
                 <Text style={[styles.trackingId, { color: colors.textMuted }]}>{item.trackingId}</Text>
             </View>
@@ -194,7 +209,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 <View style={styles.infoRow}>
                     <MapPin size={20} color={colors.accent} />
                     <View style={styles.infoCol}>
-                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>RECEPTEUR</Text>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{translate('receiver')}</Text>
                         <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.receiverName}</Text>
                         <Text style={[styles.infoSubValue, { color: colors.textMuted }]}>{item.deliveryAddress}</Text>
                     </View>
@@ -224,7 +239,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                         onPress={() => handleAcceptOrder(item.id)}
                     >
                         <CheckCircle2 size={20} color="#FFF" />
-                        <Text style={[styles.actionBtnText, { color: '#FFF', marginLeft: 10 }]}>ACCEPT ORDER</Text>
+                        <Text style={[styles.actionBtnText, { color: '#FFF', marginLeft: 10 }]}>{translate('acceptOrder')}</Text>
                     </TouchableOpacity>
                 ) : (
                     <>
@@ -233,7 +248,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                             onPress={() => handleOpenMap(item.deliveryAddress)}
                         >
                             <Navigation size={20} color={colors.foreground} />
-                            <Text style={[styles.actionBtnText, { color: colors.foreground }]}>MAP</Text>
+                            <Text style={[styles.actionBtnText, { color: colors.foreground }]}>{translate('map')}</Text>
                         </TouchableOpacity>
 
                         {item.status === 'Pending' || item.status === 'In Transit' ? (
@@ -242,7 +257,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                                 onPress={() => handleStartDelivery(item)}
                             >
                                 <Truck size={20} color="#FFF" />
-                                <Text style={[styles.actionBtnText, { color: '#FFF' }]}>START</Text>
+                                <Text style={[styles.actionBtnText, { color: '#FFF' }]}>{translate('start')}</Text>
                             </TouchableOpacity>
                         ) : item.status === 'Out for Delivery' ? (
                             <TouchableOpacity
@@ -250,7 +265,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                                 onPress={() => onOpenProof(item)}
                             >
                                 <CheckCircle2 size={20} color="#FFF" />
-                                <Text style={[styles.actionBtnText, { color: '#FFF' }]}>CONFIRM</Text>
+                                <Text style={[styles.actionBtnText, { color: '#FFF' }]}>{translate('confirm')}</Text>
                             </TouchableOpacity>
                         ) : null}
 
@@ -272,7 +287,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 <TouchableOpacity onPress={onBack}>
                     <ArrowLeft color={colors.foreground} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.foreground }]}>DRIVER PANEL</Text>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>{translate('driverPanel')}</Text>
                 <View style={{ width: 24 }} />
             </View>
 
@@ -282,16 +297,16 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 <>
                     <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 5 }}>
                         <TouchableOpacity style={{ flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: activeTab === 'available' ? colors.foreground : 'transparent' }} onPress={() => setActiveTab('available')}>
-                            <Text style={{ textAlign: 'center', fontWeight: '800', color: activeTab === 'available' ? colors.foreground : colors.textMuted }}>AVAILABLE</Text>
+                            <Text style={{ textAlign: 'center', fontWeight: '800', color: activeTab === 'available' ? colors.foreground : colors.textMuted }}>{translate('available')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={{ flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: activeTab === 'my_deliveries' ? colors.foreground : 'transparent' }} onPress={() => setActiveTab('my_deliveries')}>
-                            <Text style={{ textAlign: 'center', fontWeight: '800', color: activeTab === 'my_deliveries' ? colors.foreground : colors.textMuted }}>MY DELIVERIES ({shipments.length})</Text>
+                            <Text style={{ textAlign: 'center', fontWeight: '800', color: activeTab === 'my_deliveries' ? colors.foreground : colors.textMuted }}>{translate('myDeliveries')} ({shipments.length})</Text>
                         </TouchableOpacity>
                     </View>
 
                     {activeTab === 'available' && driverCity && (
                         <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
-                            <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>📍 FILTERED BY REGION: {driverCity.toUpperCase()}</Text>
+                            <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>📍 {translate('filteredByRegion')}: {driverCity.toUpperCase()}</Text>
                         </View>
                     )}
 
@@ -304,7 +319,9 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                             <View style={styles.emptyContainer}>
                                 <Truck size={64} color={colors.border} />
                                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                                    {activeTab === 'available' ? `No assigned shipments in ${driverCity || 'your area'}` : 'No assigned deliveries'}
+                                    {activeTab === 'available'
+                                        ? (translate('noAssignedShipmentsIn').replace('{{city}}', driverCity || 'your area'))
+                                        : translate('noDeliveries')}
                                 </Text>
                             </View>
                         }

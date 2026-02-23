@@ -52,8 +52,10 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
     const [activeTab, setActiveTab] = useState<'send' | 'history'>('send');
     const [title, setTitle] = useState('');
     const [titleAr, setTitleAr] = useState('');
+    const [titleEn, setTitleEn] = useState('');
     const [message, setMessage] = useState('');
     const [messageAr, setMessageAr] = useState('');
+    const [messageEn, setMessageEn] = useState('');
     const [image, setImage] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -126,8 +128,10 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
                 userId: 'ALL',
                 title,
                 titleAr: titleAr || title,
+                titleEn: titleEn || title,
                 message,
                 messageAr: messageAr || message,
+                messageEn: messageEn || message,
                 image: imageUrl,
                 read: false,
                 type: 'broadcast',
@@ -175,7 +179,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
             }
 
             Alert.alert(t('broadcastSuccess'), t('thankYou'));
-            setTitle(''); setTitleAr(''); setMessage(''); setMessageAr(''); setImage(null);
+            setTitle(''); setTitleAr(''); setTitleEn(''); setMessage(''); setMessageAr(''); setMessageEn(''); setImage(null);
             setActiveTab('history');
         } catch (e: any) {
             Alert.alert(t('error'), t('broadcastError'));
@@ -208,10 +212,16 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
                 {activeTab === 'send' ? (
                     <AdminCard>
                         <AdminInput
-                            label={t('title').toUpperCase()}
+                            label={t('title').toUpperCase() + " (FR)"}
                             value={title}
                             onChangeText={setTitle}
-                            placeholder="Summer Sale..."
+                            placeholder="Summer Sale (FR)..."
+                        />
+                        <AdminInput
+                            label={t('titleEn').toUpperCase() + " (EN)"}
+                            value={titleEn}
+                            onChangeText={setTitleEn}
+                            placeholder="Summer Sale (EN)..."
                         />
                         <AdminInput
                             label={t('titleAr').toUpperCase()}
@@ -220,11 +230,18 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
                             placeholder="تخفيضات الصيف..."
                         />
                         <AdminInput
-                            label={t('message').toUpperCase()}
+                            label={t('message').toUpperCase() + " (FR)"}
                             value={message}
                             onChangeText={setMessage}
                             multiline
-                            placeholder="Get up to 50% off..."
+                            placeholder="Get up to 50% off (FR)..."
+                        />
+                        <AdminInput
+                            label={t('messageEn').toUpperCase() + " (EN)"}
+                            value={messageEn}
+                            onChangeText={setMessageEn}
+                            multiline
+                            placeholder="Get up to 50% off (EN)..."
                         />
                         <AdminInput
                             label={t('messageAr').toUpperCase()}

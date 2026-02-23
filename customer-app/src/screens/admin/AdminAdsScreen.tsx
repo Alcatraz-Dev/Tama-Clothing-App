@@ -67,8 +67,10 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
     const [editingAd, setEditingAd] = useState<any>(null);
     const [titleFr, setTitleFr] = useState('');
     const [titleAr, setTitleAr] = useState('');
+    const [titleEn, setTitleEn] = useState('');
     const [descFr, setDescFr] = useState('');
     const [descAr, setDescAr] = useState('');
+    const [descEn, setDescEn] = useState('');
     const [type, setType] = useState('image');
     const [url, setUrl] = useState('');
     const [targetType, setTargetType] = useState('none');
@@ -110,8 +112,8 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
         try {
             const mediaUrl = url.startsWith('http') ? url : await uploadToCloudinary(url);
             const data: any = {
-                title: { fr: titleFr, "ar-tn": titleAr },
-                description: { fr: descFr, "ar-tn": descAr },
+                title: { fr: titleFr, "ar-tn": titleAr, en: titleEn },
+                description: { fr: descFr, "ar-tn": descAr, en: descEn },
                 type,
                 url: mediaUrl,
                 targetType,
@@ -157,8 +159,10 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
         setEditingAd(null);
         setTitleFr('');
         setTitleAr('');
+        setTitleEn('');
         setDescFr('');
         setDescAr('');
+        setDescEn('');
         setType('image');
         setUrl('');
         setTargetType('none');
@@ -169,8 +173,10 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
         setEditingAd(ad);
         setTitleFr(ad.title?.fr || (typeof ad.title === 'string' ? ad.title : ''));
         setTitleAr(ad.title?.['ar-tn'] || '');
+        setTitleEn(ad.title?.en || '');
         setDescFr(ad.description?.fr || '');
         setDescAr(ad.description?.['ar-tn'] || '');
+        setDescEn(ad.description?.en || '');
         setType(ad.type || 'image');
         setUrl(ad.url || '');
         setTargetType(ad.targetType || (ad.link ? 'category' : 'none'));
@@ -308,26 +314,40 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                         />
 
                         <AdminInput
+                            label={t('campaignTitle').toUpperCase() + " (EN)"}
+                            value={titleEn}
+                            onChangeText={setTitleEn}
+                            placeholder={t('campaignTitle') + ' (EN)'}
+                        />
+
+                        <AdminInput
                             label={t('campaignTitle').toUpperCase() + " (AR)"}
                             value={titleAr}
                             onChangeText={setTitleAr}
                             placeholder={t('campaignTitle') + ' (AR)'}
+                            textAlign="right"
                         />
 
                         <AdminInput
                             label={t('description').toUpperCase() + " (FR)"}
                             value={descFr}
                             onChangeText={setDescFr}
-                            placeholder={t('description') + '...'}
-                            multiline
+                            placeholder={t('description') + ' (FR)'}
+                        />
+
+                        <AdminInput
+                            label={t('description').toUpperCase() + " (EN)"}
+                            value={descEn}
+                            onChangeText={setDescEn}
+                            placeholder={t('description') + ' (EN)'}
                         />
 
                         <AdminInput
                             label={t('description').toUpperCase() + " (AR)"}
                             value={descAr}
                             onChangeText={setDescAr}
-                            placeholder={t('description') + '...'}
-                            multiline
+                            placeholder={t('description') + ' (AR)'}
+                            textAlign="right"
                         />
 
                         <SectionLabel text={t('targetAction').toUpperCase()} style={{ marginBottom: 15 }} />

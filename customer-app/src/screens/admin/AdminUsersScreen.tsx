@@ -113,7 +113,8 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
     };
 
     const getUserStats = (user: any) => {
-        if (user.role === 'brand_owner' && user.brandId) {
+        const isBrandPrivileged = ['brand_owner', 'nor_kam', 'editor', 'partner'].includes(user.role);
+        if (isBrandPrivileged && user.brandId) {
             const brandOrders = orders.filter(
                 (o) => o.items && o.items.some((i: any) => i.brandId === user.brandId)
             );
@@ -163,7 +164,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
         if (!selectedUser) return;
         try {
             const b = brands.find((b) => b.id === userBrandId);
-            const isBrandRole = ['brand_owner', 'nor_kam', 'admin'].includes(userRole);
+            const isBrandRole = ['brand_owner', 'nor_kam', 'admin', 'editor', 'partner'].includes(userRole);
             const updates: any = {
                 role: userRole,
                 brandId: isBrandRole ? userBrandId : null,
@@ -241,9 +242,10 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
         );
     });
 
-    const totalCustomers = users.length;
+    const totalCustomers = users.filter(u => u.role === 'customer' || !u.role).length;
     const totalRevenue = users.reduce((sum, u) => {
-        if (u.role === 'admin' || u.role === 'brand_owner') return sum;
+        const isStaff = ['admin', 'brand_owner', 'nor_kam', 'editor', 'support', 'driver', 'partner'].includes(u.role);
+        if (isStaff) return sum;
         return sum + getUserStats(u).totalSpent;
     }, 0);
     const bannedCount = users.filter((u) => u.isBanned).length;
@@ -329,9 +331,9 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                                             <Text style={[sc.userName, { color: isBanned ? '#EF4444' : colors.foreground }]}>
                                                 {item.fullName || 'Unknown'}
                                             </Text>
-                                            {item.role === 'brand_owner' && (
-                                                <View style={[sc.roleTag, { backgroundColor: colors.foreground }]}>
-                                                    <Text style={[sc.roleTagText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{item.brandName?.toUpperCase() || 'OWNER'}</Text>
+                                            {(item.role === 'brand_owner' || item.role === 'nor_kam' || item.role === 'editor' || item.role === 'partner') && item.brandName && (
+                                                <View style={[sc.roleTag, { backgroundColor: colors.accent }]}>
+                                                    <Text style={[sc.roleTagText, { color: '#FFF' }]}>{item.brandName.toUpperCase()}</Text>
                                                 </View>
                                             )}
                                         </View>
@@ -362,9 +364,9 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                                         <Text style={[sc.miniStatVal, { color: '#10B981' }]}>{stats.completedOrders}</Text>
                                     </View>
                                     <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                                        <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{item.role === 'brand_owner' ? t('revenue').toUpperCase() : 'AVG'}</Text>
+                                        <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role) ? t('revenue').toUpperCase() : 'AVG'}</Text>
                                         <Text style={[sc.miniStatVal, { color: colors.foreground }]}>
-                                            {item.role === 'brand_owner'
+                                            {['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role)
                                                 ? stats.totalSpent.toFixed(0)
                                                 : (stats.totalOrders > 0 ? (stats.totalSpent / stats.totalOrders).toFixed(0) : '0')} TND
                                         </Text>
@@ -460,7 +462,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
 
                         <InputLabel text={t('role').toUpperCase()} />
                         <View style={sc.chipsWrap}>
-                            {['customer', 'brand_owner', 'nor_kam', 'admin', 'editor', 'support'].map((r) => (
+                            {['customer', 'brand_owner', 'nor_kam', 'admin', 'editor', 'support', 'driver', 'partner'].map((r) => (
                                 <AdminChip
                                     key={r}
                                     label={t(r === 'brand_owner' ? 'brandOwner' : (r === 'nor_kam' ? 'norKam' : r)).toUpperCase()}
@@ -470,7 +472,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                             ))}
                         </View>
 
-                        {['brand_owner', 'nor_kam', 'admin'].includes(userRole) && (
+                        {['brand_owner', 'nor_kam', 'admin', 'editor', 'partner'].includes(userRole) && (
                             <>
                                 <InputLabel text={t('selectBrand').toUpperCase()} />
                                 <View style={{ gap: 10 }}>

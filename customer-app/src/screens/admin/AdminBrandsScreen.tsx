@@ -61,6 +61,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
     const [editingBrand, setEditingBrand] = useState<any>(null);
     const [nameFr, setNameFr] = useState('');
     const [nameAr, setNameAr] = useState('');
+    const [nameEn, setNameEn] = useState('');
     const [image, setImage] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
@@ -104,7 +105,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
             }
 
             const data = {
-                name: { fr: nameFr, "ar-tn": nameAr },
+                name: { fr: nameFr, "ar-tn": nameAr, en: nameEn },
                 image: imgUrl,
                 address,
                 phone,
@@ -171,6 +172,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
         setEditingBrand(null);
         setNameFr('');
         setNameAr('');
+        setNameEn('');
         setImage('');
         setAddress('');
         setPhone('');
@@ -182,6 +184,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
         setEditingBrand(b);
         setNameFr(b.name?.fr || (typeof b.name === 'string' ? b.name : ''));
         setNameAr(b.name?.['ar-tn'] || '');
+        setNameEn(b.name?.en || '');
         setImage(b.image || '');
         setAddress(b.address || '');
         setPhone(b.phone || '');
@@ -292,6 +295,17 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
                                         value={nameFr}
                                         onChangeText={setNameFr}
                                         placeholder={t('frenchName')}
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+
+                                <View style={sc.inputWrap}>
+                                    <InputLabel text={t('brand').toUpperCase() + " (EN)"} />
+                                    <TextInput
+                                        style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                                        value={nameEn}
+                                        onChangeText={setNameEn}
+                                        placeholder={t('englishName')}
                                         placeholderTextColor={colors.textMuted}
                                     />
                                 </View>
