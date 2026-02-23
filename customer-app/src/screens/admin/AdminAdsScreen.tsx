@@ -45,6 +45,7 @@ import {
     InputLabel,
     EmptyState,
     AdminChip,
+    AdminInput,
 } from '../../components/admin/AdminUI';
 import { uploadToCloudinary } from '../../utils/cloudinary';
 import { getName, translateCategory } from '../../utils/translationHelpers';
@@ -185,9 +186,9 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
-                title={t('adsCampaigns').toUpperCase()}
+                title={t('adsCampaigns')}
                 onBack={onBack}
                 scrollY={scrollY}
                 rightElement={
@@ -298,51 +299,35 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
                             )}
                         </TouchableOpacity>
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('campaignTitle').toUpperCase() + " (FR)"} />
-                            <TextInput
-                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                                value={titleFr}
-                                onChangeText={setTitleFr}
-                                placeholder={t('campaignTitle') + ' (FR)'}
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('campaignTitle').toUpperCase() + " (FR)"}
+                            value={titleFr}
+                            onChangeText={setTitleFr}
+                            placeholder={t('campaignTitle') + ' (FR)'}
+                        />
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('campaignTitle').toUpperCase() + " (AR)"} />
-                            <TextInput
-                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border, textAlign: 'right' }]}
-                                value={titleAr}
-                                onChangeText={setTitleAr}
-                                placeholder={t('campaignTitle') + ' (AR)'}
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('campaignTitle').toUpperCase() + " (AR)"}
+                            value={titleAr}
+                            onChangeText={setTitleAr}
+                            placeholder={t('campaignTitle') + ' (AR)'}
+                        />
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('description').toUpperCase() + " (FR)"} />
-                            <TextInput
-                                style={[sc.input, sc.textArea, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                                value={descFr}
-                                onChangeText={setDescFr}
-                                placeholder={t('description') + '...'}
-                                multiline
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('description').toUpperCase() + " (FR)"}
+                            value={descFr}
+                            onChangeText={setDescFr}
+                            placeholder={t('description') + '...'}
+                            multiline
+                        />
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('description').toUpperCase() + " (AR)"} />
-                            <TextInput
-                                style={[sc.input, sc.textArea, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border, textAlign: 'right' }]}
-                                value={descAr}
-                                onChangeText={setDescAr}
-                                placeholder={t('description') + '...'}
-                                multiline
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('description').toUpperCase() + " (AR)"}
+                            value={descAr}
+                            onChangeText={setDescAr}
+                            placeholder={t('description') + '...'}
+                            multiline
+                        />
 
                         <SectionLabel text={t('targetAction').toUpperCase()} style={{ marginBottom: 15 }} />
                         <View style={sc.targetSelector}>
@@ -404,16 +389,16 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
-    addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20, paddingBottom: 100 },
-    adCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    adMediaWrap: { width: 100, height: 75, borderRadius: 12, overflow: 'hidden', borderWidth: 1 },
+    addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    listContent: { padding: 20, paddingBottom: 120, paddingTop: 10 },
+    adCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
+    adMediaWrap: { width: 110, height: 75, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
     adMedia: { width: '100%', height: '100%' },
-    typeBadge: { position: 'absolute', bottom: 4, right: 4, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    typeBadgeText: { color: 'white', fontSize: 8, fontWeight: '900' },
-    adInfo: { flex: 1, marginLeft: 16 },
-    adTitle: { fontWeight: '800', fontSize: 13 },
-    adDesc: { fontSize: 11, marginTop: 4 },
+    typeBadge: { position: 'absolute', bottom: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
+    typeBadgeText: { color: 'white', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
+    adInfo: { flex: 1, marginLeft: 20 },
+    adTitle: { fontWeight: '900', fontSize: 14, letterSpacing: -0.2 },
+    adDesc: { fontSize: 12, marginTop: 6, opacity: 0.8 },
     actions: { flexDirection: 'row', gap: 8 },
     actionBtn: { padding: 8 },
 

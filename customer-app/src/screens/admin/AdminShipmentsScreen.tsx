@@ -57,8 +57,8 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('shipments').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('shipments')} onBack={onBack} scrollY={scrollY} />
 
             <View style={[sc.nav, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity

@@ -43,6 +43,7 @@ import {
     StatusBadge,
     EmptyState,
     ModernSwitch,
+    AdminInput,
 } from '../../components/admin/AdminUI';
 
 const { width } = Dimensions.get('window');
@@ -158,8 +159,8 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('coupons').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('coupons')} onBack={onBack} scrollY={scrollY} />
 
             <Animated.ScrollView
                 onScroll={Animated.event(
@@ -173,23 +174,19 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
                 <AdminCard style={sc.formCard}>
                     <SectionLabel text={t('createCoupon')} />
 
-                    <View style={sc.inputGroup}>
-                        <InputLabel text={t('codeRequired') ? t('codeRequired').toUpperCase() : "COUPON CODE"} />
-                        <TextInput
-                            style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', color: colors.foreground, borderColor: colors.border }]}
-                            placeholder="e.g. SAVE20"
-                            placeholderTextColor={colors.textMuted}
-                            value={code}
-                            onChangeText={setCode}
-                            autoCapitalize="characters"
-                        />
-                    </View>
+                    <AdminInput
+                        label={t('codeRequired') ? t('codeRequired').toUpperCase() : "COUPON CODE"}
+                        placeholder="e.g. SAVE20"
+                        value={code}
+                        onChangeText={setCode}
+                        autoCapitalize="characters"
+                    />
 
                     <View style={sc.chipsWrap}>
                         {['percentage', 'fixed', 'free_shipping', 'bundle_price'].map((tOpt) => (
                             <AdminChip
                                 key={tOpt}
-                                label={tOpt === 'free_shipping' ? t('freeShip') : tOpt === 'bundle_price' ? t('bundle') : t(tOpt).toUpperCase()}
+                                label={tOpt === 'free_shipping' ? t('freeShip') : tOpt === 'bundle_price' ? t('bundle') : (t(tOpt) || tOpt).toUpperCase()}
                                 selected={type === tOpt}
                                 onPress={() => setType(tOpt as any)}
                             />
@@ -198,20 +195,13 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
 
                     {type === 'bundle_price' ? (
                         <View style={sc.bundleContainer}>
-                            <InputLabel text={t('targetProductLabel')} />
-                            <TouchableOpacity
-                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', borderColor: colors.border, justifyContent: 'center' }]}
+                            <AdminInput
+                                label={t('targetProductLabel').toUpperCase()}
+                                placeholder={t('selectProductPlaceholder')}
+                                value={targetProductId ? getProductName(targetProductId) : ''}
+                                editable={false}
                                 onPress={() => setShowProductSelector(!showProductSelector)}
-                            >
-                                <View style={sc.selectorBtn}>
-                                    {targetProductId && products.find(p => p.id === targetProductId)?.images?.[0] && (
-                                        <Image source={{ uri: products.find(p => p.id === targetProductId)?.images[0] }} style={sc.smallImg} />
-                                    )}
-                                    <Text style={{ color: targetProductId ? colors.foreground : colors.textMuted, fontSize: 13, fontWeight: '600' }}>
-                                        {targetProductId ? getProductName(targetProductId) : t('selectProductPlaceholder')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                            />
 
                             {showProductSelector && (
                                 <View style={[sc.dropdown, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#FFF', borderColor: colors.border }]}>
@@ -229,25 +219,29 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
                                 </View>
                             )}
 
-                            <InputLabel text={t('priceTiers')} />
+                            <InputLabel text={t('priceTiers').toUpperCase()} />
                             {tiers.map((tier, index) => (
                                 <View key={index} style={sc.tierRow}>
-                                    <TextInput
-                                        style={[sc.tierInput, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', color: colors.foreground, borderColor: colors.border }]}
-                                        placeholder={t('qty')}
-                                        placeholderTextColor={colors.textMuted}
-                                        keyboardType="numeric"
-                                        value={tier.qty ? tier.qty.toString() : ''}
-                                        onChangeText={(v) => updateTier(index, 'qty', v)}
-                                    />
-                                    <TextInput
-                                        style={[sc.tierInput, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', color: colors.foreground, borderColor: colors.border }]}
-                                        placeholder={t('price')}
-                                        placeholderTextColor={colors.textMuted}
-                                        keyboardType="numeric"
-                                        value={tier.price ? tier.price.toString() : ''}
-                                        onChangeText={(v) => updateTier(index, 'price', v)}
-                                    />
+                                    <View style={{ flex: 1 }}>
+                                        <AdminInput
+                                            label=""
+                                            placeholder={t('qty')}
+                                            keyboardType="numeric"
+                                            value={tier.qty ? tier.qty.toString() : ''}
+                                            onChangeText={(v) => updateTier(index, 'qty', v)}
+                                            style={{ marginBottom: 0 }}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <AdminInput
+                                            label=""
+                                            placeholder={t('price')}
+                                            keyboardType="numeric"
+                                            value={tier.price ? tier.price.toString() : ''}
+                                            onChangeText={(v) => updateTier(index, 'price', v)}
+                                            style={{ marginBottom: 0 }}
+                                        />
+                                    </View>
                                     {tiers.length > 1 && (
                                         <TouchableOpacity onPress={() => removeTier(index)} style={sc.removeBtn}>
                                             <X size={18} color={colors.error} />
@@ -262,31 +256,23 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
                         </View>
                     ) : (
                         type !== 'free_shipping' && (
-                            <View style={sc.inputGroup}>
-                                <InputLabel text={type === 'percentage' ? t('percentage') || "PERCENTAGE (%)" : t('value') || "VALUE"} />
-                                <TextInput
-                                    style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', color: colors.foreground, borderColor: colors.border }]}
-                                    placeholder={type === 'percentage' ? (t('percentagePlaceholder') || "e.g. 20") : (t('valuePlaceholder') || "e.g. 10")}
-                                    placeholderTextColor={colors.textMuted}
-                                    value={value}
-                                    onChangeText={setValue}
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <AdminInput
+                                label={type === 'percentage' ? t('percentage') || "PERCENTAGE (%)" : t('value') || "VALUE"}
+                                placeholder={type === 'percentage' ? (t('percentagePlaceholder') || "e.g. 20") : (t('valuePlaceholder') || "e.g. 10")}
+                                value={value}
+                                onChangeText={setValue}
+                                keyboardType="numeric"
+                            />
                         )
                     )}
 
-                    <View style={sc.inputGroup}>
-                        <InputLabel text={t('minOrderOptional') || "MINIMUM COMMANDE (Optional)"} />
-                        <TextInput
-                            style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7', color: colors.foreground, borderColor: colors.border }]}
-                            placeholder="e.g. 50"
-                            placeholderTextColor={colors.textMuted}
-                            value={minOrder}
-                            onChangeText={setMinOrder}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <AdminInput
+                        label={t('minOrderOptional') || "MINIMUM COMMANDE (Optional)"}
+                        placeholder="e.g. 50"
+                        value={minOrder}
+                        onChangeText={setMinOrder}
+                        keyboardType="numeric"
+                    />
 
                     <TouchableOpacity
                         style={[sc.submitBtn, { backgroundColor: colors.foreground }]}
@@ -371,17 +357,17 @@ const sc = StyleSheet.create({
     root: { flex: 1 },
     scrollContent: { padding: 20 },
 
-    formCard: { padding: 18 },
-    inputGroup: { marginBottom: 15 },
+    formCard: { padding: 22, borderRadius: 24, borderWidth: 1, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 16, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+    inputGroup: { marginBottom: 16 },
     input: {
-        height: 50,
-        borderRadius: 14,
-        paddingHorizontal: 15,
+        height: 54,
+        borderRadius: 16,
+        paddingHorizontal: 16,
         borderWidth: 1,
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
     },
-    chipsWrap: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 18 },
+    chipsWrap: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 20 },
 
     submitBtn: {
         height: 55,
@@ -418,7 +404,7 @@ const sc = StyleSheet.create({
     addTierText: { fontSize: 12, fontWeight: '700' },
 
     // List
-    couponCard: { padding: 18 },
+    couponCard: { padding: 22, borderRadius: 24, borderWidth: 1, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
     couponHeader: { flexDirection: 'row', justifyContent: 'space-between' },
     codeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     codeText: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },

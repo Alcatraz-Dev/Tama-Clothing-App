@@ -202,7 +202,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
                 title={t('brands').toUpperCase()}
                 onBack={onBack}
@@ -357,9 +357,9 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
 const sc = StyleSheet.create({
     root: { flex: 1 },
     addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20, paddingBottom: 100 },
-    brandCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    brandImg: { width: 60, height: 60, borderRadius: 12 },
+    listContent: { padding: 20, paddingBottom: 120 },
+    brandCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
+    brandImg: { width: 70, height: 70, borderRadius: 18 },
     brandInfo: { flex: 1, marginLeft: 16 },
     brandName: { fontWeight: '900', fontSize: 14 },
     brandNameAr: { fontSize: 11, marginTop: 2, writingDirection: 'rtl' },

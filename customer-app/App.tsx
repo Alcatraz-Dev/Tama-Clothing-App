@@ -910,9 +910,10 @@ export default function App() {
             const userData = docSnap.data();
             setProfileData({ ...userData, uid: u.uid, id: u.uid });
             if (userData.followedCollabs) setFollowedCollabs(userData.followedCollabs);
+            if (userData.wishlist) setWishlist(userData.wishlist);
           } else if (u.email) {
             // Initial user setup if doc doesn't exist
-            const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User', wallet: { coins: 0, diamonds: 0 } };
+            const def = { email: u.email, role: 'customer', fullName: u.displayName || 'User', wallet: { coins: 0, diamonds: 0 }, wishlist: [] };
             setProfileData({ ...def, uid: u.uid, id: u.uid });
             setDoc(doc(db, 'users', u.uid), def, { merge: true });
           }
@@ -946,6 +947,7 @@ export default function App() {
       } else {
         setUser(null);
         setProfileData(null);
+        setWishlist([]);
       }
     });
     return unsubscribe;
@@ -985,8 +987,27 @@ export default function App() {
     setCart(cart.filter(item => item.cartId !== cartId));
   };
 
-  const toggleWishlist = (productId: string) => {
-    setWishlist(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]);
+  const toggleWishlist = async (productId: string) => {
+    if (!user) {
+      Alert.alert(t('error') || 'Error', t('loginRequired') || 'Please login to save your favorites');
+      return;
+    }
+
+    const newWishlist = wishlist.includes(productId)
+      ? wishlist.filter(id => id !== productId)
+      : [...wishlist, productId];
+
+    // Optimistic UI update
+    setWishlist(newWishlist);
+
+    // Save to Firebase
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { wishlist: newWishlist });
+    } catch (err) {
+      console.error('Failed to save wishlist', err);
+      // Revert if error
+      setWishlist(wishlist);
+    }
   };
 
   const toggleFollowCollab = async (collabIdOrUserId: string) => {
@@ -1915,6 +1936,8 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
   const [loading, setLoading] = useState(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+  const featuredScrollX = useRef(new Animated.Value(0)).current;
+  const selectionScrollX = useRef(new Animated.Value(0)).current;
   const randomColors = [
     "#FF6B6B",
     "#FF4757",
@@ -2584,22 +2607,69 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
               <Text style={[styles.modernSectionLink, { color: colors.accent }]}>{t('refineGallery')}</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15, paddingBottom: 10 }}>
-            {featured.map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={wishlist?.includes(p.id)}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                theme={theme}
-                language={language}
-                t={t}
-              />
-            ))}
-          </ScrollView>
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={width * 0.72}
+            contentContainerStyle={{ paddingHorizontal: width * 0.14, paddingBottom: 25, paddingTop: 10 }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: featuredScrollX } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+          >
+            {featured.map((p: any, index: number) => {
+              const CARD_WIDTH = width * 0.72;
+              const ITEM_SIZE = CARD_WIDTH;
+              const inputRange = [
+                (index - 1) * ITEM_SIZE,
+                index * ITEM_SIZE,
+                (index + 1) * ITEM_SIZE
+              ];
+
+              const scale = featuredScrollX.interpolate({
+                inputRange,
+                outputRange: [0.85, 1, 0.85],
+                extrapolate: 'clamp'
+              });
+
+              const translateX = featuredScrollX.interpolate({
+                inputRange,
+                outputRange: [25, 0, -25],
+                extrapolate: 'clamp'
+              });
+
+              return (
+                <Animated.View
+                  key={p.id}
+                  style={{
+                    width: CARD_WIDTH,
+                    height: CARD_WIDTH * 1.38,
+                    transform: [{ scale }, { translateX }],
+                    zIndex: featuredScrollX.interpolate({
+                      inputRange,
+                      outputRange: [0, 10, 0],
+                      extrapolate: 'clamp'
+                    })
+                  }}
+                >
+                  <ProductCard
+                    product={p}
+                    onPress={() => onProductPress(p)}
+                    isWishlisted={wishlist?.includes(p.id)}
+                    onToggleWishlist={() => toggleWishlist(p.id)}
+                    onAddToCart={() => addToCart(p)}
+                    showRating={true}
+                    theme={theme}
+                    language={language}
+                    t={t}
+                    isFeaturedHero={true}
+                  />
+                </Animated.View>
+              );
+            })}
+          </Animated.ScrollView>
         </View>
 
         {/* Dynamic Promo Banners Carousel (last) */}
@@ -2641,22 +2711,69 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
         <View style={[styles.modernSection, { marginTop: 10, paddingBottom: 20 }]}>
           <Text style={[styles.modernSectionTitle, { textAlign: 'center', marginBottom: 20, letterSpacing: 2, color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}>{t('ourSelection')}</Text>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}>
-            {featured.slice(0, 5).map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={wishlist?.includes(p.id)}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                theme={theme}
-                language={language}
-                t={t}
-              />
-            ))}
-          </ScrollView>
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={width * 0.72}
+            contentContainerStyle={{ paddingHorizontal: width * 0.14, paddingBottom: 25, paddingTop: 10 }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: selectionScrollX } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+          >
+            {featured.slice(0, 5).map((p: any, index: number) => {
+              const CARD_WIDTH = width * 0.72;
+              const ITEM_SIZE = CARD_WIDTH;
+              const inputRange = [
+                (index - 1) * ITEM_SIZE,
+                index * ITEM_SIZE,
+                (index + 1) * ITEM_SIZE
+              ];
+
+              const scale = selectionScrollX.interpolate({
+                inputRange,
+                outputRange: [0.85, 1, 0.85],
+                extrapolate: 'clamp'
+              });
+
+              const translateX = selectionScrollX.interpolate({
+                inputRange,
+                outputRange: [25, 0, -25],
+                extrapolate: 'clamp'
+              });
+
+              return (
+                <Animated.View
+                  key={p.id}
+                  style={{
+                    width: CARD_WIDTH,
+                    height: CARD_WIDTH * 1.38,
+                    transform: [{ scale }, { translateX }],
+                    zIndex: selectionScrollX.interpolate({
+                      inputRange,
+                      outputRange: [0, 10, 0],
+                      extrapolate: 'clamp'
+                    })
+                  }}
+                >
+                  <ProductCard
+                    product={p}
+                    onPress={() => onProductPress(p)}
+                    isWishlisted={wishlist?.includes(p.id)}
+                    onToggleWishlist={() => toggleWishlist(p.id)}
+                    onAddToCart={() => addToCart(p)}
+                    showRating={true}
+                    theme={theme}
+                    language={language}
+                    t={t}
+                    isFeaturedHero={true}
+                  />
+                </Animated.View>
+              );
+            })}
+          </Animated.ScrollView>
 
           <View style={{ marginTop: 30, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 10 }}>
             <TouchableOpacity onPress={() => onNavigate && onNavigate('ShippingPolicy')} style={{ alignItems: 'center', gap: 8 }}>
@@ -3614,8 +3731,8 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
         left: 0,
         right: 0,
         zIndex: 1000,
-        height: 60 + insets.top,
-        paddingTop: insets.top,
+        height: 80 + insets.top,
+        paddingTop: insets.top - 15,
         borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
         borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
       }]}>
@@ -3693,7 +3810,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
           {/* Badge Overlay - Center of Image */}
           {isBrandOwner && (
-            <View style={{ position: 'absolute', top: '25%', left: 0, right: 0, alignItems: 'center', transform: [{ translateY: -15 }] }}>
+            <View style={{ position: 'absolute', top: '30%', left: 0, right: 0, alignItems: 'center', transform: [{ translateY: -15 }] }}>
               <View style={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', marginBottom: 25 }}>
                 <Text style={{ fontSize: 11, fontWeight: '900', color: theme === 'dark' ? '#FFF' : '#000', letterSpacing: 1 }}>
                   {t('brandOwner').toUpperCase()}
@@ -3734,7 +3851,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
           {/* Stats Cards Overlay - Bottom of Image */}
           {isOwnProfile && isBrandOwner && (
-            <View style={{ position: 'absolute', bottom: 130, left: 0, right: 0, paddingHorizontal: 10 }}>
+            <View style={{ position: 'absolute', bottom: 120, left: 0, right: 0, paddingHorizontal: 10 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1, backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8 }}>
@@ -3769,7 +3886,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               {/* Platform specific Auth icon bottom corner */}
               <TouchableOpacity
                 onPress={handleToggleStats}
-                style={{ position: 'absolute', bottom: -80, right: 20 }}
+                style={{ position: 'absolute', bottom: -60, right: 20 }}
               >
                 <View style={{
                   width: 50,
@@ -5493,6 +5610,7 @@ function WishlistScreen({ onBack, onProductPress, wishlist, toggleWishlist, addT
   const [loading, setLoading] = useState(true);
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const favorisScrollX = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
   const headerOpacity = scrollY.interpolate({
@@ -5568,22 +5686,69 @@ function WishlistScreen({ onBack, onProductPress, wishlist, toggleWishlist, addT
             <Text style={[styles.modernSectionTitle, { marginTop: 20, color: colors.textMuted }]}>{t('nothingSaved')}</Text>
           </View>
         ) : (
-          <View style={styles.modernGrid}>
-            {products.map(p => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={true}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                t={t}
-                theme={theme}
-                language={language}
-              />
-            ))}
-          </View>
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={width * 0.72}
+            contentContainerStyle={{ paddingHorizontal: width * 0.14, paddingBottom: 25, paddingTop: 100 }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: favorisScrollX } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+          >
+            {products.map((p: any, index: number) => {
+              const CARD_WIDTH = width * 0.72;
+              const ITEM_SIZE = CARD_WIDTH;
+              const inputRange = [
+                (index - 1) * ITEM_SIZE,
+                index * ITEM_SIZE,
+                (index + 1) * ITEM_SIZE
+              ];
+
+              const scale = favorisScrollX.interpolate({
+                inputRange,
+                outputRange: [0.85, 1, 0.85],
+                extrapolate: 'clamp'
+              });
+
+              const translateX = favorisScrollX.interpolate({
+                inputRange,
+                outputRange: [25, 0, -25],
+                extrapolate: 'clamp'
+              });
+
+              return (
+                <Animated.View
+                  key={p.id}
+                  style={{
+                    width: CARD_WIDTH,
+                    height: CARD_WIDTH * 1.38,
+                    transform: [{ scale }, { translateX }],
+                    zIndex: favorisScrollX.interpolate({
+                      inputRange,
+                      outputRange: [0, 10, 0],
+                      extrapolate: 'clamp'
+                    })
+                  }}
+                >
+                  <ProductCard
+                    product={p}
+                    onPress={() => onProductPress(p)}
+                    isWishlisted={true}
+                    onToggleWishlist={() => toggleWishlist(p.id)}
+                    onAddToCart={() => addToCart(p)}
+                    showRating={true}
+                    t={t}
+                    theme={theme}
+                    language={language}
+                    isFeaturedHero={true}
+                  />
+                </Animated.View>
+              );
+            })}
+          </Animated.ScrollView>
         )}
         <View style={{ height: 100 }} />
       </Animated.ScrollView>
@@ -5879,7 +6044,7 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             {/* Product Header Card */}
-            <View style={{ flexDirection: 'row', gap: 15, marginBottom: 20, alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', gap: 15, marginBottom: 30, alignItems: 'flex-start' }}>
               <View style={{
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 2 },
@@ -5889,18 +6054,18 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
               }}>
                 <Image
                   source={{ uri: product.mainImage || product.image || product.imageUrl }}
-                  style={{ width: 85, height: 110, borderRadius: 16, backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7' }}
+                  style={{ width: 100, height: 120, borderRadius: 16, backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7' }}
                 />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.accent, letterSpacing: 1.2, marginBottom: 4 }}>{String(translateCategory(getName(product.category)) || t('collections')).toUpperCase()}</Text>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground, letterSpacing: -0.5, lineHeight: 22 }}>{String(getName(product.name)).toUpperCase()}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.foreground }}>
+              <View style={{ flex: 1, paddingTop: 5 }}>
+                <Text style={{ fontSize: 11, fontWeight: '900', color: colors.foreground, letterSpacing: 1.5, marginBottom: 6 }}>{String(translateCategory(getName(product.category)) || t('collections')).toUpperCase()}</Text>
+                <Text style={{ fontSize: 22, fontWeight: '900', color: colors.foreground, letterSpacing: -0.5, lineHeight: 26, marginBottom: 8 }}>{String(getName(product.name)).toUpperCase()}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground }}>
                     {product.discountPrice ? product.discountPrice.toFixed(2) : product.price.toFixed(2)} TND
                   </Text>
                   {product.discountPrice && (
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, textDecorationLine: 'line-through' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, textDecorationLine: 'line-through' }}>
                       {product.price.toFixed(2)} TND
                     </Text>
                   )}
@@ -5910,10 +6075,10 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
 
             {/* Color Selector */}
             {product.colors && product.colors.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '900', color: colors.foreground, letterSpacing: 1 }}>{t('color')}</Text>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{translateColor(selectedColor).toUpperCase()}</Text>
+              <View style={{ marginBottom: 25 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '900', color: colors.foreground, letterSpacing: 1.5 }}>{t('color').toUpperCase()}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted }}>{translateColor(selectedColor).toUpperCase()}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                   {product.colors.map((c: string) => {
@@ -5925,9 +6090,9 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
                         onPress={() => setSelectedColor(c)}
                         activeOpacity={0.8}
                         style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 17,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
                           borderWidth: 2,
                           borderColor: isSelected ? colors.foreground : (theme === 'dark' ? colors.secondary : '#EEE'),
                           justifyContent: 'center',
@@ -5935,9 +6100,9 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
                         }}
                       >
                         <View style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
+                          width: 26,
+                          height: 26,
+                          borderRadius: 13,
                           backgroundColor: displayColor,
                           borderWidth: 1,
                           borderColor: (displayColor === 'black' || displayColor === '#000' || displayColor === '#000000')
@@ -5952,15 +6117,15 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
             )}
 
             {/* Size Selector */}
-            <View style={{ marginBottom: 30 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 11, fontWeight: '900', color: colors.foreground, letterSpacing: 1 }}>{t('size')}</Text>
+            <View style={{ marginBottom: 35 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: colors.foreground, letterSpacing: 1.5 }}>{t('size').toUpperCase()}</Text>
                 <TouchableOpacity onPress={onSizeGuide}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{t('sizeGuide')}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted }}>{t('sizeGuide').toUpperCase()}</Text>
                 </TouchableOpacity>
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {(product.sizes || ['XS', 'S', 'M', 'L', 'XL']).map((s: string) => {
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {(product.sizes || ['XS', 'S', 'M', 'L', 'XL', 'XXL']).map((s: string) => {
                   const isSelected = selectedSize === s;
                   return (
                     <TouchableOpacity
@@ -5969,21 +6134,26 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
                       activeOpacity={0.7}
                       style={[
                         {
-                          minWidth: 54,
-                          height: 44,
-                          borderRadius: 14,
-                          backgroundColor: isSelected ? colors.foreground : (theme === 'dark' ? colors.secondary : '#F2F2F7'),
+                          minWidth: 50,
+                          height: 48,
+                          borderRadius: 16,
+                          backgroundColor: isSelected ? colors.foreground : (theme === 'dark' ? colors.secondary : '#FFFFFF'),
                           alignItems: 'center',
                           justifyContent: 'center',
                           borderWidth: 1.5,
-                          borderColor: isSelected ? colors.foreground : (theme === 'dark' ? colors.secondary : colors.border),
-                          paddingHorizontal: 12
+                          borderColor: isSelected ? colors.foreground : (theme === 'dark' ? colors.secondary : '#F2F2F7'),
+                          paddingHorizontal: 12,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: isSelected ? 0.2 : 0.05,
+                          shadowRadius: 4,
+                          elevation: isSelected ? 4 : 1
                         },
                         { flexGrow: 0 }
                       ]}
                     >
                       <Text style={{
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: '900',
                         color: isSelected ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground
                       }}>{s}</Text>
@@ -5997,16 +6167,16 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
             <TouchableOpacity
               style={{
                 backgroundColor: colors.foreground,
-                height: 54,
-                borderRadius: 16,
+                height: 58,
+                borderRadius: 18,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 10,
+                gap: 12,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.15,
-                shadowRadius: 8,
+                shadowRadius: 10,
                 elevation: 6,
                 marginBottom: 10
               }}
@@ -6666,6 +6836,18 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
             onScroll={(e) => setActiveImg(Math.round(e.nativeEvent.contentOffset.x / width))}
             scrollEventThrottle={16}
           >
+            {product.videoUrl && (
+              <View style={styles.detailFullVideo}>
+                <Video
+                  source={{ uri: product.videoUrl }}
+                  style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}
+                  useNativeControls
+                  resizeMode={ResizeMode.COVER}
+                  isLooping
+                  shouldPlay
+                />
+              </View>
+            )}
             {allImages.map((img: string, idx: number) => (
               <Image
                 key={idx}
@@ -6677,12 +6859,16 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
           </ScrollView>
 
           {/* Image Pagination Dots */}
-          {allImages.length > 1 && (
+          {(allImages.length + (product.videoUrl ? 1 : 0)) > 1 && (
             <View style={styles.imagePagination}>
-              {allImages.map((_: string, idx: number) => (
+              {Array.from({ length: allImages.length + (product.videoUrl ? 1 : 0) }).map((_, idx: number) => (
                 <View
                   key={idx}
-                  style={[styles.paginationDot, activeImg === idx && styles.activePaginationDot, activeImg === idx && { backgroundColor: theme === 'dark' ? '#FFF' : '#000' }]}
+                  style={[
+                    styles.paginationDot,
+                    activeImg === idx && styles.activePaginationDot,
+                    activeImg === idx && { backgroundColor: theme === 'dark' ? '#FFF' : '#000' }
+                  ]}
                 />
               ))}
             </View>
@@ -11649,6 +11835,7 @@ const styles = StyleSheet.create({
 
   // Detail Modern
   detailFullImage: { width: width, height: height * 0.52 },
+  detailFullVideo: { width: width, height: height * 0.52 },
   glassBackBtn: { position: 'absolute', top: 50, left: 20, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, zIndex: 100 },
   detailBottomContent: { flex: 1, marginTop: -35, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 15 },
   dragIndicator: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E5EA', alignSelf: 'center', marginBottom: 20 },

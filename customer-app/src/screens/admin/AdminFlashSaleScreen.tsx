@@ -37,6 +37,8 @@ import {
     InputLabel,
     SectionLabel,
     ModernSwitch,
+    AdminInput,
+    AdminChip,
 } from '../../components/admin/AdminUI';
 import { getName } from '../../utils/translationHelpers';
 
@@ -123,9 +125,9 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
-                title={t('flashSale').toUpperCase()}
+                title={t('flashSale')}
                 onBack={onBack}
                 scrollY={scrollY}
                 rightElement={
@@ -157,40 +159,37 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
                     <ModernSwitch active={active} onPress={() => setActive(!active)} />
                 </AdminCard>
 
-                <View style={sc.inputGroup}>
-                    <InputLabel text={t('campaignTitle').toUpperCase()} />
-                    <TextInput
-                        style={[sc.input, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                        value={title}
-                        onChangeText={setTitle}
-                        placeholder={t('flashSaleTitlePlaceholder')}
-                        placeholderTextColor={colors.textMuted}
-                    />
-                </View>
+                <AdminInput
+                    label={t('campaignTitle').toUpperCase()}
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder={t('flashSaleTitlePlaceholder')}
+                />
 
-                <View style={sc.inputGroup}>
-                    <InputLabel text={t('endTimeIso').toUpperCase()} />
-                    <TextInput
-                        style={[sc.input, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                        value={endTime}
-                        onChangeText={setEndTime}
-                        placeholder="YYYY-MM-DDTHH:MM:SS"
-                        placeholderTextColor={colors.textMuted}
-                    />
+                <AdminInput
+                    label={t('endTimeIso').toUpperCase()}
+                    value={endTime}
+                    onChangeText={setEndTime}
+                    placeholder="YYYY-MM-DDTHH:MM:SS"
+                />
+
+                <View style={{ marginBottom: 20 }}>
                     <View style={sc.presetWrap}>
-                        {[6, 12, 24, 48].map(h => (
-                            <TouchableOpacity
-                                key={h}
-                                onPress={() => {
-                                    const d = new Date();
-                                    d.setHours(d.getHours() + h);
-                                    setEndTime(d.toISOString().slice(0, 19));
-                                }}
-                                style={[sc.presetBtn, { backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderColor: colors.border }]}
-                            >
-                                <Text style={[sc.presetText, { color: colors.foreground }]}>+{h}H</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {[6, 12, 24, 48].map(h => {
+                            const d = new Date();
+                            d.setHours(d.getHours() + h);
+                            const iso = d.toISOString().slice(0, 19);
+                            const isSelected = endTime === iso;
+
+                            return (
+                                <AdminChip
+                                    key={h}
+                                    label={`+${h}H`}
+                                    selected={isSelected}
+                                    onPress={() => setEndTime(iso)}
+                                />
+                            );
+                        })}
                     </View>
                     <Text style={[sc.helpText, { color: colors.textMuted }]}>{t('selectPresetOrIso')}</Text>
                 </View>
@@ -241,23 +240,23 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
-    saveBtn: { paddingHorizontal: 16, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+    saveBtn: { paddingHorizontal: 16, height: 42, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     saveText: { fontSize: 11, fontWeight: '900' },
-    scrollContent: { padding: 25, paddingTop: 80 },
-    statusCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, padding: 20 },
-    statusTitle: { fontWeight: '800', fontSize: 16 },
-    statusSub: { fontSize: 12, marginTop: 2 },
+    scrollContent: { padding: 25, paddingTop: 10, paddingBottom: 120 },
+    statusCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, padding: 24, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+    statusTitle: { fontWeight: '900', fontSize: 16, letterSpacing: -0.2 },
+    statusSub: { fontSize: 13, marginTop: 4, opacity: 0.8 },
 
     inputGroup: { marginBottom: 25 },
-    input: { height: 52, borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, fontSize: 14, fontWeight: '600' },
+    input: { height: 54, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, fontSize: 15, fontWeight: '600' },
     presetWrap: { flexDirection: 'row', gap: 10, marginTop: 12 },
-    presetBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-    presetText: { fontSize: 10, fontWeight: '900' },
-    helpText: { fontSize: 10, marginTop: 10 },
+    presetBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+    presetText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+    helpText: { fontSize: 11, marginTop: 10, opacity: 0.7 },
 
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    productCard: { width: (width - 60) / 3, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
-    productImg: { width: '100%', height: 90 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    productCard: { width: (width - 62) / 3, borderRadius: 20, overflow: 'hidden', borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+    productImg: { width: '100%', height: 100 },
     productInfo: { padding: 8 },
     productName: { fontSize: 9, fontWeight: '700' },
     checkIcon: { position: 'absolute', top: 6, right: 6, borderRadius: 10, padding: 1 }

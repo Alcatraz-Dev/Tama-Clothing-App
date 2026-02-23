@@ -41,6 +41,7 @@ import {
     EmptyState,
     AdminChip,
     ModernSwitch,
+    AdminInput,
 } from '../../components/admin/AdminUI';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 
@@ -182,8 +183,8 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('broadcast').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('broadcast')} onBack={onBack} scrollY={scrollY} />
 
             <View style={sc.topNav}>
                 <AdminChip
@@ -204,48 +205,32 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
             >
                 {activeTab === 'send' ? (
                     <AdminCard>
-                        <View style={sc.inputGroup}>
-                            <InputLabel text={t('title').toUpperCase()} />
-                            <TextInput
-                                style={[sc.input, { borderColor: colors.border, color: colors.foreground }]}
-                                value={title}
-                                onChangeText={setTitle}
-                                placeholder="Summer Sale..."
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
-                        <View style={sc.inputGroup}>
-                            <InputLabel text={t('titleAr').toUpperCase()} />
-                            <TextInput
-                                style={[sc.input, { borderColor: colors.border, color: colors.foreground, textAlign: 'right' }]}
-                                value={titleAr}
-                                onChangeText={setTitleAr}
-                                placeholder="تخفيضات الصيف..."
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
-                        <View style={sc.inputGroup}>
-                            <InputLabel text={t('message').toUpperCase()} />
-                            <TextInput
-                                style={[sc.textArea, { borderColor: colors.border, color: colors.foreground }]}
-                                value={message}
-                                onChangeText={setMessage}
-                                multiline
-                                placeholder="Get up to 50% off..."
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
-                        <View style={sc.inputGroup}>
-                            <InputLabel text={t('messageAr').toUpperCase()} />
-                            <TextInput
-                                style={[sc.textArea, { borderColor: colors.border, color: colors.foreground, textAlign: 'right' }]}
-                                value={messageAr}
-                                onChangeText={setMessageAr}
-                                multiline
-                                placeholder="احصل على خصم يصل إلى 50%..."
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('title').toUpperCase()}
+                            value={title}
+                            onChangeText={setTitle}
+                            placeholder="Summer Sale..."
+                        />
+                        <AdminInput
+                            label={t('titleAr').toUpperCase()}
+                            value={titleAr}
+                            onChangeText={setTitleAr}
+                            placeholder="تخفيضات الصيف..."
+                        />
+                        <AdminInput
+                            label={t('message').toUpperCase()}
+                            value={message}
+                            onChangeText={setMessage}
+                            multiline
+                            placeholder="Get up to 50% off..."
+                        />
+                        <AdminInput
+                            label={t('messageAr').toUpperCase()}
+                            value={messageAr}
+                            onChangeText={setMessageAr}
+                            multiline
+                            placeholder="احصل على خصم يصل إلى 50%..."
+                        />
 
                         <InputLabel text={t('image').toUpperCase()} />
                         <TouchableOpacity
@@ -302,7 +287,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
 const sc = StyleSheet.create({
     root: { flex: 1 },
     topNav: { flexDirection: 'row', gap: 10, padding: 20, paddingTop: 10 },
-    scrollContent: { padding: 20, paddingTop: 5 },
+    scrollContent: { padding: 20, paddingTop: 10 },
     inputGroup: { marginBottom: 16 },
     input: { height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, fontSize: 13, fontWeight: '600' },
     textArea: { height: 80, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 13, fontWeight: '600', textAlignVertical: 'top' },

@@ -200,8 +200,8 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('settings').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('settings')} onBack={onBack} scrollY={scrollY} />
 
             <View style={[sc.nav, { borderBottomColor: colors.border }]}>
                 {[
@@ -400,8 +400,8 @@ const sc = StyleSheet.create({
     navText: { fontSize: 8, fontWeight: '900' },
     scrollContent: { padding: 20 },
     inputGroup: { marginBottom: 16 },
-    input: { height: 48, borderRadius: 12, borderSize: 1, paddingHorizontal: 12, fontSize: 13, fontWeight: '600', borderWidth: 1 },
-    textArea: { height: 120, borderRadius: 12, borderSize: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 13, fontWeight: '600', textAlignVertical: 'top', borderWidth: 1 },
+    input: { height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, fontSize: 13, fontWeight: '600' },
+    textArea: { height: 120, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 13, fontWeight: '600', textAlignVertical: 'top' },
     passWrap: { flexDirection: 'row', alignItems: 'center' },
     passInput: { flex: 1 },
     eyeBtn: { position: 'absolute', right: 12 },

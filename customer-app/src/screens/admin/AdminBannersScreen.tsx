@@ -164,9 +164,9 @@ export default function AdminBannersScreen({ onBack, t, profileData }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
-                title={t('banners').toUpperCase()}
+                title={t('banners')}
                 onBack={onBack}
                 scrollY={scrollY}
                 rightElement={
@@ -311,13 +311,13 @@ export default function AdminBannersScreen({ onBack, t, profileData }: any) {
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
-    addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20, paddingBottom: 100 },
-    bannerCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    bannerImg: { width: 100, height: 60, borderRadius: 12 },
-    bannerInfo: { flex: 1, marginLeft: 16 },
-    bannerTitle: { fontWeight: '800', fontSize: 13 },
-    bannerSub: { fontSize: 11, marginTop: 4 },
+    addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    listContent: { padding: 20, paddingBottom: 120, paddingTop: 10 },
+    bannerCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
+    bannerImg: { width: 110, height: 75, borderRadius: 16 },
+    bannerInfo: { flex: 1, marginLeft: 20 },
+    bannerTitle: { fontWeight: '900', fontSize: 14, letterSpacing: -0.2 },
+    bannerSub: { fontSize: 12, marginTop: 6, opacity: 0.8 },
     actions: { flexDirection: 'row', gap: 8 },
     actionBtn: { padding: 8 },
 

@@ -43,6 +43,7 @@ import {
     IconActionButton,
     StatusBadge,
     ModernSwitch,
+    AdminInput,
 } from '../../components/admin/AdminUI';
 import { uploadToCloudinary } from '../../utils/cloudinary';
 
@@ -183,9 +184,9 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
-                title={t('promoBanners').toUpperCase()}
+                title={t('promoBanners')}
                 onBack={onBack}
                 scrollY={scrollY}
                 rightElement={
@@ -226,12 +227,12 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
                                 </View>
 
                                 <View style={sc.bannerActions}>
-                                    <TouchableOpacity onPress={() => toggleStatus(banner)} style={sc.statusToggle}>
+                                    <View style={sc.statusToggle}>
                                         <ModernSwitch active={banner.isActive} onPress={() => toggleStatus(banner)} />
                                         <Text style={[sc.statusText, { color: banner.isActive ? '#10B981' : colors.textMuted }]}>
-                                            {banner.isActive ? t('active').toUpperCase() : t('inactive').toUpperCase()}
+                                            {banner.isActive ? t('activeStatus').toUpperCase() : t('inactiveStatus').toUpperCase()}
                                         </Text>
-                                    </TouchableOpacity>
+                                    </View>
 
                                     <View style={sc.actionGroup}>
                                         <IconActionButton onPress={() => handleEdit(banner)}>
@@ -279,43 +280,32 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
                             )}
                         </TouchableOpacity>
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('promotionTitle').toUpperCase()} />
-                            <TextInput
-                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                                value={form.title}
-                                onChangeText={(t) => setForm({ ...form, title: t })}
-                                placeholder={t('summerSalePlaceholder')}
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('promotionTitle').toUpperCase()}
+                            value={form.title}
+                            onChangeText={(t) => setForm({ ...form, title: t })}
+                            placeholder={t('summerSalePlaceholder')}
+                        />
 
-                        <View style={sc.inputWrap}>
-                            <InputLabel text={t('description').toUpperCase()} />
-                            <TextInput
-                                style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
-                                value={form.description}
-                                onChangeText={(t) => setForm({ ...form, description: t })}
-                                placeholder={t('offerPlaceholder')}
-                                placeholderTextColor={colors.textMuted}
-                            />
-                        </View>
+                        <AdminInput
+                            label={t('description Offer').toUpperCase()}
+                            value={form.description}
+                            onChangeText={(t) => setForm({ ...form, description: t })}
+                            placeholder={t('offerPlaceholder')}
+                        />
 
                         <View style={sc.row}>
-                            <View style={[sc.inputWrap, { flex: 2 }]}>
-                                <InputLabel text={t('bgColor').toUpperCase()} />
-                                <TextInput
-                                    style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                            <View style={{ flex: 2 }}>
+                                <AdminInput
+                                    label={t('bgColor').toUpperCase()}
                                     value={form.backgroundColor}
                                     onChangeText={(t) => setForm({ ...form, backgroundColor: t })}
                                     placeholder="#FF2D55"
-                                    placeholderTextColor={colors.textMuted}
                                 />
                             </View>
-                            <View style={[sc.inputWrap, { flex: 1 }]}>
-                                <InputLabel text={t('order').toUpperCase()} />
-                                <TextInput
-                                    style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                            <View style={{ flex: 1 }}>
+                                <AdminInput
+                                    label={t('order').toUpperCase()}
                                     value={form.order}
                                     onChangeText={(t) => setForm({ ...form, order: t })}
                                     keyboardType="numeric"
@@ -352,18 +342,19 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
 
 const sc = StyleSheet.create({
     root: { flex: 1 },
-    addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20 },
-    bannerCard: { padding: 15 },
-    bannerPreview: { flexDirection: 'row', gap: 15 },
-    bannerImgWrap: { width: 110, height: 70, borderRadius: 15, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    listContent: { padding: 20, paddingTop: 10 },
+    bannerCard: { padding: 22, borderRadius: 24, borderWidth: 1, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+    bannerPreview: { flexDirection: 'row', gap: 18 },
+    bannerImgWrap: { width: 120, height: 80, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
     bannerImg: { width: '100%', height: '100%' },
-    bannerInfo: { flex: 1 },
-    bannerTitle: { fontSize: 13, fontWeight: '900' },
-    bannerDesc: { fontSize: 11, marginTop: 4, opacity: 0.8 },
-    badgeRow: { marginTop: 8 },
-    bannerActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 15 },
-    statusText: { fontSize: 9, fontWeight: '900' },
+    bannerInfo: { flex: 1, justifyContent: 'center' },
+    bannerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
+    bannerDesc: { fontSize: 13, marginTop: 4, opacity: 0.8 },
+    badgeRow: { marginTop: 10 },
+    bannerActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 18 },
+    statusText: { fontSize: 9, fontWeight: '900', marginLeft: 8 },
+    statusToggle: { flexDirection: 'row', alignItems: 'center' },
     actionGroup: { flexDirection: 'row', gap: 8 },
 
     modalRoot: { flex: 1 },

@@ -146,7 +146,7 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             <AdminHeader
                 title={t('categories').toUpperCase()}
                 onBack={onBack}
@@ -246,12 +246,12 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
 const sc = StyleSheet.create({
     root: { flex: 1 },
     addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20, paddingBottom: 100 },
-    categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    categoryImg: { width: 60, height: 60, borderRadius: 12 },
-    categoryInfo: { flex: 1, marginLeft: 16 },
-    categoryName: { fontWeight: '900', fontSize: 14 },
-    categoryNameAr: { fontSize: 11, marginTop: 2, writingDirection: 'rtl' },
+    listContent: { padding: 20, paddingBottom: 120 },
+    categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
+    categoryImg: { width: 70, height: 70, borderRadius: 18 },
+    categoryInfo: { flex: 1, marginLeft: 20 },
+    categoryName: { fontWeight: '900', fontSize: 15, letterSpacing: -0.2 },
+    categoryNameAr: { fontSize: 12, marginTop: 4, writingDirection: 'rtl', opacity: 0.8 },
     actions: { flexDirection: 'row', gap: 8 },
     actionBtn: { padding: 8 },
 

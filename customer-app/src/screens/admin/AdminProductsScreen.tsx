@@ -15,6 +15,7 @@ import {
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { AdminHeader } from '../../components/admin/AdminHeader';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getString(val: any): string {
@@ -25,51 +26,44 @@ function getString(val: any): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function ProductListItem({ item, onEdit, onDelete, colors, theme }: any) {
+    const isDark = theme === 'dark';
     return (
-        <View style={[sc.listCard, { backgroundColor: theme === 'dark' ? '#121218' : '#FFF', borderColor: colors.border }]}>
-            <View>
-                <Image
-                    source={{ uri: item.images?.[0] || item.mainImage }}
-                    style={[sc.listThumb, { backgroundColor: theme === 'dark' ? '#17171F' : '#F5F5F7' }]}
-                />
-                {/* VIDEO badge */}
-                {!!item.videoUrl && (
-                    <View style={sc.videoBadge}>
-                        <Text style={sc.videoBadgeText}>▶ VIDEO</Text>
-                    </View>
-                )}
-            </View>
+        <View style={[sc.listCard, { backgroundColor: isDark ? '#111118' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+            <Image
+                source={{ uri: item.images?.[0] || item.mainImage }}
+                style={sc.listThumb}
+            />
+
             <View style={sc.listInfo}>
-                <Text style={[sc.listName, { color: colors.foreground }]} numberOfLines={2}>
+                <Text style={[sc.listName, { color: colors.foreground }]} numberOfLines={1}>
                     {getString(item.name)}
                 </Text>
+
                 <View style={sc.listMetaRow}>
-                    <View style={[sc.metaTag, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7' }]}>
-                        <Text style={[sc.metaTagText, { color: colors.textMuted }]}>
-                            {getString(item.category)}
-                        </Text>
+                    <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
+                        <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{getString(item.category)}</Text>
                     </View>
                     {item.brandName ? (
-                        <View style={[sc.metaTag, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7' }]}>
+                        <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
                             <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{item.brandName}</Text>
                         </View>
                     ) : null}
                 </View>
+
                 <View style={sc.priceRow}>
-                    <Text style={[sc.priceMain, { color: colors.foreground }]}>
-                        {item.discountPrice ?? item.price} TND
-                    </Text>
+                    <Text style={[sc.priceMain, { color: colors.foreground }]}>{item.discountPrice ?? item.price} TND</Text>
                     {item.discountPrice ? (
                         <Text style={[sc.priceOld, { color: colors.textMuted }]}>{item.price} TND</Text>
                     ) : null}
                 </View>
             </View>
-            <View style={sc.listActions}>
-                <TouchableOpacity onPress={() => onEdit(item)} style={sc.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Settings size={18} color={colors.foreground} />
+
+            <View style={sc.actionsCol}>
+                <TouchableOpacity onPress={() => onEdit(item)} style={[sc.actionBtn, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} activeOpacity={0.7}>
+                    <Settings size={18} color={colors.foreground} strokeWidth={2} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => onDelete(item.id)} style={sc.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Trash2 size={18} color={colors.error} />
+                <TouchableOpacity onPress={() => onDelete(item.id)} style={[sc.actionBtn, { borderColor: isDark ? 'rgba(255,59,48,0.3)' : 'rgba(255,59,48,0.2)' }]} activeOpacity={0.7}>
+                    <Trash2 size={18} color="#FF3B30" strokeWidth={2} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -253,25 +247,21 @@ export default function AdminProductsScreen({ onBack, t, profileData }: any) {
 
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            {/* Animated Header */}
-            <Animated.View style={[sc.header, {
-                backgroundColor: colors.background,
-                borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-            }]}>
-                <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-                    <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme === 'dark' ? 'dark' : 'light'} />
-                    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + 'B3' }]} />
-                </Animated.View>
-                <TouchableOpacity onPress={onBack} style={[sc.iconBtn, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#F2F2F7' }]} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                    <ChevronLeft size={20} color={colors.foreground} />
-                </TouchableOpacity>
-                <Text style={[sc.headerTitle, { color: colors.foreground }]} pointerEvents="none">{t('products').toUpperCase()}</Text>
-                <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[sc.iconBtn, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#F2F2F7' }]} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                    <Plus size={20} color={colors.foreground} />
-                </TouchableOpacity>
-            </Animated.View>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader
+                title={t('products')}
+                onBack={onBack}
+                scrollY={scrollY}
+                rightElement={
+                    <TouchableOpacity
+                        onPress={() => { resetForm(); setModalVisible(true); }}
+                        style={[sc.iconBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                        <Plus size={20} color={colors.foreground} />
+                    </TouchableOpacity>
+                }
+            />
 
             {/* Product List */}
             {loading ? (
@@ -285,8 +275,8 @@ export default function AdminProductsScreen({ onBack, t, profileData }: any) {
                     scrollEventThrottle={16}
                     ListEmptyComponent={
                         <View style={sc.empty}>
-                            <View style={[sc.emptyIconBox, { backgroundColor: theme === 'dark' ? '#121218' : '#F5F5F7', borderColor: colors.border }]}>
-                                <Package2 size={36} color={colors.textMuted} strokeWidth={1.5} />
+                            <View style={[sc.emptyIconBox, { backgroundColor: theme === 'dark' ? '#111118' : '#F5F5F7', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
+                                <Package2 size={42} color={colors.textMuted} strokeWidth={1.2} />
                             </View>
                             <Text style={[sc.emptyTitle, { color: colors.foreground }]}>{t('noProductsFound')}</Text>
                             <Text style={[sc.emptySubtitle, { color: colors.textMuted }]}>{t('addFirstProduct') || 'Ajoutez votre premier produit'}</Text>
@@ -550,37 +540,96 @@ const sc = StyleSheet.create({
 
     // Header
     header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 100, overflow: 'hidden' },
-    headerTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2, position: 'absolute', left: 50, right: 50, textAlign: 'center', zIndex: 1 },
-    iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+    headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
+    iconBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     // List
-    listContent: { padding: 18, paddingBottom: 100 },
-    listCard: { flexDirection: 'row', borderRadius: 20, borderWidth: 1, padding: 14, marginBottom: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-    listThumb: { width: 64, height: 82, borderRadius: 12 },
-    videoBadge: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
-    videoBadgeText: { color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 0.3 },
-    listInfo: { flex: 1, marginLeft: 14, justifyContent: 'center' },
-    listName: { fontSize: 13, fontWeight: '800', lineHeight: 17, marginBottom: 6 },
-    listMetaRow: { flexDirection: 'row', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
-    metaTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-    metaTagText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
-    priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    priceMain: { fontSize: 14, fontWeight: '900' },
-    priceOld: { fontSize: 11, textDecorationLine: 'line-through' },
-    listActions: { gap: 10, marginLeft: 10 },
-    actionBtn: { padding: 6 },
+    listContent: { padding: 20, paddingBottom: 120 },
+    listCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 24,
+        borderWidth: 1,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 2
+    },
+    listThumb: {
+        width: 80,
+        height: 80,
+        borderRadius: 16,
+    },
+    listInfo: {
+        flex: 1,
+        marginLeft: 16,
+        justifyContent: 'center'
+    },
+    listName: {
+        fontSize: 15,
+        fontWeight: '900',
+        letterSpacing: -0.2,
+        marginBottom: 6,
+    },
+    listMetaRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginBottom: 8,
+        flexWrap: 'wrap'
+    },
+    metaTag: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    metaTagText: {
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.5
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    priceMain: {
+        fontSize: 15,
+        fontWeight: '900',
+        letterSpacing: -0.2
+    },
+    priceOld: {
+        fontSize: 12,
+        textDecorationLine: 'line-through',
+        fontWeight: '700',
+        opacity: 0.6
+    },
+    actionsCol: {
+        gap: 8,
+        marginLeft: 10,
+    },
+    actionBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
 
-    empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
-    emptyIconBox: { width: 90, height: 90, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-    emptyTitle: { fontSize: 16, fontWeight: '800', letterSpacing: 0.3, marginBottom: 8, textAlign: 'center' },
-    emptySubtitle: { fontSize: 12, fontWeight: '500', textAlign: 'center', lineHeight: 18, marginBottom: 28 },
-    emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
-    emptyBtnText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+    empty: { alignItems: 'center', paddingVertical: 80, paddingHorizontal: 20 },
+    emptyIconBox: { width: 100, height: 100, borderRadius: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginBottom: 24, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
+    emptyTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.3, marginBottom: 10, textAlign: 'center' },
+    emptySubtitle: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+    emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 28, paddingVertical: 16, borderRadius: 18 },
+    emptyBtnText: { fontSize: 13, fontWeight: '900', letterSpacing: 1 },
     emptyText: { fontSize: 13, fontWeight: '600' },
 
     // Modal
     modalRoot: { flex: 1 },
-    modalHeader: { height: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1 },
+    modalHeader: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1 },
     modalTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1, position: 'absolute', left: 80, right: 80, textAlign: 'center' },
     modalAction: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
     formContent: { padding: 22, paddingBottom: 100 },

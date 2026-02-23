@@ -8,6 +8,13 @@ import { BlurView } from 'expo-blur';
 import {
     ChevronLeft, X, Search, MapPin, Phone, Mail, User, ShoppingBag, PackageOpen,
 } from 'lucide-react-native';
+import { AdminHeader } from '../../components/admin/AdminHeader';
+import {
+    AdminSearchBar,
+    EmptyState,
+    adminStyles,
+    DS,
+} from '../../components/admin/AdminUI';
 import {
     collection, getDocs, query, orderBy, addDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
@@ -156,42 +163,20 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
 
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
             {/* Header */}
-            <Animated.View style={[sc.header, {
-                backgroundColor: colors.background,
-                borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-            }]}>
-                <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-                    <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme === 'dark' ? 'dark' : 'light'} />
-                    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + 'B3' }]} />
-                </Animated.View>
-                <TouchableOpacity onPress={onBack} style={[sc.iconBtn, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.5)' : '#F2F2F7' }]} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                    <ChevronLeft size={20} color={colors.foreground} />
-                </TouchableOpacity>
-                <Text style={[sc.headerTitle, { color: colors.foreground }]} pointerEvents="none">{t('orders').toUpperCase()}</Text>
-                <View style={{ width: 40 }} />
-            </Animated.View>
+            <AdminHeader
+                title={t('orders')}
+                onBack={onBack}
+                scrollY={scrollY}
+            />
 
-            {/* Search bar */}
-            <View style={sc.searchWrap}>
-                <View style={[sc.searchBar, { backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderColor: colors.border }]}>
-                    <Search size={17} color={colors.textMuted} />
-                    <TextInput
-                        style={[sc.searchInput, { color: colors.foreground }]}
-                        placeholder={t('searchOrdersPlaceholder')}
-                        placeholderTextColor={colors.textMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <X size={15} color={colors.textMuted} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
+            <AdminSearchBar
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={t('searchOrdersPlaceholder')}
+                onClear={() => setSearchQuery('')}
+            />
 
             {/* Orders list */}
             {loading ? (
@@ -204,15 +189,11 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                     onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                     scrollEventThrottle={16}
                     ListEmptyComponent={
-                        <View style={sc.empty}>
-                            <View style={[sc.emptyIconBox, { backgroundColor: theme === 'dark' ? '#121218' : '#F5F5F7', borderColor: colors.border }]}>
-                                <PackageOpen size={36} color={colors.textMuted} strokeWidth={1.5} />
-                            </View>
-                            <Text style={[sc.emptyTitle, { color: colors.foreground }]}>{t('noOrdersFound')}</Text>
-                            <Text style={[sc.emptySubtitle, { color: colors.textMuted }]}>
-                                {searchQuery ? 'Aucun résultat pour votre recherche' : 'Les commandes apparaîtront ici'}
-                            </Text>
-                        </View>
+                        <EmptyState
+                            message={t('noOrdersFound') || 'No orders found'}
+                            subtitle={searchQuery ? 'Try a different search' : 'Orders will appear here'}
+                            icon={<PackageOpen size={36} color={colors.textMuted} strokeWidth={1.5} />}
+                        />
                     }
                     renderItem={({ item }) => {
                         const customer = getCustomer(item);
@@ -220,7 +201,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                         return (
                             <TouchableOpacity
                                 onPress={() => setSelectedOrder(item)}
-                                style={[sc.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : '#FFF', borderColor: colors.border }]}
+                                style={[sc.orderCard, { backgroundColor: theme === 'dark' ? '#111118' : '#FFFFFF', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
                                 activeOpacity={0.75}
                             >
                                 <View style={sc.orderCardTop}>
@@ -371,7 +352,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                     </ScrollView>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -381,23 +362,23 @@ const sc = StyleSheet.create({
 
     // Header
     header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, zIndex: 100, overflow: 'hidden' },
-    headerTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2, position: 'absolute', left: 50, right: 50, textAlign: 'center', zIndex: 1 },
-    iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+    headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
+    iconBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     // Search
-    searchWrap: { paddingHorizontal: 18, marginBottom: 6 },
+    searchWrap: { paddingHorizontal: 18, marginBottom: 6, marginTop: 10 },
     searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, height: 46, borderWidth: 1, gap: 10 },
     searchInput: { flex: 1, fontSize: 13, fontWeight: '600' },
 
     // List
-    listContent: { padding: 18, paddingBottom: 100 },
-    orderCard: { borderRadius: 20, borderWidth: 1, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-    orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    orderId: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
-    orderDate: { fontSize: 11 },
-    customerName: { fontSize: 14, fontWeight: '700', marginBottom: 10 },
+    listContent: { padding: 20, paddingBottom: 120 },
+    orderCard: { borderRadius: 24, borderWidth: 1, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+    orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    orderId: { fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
+    orderDate: { fontSize: 11, fontWeight: '600' },
+    customerName: { fontSize: 16, fontWeight: '800', marginBottom: 12, letterSpacing: -0.2 },
     orderCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    orderMeta: { fontSize: 11, fontWeight: '600' },
+    orderMeta: { fontSize: 12, fontWeight: '700' },
 
     statusBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
     statusText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
@@ -421,7 +402,7 @@ const sc = StyleSheet.create({
     printBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
     printBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
-    section: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
+    section: { borderRadius: 24, borderWidth: 1, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 16, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
     sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
     sectionTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },

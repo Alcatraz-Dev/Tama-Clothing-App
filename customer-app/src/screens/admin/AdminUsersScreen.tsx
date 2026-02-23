@@ -247,8 +247,8 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
 
     // ─── Render ──────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('clients').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('clients')} onBack={onBack} scrollY={scrollY} />
 
             <Animated.FlatList
                 onScroll={Animated.event(

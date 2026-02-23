@@ -2,27 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
-    Animated,
     ActivityIndicator,
+    Animated,
     Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-    ChevronLeft,
-    ShoppingCart,
-    Package,
-    Users as UsersIcon,
-    Image as ImageIcon,
-} from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon } from 'lucide-react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminHeader';
 
 const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - 52) / 2;
 
 interface StatCardProps {
     label: string;
@@ -33,75 +26,81 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon: Icon, color }: StatCardProps) {
     const { colors, theme } = useAppTheme();
-    const iconColor = color || colors.foreground;
-    const bgColor = theme === 'dark'
-        ? (color ? color + '15' : 'rgba(255,255,255,0.05)')
-        : (color ? color + '10' : 'rgba(0,0,0,0.02)');
+    const isDark = theme === 'dark';
 
     return (
-        <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
-            <View style={[sc.statIconBox, { backgroundColor: bgColor }]}>
-                <Icon size={20} color={iconColor} strokeWidth={1.8} />
+        <View style={[
+            sc.statCard,
+            {
+                backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+            }
+        ]}>
+            <View style={[sc.statIconBox, { backgroundColor: color + (isDark ? '20' : '14') }]}>
+                <Icon size={22} color={color} strokeWidth={1.7} />
             </View>
-            <Text style={[sc.statValue, { color: colors.foreground }]}>{value}</Text>
-            <Text style={[sc.statLabel, { color: colors.textMuted }]}>{label}</Text>
+            <Text style={[sc.statValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+            <Text style={[sc.statLabel, { color: colors.textMuted }]}>{label.toUpperCase()}</Text>
+            {/* Accent dot */}
+            <View style={[sc.accentDot, { backgroundColor: color }]} />
         </View>
     );
 }
 
 export default function AdminDashboardScreen({ onBack, t, profileData, language }: any) {
     const { colors, theme } = useAppTheme();
+    const isDark = theme === 'dark';
     const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, products: 0 });
     const [recentOrders, setRecentOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const scrollY = useRef(new Animated.Value(0)).current;
 
-    useEffect(() => {
-        fetchDashboardData();
-    }, [profileData]);
-
     const fetchDashboardData = async () => {
         try {
-            setLoading(true);
             const isBrandOwner = profileData?.role === 'brand_owner';
             const myBrandId = profileData?.brandId;
 
-            const ordersSnap = await getDocs(collection(db, 'orders'));
+            const [ordersSnap, usersSnap, productsSnap] = await Promise.all([
+                getDocs(collection(db, 'orders')),
+                getDocs(collection(db, 'users')),
+                getDocs(collection(db, 'products')),
+            ]);
+
+            const ordersData = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
             let totalSales = 0;
-            let orderCount = 0;
-            const ordersData = ordersSnap.docs.map(d => {
-                const data = d.data();
-                let orderTotal = 0;
+            let orderCount = ordersData.length;
 
+            ordersData.forEach((o: any) => {
                 if (isBrandOwner && myBrandId) {
-                    const myItems = (data.items || []).filter((item: any) => item.brandId === myBrandId);
-                    if (myItems.length > 0) {
-                        orderTotal = myItems.reduce((sum: number, item: any) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
-                        totalSales += orderTotal;
-                        orderCount++;
-                        return { id: d.id, ...data, total: orderTotal, isMyBrand: true };
+                    const brandItems = (o.items || []).filter((i: any) => i.brandId === myBrandId);
+                    if (brandItems.length > 0) {
+                        const brandTotal = brandItems.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+                        totalSales += brandTotal;
                     }
-                    return null;
                 } else {
-                    orderTotal = typeof data.total === 'number' ? data.total : (parseFloat(data.total) || 0);
-                    totalSales += orderTotal;
-                    orderCount++;
-                    return { id: d.id, ...data, total: orderTotal };
+                    totalSales += (o.total || 0);
                 }
-            }).filter(o => o !== null);
+            });
 
-            const usersSnap = await getDocs(collection(db, 'users'));
-            const customerCount = usersSnap.docs.filter(d => d.data().role !== 'admin').length;
+            if (isBrandOwner && myBrandId) {
+                orderCount = ordersData.filter((o: any) => (o.items || []).some((i: any) => i.brandId === myBrandId)).length;
+            }
 
-            const productsSnap = await getDocs(collection(db, 'products'));
-            let productsCount = productsSnap.size;
+            const customerCount = usersSnap.docs.length;
+            let productsCount = productsSnap.docs.length;
+
             if (isBrandOwner && myBrandId) {
                 productsCount = productsSnap.docs.filter(d => d.data().brandId === myBrandId).length;
             }
 
             setStats({ sales: totalSales, orders: orderCount, customers: customerCount, products: productsCount });
 
-            const validOrders = ordersData.filter((o: any) => o.createdAt && typeof o.createdAt.seconds === 'number');
+            let validOrders = ordersData.filter((o: any) => o.createdAt && typeof o.createdAt.seconds === 'number');
+            if (isBrandOwner && myBrandId) {
+                validOrders = validOrders.filter((o: any) => (o.items || []).some((i: any) => i.brandId === myBrandId));
+            }
+
             const sortedOrders = validOrders.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).slice(0, 5);
             setRecentOrders(sortedOrders);
 
@@ -135,9 +134,13 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
         }
     };
 
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('dashboard').toUpperCase()} onBack={onBack} scrollY={scrollY} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('dashboard')} onBack={onBack} scrollY={scrollY} />
 
             <Animated.ScrollView
                 contentContainerStyle={sc.scrollContent}
@@ -148,35 +151,60 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
                 {loading ? <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 100 }} /> : (
                     <>
                         {profileData?.role === 'brand_owner' && (
-                            <View style={[sc.brandBanner, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7' }]}>
-                                <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
-                                <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
+                            <View style={[
+                                sc.brandBanner,
+                                {
+                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                }
+                            ]}>
+                                <View style={sc.brandBannerContent}>
+                                    <View>
+                                        <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
+                                        <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
+                                    </View>
+                                    <View style={[sc.badgeRole, { backgroundColor: 'rgba(52, 199, 89, 0.15)' }]}>
+                                        <Text style={[sc.badgeRoleText, { color: '#34C759' }]}>VERIFIED</Text>
+                                    </View>
+                                </View>
                             </View>
                         )}
 
                         <View style={sc.statsGrid}>
-                            <StatCard label={t('totalSales').toUpperCase()} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
-                            <StatCard label={t('orders').toUpperCase()} value={stats.orders.toString()} icon={Package} color="#5856D6" />
+                            <StatCard label={t('totalSales')} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
+                            <StatCard label={t('orders')} value={stats.orders.toString()} icon={Package} color="#5856D6" />
                             {profileData?.role !== 'brand_owner' && (
-                                <StatCard label={t('clients').toUpperCase()} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
+                                <StatCard label={t('clients')} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
                             )}
-                            <StatCard label={t('products').toUpperCase()} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
+                            <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
                         </View>
 
-                        <Text style={[sc.sectionTitle, { color: colors.foreground }]}>{t('recentOrders').toUpperCase()}</Text>
+                        {recentOrders.length > 0 && (
+                            <Text style={[sc.sectionTitle, { color: colors.foreground }]}>{t('recentOrders').toUpperCase()}</Text>
+                        )}
+
                         {recentOrders.map(order => (
-                            <View key={order.id} style={[sc.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
+                            <View
+                                key={order.id}
+                                style={[
+                                    sc.orderCard,
+                                    {
+                                        backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                    }
+                                ]}
+                            >
                                 <View style={sc.orderRow}>
                                     <Text style={[sc.orderId, { color: colors.foreground }]}>#{order.id.slice(0, 8).toUpperCase()}</Text>
                                     <Text style={[sc.orderTotal, { color: colors.foreground }]}>{order.total.toFixed(2)} TND</Text>
                                 </View>
                                 <View style={sc.orderRow}>
+                                    <View style={[sc.statusTag, { backgroundColor: getStatusColor(order.status) + '15' }]}>
+                                        <Text style={[sc.statusText, { color: getStatusColor(order.status) }]}>{getStatusLabel(order.status).toUpperCase()}</Text>
+                                    </View>
                                     <Text style={[sc.orderDate, { color: colors.textMuted }]}>
                                         {new Date(order.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}
                                     </Text>
-                                    <View style={[sc.statusTag, { backgroundColor: getStatusColor(order.status) }]}>
-                                        <Text style={sc.statusText}>{getStatusLabel(order.status).toUpperCase()}</Text>
-                                    </View>
                                 </View>
                             </View>
                         ))}
@@ -188,22 +216,150 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
 }
 
 const sc = StyleSheet.create({
-    root: { flex: 1 },
-    scrollContent: { padding: 20 },
-    brandBanner: { padding: 15, borderRadius: 12, marginBottom: 20 },
-    brandName: { fontWeight: '800' },
-    brandRole: { fontSize: 11, marginTop: 2 },
-    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 30 },
-    statCard: { width: (width - 52) / 2, padding: 16, borderRadius: 20, borderWidth: 1 },
-    statIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    statValue: { fontSize: 16, fontWeight: '800' },
-    statLabel: { fontSize: 9, fontWeight: '700', marginTop: 4 },
-    sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1, marginBottom: 15 },
-    orderCard: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 12 },
-    orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    orderId: { fontWeight: '800', fontSize: 13 },
-    orderTotal: { fontWeight: '700', fontSize: 13 },
-    orderDate: { fontSize: 12 },
-    statusTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    statusText: { color: 'white', fontSize: 9, fontWeight: '900' },
+    root: {
+        flex: 1
+    },
+    scrollContent: {
+        padding: 20,
+        paddingTop: 10,
+        paddingBottom: 100,
+    },
+    // Banner
+    brandBanner: {
+        padding: 18,
+        borderRadius: 22,
+        borderWidth: 1,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    brandBannerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    brandName: {
+        fontSize: 16,
+        fontWeight: '900',
+        letterSpacing: 0.5,
+    },
+    brandRole: {
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 4,
+        letterSpacing: 0.5,
+    },
+    badgeRole: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    badgeRoleText: {
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.6,
+    },
+    // Stats Grid
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 32
+    },
+    statCard: {
+        width: CARD_WIDTH,
+        paddingVertical: 20,
+        paddingHorizontal: 16,
+        borderRadius: 22,
+        borderWidth: 1,
+        alignItems: 'center',
+        position: 'relative',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06,
+        shadowRadius: 14,
+        elevation: 3,
+        minHeight: 130, // Taller card for premium feel
+    },
+    statIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14
+    },
+    statValue: {
+        fontSize: 20,
+        fontWeight: '900',
+        letterSpacing: -0.3,
+    },
+    statLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.6,
+        marginTop: 6,
+        textAlign: 'center',
+    },
+    accentDot: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        opacity: 0.7,
+    },
+    // Orders list
+    sectionTitle: {
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 1,
+        marginBottom: 16,
+        marginLeft: 4,
+    },
+    orderCard: {
+        padding: 18,
+        borderRadius: 20,
+        borderWidth: 1,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    orderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+    },
+    orderId: {
+        fontWeight: '800',
+        fontSize: 15,
+        letterSpacing: 0.2,
+    },
+    orderTotal: {
+        fontWeight: '900',
+        fontSize: 14,
+        letterSpacing: 0.2,
+    },
+    orderDate: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    statusTag: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    statusText: {
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.6,
+    },
 });

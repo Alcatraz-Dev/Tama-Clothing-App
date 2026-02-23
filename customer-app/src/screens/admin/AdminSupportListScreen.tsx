@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -6,6 +6,7 @@ import {
     ScrollView,
     StyleSheet,
     ActivityIndicator,
+    Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -25,8 +26,9 @@ import { AdminHeader } from '../../components/admin/AdminHeader';
 
 export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) {
     const { colors, theme } = useAppTheme();
-    const [chats, setChats] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const [chats, setChats] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(true);
 
     useEffect(() => {
         const chatsRef = collection(db, 'chats');
@@ -60,8 +62,8 @@ export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) 
     };
 
     return (
-        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('support').toUpperCase()} onBack={onBack} />
+        <SafeAreaView style={[sc.root, { backgroundColor: colors.background }]} edges={["bottom", "left", "right"]}>
+            <AdminHeader title={t('support')} onBack={onBack} scrollY={scrollY} />
 
             <ScrollView contentContainerStyle={sc.scrollContent} showsVerticalScrollIndicator={false}>
                 {loading ? (
