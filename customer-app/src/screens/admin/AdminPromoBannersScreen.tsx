@@ -38,6 +38,7 @@ import {
     StatusBadge,
     ModernSwitch,
     AdminInput,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 import { uploadToCloudinary } from '../../utils/cloudinary';
 
@@ -181,23 +182,18 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('promoBanners')}</Text>
+            <AdminHeader
+                title={t('promoBanners')}
+                onBack={onBack}
+                rightElement={
                     <TouchableOpacity
                         onPress={handleAddNew}
                         style={[sc.addBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
                     >
                         <Plus size={20} color={colors.foreground} />
                     </TouchableOpacity>
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+                }
+            />
 
             <Animated.ScrollView
                 contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}

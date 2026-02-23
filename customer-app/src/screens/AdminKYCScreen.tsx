@@ -16,7 +16,7 @@ import { collection, query, where, getDocs, doc, updateDoc, orderBy, onSnapshot 
 import { db } from '../api/firebase';
 import { ChevronLeft, CheckCircle2, XCircle, Search, User, CreditCard, Calendar, Clock, ShieldCheck } from 'lucide-react-native';
 import { Theme } from '../theme';
-import { BlurView } from 'expo-blur';
+import { AdminHeader } from '../components/admin/AdminUI';
 
 const { width } = Dimensions.get('window');
 
@@ -235,13 +235,7 @@ export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminK
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F2F2F7' }]}>
-                    <ChevronLeft size={24} color={colors.foreground} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.foreground }]}>KYC Requests</Text>
-                <View style={{ width: 40 }} />
-            </View>
+            <AdminHeader title={t('adminConsole')} onBack={onBack} />
 
             {loading ? (
                 <View style={styles.centered}>

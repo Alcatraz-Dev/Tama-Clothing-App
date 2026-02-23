@@ -444,6 +444,9 @@ export const fr = {
   lastOrderLabel: 'DERNIÈRE COMMANDE',
   neverLabel: 'Jamais',
   // ── Missing admin screen keys ──
+  profileSettings: 'GÉRER LE PROFIL',
+  leaveBlankToKeep: 'Laissez vide pour conserver',
+  currentPasswordToVerify: 'MOT DE PASSE ACTUEL (POUR VÉRIFIER)',
   noProductsFound: 'Aucun produit trouvé',
   noOrdersFound: 'Aucune commande trouvée',
   inactive: 'INACTIF',

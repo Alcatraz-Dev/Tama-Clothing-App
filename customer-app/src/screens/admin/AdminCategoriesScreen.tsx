@@ -40,6 +40,7 @@ import {
     SectionLabel,
     InputLabel,
     EmptyState,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 import { uploadToCloudinary } from '../../utils/cloudinary';
 import { getSafeString } from '../../utils/helpers';
@@ -148,23 +149,18 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('categories')}</Text>
+            <AdminHeader
+                title={t('categories')}
+                onBack={onBack}
+                rightElement={
                     <TouchableOpacity
                         onPress={() => { resetForm(); setModalVisible(true); }}
                         style={[sc.addBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
                     >
                         <Plus size={20} color={colors.foreground} />
                     </TouchableOpacity>
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+                }
+            />
 
             <Animated.FlatList
                 data={categories}
@@ -183,11 +179,11 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
                             {item.name?.['ar-tn'] && <Text style={[sc.categoryNameAr, { color: colors.textMuted }]}>{item.name['ar-tn']}</Text>}
                         </View>
                         <View style={sc.actions}>
-                            <TouchableOpacity onPress={() => openEdit(item)} style={sc.actionBtn}>
+                            <TouchableOpacity onPress={() => openEdit(item)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
                                 <Settings size={18} color={colors.foreground} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={sc.actionBtn}>
-                                <Trash2 size={18} color={colors.error} />
+                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]}>
+                                <Trash2 size={18} color="#FF3B30" />
                             </TouchableOpacity>
                         </View>
                     </AdminCard>
@@ -257,13 +253,13 @@ const sc = StyleSheet.create({
     hSep: { height: StyleSheet.hairlineWidth },
     addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     listContent: { padding: 20, paddingBottom: 120 },
-    categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
-    categoryImg: { width: 70, height: 70, borderRadius: 18 },
-    categoryInfo: { flex: 1, marginLeft: 20 },
-    categoryName: { fontWeight: '900', fontSize: 15, letterSpacing: -0.2 },
-    categoryNameAr: { fontSize: 12, marginTop: 4, writingDirection: 'rtl', opacity: 0.8 },
-    actions: { flexDirection: 'row', gap: 8 },
-    actionBtn: { padding: 8 },
+    categoryCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 24, marginBottom: 16 },
+    categoryImg: { width: 75, height: 75, borderRadius: 18 },
+    categoryInfo: { flex: 1, marginLeft: 18 },
+    categoryName: { fontWeight: '900', fontSize: 16, letterSpacing: -0.2 },
+    categoryNameAr: { fontSize: 13, marginTop: 4, writingDirection: 'rtl', opacity: 0.8 },
+    actions: { gap: 10, marginLeft: 12 },
+    actionBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     modalRoot: { flex: 1 },
     modalHeader: {

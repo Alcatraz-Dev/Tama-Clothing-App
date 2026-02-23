@@ -45,6 +45,7 @@ import {
     EmptyState,
     ModernSwitch,
     AdminInput,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 
 export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
@@ -161,18 +162,7 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.headerRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('coupons')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('coupons')} onBack={onBack} />
 
             <Animated.ScrollView
                 onScroll={Animated.event(

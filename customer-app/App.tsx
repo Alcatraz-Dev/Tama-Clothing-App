@@ -13,6 +13,22 @@ import ShipmentTrackingScreen from './src/screens/ShipmentTrackingScreen';
 import ProofOfDeliveryScreen from './src/screens/ProofOfDeliveryScreen';
 import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
 import AdminProductsScreen from './src/screens/admin/AdminProductsScreen';
+import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
+import AdminOrdersScreen from './src/screens/admin/AdminOrdersScreen';
+import AdminShipmentsScreen from './src/screens/admin/AdminShipmentsScreen';
+import AdminCategoriesScreen from './src/screens/admin/AdminCategoriesScreen';
+import AdminBrandsScreen from './src/screens/admin/AdminBrandsScreen';
+import AdminAdsScreen from './src/screens/admin/AdminAdsScreen';
+import AdminBannersScreen from './src/screens/admin/AdminBannersScreen';
+import AdminCouponsScreen from './src/screens/admin/AdminCouponsScreen';
+import AdminUsersScreen from './src/screens/admin/AdminUsersScreen';
+import AdminFlashSaleScreen from './src/screens/admin/AdminFlashSaleScreen';
+import AdminPromoBannersScreen from './src/screens/admin/AdminPromoBannersScreen';
+import AdminNotificationsScreen from './src/screens/admin/AdminNotificationsScreen';
+import AdminSettingsScreen from './src/screens/admin/AdminSettingsScreen';
+import AdminSupportListScreen from './src/screens/admin/AdminSupportListScreen';
+import AdminSupportChatScreen from './src/screens/admin/AdminSupportChatScreen';
+import AdminMenuScreen from './src/screens/admin/AdminMenuScreen';
 import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -2040,23 +2056,55 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
 
       // Fetch Flash Sale
       try {
-        const flashSnap = await getDoc(doc(db, 'settings', 'flashSale'));
-        if (flashSnap.exists() && flashSnap.data().active) {
-          const fsData = flashSnap.data();
-          const now = new Date().getTime();
-          const end = fsData.endTime ? new Date(fsData.endTime).getTime() : 0;
+        const settingsSnap = await getDocs(collection(db, 'settings'));
+        const now = new Date().getTime();
 
-          if (end > now) {
-            setFlashSale(fsData);
-            if (fsData.productIds?.length > 0) {
-              const pSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', fsData.productIds.slice(0, 10))));
-              setFlashProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        let activeFlashSales: any[] = settingsSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter((d: any) => d.id.startsWith('flashSale') && d.active);
+
+        // Filter out expired ones
+        activeFlashSales = activeFlashSales.filter((fs: any) => {
+          const end = fs.endTime ? new Date(fs.endTime).getTime() : 0;
+          return end > now;
+        });
+
+        if (activeFlashSales.length > 0) {
+          // Pick the one that ends SOONEST for the big timer
+          const soonestFlashSale = activeFlashSales.reduce((prev: any, curr: any) => {
+            const prevEnd = new Date(prev.endTime).getTime();
+            const currEnd = new Date(curr.endTime).getTime();
+            return currEnd < prevEnd ? curr : prev;
+          });
+          setFlashSale(soonestFlashSale);
+
+          // Combine all product IDs from all active flash sales
+          let allProductIds: string[] = [];
+          activeFlashSales.forEach((fs: any) => {
+            if (fs.productIds && Array.isArray(fs.productIds)) {
+              allProductIds.push(...fs.productIds);
             }
+          });
+
+          // unique product IDs
+          allProductIds = [...new Set(allProductIds)];
+
+          if (allProductIds.length > 0) {
+            // chunk up to 10
+            const pSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', allProductIds.slice(0, 10))));
+            const productsData = pSnap.docs.map(d => {
+              const pId = d.id;
+              // find which flash sale this belongs to in order to get ITS end time
+              const relatedFs = activeFlashSales.find((fs: any) => fs.productIds.includes(pId));
+              return { ...d.data(), id: pId, flashSaleEndTime: relatedFs?.endTime };
+            });
+            setFlashProducts(productsData);
           } else {
-            setFlashSale(null);
+            setFlashProducts([]);
           }
         } else {
           setFlashSale(null);
+          setFlashProducts([]);
         }
       } catch (fsErr) {
         console.log("Error fetching flash sale", fsErr);
@@ -2547,6 +2595,8 @@ function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCamp
                     theme={theme}
                     language={language}
                     t={t}
+                    customWidth={width * 0.65}
+                    flashSaleEndTime={p.flashSaleEndTime}
                   />
                 ))}
               </ScrollView>
@@ -8450,627 +8500,8 @@ function SizeGuideScreen({ onBack, t, language }: any) {
 
 // --- ADMIN SETTINGS (TEAM + SOCIALS) ---
 
-function AdminSettingsScreen({ onBack, user, t }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [activeTab, setActiveTabTab] = useState<'account' | 'team' | 'socials' | 'legal'>('account');
-  const [team, setTeam] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState('admin');
-  const [adding, setAdding] = useState(false);
+// AdminSettingsScreen is now imported from './src/screens/admin/AdminSettingsScreen.tsx'
 
-  // Account State
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [updateNewEmail, setUpdateNewEmail] = useState(user?.email || "");
-  const [updateNewPassword, setUpdateNewPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [accountLoading, setAccountLoading] = useState(false);
-
-  // Socials State
-  const [socials, setSocials] = useState({
-    facebook: "",
-    instagram: "",
-    tiktok: "",
-    whatsapp: "",
-    youtube: "",
-    website: ""
-  });
-  const [socialsLoading, setSocialsLoading] = useState(false);
-
-  // Legal State
-  const [legal, setLegal] = useState({ privacy: "", privacyAr: "", terms: "", termsAr: "" });
-  const [legalLoading, setLegalLoading] = useState(false);
-
-  useEffect(() => {
-    if (activeTab === 'team') {
-      fetchTeam();
-    } else if (activeTab === 'socials') {
-      fetchSocials();
-    } else if (activeTab === 'legal') {
-      fetchLegal();
-    }
-  }, [activeTab]);
-
-  const handleUpdateAccount = async () => {
-    if (!currentPassword) {
-      Alert.alert(t('error'), t('passwordRequired'));
-      return;
-    }
-    setAccountLoading(true);
-    try {
-      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      if (updateNewEmail !== user.email) {
-        await updateEmail(user, updateNewEmail);
-        await updateDoc(doc(db, "users", user.uid), { email: updateNewEmail });
-      }
-
-      if (updateNewPassword) {
-        await updatePassword(user, updateNewPassword);
-      }
-
-      Alert.alert(t('successTitle'), t('accountUpdated'));
-      setCurrentPassword('');
-      setUpdateNewPassword('');
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert(t('error'), err.code === 'auth/wrong-password' ? t('incorrectPassword') : t('updateFailed'));
-    } finally {
-      setAccountLoading(false);
-    }
-  };
-
-  const fetchTeam = async () => {
-    try {
-      setLoading(true);
-      const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'editor', 'viewer', 'support']));
-      const snap = await getDocs(q);
-      setTeam(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSocials = async () => {
-    try {
-      setLoading(true);
-      const docRef = doc(db, 'settings', 'socials');
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        setSocials({
-          facebook: data.facebook || "",
-          instagram: data.instagram || "",
-          tiktok: data.tiktok || "",
-          whatsapp: data.whatsapp || "",
-          youtube: data.youtube || "",
-          website: data.website || ""
-        });
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveSocials = async () => {
-    setSocialsLoading(true);
-    try {
-      await setDoc(doc(db, 'settings', 'socials'), {
-        ...socials,
-        updatedAt: serverTimestamp()
-      });
-      Alert.alert(t('successTitle'), t('linksUpdated'));
-    } catch (err) {
-      Alert.alert(t('error'), t('updateFailed'));
-    } finally {
-      setSocialsLoading(false);
-    }
-  };
-
-  const fetchLegal = async () => {
-    try {
-      setLoading(true);
-      const docRef = doc(db, 'settings', 'legal');
-      const snap = await getDoc(docRef);
-
-      const defaultPrivacy = `At Tama Clothing, we prioritize your privacy. This policy outlines how we collect, use, and protect your information.
-
-1. Information Collection
-We collect personal data (name, email, shipping address) when you create an account or place an order. We may also collect browsing data to improve your experience.
-
-2. Usage of Information
-Your data is used solely for processing orders, improving our services, and sending relevant updates (if opted in). We do not sell your data to third parties.
-
-3. Data Security
-We implement industry-standard security measures to protect your personal information. However, no method of transmission is 100% secure.
-
-4. Contact Us
-If you have questions about this policy, please contact our support team.`;
-
-      const defaultTerms = `Welcome to Tama Clothing. By accessing or using our mobile application, you agree to be bound by these terms.
-
-1. Usage Rights
-You are granted a limited license to access and use the app for personal shopping purposes. Misuse or unauthorized access is strictly prohibited.
-
-2. Purchases & Payments
-All prices are in TND. We reserve the right to change prices at any time. Orders are subject to acceptance and availability.
-
-3. Intellectual Property
-All content (images, text, designs) is owned by Tama Clothing and protected by copyright laws.
-
-4. Limitation of Liability
-Tama Clothing is not liable for indirect damages arising from your use of the app.
-
-5. Governing Law
-These terms are governed by the laws of Tunisia.`;
-
-      const defaultPrivacyAr = `في Tama Clothing، نولي أولوية قصوى لخصوصيتك. توضح هذه السياسة كيفية جمعنا لمعلوماتك واستخدامها وحمايتها.
-
-1. جمع المعلومات
-نقوم بجمع البيانات الشخصية (الاسم، البريد الإلكتروني، عنوان الشحن) عند إنشاء حساب أو تقديم طلب. قد نجمع أيضًا بيانات التصفح لتحسين تجربتك.
-
-2. استخدام المعلومات
-تُستخدم بياناتك فقط لمعالجة الطلبات، وتحسين خدماتنا، وإرسال التحديثات ذات الصلة (إذا وافقت على ذلك). نحن لا نبيع بياناتك لأطراف ثالثة.
-
-3. أمان البيانات
-نحن نطبق إجراءات أمنية قياسية في الصناعة لحماية معلوماتك الشخصية. ومع ذلك، لا توجد طريقة نقل آمنة بنسبة 100%.
-
-4. اتصل بنا
-إذا كانت لديك أسئلة حول هذه السياسة، يرجى الاتصال بفريق الدعم لدينا.`;
-
-      const defaultTermsAr = `مرحبًا بكم في Tama Clothing. من خلال الوصول إلى تطبيق الهاتف المحمول الخاص بنا أو استخدامه، فإنك توافق على الالتزام بهذه الشروط.
-
-1. حقوق الاستخدام
-يتم منحك ترخيصًا محدودًا للوصول إلى التطبيق واستخدامه لأغراض التسوق الشخصي. يُمنع إساءة الاستخدام أو الوصول غير المصرح به منعًا باتًا.
-
-2. المشتريات والمدفوعات
-جميع الأسعار بالدينار التونسي. نحتفظ بالحق في تغيير الأسعار في أي وقت. تخضع الطلبات للقبول والتوافر.
-
-3. الملكية الفكرية
-جميع المحتويات (الصور، النصوص، التصميمات) مملوكة لـ Tama Clothing ومحمية بموجب قوانين حقوق النشر.
-
-4. تحديد المسؤولية
-Tama Clothing ليست مسؤولة عن الأضرار غير المباشرة الناشئة عن استخدامك للتطبيق.
-
-5. القانون الحاكم
-تخضع هذه الشروط لقوانين تونس.`;
-
-      if (snap.exists()) {
-        const data = snap.data();
-        setLegal({
-          privacy: data.privacy || defaultPrivacy,
-          privacyAr: data.privacyAr || defaultPrivacyAr,
-          terms: data.terms || defaultTerms,
-          termsAr: data.termsAr || defaultTermsAr
-        });
-      } else {
-        setLegal({
-          privacy: defaultPrivacy,
-          privacyAr: defaultPrivacyAr,
-          terms: defaultTerms,
-          termsAr: defaultTermsAr
-        });
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveLegal = async () => {
-    setLegalLoading(true);
-    try {
-      await setDoc(doc(db, 'settings', 'legal'), {
-        ...legal,
-        updatedAt: serverTimestamp()
-      });
-      Alert.alert(t('successTitle'), t('pagesUpdated'));
-    } catch (err) {
-      Alert.alert(t('error'), t('updateFailed'));
-    } finally {
-      setLegalLoading(false);
-    }
-  };
-
-  const handleAdd = async () => {
-    if (!newEmail) return;
-    setAdding(true);
-    try {
-      const q = query(collection(db, 'users'), where('email', '==', newEmail), limit(1));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        Alert.alert(t('error'), t('userRegistered'));
-      } else {
-        const target = snap.docs[0];
-        await updateDoc(doc(db, 'users', target.id), { role: newRole });
-        setNewEmail('');
-        fetchTeam();
-        Alert.alert(t('successTitle'), t('memberAdded'));
-      }
-    } catch (err) {
-      Alert.alert(t('error'), t('updateFailed'));
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleRoleChange = async (uid: string, role: string) => {
-    if (uid === user?.uid) return;
-    try {
-      await updateDoc(doc(db, 'users', uid), { role });
-      fetchTeam();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleRemove = async (uid: string) => {
-    if (uid === user?.uid) return;
-    Alert.alert(t('error'), t('confirmDeleteMember'), [
-      { text: t('cancel') },
-      {
-        text: t('remove'), style: 'destructive', onPress: async () => {
-          await updateDoc(doc(db, 'users', uid), { role: 'customer' });
-          fetchTeam();
-        }
-      }
-    ]);
-  };
-
-  const ROLES = [
-    { value: 'admin', label: t('admin').toUpperCase() },
-    { value: 'brand_owner', label: t('brandOwner').toUpperCase() },
-    { value: 'nor_kam', label: t('norKam').toUpperCase() },
-    { value: 'editor', label: t('editor').toUpperCase() },
-    { value: 'support', label: t('support').toUpperCase() },
-    { value: 'viewer', label: t('viewer').toUpperCase() },
-    { value: 'driver', label: t('driver') ? t('driver').toUpperCase() : 'DRIVER' },
-  ];
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={styles.modernHeader}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: appColors.foreground }]}>{t('settings')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Tabs */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 25, marginBottom: 20 }}>
-        <TouchableOpacity
-          onPress={() => setActiveTabTab('account')}
-          style={{ marginRight: 15, paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: activeTab === 'account' ? appColors.foreground : 'transparent' }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: '900', color: activeTab === 'account' ? appColors.foreground : appColors.textMuted }}>{t('account')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTabTab('team')}
-          style={{ marginRight: 15, paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: activeTab === 'team' ? appColors.foreground : 'transparent' }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: '900', color: activeTab === 'team' ? appColors.foreground : appColors.textMuted }}>{t('team')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTabTab('socials')}
-          style={{ marginRight: 15, paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: activeTab === 'socials' ? appColors.foreground : 'transparent' }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: '900', color: activeTab === 'socials' ? appColors.foreground : appColors.textMuted }}>{t('socials')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTabTab('legal')}
-          style={{ paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: activeTab === 'legal' ? appColors.foreground : 'transparent' }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: '900', color: activeTab === 'legal' ? appColors.foreground : appColors.textMuted }}>{t('pages')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 25, paddingTop: 0 }}>
-
-        {activeTab === 'account' && (
-          <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('updateAccount')}</Text>
-            <View style={{ gap: 15 }}>
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('emailAddress')}</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                  value={updateNewEmail}
-                  onChangeText={setUpdateNewEmail}
-                  autoCapitalize="none"
-                />
-              </View>
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('currentPasswordRequired')}</Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <TextInput
-                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, paddingRight: 50 }]}
-                    placeholder="********"
-                    placeholderTextColor="#666"
-                    secureTextEntry={!showCurrentPassword}
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                  />
-                  <TouchableOpacity
-                    style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
-                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                  >
-                    {showCurrentPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('newPasswordOptional')}</Text>
-                <View style={{ position: 'relative', justifyContent: 'center' }}>
-                  <TextInput
-                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, paddingRight: 50 }]}
-                    placeholder={t('leaveEmptyToKeepCurrent')}
-                    placeholderTextColor="#666"
-                    secureTextEntry={!showNewPassword}
-                    value={updateNewPassword}
-                    onChangeText={setUpdateNewPassword}
-                  />
-                  <TouchableOpacity
-                    style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center' }}
-                    onPress={() => setShowNewPassword(!showNewPassword)}
-                  >
-                    {showNewPassword ? <EyeOff size={18} color={appColors.textMuted} /> : <Eye size={18} color={appColors.textMuted} />}
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.saveBtnPremium, { backgroundColor: theme === 'dark' ? '#FFF' : '#000', marginTop: 30 }]}
-                onPress={handleUpdateAccount}
-                disabled={accountLoading}
-              >
-                {accountLoading ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('updateProfile')}</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {activeTab === 'team' && (
-          <>
-            {/* ADD MEMBER */}
-            <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-              <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('addNewMember')}</Text>
-              <View style={{ gap: 10 }}>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                  placeholder={t('userEmail')}
-                  placeholderTextColor="#666"
-                  value={newEmail}
-                  onChangeText={setNewEmail}
-                  autoCapitalize="none"
-                />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5, paddingVertical: 10 }}>
-                  {ROLES.map(r => (
-                    <TouchableOpacity
-                      key={r.value}
-                      style={[styles.roleOption, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', borderColor: appColors.border }, newRole === r.value && { backgroundColor: appColors.foreground, borderColor: appColors.foreground }]}
-                      onPress={() => setNewRole(r.value)}
-                    >
-                      <Text style={[styles.roleOptionText, { color: appColors.textMuted }, newRole === r.value && { color: theme === 'dark' ? '#000' : '#FFF' }]}>{r.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                <TouchableOpacity
-                  style={[styles.saveBtnPremium, { backgroundColor: theme === 'dark' ? '#FFF' : '#000', marginTop: 20 }]}
-                  onPress={handleAdd}
-                  disabled={adding}
-                >
-                  {adding ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('invite')}</Text>}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* TEAM LIST */}
-            <Text style={[styles.settingsLabel, { marginTop: 20, color: appColors.foreground }]}>{t('currentTeam')}</Text>
-            {loading ? <ActivityIndicator color={appColors.foreground} /> : team.map(member => (
-              <View key={member.id} style={[styles.teamCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: appColors.foreground }}>{member.fullName || 'User'}</Text>
-                  <Text style={{ fontSize: 11, color: appColors.textMuted }}>{member.email}</Text>
-
-                  {/* Role Actions */}
-                  {member.id !== user?.uid && (
-                    <View style={{ flexDirection: 'row', marginTop: 8, gap: 5 }}>
-                      {ROLES.map(r => (
-                        <TouchableOpacity
-                          key={r.value}
-                          onPress={() => handleRoleChange(member.id, r.value)}
-                          style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, backgroundColor: member.role === r.value ? appColors.foreground : (theme === 'dark' ? '#000' : '#F2F2F7') }}
-                        >
-                          <Text style={{ fontSize: 9, fontWeight: '800', color: member.role === r.value ? (theme === 'dark' ? '#000' : '#FFF') : appColors.textMuted }}>{r.label[0]}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-
-                <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                  <View style={[styles.teamRoleBadge, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}><Text style={[styles.teamRoleText, { color: appColors.foreground }]}>{member.role}</Text></View>
-                  {member.id !== user?.uid && (
-                    <TouchableOpacity onPress={() => handleRemove(member.id)}>
-                      <Trash2 size={16} color={appColors.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            ))}
-          </>
-        )}
-
-        {activeTab === 'socials' && (
-          /* SOCIALS TAB */
-          <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Text style={[styles.settingsLabel, { marginBottom: 20, color: appColors.foreground }]}>{t('manageSocialLinks')}</Text>
-
-            <View style={{ gap: 15 }}>
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('instagram')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: appColors.border }}>
-                  <Instagram size={18} color={appColors.textMuted} />
-                  <TextInput
-                    style={[styles.premiumInput, { flex: 1, backgroundColor: 'transparent', paddingLeft: 10, color: appColors.foreground, borderWidth: 0 }]}
-                    placeholder="https://instagram.com/..."
-                    placeholderTextColor="#666"
-                    value={socials.instagram}
-                    onChangeText={text => setSocials({ ...socials, instagram: text })}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('facebook')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: appColors.border }}>
-                  <Facebook size={18} color={appColors.textMuted} />
-                  <TextInput
-                    style={[styles.premiumInput, { flex: 1, backgroundColor: 'transparent', paddingLeft: 10, color: appColors.foreground, borderWidth: 0 }]}
-                    placeholder="https://facebook.com/..."
-                    placeholderTextColor="#666"
-                    value={socials.facebook}
-                    onChangeText={text => setSocials({ ...socials, facebook: text })}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('tiktok')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: appColors.border }}>
-                  <Globe size={18} color={appColors.textMuted} />
-                  <TextInput
-                    style={[styles.premiumInput, { flex: 1, backgroundColor: 'transparent', paddingLeft: 10, color: appColors.foreground, borderWidth: 0 }]}
-                    placeholder="https://tiktok.com/..."
-                    placeholderTextColor="#666"
-                    value={socials.tiktok}
-                    onChangeText={text => setSocials({ ...socials, tiktok: text })}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('whatsappNumber')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: appColors.border }}>
-                  <MessageCircle size={18} color={appColors.textMuted} />
-                  <TextInput
-                    style={[styles.premiumInput, { flex: 1, backgroundColor: 'transparent', paddingLeft: 10, color: appColors.foreground, borderWidth: 0 }]}
-                    placeholder="+216 20 000 000"
-                    placeholderTextColor="#666"
-                    value={socials.whatsapp}
-                    onChangeText={text => setSocials({ ...socials, whatsapp: text })}
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('website')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: appColors.border }}>
-                  <Globe size={18} color={appColors.textMuted} />
-                  <TextInput
-                    style={[styles.premiumInput, { flex: 1, backgroundColor: 'transparent', paddingLeft: 10, color: appColors.foreground, borderWidth: 0 }]}
-                    placeholder="https://website.com"
-                    placeholderTextColor="#666"
-                    value={socials.website}
-                    onChangeText={text => setSocials({ ...socials, website: text })}
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.saveBtnPremium, { marginTop: 30, backgroundColor: theme === 'dark' ? '#FFF' : '#000' }]}
-                onPress={handleSaveSocials}
-                disabled={socialsLoading}
-              >
-                {socialsLoading ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('saveChanges')}</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {activeTab === 'legal' && (
-          <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Text style={[styles.settingsLabel, { marginBottom: 20, color: appColors.foreground }]}>{t('manageLegalPages')}</Text>
-
-            <View style={{ gap: 20 }}>
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('privacyPolicy')} (FR/EN)</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, height: 120, paddingTop: 15, textAlignVertical: 'top' }]}
-                  placeholder={t('enterPrivacyPolicyContent')}
-                  placeholderTextColor="#666"
-                  value={legal.privacy}
-                  onChangeText={val => setLegal({ ...legal, privacy: val })}
-                  multiline
-                  scrollEnabled={true}
-                />
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('privacyPolicy')} (AR)</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, height: 120, paddingTop: 15, textAlignVertical: 'top', textAlign: 'right' }]}
-                  placeholder="سياسة الخصوصية بالعربية..."
-                  placeholderTextColor="#666"
-                  value={legal.privacyAr}
-                  onChangeText={val => setLegal({ ...legal, privacyAr: val })}
-                  multiline
-                  scrollEnabled={true}
-                />
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('termsOfService')} (FR/EN)</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, height: 120, paddingTop: 15, textAlignVertical: 'top' }]}
-                  placeholder={t('enterTermsOfServiceContent')}
-                  placeholderTextColor="#666"
-                  value={legal.terms}
-                  onChangeText={val => setLegal({ ...legal, terms: val })}
-                  multiline
-                  scrollEnabled={true}
-                />
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('termsOfService')} (AR)</Text>
-                <TextInput
-                  style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, height: 120, paddingTop: 15, textAlignVertical: 'top', textAlign: 'right' }]}
-                  placeholder="شروط الخدمة بالعربية..."
-                  placeholderTextColor="#666"
-                  value={legal.termsAr}
-                  onChangeText={val => setLegal({ ...legal, termsAr: val })}
-                  multiline
-                  scrollEnabled={true}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.saveBtnPremium, { marginTop: 40, backgroundColor: theme === 'dark' ? '#FFF' : '#000' }]}
-              onPress={handleSaveLegal}
-              disabled={legalLoading}
-            >
-              {legalLoading ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{legalLoading ? t('saving') : t('updatePages')}</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
 
 function NotificationsScreen({ notifications, language, onClear, onBack, t }: any) {
   const { colors, theme } = useAppTheme();
@@ -9158,400 +8589,8 @@ function NotificationsScreen({ notifications, language, onClear, onBack, t }: an
   );
 }
 
-function AdminNotificationsScreen({ onBack, t }: any) {
-  const { colors, theme } = useAppTheme();
-  const [activeTab, setActiveTab] = useState<'send' | 'history'>('send');
-  const [title, setTitle] = useState('');
-  const [titleAr, setTitleAr] = useState('');
-  const [message, setMessage] = useState('');
-  const [messageAr, setMessageAr] = useState('');
-  const [image, setImage] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const handlePickImage = async () => {
-    try {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
 
-      if (!result.canceled) {
-        setImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
-    }
-  };
-
-  const fetchHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const q = query(
-        collection(db, 'notifications'),
-        where('type', '==', 'broadcast')
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        // Sort newest first in-memory to avoid requiring a composite Firestore index
-        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setNotifications(data);
-    } catch (error) {
-      console.error("Failed to fetch broadcast history:", error);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'history') {
-      fetchHistory();
-    }
-  }, [activeTab]);
-
-  const handleDeleteNotification = async (id: string) => {
-    Alert.alert(
-      t('delete'),
-      t('areYouSure'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'notifications', id));
-              setNotifications(prev => prev.filter(n => n.id !== id));
-            } catch (error) {
-              Alert.alert(t('error'), 'Failed to delete notification');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleSend = async () => {
-    if (!title || !message) return Alert.alert(t('error'), t('nameRequired'));
-    setSending(true);
-    try {
-      let imageUrl = null;
-
-      // Upload Image if present
-      if (image && !image.startsWith('http')) {
-        imageUrl = await uploadImageToCloudinary(image);
-      } else if (image && image.startsWith('http')) {
-        imageUrl = image;
-      }
-
-      // 1. Save to Database
-      await addDoc(collection(db, 'notifications'), {
-        userId: 'ALL',
-        title,
-        titleAr: titleAr || title,
-        message,
-        messageAr: messageAr || message,
-        image: imageUrl,
-        read: false,
-        type: 'broadcast',
-        createdAt: serverTimestamp()
-      });
-
-      // 2. Broadcast Push Notification
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const tokens: string[] = [];
-      usersSnap.docs.forEach(doc => {
-        const d = doc.data();
-        if (d.expoPushToken) tokens.push(d.expoPushToken);
-      });
-
-      // Remove duplicates
-      const uniqueTokens = [...new Set(tokens)];
-
-      if (uniqueTokens.length > 0) {
-        const chunkArray = (myArray: string[], chunk_size: number) => {
-          let results = [];
-          while (myArray.length) {
-            results.push(myArray.splice(0, chunk_size));
-          }
-          return results;
-        };
-
-        const chunks = chunkArray([...uniqueTokens], 100);
-
-        // Combined push notification text for broadcast
-        const combinedTitle = titleAr ? `${titleAr} | ${title}` : title;
-        const combinedBody = messageAr ? `${messageAr} | ${message}` : message;
-
-        for (const chunk of chunks) {
-          const pushMessages = chunk.map(token => ({
-            to: token,
-            sound: 'default',
-            title: combinedTitle,
-            body: combinedBody,
-            data: { type: 'broadcast', image: imageUrl },
-          }));
-
-          await fetch('https://exp.host/--/api/v2/push/send', {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Accept-encoding': 'gzip, deflate',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(pushMessages),
-          });
-        }
-      }
-
-      Alert.alert(t('broadcastSuccess'), t('thankYou'));
-      setTitle('');
-      setTitleAr('');
-      setMessage('');
-      setMessageAr('');
-      setImage(null);
-    } catch (e: any) {
-      Alert.alert(t('error'), t('broadcastError'));
-      console.error(e);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: colors.foreground }]}>{t('broadcast').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <TouchableOpacity
-          style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'send' ? colors.foreground : 'transparent' }}
-          onPress={() => setActiveTab('send')}
-        >
-          <Text style={{ fontWeight: '800', color: activeTab === 'send' ? colors.foreground : colors.textMuted }}>{t('sendBroadcast').toUpperCase()}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'history' ? colors.foreground : 'transparent' }}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={{ fontWeight: '800', color: activeTab === 'history' ? colors.foreground : colors.textMuted }}>HISTORY</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 25 }}>
-        {activeTab === 'send' ? (
-          <>
-            <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
-              <Text style={[styles.inputLabelField, { color: colors.foreground }]}>{t('notificationImage').toUpperCase()} {t('optional').toUpperCase()}</Text>
-              <View style={{ marginBottom: 20 }}>
-                {image ? (
-                  <View>
-                    <Image source={{ uri: image }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0' }} resizeMode="cover" />
-                    <TouchableOpacity
-                      onPress={() => setImage(null)}
-                      style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 }}
-                    >
-                      <X size={16} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity onPress={handlePickImage} style={{ width: '100%', height: 150, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA' }}>
-                    <ImageIcon size={32} color={colors.textMuted} />
-                    <Text style={{ marginTop: 10, color: colors.textMuted, fontSize: 11, fontWeight: '700' }}>{t('tapToUpload').toUpperCase()}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (FR)</Text>
-              <TextInput
-                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground }]}
-                placeholder={t('flashSalePlaceholder')}
-                placeholderTextColor="#999"
-                value={title}
-                onChangeText={setTitle}
-              />
-
-              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationTitleLabel').toUpperCase()} (AR)</Text>
-              <TextInput
-                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, textAlign: 'right' }]}
-                placeholder={t('flashSalePlaceholder')}
-                placeholderTextColor="#999"
-                value={titleAr}
-                onChangeText={setTitleAr}
-              />
-
-              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (FR)</Text>
-              <TextInput
-                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15 }]}
-                placeholder={t('typeMessagePlaceholder')}
-                placeholderTextColor="#999"
-                value={message}
-                onChangeText={setMessage}
-                multiline
-              />
-
-              <Text style={[styles.inputLabelField, { color: colors.foreground, marginTop: 20 }]}>{t('notificationMessageLabel').toUpperCase()} (AR)</Text>
-              <TextInput
-                style={[styles.modernInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F2F2F7', color: colors.foreground, height: 100, paddingTop: 15, textAlign: 'right' }]}
-                placeholder={t('typeMessagePlaceholder')}
-                placeholderTextColor="#999"
-                value={messageAr}
-                onChangeText={setMessageAr}
-                multiline
-              />
-
-              <TouchableOpacity
-                onPress={handleSend}
-                disabled={sending}
-                style={[styles.saveBtnPremium, { backgroundColor: colors.foreground, marginTop: 30 }]}
-              >
-                {sending ? <ActivityIndicator color={theme === 'dark' ? 'black' : 'white'} /> : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Megaphone size={18} color={theme === 'dark' ? 'black' : 'white'} />
-                    <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? 'black' : 'white' }]}>{t('sendBroadcast').toUpperCase()}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-            <Text style={{ textAlign: 'center', marginTop: 20, color: colors.textMuted, fontSize: 11 }}>
-              {t('broadcastHelpText')}
-            </Text>
-          </>
-        ) : (
-          <View>
-            {loadingHistory ? (
-              <ActivityIndicator color={colors.foreground} style={{ marginTop: 50 }} />
-            ) : notifications.length === 0 ? (
-              <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 50 }}>No notifications found.</Text>
-            ) : (
-              notifications.map((notif, idx) => (
-                <View key={notif.id || idx} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', padding: 15, borderRadius: 12, marginBottom: 15 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{notif.title || notif.titleAr}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>{notif.message || notif.messageAr}</Text>
-                    {notif.createdAt && (
-                      <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 5 }}>
-                        {new Date(notif.createdAt?.seconds * 1000).toLocaleDateString()}
-                      </Text>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeleteNotification(notif.id)} style={{ padding: 10 }}>
-                    <Trash2 size={20} color={colors.error} />
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-// Removed "View style={{ padding: 25 }}" wrapper and replaced with ScrollView for better UX on smaller screens
-
-
-// --- ADMIN SCREENS ---
-
-function AdminMenuScreen({ onBack, onNavigate, profileData, t }: any) {
-  const { colors, theme } = useAppTheme();
-
-  const role = profileData?.role || 'admin'; // Fallback to admin if not set
-
-  const menuItems = [
-    { label: t('dashboard').toUpperCase(), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support', 'brand_owner'], color: '#5856D6' },
-    { label: t('products').toUpperCase(), icon: Package, route: 'AdminProducts', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
-    { label: t('categories').toUpperCase(), icon: ListTree, route: 'AdminCategories', roles: ['admin'], color: '#AF52DE' },
-    { label: t('brands').toUpperCase(), icon: Shield, route: 'AdminBrands', roles: ['admin'], color: '#007AFF' },
-    { label: t('orders').toUpperCase(), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support', 'brand_owner'], color: '#34C759' },
-    { label: (t('shipments') || 'EXPÉDITIONS').toUpperCase(), icon: Truck, route: 'AdminShipments', roles: ['admin', 'support'], color: '#FF9500' },
-    { label: 'COLLABORATIONS', icon: Handshake, route: 'AdminCollaboration', roles: ['admin'], color: '#FF9500' },
-    { label: t('clients').toUpperCase(), icon: UsersIcon, route: 'AdminUsers', roles: ['admin', 'support'], color: '#5AC8FA' },
-    { label: t('banners').toUpperCase(), icon: ImageIcon, route: 'AdminBanners', roles: ['admin', 'brand_owner'], color: '#FF9500' },
-    { label: t('adsPromo').toUpperCase(), icon: Megaphone, route: 'AdminAds', roles: ['admin', 'brand_owner'], color: '#FF3B30' },
-    { label: t('coupons').toUpperCase(), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
-    { label: t('flashSale').toUpperCase(), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner'], color: '#FFCC00' },
-    { label: t('promotions').toUpperCase(), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner'], color: '#FF2D55' },
-    { label: t('support').toUpperCase(), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
-    { label: (t('identityVerification') || 'VERIFICATIONS').toUpperCase(), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
-    { label: t('broadcast').toUpperCase(), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
-    { label: t('settings').toUpperCase(), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
-  ].filter(item => item.roles.includes(role));
-  const iconColor = theme === 'dark' ? '#FFF' : '#000';
-  return (
-
-
-    <View style={[{ flex: 1, backgroundColor: theme === 'dark' ? '#000' : '#FFF' }]}>
-      {/* Header with Blur Effect */}
-      <View style={[{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        overflow: 'hidden',
-      }]}>
-        <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingVertical: 15,
-        }}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={[{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              marginTop: 30,
-              alignItems: 'center',
-              justifyContent: 'center', backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-            }]}
-          >
-            <ChevronLeft size={24} color={iconColor} />
-          </TouchableOpacity>
-
-          <View style={{ flex: 1, alignItems: 'center', marginTop: 30 }}>
-            <Text style={[{
-              fontSize: 20,
-              fontWeight: '800',
-              letterSpacing: -0.5, color: theme === 'dark' ? '#FFF' : '#000'
-            }]}>
-              {t('adminConsole')}
-            </Text>
-
-          </View>
-
-          <View style={{ width: 40 }} />
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120, marginTop: 100 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[styles.adminMenuCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}
-              onPress={() => onNavigate(item.route)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.adminIconBox, { backgroundColor: theme === 'dark' ? (item.color + '15') : (item.color + '10') }]}>
-                <item.icon size={26} color={item.color} strokeWidth={1.5} />
-              </View>
-              <Text style={[styles.adminMenuText, { color: colors.foreground }]}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </View >
-  );
-}
+// Helper functions preserved below
 
 // Placeholders for other admin screens
 // --- HELPER FUNCTIONS ---
@@ -9586,148 +8625,148 @@ const getStatusColor = (status: any) => {
 };
 
 // --- ADMIN DASHBOARD ---
-function AdminDashboardScreen({ onBack, t, user: currentUser, profileData, language }: any) {
-  const { colors, theme } = useAppTheme();
-  const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, products: 0 });
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// function AdminDashboardScreen({ onBack, t, user: currentUser, profileData, language }: any) {
+//   const { colors, theme } = useAppTheme();
+//   const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, products: 0 });
+//   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
 
-  const getStatusLabel = (status: string) => {
-    switch ((status || '').toLowerCase()) {
-      case 'pending': return t('statusPending');
-      case 'delivered': return t('statusDelivered');
-      case 'shipped': return t('statusShipped');
-      case 'cancelled': return t('statusCancelled');
-      case 'processing': return t('statusProcessing');
-      default: return status;
-    }
-  };
+//   const getStatusLabel = (status: string) => {
+//     switch ((status || '').toLowerCase()) {
+//       case 'pending': return t('statusPending');
+//       case 'delivered': return t('statusDelivered');
+//       case 'shipped': return t('statusShipped');
+//       case 'cancelled': return t('statusCancelled');
+//       case 'processing': return t('statusProcessing');
+//       default: return status;
+//     }
+//   };
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [currentUser, profileData]);
+//   useEffect(() => {
+//     fetchDashboardData();
+//   }, [currentUser, profileData]);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const isBrandOwner = profileData?.role === 'brand_owner';
-      const myBrandId = profileData?.brandId;
+//   const fetchDashboardData = async () => {
+//     try {
+//       setLoading(true);
+//       const isBrandOwner = profileData?.role === 'brand_owner';
+//       const myBrandId = profileData?.brandId;
 
-      // Orders & Sales
-      const ordersSnap = await getDocs(collection(db, 'orders'));
-      let totalSales = 0;
-      let orderCount = 0;
-      const ordersData = ordersSnap.docs.map(d => {
-        const data = d.data();
-        let orderTotal = 0;
+//       // Orders & Sales
+//       const ordersSnap = await getDocs(collection(db, 'orders'));
+//       let totalSales = 0;
+//       let orderCount = 0;
+//       const ordersData = ordersSnap.docs.map(d => {
+//         const data = d.data();
+//         let orderTotal = 0;
 
-        if (isBrandOwner && myBrandId) {
-          // Calculate only items belonging to this brand
-          const myItems = (data.items || []).filter((item: any) => item.brandId === myBrandId);
-          if (myItems.length > 0) {
-            orderTotal = myItems.reduce((sum: number, item: any) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
-            totalSales += orderTotal;
-            orderCount++;
-            return { id: d.id, ...data, total: orderTotal, isMyBrand: true };
-          }
-          return null;
-        } else {
-          orderTotal = typeof data.total === 'number' ? data.total : (parseFloat(data.total) || 0);
-          totalSales += orderTotal;
-          orderCount++;
-          return { id: d.id, ...data };
-        }
-      }).filter(o => o !== null);
+//         if (isBrandOwner && myBrandId) {
+//           // Calculate only items belonging to this brand
+//           const myItems = (data.items || []).filter((item: any) => item.brandId === myBrandId);
+//           if (myItems.length > 0) {
+//             orderTotal = myItems.reduce((sum: number, item: any) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
+//             totalSales += orderTotal;
+//             orderCount++;
+//             return { id: d.id, ...data, total: orderTotal, isMyBrand: true };
+//           }
+//           return null;
+//         } else {
+//           orderTotal = typeof data.total === 'number' ? data.total : (parseFloat(data.total) || 0);
+//           totalSales += orderTotal;
+//           orderCount++;
+//           return { id: d.id, ...data };
+//         }
+//       }).filter(o => o !== null);
 
-      // Customers
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const customerCount = usersSnap.docs.filter(d => d.data().role !== 'admin').length;
+//       // Customers
+//       const usersSnap = await getDocs(collection(db, 'users'));
+//       const customerCount = usersSnap.docs.filter(d => d.data().role !== 'admin').length;
 
-      // Products
-      const productsSnap = await getDocs(collection(db, 'products'));
-      let productsCount = productsSnap.size;
-      if (isBrandOwner && myBrandId) {
-        productsCount = productsSnap.docs.filter(d => d.data().brandId === myBrandId).length;
-      }
+//       // Products
+//       const productsSnap = await getDocs(collection(db, 'products'));
+//       let productsCount = productsSnap.size;
+//       if (isBrandOwner && myBrandId) {
+//         productsCount = productsSnap.docs.filter(d => d.data().brandId === myBrandId).length;
+//       }
 
-      setStats({
-        sales: totalSales,
-        orders: orderCount,
-        customers: customerCount,
-        products: productsCount
-      });
+//       setStats({
+//         sales: totalSales,
+//         orders: orderCount,
+//         customers: customerCount,
+//         products: productsCount
+//       });
 
-      // Recent Orders (Safe Sort)
-      const validOrders = ordersData.filter((o: any) => o.createdAt && typeof o.createdAt.seconds === 'number');
-      const sortedOrders = validOrders.sort((a: any, b: any) => {
-        const tA = a.createdAt?.seconds || 0;
-        const tB = b.createdAt?.seconds || 0;
-        return tB - tA;
-      }).slice(0, 5);
+//       // Recent Orders (Safe Sort)
+//       const validOrders = ordersData.filter((o: any) => o.createdAt && typeof o.createdAt.seconds === 'number');
+//       const sortedOrders = validOrders.sort((a: any, b: any) => {
+//         const tA = a.createdAt?.seconds || 0;
+//         const tB = b.createdAt?.seconds || 0;
+//         return tB - tA;
+//       }).slice(0, 5);
 
-      setRecentOrders(sortedOrders);
+//       setRecentOrders(sortedOrders);
 
-    } catch (err) {
-      console.log('Dashboard Error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+//     } catch (err) {
+//       console.log('Dashboard Error:', err);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: colors.foreground }]}>{t('dashboard').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={colors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: colors.foreground }]}>{t('dashboard').toUpperCase()}</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
-        {loading ? <ActivityIndicator size="large" color={colors.foreground} /> : (
-          <>
-            {currentUser?.role === 'brand_owner' && (
-              <View style={{ backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', padding: 15, borderRadius: 12, marginBottom: 20 }}>
-                <Text style={{ fontWeight: '800', color: colors.foreground }}>{currentUser.brandName?.toUpperCase() || t('brandOwner')}</Text>
-                <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
-              </View>
-            )}
+//       <ScrollView contentContainerStyle={{ padding: 20 }}>
+//         {loading ? <ActivityIndicator size="large" color={colors.foreground} /> : (
+//           <>
+//             {currentUser?.role === 'brand_owner' && (
+//               <View style={{ backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', padding: 15, borderRadius: 12, marginBottom: 20 }}>
+//                 <Text style={{ fontWeight: '800', color: colors.foreground }}>{currentUser.brandName?.toUpperCase() || t('brandOwner')}</Text>
+//                 <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
+//               </View>
+//             )}
 
-            {/* Stats Grid */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginBottom: 30 }}>
-              <StatCard key="sales" label={t('totalSales').toUpperCase()} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
-              <StatCard key="orders" label={t('orders').toUpperCase()} value={stats.orders.toString()} icon={Package} color="#5856D6" />
-              {currentUser?.role !== 'brand_owner' && (
-                <>
-                  <StatCard key="clients" label={t('clients').toUpperCase()} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
-                </>
-              )}
-              <StatCard key="products" label={t('products').toUpperCase()} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
-            </View>
+//             {/* Stats Grid */}
+//             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginBottom: 30 }}>
+//               <StatCard key="sales" label={t('totalSales').toUpperCase()} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
+//               <StatCard key="orders" label={t('orders').toUpperCase()} value={stats.orders.toString()} icon={Package} color="#5856D6" />
+//               {currentUser?.role !== 'brand_owner' && (
+//                 <>
+//                   <StatCard key="clients" label={t('clients').toUpperCase()} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
+//                 </>
+//               )}
+//               <StatCard key="products" label={t('products').toUpperCase()} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
+//             </View>
 
-            {/* Recent Orders */}
-            <Text style={[styles.settingsLabel, { color: colors.foreground }]}>{t('recentOrders').toUpperCase()}</Text>
-            {recentOrders.map(order => (
-              <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontWeight: '800', color: colors.foreground }}>#{order.id.slice(0, 8)}</Text>
-                  <Text style={{ fontWeight: '700', color: colors.foreground }}>{order.total.toFixed(2)} TND</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 12, color: colors.textMuted }}>{new Date(order.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}</Text>
-                  <View style={[styles.statusTag, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusText}>{getStatusLabel(order.status).toUpperCase()}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+//             {/* Recent Orders */}
+//             <Text style={[styles.settingsLabel, { color: colors.foreground }]}>{t('recentOrders').toUpperCase()}</Text>
+//             {recentOrders.map(order => (
+//               <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+//                   <Text style={{ fontWeight: '800', color: colors.foreground }}>#{order.id.slice(0, 8)}</Text>
+//                   <Text style={{ fontWeight: '700', color: colors.foreground }}>{order.total.toFixed(2)} TND</Text>
+//                 </View>
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+//                   <Text style={{ fontSize: 12, color: colors.textMuted }}>{new Date(order.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}</Text>
+//                   <View style={[styles.statusTag, { backgroundColor: getStatusColor(order.status) }]}>
+//                     <Text style={styles.statusText}>{getStatusLabel(order.status).toUpperCase()}</Text>
+//                   </View>
+//                 </View>
+//               </View>
+//             ))}
+//           </>
+//         )}
+//       </ScrollView>
+//     </SafeAreaView>
+//   );
+// }
 
 function StatCard({ label, value, icon: Icon, color }: any) {
   const { colors, theme } = useAppTheme();
@@ -9750,341 +8789,341 @@ function StatCard({ label, value, icon: Icon, color }: any) {
 // --- ADMIN PRODUCTS is now imported from './src/screens/admin/AdminProductsScreen.tsx' ---
 
 // --- ADMIN ORDERS ---
-function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+// function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const [orders, setOrders] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-  const getStatusLabel = (status: string) => {
-    switch ((status || '').toLowerCase()) {
-      case 'pending': return t('statusPending');
-      case 'delivered': return t('statusDelivered');
-      case 'shipped': return t('statusShipped');
-      case 'cancelled': return t('statusCancelled');
-      case 'processing': return t('statusProcessing');
-      default: return status;
-    }
-  };
+//   const getStatusLabel = (status: string) => {
+//     switch ((status || '').toLowerCase()) {
+//       case 'pending': return t('statusPending');
+//       case 'delivered': return t('statusDelivered');
+//       case 'shipped': return t('statusShipped');
+//       case 'cancelled': return t('statusCancelled');
+//       case 'processing': return t('statusProcessing');
+//       default: return status;
+//     }
+//   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, [currentUser, profileData]);
+//   useEffect(() => {
+//     fetchOrders();
+//   }, [currentUser, profileData]);
 
-  const fetchOrders = async () => {
-    try {
-      const isBrandOwner = profileData?.role === 'brand_owner';
-      const myBrandId = profileData?.brandId;
+//   const fetchOrders = async () => {
+//     try {
+//       const isBrandOwner = profileData?.role === 'brand_owner';
+//       const myBrandId = profileData?.brandId;
 
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      const allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+//       const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+//       const snap = await getDocs(q);
+//       const allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-      if (isBrandOwner && myBrandId) {
-        // Filter orders that have items from my brand
-        const myOrders = allOrders.filter(o => (o.items || []).some((i: any) => i.brandId === myBrandId));
-        // Also update the order object to show my items only if needed, or keep it complete
-        setOrders(myOrders);
-      } else {
-        setOrders(allOrders);
-      }
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
-  };
+//       if (isBrandOwner && myBrandId) {
+//         // Filter orders that have items from my brand
+//         const myOrders = allOrders.filter(o => (o.items || []).some((i: any) => i.brandId === myBrandId));
+//         // Also update the order object to show my items only if needed, or keep it complete
+//         setOrders(myOrders);
+//       } else {
+//         setOrders(allOrders);
+//       }
+//     } catch (err) { console.error(err) }
+//     finally { setLoading(false) }
+//   };
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    try {
-      await updateDoc(doc(db, 'orders', id), { status: newStatus });
-      if (selectedOrder && selectedOrder.id === id) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
+//   const updateStatus = async (id: string, newStatus: string) => {
+//     try {
+//       await updateDoc(doc(db, 'orders', id), { status: newStatus });
+//       if (selectedOrder && selectedOrder.id === id) {
+//         setSelectedOrder({ ...selectedOrder, status: newStatus });
 
-        // Send Notification if userId exists
-        if (selectedOrder.userId) {
-          try {
-            await addDoc(collection(db, 'notifications'), {
-              userId: selectedOrder.userId,
-              title: `Order Update`,
-              message: `Your order #${id.slice(0, 8)} is now ${newStatus.toUpperCase()}.`,
-              read: false,
-              type: 'order_update',
-              data: { orderId: id },
-              createdAt: serverTimestamp()
-            });
-          } catch (ne) { console.log('Notif error', ne); }
-        }
-      }
-      fetchOrders();
-    } catch (err) { Alert.alert(t('error'), t('updateFailed')); }
-  };
+//         // Send Notification if userId exists
+//         if (selectedOrder.userId) {
+//           try {
+//             await addDoc(collection(db, 'notifications'), {
+//               userId: selectedOrder.userId,
+//               title: `Order Update`,
+//               message: `Your order #${id.slice(0, 8)} is now ${newStatus.toUpperCase()}.`,
+//               read: false,
+//               type: 'order_update',
+//               data: { orderId: id },
+//               createdAt: serverTimestamp()
+//             });
+//           } catch (ne) { console.log('Notif error', ne); }
+//         }
+//       }
+//       fetchOrders();
+//     } catch (err) { Alert.alert(t('error'), t('updateFailed')); }
+//   };
 
-  const printOrderLabel = async () => {
-    if (!selectedOrder) return;
-    try {
-      const customer = getCustomer(selectedOrder);
-      const deliveryAddress = customer.address || 'Address not provided';
-      const itemsString = selectedOrder.items?.map((i: any) => `${i.name || 'Item'} (x${i.quantity || 1})`).join(', ') || 'Various Items';
+//   const printOrderLabel = async () => {
+//     if (!selectedOrder) return;
+//     try {
+//       const customer = getCustomer(selectedOrder);
+//       const deliveryAddress = customer.address || 'Address not provided';
+//       const itemsString = selectedOrder.items?.map((i: any) => `${i.name || 'Item'} (x${i.quantity || 1})`).join(', ') || 'Various Items';
 
-      const labelData = {
-        trackingId: selectedOrder.trackingId || selectedOrder.id,
-        senderName: profileData?.brandName || 'Tama Clothing',
-        receiverName: customer.fullName,
-        receiverPhone: customer.phone,
-        deliveryAddress: deliveryAddress,
-        items: [itemsString],
-        weight: 'Unknown',
-        serviceType: 'Standard delivery',
-        carrierName: 'Tama Logistics',
-        carrierPhone: '+216 71 000 000',
-      };
+//       const labelData = {
+//         trackingId: selectedOrder.trackingId || selectedOrder.id,
+//         senderName: profileData?.brandName || 'Tama Clothing',
+//         receiverName: customer.fullName,
+//         receiverPhone: customer.phone,
+//         deliveryAddress: deliveryAddress,
+//         items: [itemsString],
+//         weight: 'Unknown',
+//         serviceType: 'Standard delivery',
+//         carrierName: 'Tama Logistics',
+//         carrierPhone: '+216 71 000 000',
+//       };
 
-      const html = generateShippingStickerHTML(labelData);
+//       const html = generateShippingStickerHTML(labelData);
 
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    } catch (error: any) {
-      if (error.message && error.message.includes('ExpoPrint')) {
-        Alert.alert('Module Manquant', 'L\'application doit être reconstruite pour utiliser la fonctionnalité d\'impression. Veuillez patienter pour la fin de la compilation.');
-      } else {
-        Alert.alert(t('error') || 'Error', error.message);
-      }
-    }
-  };
+//       const { uri } = await Print.printToFileAsync({ html });
+//       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+//     } catch (error: any) {
+//       if (error.message && error.message.includes('ExpoPrint')) {
+//         Alert.alert('Module Manquant', 'L\'application doit être reconstruite pour utiliser la fonctionnalité d\'impression. Veuillez patienter pour la fin de la compilation.');
+//       } else {
+//         Alert.alert(t('error') || 'Error', error.message);
+//       }
+//     }
+//   };
 
-  const getCustomer = (order: any) => {
-    const c = order.customer || order.shippingAddress;
-    return {
-      fullName: c?.fullName || 'Client Inconnu',
-      phone: c?.phone || 'Non renseigné',
-      address: c?.address || 'Non renseignée',
-      email: c?.email || 'Non renseigné'
-    };
-  };
+//   const getCustomer = (order: any) => {
+//     const c = order.customer || order.shippingAddress;
+//     return {
+//       fullName: c?.fullName || 'Client Inconnu',
+//       phone: c?.phone || 'Non renseigné',
+//       address: c?.address || 'Non renseignée',
+//       email: c?.email || 'Non renseigné'
+//     };
+//   };
 
-  const [searchQuery, setSearchQuery] = useState('');
+//   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredOrders = orders.filter(o => {
-    const q = searchQuery.toLowerCase();
-    const customer = getCustomer(o);
-    return o.id.toLowerCase().includes(q) || customer.fullName.toLowerCase().includes(q) || customer.phone.includes(q);
-  });
+//   const filteredOrders = orders.filter(o => {
+//     const q = searchQuery.toLowerCase();
+//     const customer = getCustomer(o);
+//     return o.id.toLowerCase().includes(q) || customer.fullName.toLowerCase().includes(q) || customer.phone.includes(q);
+//   });
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#000' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('orders').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#000' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('orders').toUpperCase()}</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
 
-      <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderRadius: 12, paddingHorizontal: 15, height: 45, borderWidth: 1, borderColor: appColors.border }}>
-          <Search size={18} color={appColors.textMuted} />
-          <TextInput
-            style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: appColors.foreground }}
-            placeholder={t('searchOrdersPlaceholder')}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={appColors.textMuted}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <X size={16} color={appColors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+//       <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
+//         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderRadius: 12, paddingHorizontal: 15, height: 45, borderWidth: 1, borderColor: appColors.border }}>
+//           <Search size={18} color={appColors.textMuted} />
+//           <TextInput
+//             style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: appColors.foreground }}
+//             placeholder={t('searchOrdersPlaceholder')}
+//             value={searchQuery}
+//             onChangeText={setSearchQuery}
+//             placeholderTextColor={appColors.textMuted}
+//           />
+//           {searchQuery.length > 0 && (
+//             <TouchableOpacity onPress={() => setSearchQuery('')}>
+//               <X size={16} color={appColors.textMuted} />
+//             </TouchableOpacity>
+//           )}
+//         </View>
+//       </View>
 
-      <FlatList
-        data={filteredOrders}
-        contentContainerStyle={{ padding: 20 }}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => {
-          const customer = getCustomer(item);
-          return (
-            <TouchableOpacity onPress={() => setSelectedOrder(item)} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-              <View style={{
-                flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12
-                , paddingBottom: 10
-              }}>
-                <Text style={{ fontWeight: '800', fontSize: 12, color: appColors.foreground }}>#{item.id.slice(0, 8).toUpperCase()}</Text>
-                <Text style={{ fontSize: 10, color: appColors.textMuted }}>{new Date(item.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}</Text>
-              </View>
+//       <FlatList
+//         data={filteredOrders}
+//         contentContainerStyle={{ padding: 20 }}
+//         keyExtractor={item => item.id}
+//         renderItem={({ item }) => {
+//           const customer = getCustomer(item);
+//           return (
+//             <TouchableOpacity onPress={() => setSelectedOrder(item)} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
+//               <View style={{
+//                 flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12
+//                 , paddingBottom: 10
+//               }}>
+//                 <Text style={{ fontWeight: '800', fontSize: 12, color: appColors.foreground }}>#{item.id.slice(0, 8).toUpperCase()}</Text>
+//                 <Text style={{ fontSize: 10, color: appColors.textMuted }}>{new Date(item.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}</Text>
+//               </View>
 
-              <View style={{ marginBottom: 15 }}>
-                <Text style={{ fontWeight: '700', fontSize: 13, marginBottom: 4, color: appColors.foreground }}>{customer.fullName}</Text>
-                <Text style={{ fontSize: 11, color: appColors.textMuted }}>{item.items?.length || 0} {t('itemsLabel')} • {item.total} TND</Text>
-              </View>
+//               <View style={{ marginBottom: 15 }}>
+//                 <Text style={{ fontWeight: '700', fontSize: 13, marginBottom: 4, color: appColors.foreground }}>{customer.fullName}</Text>
+//                 <Text style={{ fontSize: 11, color: appColors.textMuted }}>{item.items?.length || 0} {t('itemsLabel')} • {item.total} TND</Text>
+//               </View>
 
-              <View style={[styles.statusTag, { backgroundColor: getStatusColor(item.status || 'pending'), alignSelf: 'flex-start' }]}>
-                <Text style={styles.statusText}>{getStatusLabel(item.status || 'pending').toUpperCase()}</Text>
-              </View>
-            </TouchableOpacity>
-          )
-        }}
-      />
+//               <View style={[styles.statusTag, { backgroundColor: getStatusColor(item.status || 'pending'), alignSelf: 'flex-start' }]}>
+//                 <Text style={styles.statusText}>{getStatusLabel(item.status || 'pending').toUpperCase()}</Text>
+//               </View>
+//             </TouchableOpacity>
+//           )
+//         }}
+//       />
 
-      <Modal visible={!!selectedOrder} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#F9F9F9' }}>
-          <View style={{
-            height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white',
-            borderBottomWidth: 1, borderBottomColor: appColors.border
-          }}>
-            <Text style={{ fontWeight: '900', fontSize: 12, color: appColors.foreground, letterSpacing: 2 }}>{t('orderDetails').toUpperCase()}</Text>
-            <TouchableOpacity onPress={() => setSelectedOrder(null)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-              <X size={24} color={appColors.foreground} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-            {selectedOrder && (
-              <>
-                {/* Order Meta Info */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <View>
-                    <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{t('orderNumber')}</Text>
-                    <Text style={{ color: appColors.foreground, fontSize: 18, fontWeight: '900' }}>#{selectedOrder.id.slice(0, 8).toUpperCase()}</Text>
-                  </View>
-                  <TouchableOpacity onPress={printOrderLabel} style={{ backgroundColor: theme === 'dark' ? '#FFF' : '#000', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}>
-                    <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 10, fontWeight: '800' }}>PRINT LABEL</Text>
-                  </TouchableOpacity>
-                </View>
+//       <Modal visible={!!selectedOrder} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#F9F9F9' }}>
+//           <View style={{
+//             height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white',
+//             borderBottomWidth: 1, borderBottomColor: appColors.border
+//           }}>
+//             <Text style={{ fontWeight: '900', fontSize: 12, color: appColors.foreground, letterSpacing: 2 }}>{t('orderDetails').toUpperCase()}</Text>
+//             <TouchableOpacity onPress={() => setSelectedOrder(null)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//               <X size={24} color={appColors.foreground} />
+//             </TouchableOpacity>
+//           </View>
+//           <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+//             {selectedOrder && (
+//               <>
+//                 {/* Order Meta Info */}
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+//                   <View>
+//                     <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700' }}>{t('orderNumber')}</Text>
+//                     <Text style={{ color: appColors.foreground, fontSize: 18, fontWeight: '900' }}>#{selectedOrder.id.slice(0, 8).toUpperCase()}</Text>
+//                   </View>
+//                   <TouchableOpacity onPress={printOrderLabel} style={{ backgroundColor: theme === 'dark' ? '#FFF' : '#000', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}>
+//                     <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 10, fontWeight: '800' }}>PRINT LABEL</Text>
+//                   </TouchableOpacity>
+//                 </View>
 
-                {/* Status Section */}
-                <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20, padding: 15 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                    <Text style={[styles.settingsLabel, { color: appColors.foreground, marginBottom: 0 }]}>{t('status').toUpperCase()}</Text>
-                    <View style={[styles.statusTag, { backgroundColor: getStatusColor(selectedOrder.status), paddingHorizontal: 10, paddingVertical: 4 }]}>
-                      <Text style={[styles.statusText, { fontSize: 9 }]}>{getStatusLabel(selectedOrder.status).toUpperCase()}</Text>
-                    </View>
-                  </View>
+//                 {/* Status Section */}
+//                 <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20, padding: 15 }]}>
+//                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+//                     <Text style={[styles.settingsLabel, { color: appColors.foreground, marginBottom: 0 }]}>{t('status').toUpperCase()}</Text>
+//                     <View style={[styles.statusTag, { backgroundColor: getStatusColor(selectedOrder.status), paddingHorizontal: 10, paddingVertical: 4 }]}>
+//                       <Text style={[styles.statusText, { fontSize: 9 }]}>{getStatusLabel(selectedOrder.status).toUpperCase()}</Text>
+//                     </View>
+//                   </View>
 
-                  <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700', marginBottom: 12, letterSpacing: 1 }}>{t('updateStatus').toUpperCase()}</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((s) => (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => updateStatus(selectedOrder.id, s)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 8,
-                          borderRadius: 10,
-                          backgroundColor: selectedOrder.status === s ? getStatusColor(s) : (theme === 'dark' ? '#1C1C1E' : '#F2F2F7'),
-                          borderWidth: 1,
-                          borderColor: selectedOrder.status === s ? getStatusColor(s) : appColors.border
-                        }}
-                      >
-                        <Text style={{
-                          color: selectedOrder.status === s ? 'white' : appColors.foreground,
-                          fontSize: 10,
-                          fontWeight: '800'
-                        }}>{t('status' + s.charAt(0).toUpperCase() + s.slice(1)).toUpperCase()}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
+//                   <Text style={{ color: appColors.textMuted, fontSize: 10, fontWeight: '700', marginBottom: 12, letterSpacing: 1 }}>{t('updateStatus').toUpperCase()}</Text>
+//                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+//                     {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((s) => (
+//                       <TouchableOpacity
+//                         key={s}
+//                         onPress={() => updateStatus(selectedOrder.id, s)}
+//                         style={{
+//                           paddingHorizontal: 12,
+//                           paddingVertical: 8,
+//                           borderRadius: 10,
+//                           backgroundColor: selectedOrder.status === s ? getStatusColor(s) : (theme === 'dark' ? '#1C1C1E' : '#F2F2F7'),
+//                           borderWidth: 1,
+//                           borderColor: selectedOrder.status === s ? getStatusColor(s) : appColors.border
+//                         }}
+//                       >
+//                         <Text style={{
+//                           color: selectedOrder.status === s ? 'white' : appColors.foreground,
+//                           fontSize: 10,
+//                           fontWeight: '800'
+//                         }}>{t('status' + s.charAt(0).toUpperCase() + s.slice(1)).toUpperCase()}</Text>
+//                       </TouchableOpacity>
+//                     ))}
+//                   </View>
+//                 </View>
 
-                {/* Client Info Section */}
-                <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20 }]}>
-                  <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('clientInfo').toUpperCase()}</Text>
-                  {(() => {
-                    const c = getCustomer(selectedOrder);
-                    return (
-                      <View style={{ gap: 15 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
-                            <User size={18} color={appColors.foreground} />
-                          </View>
-                          <View>
-                            <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('fullName').toUpperCase()}</Text>
-                            <Text style={{ fontWeight: '800', fontSize: 15, color: appColors.foreground }}>{c.fullName}</Text>
-                          </View>
-                        </View>
+//                 {/* Client Info Section */}
+//                 <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20 }]}>
+//                   <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('clientInfo').toUpperCase()}</Text>
+//                   {(() => {
+//                     const c = getCustomer(selectedOrder);
+//                     return (
+//                       <View style={{ gap: 15 }}>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+//                           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
+//                             <User size={18} color={appColors.foreground} />
+//                           </View>
+//                           <View>
+//                             <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('fullName').toUpperCase()}</Text>
+//                             <Text style={{ fontWeight: '800', fontSize: 15, color: appColors.foreground }}>{c.fullName}</Text>
+//                           </View>
+//                         </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
-                            <Phone size={18} color={appColors.foreground} />
-                          </View>
-                          <View>
-                            <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('phone').toUpperCase()}</Text>
-                            <Text style={{ fontWeight: '800', fontSize: 15, color: appColors.foreground, letterSpacing: 0.5 }}>{c.phone}</Text>
-                          </View>
-                        </View>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+//                           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
+//                             <Phone size={18} color={appColors.foreground} />
+//                           </View>
+//                           <View>
+//                             <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('phone').toUpperCase()}</Text>
+//                             <Text style={{ fontWeight: '800', fontSize: 15, color: appColors.foreground, letterSpacing: 0.5 }}>{c.phone}</Text>
+//                           </View>
+//                         </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
-                            <MapPin size={18} color={appColors.foreground} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('deliveryAddress').toUpperCase()}</Text>
-                            <Text style={{ fontWeight: '800', fontSize: 14, color: appColors.foreground }}>{c.address}</Text>
-                          </View>
-                        </View>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+//                           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
+//                             <MapPin size={18} color={appColors.foreground} />
+//                           </View>
+//                           <View style={{ flex: 1 }}>
+//                             <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('deliveryAddress').toUpperCase()}</Text>
+//                             <Text style={{ fontWeight: '800', fontSize: 14, color: appColors.foreground }}>{c.address}</Text>
+//                           </View>
+//                         </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
-                            <Mail size={18} color={appColors.foreground} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('email').toUpperCase()}</Text>
-                            <Text style={{ fontWeight: '800', fontSize: 14, color: appColors.foreground }}>{c.email}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    )
-                  })()}
-                </View>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+//                           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9F9FB', alignItems: 'center', justifyContent: 'center' }}>
+//                             <Mail size={18} color={appColors.foreground} />
+//                           </View>
+//                           <View style={{ flex: 1 }}>
+//                             <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '700' }}>{t('email').toUpperCase()}</Text>
+//                             <Text style={{ fontWeight: '800', fontSize: 14, color: appColors.foreground }}>{c.email}</Text>
+//                           </View>
+//                         </View>
+//                       </View>
+//                     )
+//                   })()}
+//                 </View>
 
-                {/* Items Section */}
-                <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20 }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 }}>
-                    <ShoppingBag size={18} color={appColors.foreground} />
-                    <Text style={[styles.settingsLabel, { color: appColors.foreground, marginBottom: 0 }]}>{t('orderItems').toUpperCase()} ({selectedOrder.items?.length})</Text>
-                  </View>
+//                 {/* Items Section */}
+//                 <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20 }]}>
+//                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 }}>
+//                     <ShoppingBag size={18} color={appColors.foreground} />
+//                     <Text style={[styles.settingsLabel, { color: appColors.foreground, marginBottom: 0 }]}>{t('orderItems').toUpperCase()} ({selectedOrder.items?.length})</Text>
+//                   </View>
 
-                  {(selectedOrder.items || []).map((prod: any, i: number) => (
-                    <View key={i} style={{ flexDirection: 'row', gap: 12, marginBottom: 18, paddingBottom: 15, borderBottomWidth: i === (selectedOrder.items?.length - 1) ? 0 : 1, borderBottomColor: appColors.border }}>
-                      <Image source={{ uri: prod.mainImage || prod.image }} style={{ width: 60, height: 75, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#eee' }} />
-                      <View style={{ flex: 1, justifyContent: 'center' }}>
-                        <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground, letterSpacing: 0.3 }}>{String(getName(prod.name)).toUpperCase()}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted }}>{prod.selectedSize}</Text>
-                          </View>
-                          <Text style={{ color: appColors.border, fontSize: 10 }}>|</Text>
-                          <Text style={{ fontSize: 11, color: appColors.textMuted, fontWeight: '600' }}>{prod.selectedColor}</Text>
-                          <Text style={{ color: appColors.border, fontSize: 10 }}>|</Text>
-                          <Text style={{ fontSize: 11, color: appColors.textMuted, fontWeight: '600' }}>{t('qty')}: {prod.quantity || 1}</Text>
-                        </View>
-                        <Text style={{ fontWeight: '900', marginTop: 8, color: appColors.foreground, fontSize: 13 }}>{prod.price.toFixed(2)} TND</Text>
-                      </View>
-                    </View>
-                  ))}
+//                   {(selectedOrder.items || []).map((prod: any, i: number) => (
+//                     <View key={i} style={{ flexDirection: 'row', gap: 12, marginBottom: 18, paddingBottom: 15, borderBottomWidth: i === (selectedOrder.items?.length - 1) ? 0 : 1, borderBottomColor: appColors.border }}>
+//                       <Image source={{ uri: prod.mainImage || prod.image }} style={{ width: 60, height: 75, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#eee' }} />
+//                       <View style={{ flex: 1, justifyContent: 'center' }}>
+//                         <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground, letterSpacing: 0.3 }}>{String(getName(prod.name)).toUpperCase()}</Text>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+//                           <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+//                             <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted }}>{prod.selectedSize}</Text>
+//                           </View>
+//                           <Text style={{ color: appColors.border, fontSize: 10 }}>|</Text>
+//                           <Text style={{ fontSize: 11, color: appColors.textMuted, fontWeight: '600' }}>{prod.selectedColor}</Text>
+//                           <Text style={{ color: appColors.border, fontSize: 10 }}>|</Text>
+//                           <Text style={{ fontSize: 11, color: appColors.textMuted, fontWeight: '600' }}>{t('qty')}: {prod.quantity || 1}</Text>
+//                         </View>
+//                         <Text style={{ fontWeight: '900', marginTop: 8, color: appColors.foreground, fontSize: 13 }}>{prod.price.toFixed(2)} TND</Text>
+//                       </View>
+//                     </View>
+//                   ))}
 
-                  {/* Summary */}
-                  <View style={{ marginTop: 5, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: appColors.textMuted, fontWeight: '600', fontSize: 12 }}>{t('subtotal')}</Text>
-                      <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 14 }}>{(selectedOrder.total - 7).toFixed(2)} TND</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: appColors.textMuted, fontWeight: '600', fontSize: 12 }}>{t('delivery')}</Text>
-                      <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 14 }}>7.00 TND</Text>
-                    </View>
-                    <View style={{ borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 12, marginTop: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 14, letterSpacing: 0.5 }}>{t('orderTotal').toUpperCase()}</Text>
-                      <Text style={{ fontWeight: '900', fontSize: 20, color: appColors.foreground }}>{selectedOrder.total?.toFixed(2)} TND</Text>
-                    </View>
-                  </View>
-                </View>
-              </>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//                   {/* Summary */}
+//                   <View style={{ marginTop: 5, gap: 10 }}>
+//                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+//                       <Text style={{ color: appColors.textMuted, fontWeight: '600', fontSize: 12 }}>{t('subtotal')}</Text>
+//                       <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 14 }}>{(selectedOrder.total - 7).toFixed(2)} TND</Text>
+//                     </View>
+//                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+//                       <Text style={{ color: appColors.textMuted, fontWeight: '600', fontSize: 12 }}>{t('delivery')}</Text>
+//                       <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 14 }}>7.00 TND</Text>
+//                     </View>
+//                     <View style={{ borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 12, marginTop: 5, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+//                       <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 14, letterSpacing: 0.5 }}>{t('orderTotal').toUpperCase()}</Text>
+//                       <Text style={{ fontWeight: '900', fontSize: 20, color: appColors.foreground }}>{selectedOrder.total?.toFixed(2)} TND</Text>
+//                     </View>
+//                   </View>
+//                 </View>
+//               </>
+//             )}
+//           </ScrollView>
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- REUSABLE UPLOAD FUNCTION ---
 
@@ -10103,1621 +9142,1621 @@ const getSafeString = (val: any) => {
 };
 
 // --- ADMIN SHIPMENTS ---
-function AdminShipmentsScreen({ onBack, t, user, profileData, language }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
-  const [shipments, setShipments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// function AdminShipmentsScreen({ onBack, t, user, profileData, language }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+//   const [shipments, setShipments] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (activeTab === 'list') {
-      fetchShipments();
-    }
-  }, [activeTab]);
+//   useEffect(() => {
+//     if (activeTab === 'list') {
+//       fetchShipments();
+//     }
+//   }, [activeTab]);
 
-  const fetchShipments = async () => {
-    try {
-      setLoading(true);
-      const q = query(collection(db, 'shipments'), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
-      setShipments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
-  };
+//   const fetchShipments = async () => {
+//     try {
+//       setLoading(true);
+//       const q = query(collection(db, 'shipments'), orderBy('createdAt', 'desc'));
+//       const snap = await getDocs(q);
+//       setShipments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+//     } catch (err) { console.error(err) }
+//     finally { setLoading(false) }
+//   };
 
-  const getStatusColor = (status: string) => {
-    switch ((status || '').toLowerCase()) {
-      case 'created': return '#FF9500';
-      case 'in_transit': return '#5856D6';
-      case 'out_for_delivery': return '#007AFF';
-      case 'delivered': return '#34C759';
-      default: return '#8E8E93';
-    }
-  };
+//   const getStatusColor = (status: string) => {
+//     switch ((status || '').toLowerCase()) {
+//       case 'created': return '#FF9500';
+//       case 'in_transit': return '#5856D6';
+//       case 'out_for_delivery': return '#007AFF';
+//       case 'delivered': return '#34C759';
+//       default: return '#8E8E93';
+//     }
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{(t('shipments') || 'EXPÉDITIONS').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{(t('shipments') || 'EXPÉDITIONS').toUpperCase()}</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
 
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: appColors.border }}>
-        <TouchableOpacity onPress={() => setActiveTab('list')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'list' ? appColors.foreground : 'transparent' }}>
-          <Text style={{ fontWeight: '800', color: activeTab === 'list' ? appColors.foreground : appColors.textMuted }}>{(t('shipments') || 'LISTE').toUpperCase()}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setActiveTab('create')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'create' ? appColors.foreground : 'transparent' }}>
-          <Text style={{ fontWeight: '800', color: activeTab === 'create' ? appColors.foreground : appColors.textMuted }}>{(t('createShipment') || 'CRÉER').toUpperCase()}</Text>
-        </TouchableOpacity>
-      </View>
+//       <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: appColors.border }}>
+//         <TouchableOpacity onPress={() => setActiveTab('list')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'list' ? appColors.foreground : 'transparent' }}>
+//           <Text style={{ fontWeight: '800', color: activeTab === 'list' ? appColors.foreground : appColors.textMuted }}>{(t('shipments') || 'LISTE').toUpperCase()}</Text>
+//         </TouchableOpacity>
+//         <TouchableOpacity onPress={() => setActiveTab('create')} style={{ flex: 1, paddingVertical: 15, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'create' ? appColors.foreground : 'transparent' }}>
+//           <Text style={{ fontWeight: '800', color: activeTab === 'create' ? appColors.foreground : appColors.textMuted }}>{(t('createShipment') || 'CRÉER').toUpperCase()}</Text>
+//         </TouchableOpacity>
+//       </View>
 
-      {activeTab === 'list' ? (
-        <FlatList
-          data={shipments}
-          keyExtractor={s => s.id}
-          contentContainerStyle={{ padding: 20 }}
-          refreshing={loading}
-          onRefresh={fetchShipments}
-          renderItem={({ item }) => (
-            <View style={{ padding: 15, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 16, marginBottom: 15, borderWidth: 1, borderColor: appColors.border }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={{ fontWeight: '900', color: appColors.foreground }}>#{item.trackingId || item.id.slice(0, 8).toUpperCase()}</Text>
-                <View style={{ backgroundColor: getStatusColor(item.status), paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{(item.status || 'CREATED').toUpperCase()}</Text>
-                </View>
-              </View>
-              <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><User size={12} color={appColors.textMuted} /> {item.receiverName}</Text>
-              <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><Phone size={12} color={appColors.textMuted} /> {item.receiverPhone}</Text>
-              <Text style={{ color: appColors.textMuted, fontSize: 13 }}><MapPin size={12} color={appColors.textMuted} /> {item.deliveryAddress}</Text>
-            </View>
-          )}
-          ListEmptyComponent={!loading ? <Text style={{ textAlign: 'center', color: appColors.textMuted, marginTop: 50 }}>{(t('noData') || 'Aucune donnée')}</Text> : null}
-        />
-      ) : (
-        <View style={{ flex: 1 }}>
-          <ShipmentCreationScreen onBack={() => setActiveTab('list')} onComplete={() => setActiveTab('list')} t={t} hideHeader={true} />
-        </View>
-      )}
-    </SafeAreaView>
-  );
-}
+//       {activeTab === 'list' ? (
+//         <FlatList
+//           data={shipments}
+//           keyExtractor={s => s.id}
+//           contentContainerStyle={{ padding: 20 }}
+//           refreshing={loading}
+//           onRefresh={fetchShipments}
+//           renderItem={({ item }) => (
+//             <View style={{ padding: 15, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 16, marginBottom: 15, borderWidth: 1, borderColor: appColors.border }}>
+//               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+//                 <Text style={{ fontWeight: '900', color: appColors.foreground }}>#{item.trackingId || item.id.slice(0, 8).toUpperCase()}</Text>
+//                 <View style={{ backgroundColor: getStatusColor(item.status), paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+//                   <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{(item.status || 'CREATED').toUpperCase()}</Text>
+//                 </View>
+//               </View>
+//               <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><User size={12} color={appColors.textMuted} /> {item.receiverName}</Text>
+//               <Text style={{ color: appColors.textMuted, fontSize: 13, marginBottom: 4 }}><Phone size={12} color={appColors.textMuted} /> {item.receiverPhone}</Text>
+//               <Text style={{ color: appColors.textMuted, fontSize: 13 }}><MapPin size={12} color={appColors.textMuted} /> {item.deliveryAddress}</Text>
+//             </View>
+//           )}
+//           ListEmptyComponent={!loading ? <Text style={{ textAlign: 'center', color: appColors.textMuted, marginTop: 50 }}>{(t('noData') || 'Aucune donnée')}</Text> : null}
+//         />
+//       ) : (
+//         <View style={{ flex: 1 }}>
+//           <ShipmentCreationScreen onBack={() => setActiveTab('list')} onComplete={() => setActiveTab('list')} t={t} hideHeader={true} />
+//         </View>
+//       )}
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN CATEGORIES ---
-function AdminCategoriesScreen({ onBack, t }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [categories, setCategories] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [nameFr, setNameFr] = useState('');
-  const [nameAr, setNameAr] = useState('');
-  const [image, setImage] = useState('');
-  const [uploading, setUploading] = useState(false);
+// function AdminCategoriesScreen({ onBack, t }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const [categories, setCategories] = useState<any[]>([]);
+//   const [modalVisible, setModalVisible] = useState(false);
+//   const [editingCategory, setEditingCategory] = useState<any>(null);
+//   const [nameFr, setNameFr] = useState('');
+//   const [nameAr, setNameAr] = useState('');
+//   const [image, setImage] = useState('');
+//   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { fetchCategories(); }, []);
+//   useEffect(() => { fetchCategories(); }, []);
 
-  const fetchCategories = async () => {
-    const snap = await getDocs(collection(db, 'categories'));
-    setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
+//   const fetchCategories = async () => {
+//     const snap = await getDocs(collection(db, 'categories'));
+//     setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+//   };
 
-  const handleSave = async () => {
-    if (!nameFr) return Alert.alert(t('error'), t('nameRequired'));
-    setUploading(true);
-    try {
-      const imgUrl = await uploadToCloudinary(image);
-      const data = {
-        name: { fr: nameFr, "ar-tn": nameAr },
-        image: imgUrl,
-        updatedAt: serverTimestamp()
-      };
+//   const handleSave = async () => {
+//     if (!nameFr) return Alert.alert(t('error'), t('nameRequired'));
+//     setUploading(true);
+//     try {
+//       const imgUrl = await uploadToCloudinary(image);
+//       const data = {
+//         name: { fr: nameFr, "ar-tn": nameAr },
+//         image: imgUrl,
+//         updatedAt: serverTimestamp()
+//       };
 
-      if (editingCategory) {
-        await updateDoc(doc(db, 'categories', editingCategory.id), data);
-      } else {
-        await addDoc(collection(db, 'categories'), { ...data, createdAt: serverTimestamp() });
-      }
-      setModalVisible(false);
-      fetchCategories();
-      resetForm();
-    } catch (error) { Alert.alert(t('error'), t('failedToSave')); }
-    finally { setUploading(false); }
-  };
+//       if (editingCategory) {
+//         await updateDoc(doc(db, 'categories', editingCategory.id), data);
+//       } else {
+//         await addDoc(collection(db, 'categories'), { ...data, createdAt: serverTimestamp() });
+//       }
+//       setModalVisible(false);
+//       fetchCategories();
+//       resetForm();
+//     } catch (error) { Alert.alert(t('error'), t('failedToSave')); }
+//     finally { setUploading(false); }
+//   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(t('delete'), t('areYouSure'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          await deleteDoc(doc(db, 'categories', id));
-          fetchCategories();
-        }
-      }
-    ]);
-  };
+//   const handleDelete = async (id: string) => {
+//     Alert.alert(t('delete'), t('areYouSure'), [
+//       { text: t('cancel'), style: 'cancel' },
+//       {
+//         text: 'Delete', style: 'destructive', onPress: async () => {
+//           await deleteDoc(doc(db, 'categories', id));
+//           fetchCategories();
+//         }
+//       }
+//     ]);
+//   };
 
-  const resetForm = () => {
-    setEditingCategory(null); setNameFr(''); setNameAr(''); setImage('');
-  };
+//   const resetForm = () => {
+//     setEditingCategory(null); setNameFr(''); setNameAr(''); setImage('');
+//   };
 
-  const openEdit = (c: any) => {
-    setEditingCategory(c);
-    setNameFr(c.name?.fr || (typeof c.name === 'string' ? c.name : ''));
-    setNameAr(c.name?.['ar-tn'] || '');
-    setImage(c.image || '');
-    setModalVisible(true);
-  };
+//   const openEdit = (c: any) => {
+//     setEditingCategory(c);
+//     setNameFr(c.name?.fr || (typeof c.name === 'string' ? c.name : ''));
+//     setNameAr(c.name?.['ar-tn'] || '');
+//     setImage(c.image || '');
+//     setModalVisible(true);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('categories').toUpperCase()}</Text>
-        <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Plus size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={categories}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noResults')}</Text></View>}
-        renderItem={({ item }) => (
-          <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{getSafeString(item.name)}</Text>
-              {item.name?.['ar-tn'] && <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2, writingDirection: 'rtl' }}>{item.name['ar-tn']}</Text>}
-            </View>
-            <View style={{ gap: 12, flexDirection: 'row' }}>
-              <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
-            <View style={{
-              height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
-            }}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingCategory ? t('editCategory').toUpperCase() : t('newCategory').toUpperCase()}</Text>
-              <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-          <ScrollView contentContainerStyle={{ padding: 25 }}>
-            <TouchableOpacity onPress={async () => {
-              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
-              if (!r.canceled) setImage(r.assets[0].uri);
-            }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
-              {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
-                <View style={{ alignItems: 'center', gap: 10 }}>
-                  <Camera size={32} color={appColors.textMuted} />
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUpload').toUpperCase()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('categories').toUpperCase()}</Text>
+//         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <Plus size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//       </View>
+//       <FlatList
+//         data={categories}
+//         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+//         ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noResults')}</Text></View>}
+//         renderItem={({ item }) => (
+//           <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
+//             <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
+//             <View style={{ flex: 1, marginLeft: 16 }}>
+//               <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{getSafeString(item.name)}</Text>
+//               {item.name?.['ar-tn'] && <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2, writingDirection: 'rtl' }}>{item.name['ar-tn']}</Text>}
+//             </View>
+//             <View style={{ gap: 12, flexDirection: 'row' }}>
+//               <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
+//               <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
+//             </View>
+//           </View>
+//         )}
+//       />
+//       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
+//           <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
+//             <View style={{
+//               height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
+//             }}>
+//               <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//               <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingCategory ? t('editCategory').toUpperCase() : t('newCategory').toUpperCase()}</Text>
+//               <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
+//               </TouchableOpacity>
+//             </View>
+//           </SafeAreaView>
+//           <ScrollView contentContainerStyle={{ padding: 25 }}>
+//             <TouchableOpacity onPress={async () => {
+//               const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
+//               if (!r.canceled) setImage(r.assets[0].uri);
+//             }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
+//               {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
+//                 <View style={{ alignItems: 'center', gap: 10 }}>
+//                   <Camera size={32} color={appColors.textMuted} />
+//                   <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUpload').toUpperCase()}</Text>
+//                 </View>
+//               )}
+//             </TouchableOpacity>
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('category').toUpperCase()} (FR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={nameFr} onChangeText={setNameFr} placeholder={t('category') + ' (FR)'} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('category').toUpperCase()} (FR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={nameFr} onChangeText={setNameFr} placeholder={t('category') + ' (FR)'} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('category').toUpperCase()} (AR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={nameAr} onChangeText={setNameAr} placeholder={t('category') + ' (AR)'} placeholderTextColor="#666" />
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('category').toUpperCase()} (AR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={nameAr} onChangeText={setNameAr} placeholder={t('category') + ' (AR)'} placeholderTextColor="#666" />
+//           </ScrollView>
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN BRANDS ---
-function AdminBrandsScreen({ onBack, t }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [brands, setBrands] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<any>(null);
-  const [nameFr, setNameFr] = useState('');
-  const [nameAr, setNameAr] = useState('');
-  const [image, setImage] = useState('');
-  const [isActive, setIsActive] = useState(true);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [productSearch, setProductSearch] = useState('');
-  const [uploading, setUploading] = useState(false);
+// function AdminBrandsScreen({ onBack, t }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const [brands, setBrands] = useState<any[]>([]);
+//   const [modalVisible, setModalVisible] = useState(false);
+//   const [editingBrand, setEditingBrand] = useState<any>(null);
+//   const [nameFr, setNameFr] = useState('');
+//   const [nameAr, setNameAr] = useState('');
+//   const [image, setImage] = useState('');
+//   const [isActive, setIsActive] = useState(true);
+//   const [allProducts, setAllProducts] = useState<any[]>([]);
+//   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+//   const [productSearch, setProductSearch] = useState('');
+//   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    fetchBrands();
-    fetchProducts();
-  }, []);
+//   useEffect(() => {
+//     fetchBrands();
+//     fetchProducts();
+//   }, []);
 
-  const fetchBrands = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'brands'));
-      setBrands(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err) }
-  };
+//   const fetchBrands = async () => {
+//     try {
+//       const snap = await getDocs(collection(db, 'brands'));
+//       setBrands(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+//     } catch (err) { console.error(err) }
+//   };
 
-  const fetchProducts = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'products'));
-      setAllProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error(err) }
-  };
+//   const fetchProducts = async () => {
+//     try {
+//       const snap = await getDocs(collection(db, 'products'));
+//       setAllProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+//     } catch (err) { console.error(err) }
+//   };
 
-  const handleSave = async () => {
-    if (!nameFr) return Alert.alert(t('error'), t('nameRequired'));
-    setUploading(true);
-    try {
-      const imgUrl = await uploadToCloudinary(image);
-      const data = {
-        name: { fr: nameFr, "ar-tn": nameAr },
-        image: imgUrl,
-        isActive,
-        updatedAt: serverTimestamp()
-      };
+//   const handleSave = async () => {
+//     if (!nameFr) return Alert.alert(t('error'), t('nameRequired'));
+//     setUploading(true);
+//     try {
+//       const imgUrl = await uploadToCloudinary(image);
+//       const data = {
+//         name: { fr: nameFr, "ar-tn": nameAr },
+//         image: imgUrl,
+//         isActive,
+//         updatedAt: serverTimestamp()
+//       };
 
-      let brandId = editingBrand?.id;
+//       let brandId = editingBrand?.id;
 
-      if (editingBrand) {
-        await updateDoc(doc(db, 'brands', editingBrand.id), data);
-      } else {
-        const ref = await addDoc(collection(db, 'brands'), { ...data, createdAt: serverTimestamp() });
-        brandId = ref.id;
-      }
+//       if (editingBrand) {
+//         await updateDoc(doc(db, 'brands', editingBrand.id), data);
+//       } else {
+//         const ref = await addDoc(collection(db, 'brands'), { ...data, createdAt: serverTimestamp() });
+//         brandId = ref.id;
+//       }
 
-      // Update products with brandId
-      const updatePromises = allProducts.map(p => {
-        const isSelected = selectedProductIds.includes(p.id);
-        const currentBrandId = p.brandId;
+//       // Update products with brandId
+//       const updatePromises = allProducts.map(p => {
+//         const isSelected = selectedProductIds.includes(p.id);
+//         const currentBrandId = p.brandId;
 
-        if (isSelected && currentBrandId !== brandId) {
-          return updateDoc(doc(db, 'products', p.id), { brandId: brandId });
-        }
-        if (!isSelected && currentBrandId === brandId) {
-          return updateDoc(doc(db, 'products', p.id), { brandId: null });
-        }
-        return Promise.resolve();
-      });
+//         if (isSelected && currentBrandId !== brandId) {
+//           return updateDoc(doc(db, 'products', p.id), { brandId: brandId });
+//         }
+//         if (!isSelected && currentBrandId === brandId) {
+//           return updateDoc(doc(db, 'products', p.id), { brandId: null });
+//         }
+//         return Promise.resolve();
+//       });
 
-      await Promise.all(updatePromises);
-      await fetchProducts();
+//       await Promise.all(updatePromises);
+//       await fetchProducts();
 
-      setModalVisible(false);
-      fetchBrands();
-      resetForm();
-    } catch (error) { Alert.alert(t('error'), t('failedToSave')); console.error(error); }
-    finally { setUploading(false); }
-  };
+//       setModalVisible(false);
+//       fetchBrands();
+//       resetForm();
+//     } catch (error) { Alert.alert(t('error'), t('failedToSave')); console.error(error); }
+//     finally { setUploading(false); }
+//   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(t('delete'), t('areYouSure'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'), style: 'destructive', onPress: async () => {
-          await deleteDoc(doc(db, 'brands', id));
-          fetchBrands();
-        }
-      }
-    ]);
-  };
+//   const handleDelete = async (id: string) => {
+//     Alert.alert(t('delete'), t('areYouSure'), [
+//       { text: t('cancel'), style: 'cancel' },
+//       {
+//         text: t('delete'), style: 'destructive', onPress: async () => {
+//           await deleteDoc(doc(db, 'brands', id));
+//           fetchBrands();
+//         }
+//       }
+//     ]);
+//   };
 
-  const resetForm = () => {
-    setEditingBrand(null); setNameFr(''); setNameAr(''); setImage(''); setIsActive(true); setSelectedProductIds([]);
-  };
+//   const resetForm = () => {
+//     setEditingBrand(null); setNameFr(''); setNameAr(''); setImage(''); setIsActive(true); setSelectedProductIds([]);
+//   };
 
-  const openEdit = (b: any) => {
-    setEditingBrand(b);
-    setNameFr(b.name?.fr || (typeof b.name === 'string' ? b.name : ''));
-    setNameAr(b.name?.['ar-tn'] || '');
-    setImage(b.image || '');
-    setIsActive(b.isActive !== false);
+//   const openEdit = (b: any) => {
+//     setEditingBrand(b);
+//     setNameFr(b.name?.fr || (typeof b.name === 'string' ? b.name : ''));
+//     setNameAr(b.name?.['ar-tn'] || '');
+//     setImage(b.image || '');
+//     setIsActive(b.isActive !== false);
 
-    // Pre-select products that have this brandId
-    const associatedProducts = allProducts.filter(p => p.brandId === b.id).map(p => p.id);
-    setSelectedProductIds(associatedProducts);
+//     // Pre-select products that have this brandId
+//     const associatedProducts = allProducts.filter(p => p.brandId === b.id).map(p => p.id);
+//     setSelectedProductIds(associatedProducts);
 
-    setModalVisible(true);
-  };
+//     setModalVisible(true);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('brands').toUpperCase()}</Text>
-        <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Plus size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={brands}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noBrandsFound')}</Text></View>}
-        renderItem={({ item }) => (
-          <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, opacity: item.isActive === false ? 0.6 : 1 }]}>
-            <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', opacity: item.isActive === false ? 0.5 : 1 }} />
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{getSafeString(item.name)}</Text>
-              {item.name?.['ar-tn'] && <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2, writingDirection: 'rtl' }}>{item.name['ar-tn']}</Text>}
-            </View>
-            <View style={{ gap: 12, flexDirection: 'row' }}>
-              <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
-            <View style={{
-              height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
-            }}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10, textTransform: 'uppercase' }}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 10, left: 85, right: 85 }]}>
-                {editingBrand ? t('editBrand').toUpperCase() : t('newBrand').toUpperCase()}
-              </Text>
-              <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10, textTransform: 'uppercase' }}>{t('save')}</Text>}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-          <FlatList
-            data={[{ type: 'form' }]}
-            keyExtractor={(item) => item.type}
-            contentContainerStyle={{ padding: 25 }}
-            renderItem={() => (
-              <>
-                <TouchableOpacity onPress={async () => {
-                  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
-                  if (!r.canceled) setImage(r.assets[0].uri);
-                }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
-                  {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
-                    <View style={{ alignItems: 'center', gap: 10 }}>
-                      <Camera size={32} color={appColors.textMuted} />
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUploadLogo')}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('brands').toUpperCase()}</Text>
+//         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <Plus size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//       </View>
+//       <FlatList
+//         data={brands}
+//         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+//         ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noBrandsFound')}</Text></View>}
+//         renderItem={({ item }) => (
+//           <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, opacity: item.isActive === false ? 0.6 : 1 }]}>
+//             <Image source={{ uri: item.image }} style={{ width: 60, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', opacity: item.isActive === false ? 0.5 : 1 }} />
+//             <View style={{ flex: 1, marginLeft: 16 }}>
+//               <Text style={{ fontWeight: '900', fontSize: 14, color: appColors.foreground }}>{getSafeString(item.name)}</Text>
+//               {item.name?.['ar-tn'] && <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2, writingDirection: 'rtl' }}>{item.name['ar-tn']}</Text>}
+//             </View>
+//             <View style={{ gap: 12, flexDirection: 'row' }}>
+//               <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
+//               <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
+//             </View>
+//           </View>
+//         )}
+//       />
+//       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
+//           <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
+//             <View style={{
+//               height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
+//             }}>
+//               <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10, textTransform: 'uppercase' }}>{t('cancel')}</Text>
+//               </TouchableOpacity>
+//               <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 10, left: 85, right: 85 }]}>
+//                 {editingBrand ? t('editBrand').toUpperCase() : t('newBrand').toUpperCase()}
+//               </Text>
+//               <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10, textTransform: 'uppercase' }}>{t('save')}</Text>}
+//               </TouchableOpacity>
+//             </View>
+//           </SafeAreaView>
+//           <FlatList
+//             data={[{ type: 'form' }]}
+//             keyExtractor={(item) => item.type}
+//             contentContainerStyle={{ padding: 25 }}
+//             renderItem={() => (
+//               <>
+//                 <TouchableOpacity onPress={async () => {
+//                   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
+//                   if (!r.canceled) setImage(r.assets[0].uri);
+//                 }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
+//                   {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
+//                     <View style={{ alignItems: 'center', gap: 10 }}>
+//                       <Camera size={32} color={appColors.textMuted} />
+//                       <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUploadLogo')}</Text>
+//                     </View>
+//                   )}
+//                 </TouchableOpacity>
 
-                <Text style={[styles.inputLabel, { color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }]}>{t('brand').toUpperCase()} (FR)</Text>
-                <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={nameFr} onChangeText={setNameFr} placeholder={t('brand') + ' (FR)'} placeholderTextColor="#666" />
+//                 <Text style={[styles.inputLabel, { color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }]}>{t('brand').toUpperCase()} (FR)</Text>
+//                 <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={nameFr} onChangeText={setNameFr} placeholder={t('brand') + ' (FR)'} placeholderTextColor="#666" />
 
-                <Text style={[styles.inputLabel, { color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }]}>{t('brand').toUpperCase()} (AR)</Text>
-                <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={nameAr} onChangeText={setNameAr} placeholder={t('brand') + ' (AR)'} placeholderTextColor="#666" />
+//                 <Text style={[styles.inputLabel, { color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }]}>{t('brand').toUpperCase()} (AR)</Text>
+//                 <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={nameAr} onChangeText={setNameAr} placeholder={t('brand') + ' (AR)'} placeholderTextColor="#666" />
 
-                {/* Visibility Toggle */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 20, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', padding: 15, borderRadius: 12 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: appColors.foreground, textTransform: 'lowercase', letterSpacing: 0.5 }}>{t('visible')}</Text>
-                  <Switch
-                    value={isActive}
-                    onValueChange={setIsActive}
-                    trackColor={{ false: theme === 'dark' ? '#3A3A3A' : '#D1D1D6', true: theme === 'dark' ? '#34C759' : '#34C759' }}
-                    thumbColor={isActive ? '#FFFFFF' : '#FFFFFF'}
-                    ios_backgroundColor={theme === 'dark' ? '#3A3A3A' : '#D1D1D6'}
-                  />
-                </View>
+//                 {/* Visibility Toggle */}
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 20, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', padding: 15, borderRadius: 12 }}>
+//                   <Text style={{ fontSize: 13, fontWeight: '700', color: appColors.foreground, textTransform: 'lowercase', letterSpacing: 0.5 }}>{t('visible')}</Text>
+//                   <Switch
+//                     value={isActive}
+//                     onValueChange={setIsActive}
+//                     trackColor={{ false: theme === 'dark' ? '#3A3A3A' : '#D1D1D6', true: theme === 'dark' ? '#34C759' : '#34C759' }}
+//                     thumbColor={isActive ? '#FFFFFF' : '#FFFFFF'}
+//                     ios_backgroundColor={theme === 'dark' ? '#3A3A3A' : '#D1D1D6'}
+//                   />
+//                 </View>
 
-                {/* Product Selection */}
-                <View style={{ marginTop: 20 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <Text style={{ color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>{t('selectProducts')}</Text>
-                    <View style={{ backgroundColor: appColors.foreground, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                      <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 10, fontWeight: '900' }}>{selectedProductIds.length}</Text>
-                    </View>
-                  </View>
+//                 {/* Product Selection */}
+//                 <View style={{ marginTop: 20 }}>
+//                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+//                     <Text style={{ color: appColors.foreground, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>{t('selectProducts')}</Text>
+//                     <View style={{ backgroundColor: appColors.foreground, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+//                       <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 10, fontWeight: '900' }}>{selectedProductIds.length}</Text>
+//                     </View>
+//                   </View>
 
-                  {/* Search Bar */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F5F5F5', borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, height: 44 }}>
-                    <Search size={16} color={appColors.textMuted} />
-                    <TextInput
-                      style={{ flex: 1, marginLeft: 8, color: appColors.foreground, fontSize: 13 }}
-                      placeholder={t('searchProducts') + '...'}
-                      placeholderTextColor={appColors.textMuted}
-                      value={productSearch}
-                      onChangeText={setProductSearch}
-                    />
-                  </View>
+//                   {/* Search Bar */}
+//                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#17171F' : '#F5F5F5', borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, height: 44 }}>
+//                     <Search size={16} color={appColors.textMuted} />
+//                     <TextInput
+//                       style={{ flex: 1, marginLeft: 8, color: appColors.foreground, fontSize: 13 }}
+//                       placeholder={t('searchProducts') + '...'}
+//                       placeholderTextColor={appColors.textMuted}
+//                       value={productSearch}
+//                       onChangeText={setProductSearch}
+//                     />
+//                   </View>
 
-                  {/* Products List */}
-                  <View style={{ maxHeight: 400 }}>
-                    {allProducts
-                      .filter(item => !productSearch || getSafeString(item.name).toLowerCase().includes(productSearch.toLowerCase()))
-                      .map((item) => {
-                        const isSelected = selectedProductIds.includes(item.id);
-                        return (
-                          <TouchableOpacity
-                            key={item.id}
-                            onPress={() => {
-                              if (isSelected) setSelectedProductIds(prev => prev.filter(id => id !== item.id));
-                              else setSelectedProductIds(prev => [...prev, item.id]);
-                            }}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              padding: 12,
-                              marginBottom: 8,
-                              borderRadius: 12,
-                              backgroundColor: isSelected ? (theme === 'dark' ? '#1A1A22' : '#F0F0F3') : (theme === 'dark' ? '#121218' : 'white'),
-                              borderWidth: isSelected ? 2 : 1,
-                              borderColor: isSelected ? appColors.foreground : appColors.border
-                            }}
-                          >
-                            <Image source={{ uri: item.mainImage || item.image }} style={{ width: 50, height: 50, borderRadius: 10, marginRight: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
-                            <View style={{ flex: 1 }}>
-                              <Text numberOfLines={1} style={{ color: appColors.foreground, fontSize: 13, fontWeight: '700', marginBottom: 2 }}>{getSafeString(item.name)}</Text>
-                              <Text numberOfLines={1} style={{ color: appColors.textMuted, fontSize: 11, fontWeight: '600' }}>{item.price} TND</Text>
-                            </View>
-                            <View style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              borderWidth: 2,
-                              borderColor: isSelected ? appColors.foreground : appColors.border,
-                              backgroundColor: isSelected ? appColors.foreground : 'transparent',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                              {isSelected && <CheckCircle2 size={16} color={theme === 'dark' ? '#000' : '#FFF'} fill={theme === 'dark' ? '#000' : '#FFF'} />}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                  </View>
-                </View>
-              </>
-            )}
-          />
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//                   {/* Products List */}
+//                   <View style={{ maxHeight: 400 }}>
+//                     {allProducts
+//                       .filter(item => !productSearch || getSafeString(item.name).toLowerCase().includes(productSearch.toLowerCase()))
+//                       .map((item) => {
+//                         const isSelected = selectedProductIds.includes(item.id);
+//                         return (
+//                           <TouchableOpacity
+//                             key={item.id}
+//                             onPress={() => {
+//                               if (isSelected) setSelectedProductIds(prev => prev.filter(id => id !== item.id));
+//                               else setSelectedProductIds(prev => [...prev, item.id]);
+//                             }}
+//                             style={{
+//                               flexDirection: 'row',
+//                               alignItems: 'center',
+//                               padding: 12,
+//                               marginBottom: 8,
+//                               borderRadius: 12,
+//                               backgroundColor: isSelected ? (theme === 'dark' ? '#1A1A22' : '#F0F0F3') : (theme === 'dark' ? '#121218' : 'white'),
+//                               borderWidth: isSelected ? 2 : 1,
+//                               borderColor: isSelected ? appColors.foreground : appColors.border
+//                             }}
+//                           >
+//                             <Image source={{ uri: item.mainImage || item.image }} style={{ width: 50, height: 50, borderRadius: 10, marginRight: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
+//                             <View style={{ flex: 1 }}>
+//                               <Text numberOfLines={1} style={{ color: appColors.foreground, fontSize: 13, fontWeight: '700', marginBottom: 2 }}>{getSafeString(item.name)}</Text>
+//                               <Text numberOfLines={1} style={{ color: appColors.textMuted, fontSize: 11, fontWeight: '600' }}>{item.price} TND</Text>
+//                             </View>
+//                             <View style={{
+//                               width: 24,
+//                               height: 24,
+//                               borderRadius: 12,
+//                               borderWidth: 2,
+//                               borderColor: isSelected ? appColors.foreground : appColors.border,
+//                               backgroundColor: isSelected ? appColors.foreground : 'transparent',
+//                               alignItems: 'center',
+//                               justifyContent: 'center'
+//                             }}>
+//                               {isSelected && <CheckCircle2 size={16} color={theme === 'dark' ? '#000' : '#FFF'} fill={theme === 'dark' ? '#000' : '#FFF'} />}
+//                             </View>
+//                           </TouchableOpacity>
+//                         );
+//                       })}
+//                   </View>
+//                 </View>
+//               </>
+//             )}
+//           />
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN ADS ---
-function AdminAdsScreen({ onBack, t, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
+// function AdminAdsScreen({ onBack, t, profileData }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const isBrandOwner = profileData?.role === 'brand_owner';
+//   const myBrandId = profileData?.brandId;
 
-  const [ads, setAds] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingAd, setEditingAd] = useState<any>(null);
-  const [titleFr, setTitleFr] = useState('');
-  const [titleAr, setTitleAr] = useState('');
-  const [descFr, setDescFr] = useState('');
-  const [descAr, setDescAr] = useState('');
-  const [type, setType] = useState('image');
-  const [url, setUrl] = useState('');
-  const [targetType, setTargetType] = useState('none');
-  const [targetId, setTargetId] = useState('');
-  const [uploading, setUploading] = useState(false);
+//   const [ads, setAds] = useState<any[]>([]);
+//   const [products, setProducts] = useState<any[]>([]);
+//   const [categories, setCategories] = useState<any[]>([]);
+//   const [modalVisible, setModalVisible] = useState(false);
+//   const [editingAd, setEditingAd] = useState<any>(null);
+//   const [titleFr, setTitleFr] = useState('');
+//   const [titleAr, setTitleAr] = useState('');
+//   const [descFr, setDescFr] = useState('');
+//   const [descAr, setDescAr] = useState('');
+//   const [type, setType] = useState('image');
+//   const [url, setUrl] = useState('');
+//   const [targetType, setTargetType] = useState('none');
+//   const [targetId, setTargetId] = useState('');
+//   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    fetchAds();
-    fetchTargets();
-  }, []);
+//   useEffect(() => {
+//     fetchAds();
+//     fetchTargets();
+//   }, []);
 
-  const fetchAds = async () => {
-    const snap = await getDocs(collection(db, 'ads'));
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Brand owners only see their own ads
-    setAds(isBrandOwner && myBrandId ? all.filter((a: any) => a.brandId === myBrandId) : all);
-  };
+//   const fetchAds = async () => {
+//     const snap = await getDocs(collection(db, 'ads'));
+//     const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//     // Brand owners only see their own ads
+//     setAds(isBrandOwner && myBrandId ? all.filter((a: any) => a.brandId === myBrandId) : all);
+//   };
 
-  const fetchTargets = async () => {
-    const pSnap = await getDocs(collection(db, 'products'));
-    const allProducts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    setProducts(isBrandOwner && myBrandId ? allProducts.filter((p: any) => p.brandId === myBrandId) : allProducts);
-    const cSnap = await getDocs(collection(db, 'categories'));
-    setCategories(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
+//   const fetchTargets = async () => {
+//     const pSnap = await getDocs(collection(db, 'products'));
+//     const allProducts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+//     setProducts(isBrandOwner && myBrandId ? allProducts.filter((p: any) => p.brandId === myBrandId) : allProducts);
+//     const cSnap = await getDocs(collection(db, 'categories'));
+//     setCategories(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+//   };
 
-  const handleSave = async () => {
-    if (!titleFr || !url) return Alert.alert(t('error'), t('mediaRequired'));
-    setUploading(true);
-    try {
-      const mediaUrl = url.startsWith('http') ? url : await uploadToCloudinary(url);
-      const data: any = {
-        title: { fr: titleFr, "ar-tn": titleAr },
-        description: { fr: descFr, "ar-tn": descAr },
-        type,
-        url: mediaUrl,
-        targetType,
-        targetId,
-        updatedAt: serverTimestamp()
-      };
-      // Tag with brandId so brand owners can only see their own ads
-      if (isBrandOwner && myBrandId) data.brandId = myBrandId;
-      if (editingAd) {
-        await updateDoc(doc(db, 'ads', editingAd.id), data);
-      } else {
-        await addDoc(collection(db, 'ads'), { ...data, createdAt: serverTimestamp() });
-      }
-      setModalVisible(false);
-      fetchAds();
-      resetForm();
-    } catch (error) { Alert.alert(t('error'), t('failedToSave')); }
-    finally { setUploading(false); }
-  };
+//   const handleSave = async () => {
+//     if (!titleFr || !url) return Alert.alert(t('error'), t('mediaRequired'));
+//     setUploading(true);
+//     try {
+//       const mediaUrl = url.startsWith('http') ? url : await uploadToCloudinary(url);
+//       const data: any = {
+//         title: { fr: titleFr, "ar-tn": titleAr },
+//         description: { fr: descFr, "ar-tn": descAr },
+//         type,
+//         url: mediaUrl,
+//         targetType,
+//         targetId,
+//         updatedAt: serverTimestamp()
+//       };
+//       // Tag with brandId so brand owners can only see their own ads
+//       if (isBrandOwner && myBrandId) data.brandId = myBrandId;
+//       if (editingAd) {
+//         await updateDoc(doc(db, 'ads', editingAd.id), data);
+//       } else {
+//         await addDoc(collection(db, 'ads'), { ...data, createdAt: serverTimestamp() });
+//       }
+//       setModalVisible(false);
+//       fetchAds();
+//       resetForm();
+//     } catch (error) { Alert.alert(t('error'), t('failedToSave')); }
+//     finally { setUploading(false); }
+//   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(t('delete'), t('areYouSure'), [{ text: t('cancel') }, { text: t('delete'), style: 'destructive', onPress: async () => { await deleteDoc(doc(db, 'ads', id)); fetchAds(); } }]);
-  };
+//   const handleDelete = async (id: string) => {
+//     Alert.alert(t('delete'), t('areYouSure'), [{ text: t('cancel') }, { text: t('delete'), style: 'destructive', onPress: async () => { await deleteDoc(doc(db, 'ads', id)); fetchAds(); } }]);
+//   };
 
-  const resetForm = () => {
-    setEditingAd(null); setTitleFr(''); setTitleAr(''); setDescFr(''); setDescAr(''); setType('image'); setUrl(''); setTargetType('none'); setTargetId('');
-  };
+//   const resetForm = () => {
+//     setEditingAd(null); setTitleFr(''); setTitleAr(''); setDescFr(''); setDescAr(''); setType('image'); setUrl(''); setTargetType('none'); setTargetId('');
+//   };
 
-  const openEdit = (ad: any) => {
-    setEditingAd(ad);
-    setTitleFr(ad.title?.fr || (typeof ad.title === 'string' ? ad.title : ''));
-    setTitleAr(ad.title?.['ar-tn'] || '');
-    setDescFr(ad.description?.fr || '');
-    setDescAr(ad.description?.['ar-tn'] || '');
-    setType(ad.type || 'image');
-    setUrl(ad.url || '');
-    setTargetType(ad.targetType || (ad.link ? 'category' : 'none'));
-    setTargetId(ad.targetId || ad.link || '');
-    setModalVisible(true);
-  };
+//   const openEdit = (ad: any) => {
+//     setEditingAd(ad);
+//     setTitleFr(ad.title?.fr || (typeof ad.title === 'string' ? ad.title : ''));
+//     setTitleAr(ad.title?.['ar-tn'] || '');
+//     setDescFr(ad.description?.fr || '');
+//     setDescAr(ad.description?.['ar-tn'] || '');
+//     setType(ad.type || 'image');
+//     setUrl(ad.url || '');
+//     setTargetType(ad.targetType || (ad.link ? 'category' : 'none'));
+//     setTargetId(ad.targetId || ad.link || '');
+//     setModalVisible(true);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('adsCampaigns').toUpperCase()}</Text>
-        <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <Plus size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={ads}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noCampaigns')}</Text></View>}
-        renderItem={({ item }) => (
-          <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <View style={{ width: 100, height: 70, borderRadius: 12, backgroundColor: '#000', overflow: 'hidden', borderWidth: 1, borderColor: appColors.border }}>
-              {item.type === 'video' ? <UniversalVideoPlayer source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} isMuted shouldPlay isLooping resizeMode="cover" /> : <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} />}
-            </View>
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground }} numberOfLines={2}>{getSafeString(item.title)}</Text>
-              <View style={{ flexDirection: 'row', marginTop: 6 }}>
-                <View style={{ backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted }}>{item.type.toUpperCase()}</Text>
-                </View>
-              </View>
-            </View>
-            <View style={{ gap: 12, flexDirection: 'row' }}>
-              <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
-            <View style={{
-              height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
-            }}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingAd ? t('editAd').toUpperCase() : t('newAd').toUpperCase()}</Text>
-              <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-          <ScrollView contentContainerStyle={{ padding: 25 }}>
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('mediaType').toUpperCase()}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 25 }}>
-              <TouchableOpacity onPress={() => setType('image')} style={{ flex: 1, padding: 15, backgroundColor: type === 'image' ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 12, borderWidth: 1, borderColor: type === 'image' ? appColors.foreground : appColors.border, alignItems: 'center' }}>
-                <Text style={{ color: type === 'image' ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 12 }}>{t('images').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setType('video')} style={{ flex: 1, padding: 15, backgroundColor: type === 'video' ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 12, borderWidth: 1, borderColor: type === 'video' ? appColors.foreground : appColors.border, alignItems: 'center' }}>
-                <Text style={{ color: type === 'video' ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 12 }}>{t('video').toUpperCase()}</Text>
-              </TouchableOpacity>
-            </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('adsCampaigns').toUpperCase()}</Text>
+//         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <Plus size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//       </View>
+//       <FlatList
+//         data={ads}
+//         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+//         ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>{t('noCampaigns')}</Text></View>}
+//         renderItem={({ item }) => (
+//           <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
+//             <View style={{ width: 100, height: 70, borderRadius: 12, backgroundColor: '#000', overflow: 'hidden', borderWidth: 1, borderColor: appColors.border }}>
+//               {item.type === 'video' ? <UniversalVideoPlayer source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} isMuted shouldPlay isLooping resizeMode="cover" /> : <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} />}
+//             </View>
+//             <View style={{ flex: 1, marginLeft: 16 }}>
+//               <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground }} numberOfLines={2}>{getSafeString(item.title)}</Text>
+//               <View style={{ flexDirection: 'row', marginTop: 6 }}>
+//                 <View style={{ backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }}>
+//                   <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted }}>{item.type.toUpperCase()}</Text>
+//                 </View>
+//               </View>
+//             </View>
+//             <View style={{ gap: 12, flexDirection: 'row' }}>
+//               <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
+//               <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
+//             </View>
+//           </View>
+//         )}
+//       />
+//       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
+//           <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
+//             <View style={{
+//               height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
+//             }}>
+//               <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//               <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingAd ? t('editAd').toUpperCase() : t('newAd').toUpperCase()}</Text>
+//               <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
+//               </TouchableOpacity>
+//             </View>
+//           </SafeAreaView>
+//           <ScrollView contentContainerStyle={{ padding: 25 }}>
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('mediaType').toUpperCase()}</Text>
+//             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 25 }}>
+//               <TouchableOpacity onPress={() => setType('image')} style={{ flex: 1, padding: 15, backgroundColor: type === 'image' ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 12, borderWidth: 1, borderColor: type === 'image' ? appColors.foreground : appColors.border, alignItems: 'center' }}>
+//                 <Text style={{ color: type === 'image' ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 12 }}>{t('images').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//               <TouchableOpacity onPress={() => setType('video')} style={{ flex: 1, padding: 15, backgroundColor: type === 'video' ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 12, borderWidth: 1, borderColor: type === 'video' ? appColors.foreground : appColors.border, alignItems: 'center' }}>
+//                 <Text style={{ color: type === 'video' ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 12 }}>{t('video').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//             </View>
 
-            <TouchableOpacity onPress={async () => {
-              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: type === 'video' ? ['videos'] : ['images'], allowsEditing: true, quality: 0.5 });
-              if (!r.canceled) setUrl(r.assets[0].uri);
-            }} style={{ width: '100%', height: 200, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: url ? 'solid' : 'dashed' }}>
-              {url ? (type === 'video' ? <UniversalVideoPlayer source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} isMuted shouldPlay resizeMode="cover" /> : <Image source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} />) : (
-                <View style={{ alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA', alignItems: 'center', justifyContent: 'center' }}>
-                    <Camera size={24} color={appColors.textMuted} />
-                  </View>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t(type === 'image' ? 'uploadImage' : 'uploadVideo').toUpperCase()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+//             <TouchableOpacity onPress={async () => {
+//               const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: type === 'video' ? ['videos'] : ['images'], allowsEditing: true, quality: 0.5 });
+//               if (!r.canceled) setUrl(r.assets[0].uri);
+//             }} style={{ width: '100%', height: 200, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: url ? 'solid' : 'dashed' }}>
+//               {url ? (type === 'video' ? <UniversalVideoPlayer source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} isMuted shouldPlay resizeMode="cover" /> : <Image source={{ uri: url }} style={{ width: '100%', height: '100%', borderRadius: 20 }} />) : (
+//                 <View style={{ alignItems: 'center', gap: 10 }}>
+//                   <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#17171F' : '#FAFAFA', alignItems: 'center', justifyContent: 'center' }}>
+//                     <Camera size={24} color={appColors.textMuted} />
+//                   </View>
+//                   <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t(type === 'image' ? 'uploadImage' : 'uploadVideo').toUpperCase()}</Text>
+//                 </View>
+//               )}
+//             </TouchableOpacity>
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (FR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={titleFr} onChangeText={setTitleFr} placeholder={t('campaignTitle') + ' (FR)'} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (FR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={titleFr} onChangeText={setTitleFr} placeholder={t('campaignTitle') + ' (FR)'} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (AR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={titleAr} onChangeText={setTitleAr} placeholder={t('campaignTitle') + ' (AR)'} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (AR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={titleAr} onChangeText={setTitleAr} placeholder={t('campaignTitle') + ' (AR)'} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('description').toUpperCase()} (FR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, height: 80, paddingVertical: 12 }]} value={descFr} onChangeText={setDescFr} placeholder={t('description') + '...'} multiline placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('description').toUpperCase()} (FR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, height: 80, paddingVertical: 12 }]} value={descFr} onChangeText={setDescFr} placeholder={t('description') + '...'} multiline placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('description').toUpperCase()} (AR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, height: 80, paddingVertical: 12, textAlign: 'right' }]} value={descAr} onChangeText={setDescAr} placeholder={t('description') + '...'} multiline placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('description').toUpperCase()} (AR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, height: 80, paddingVertical: 12, textAlign: 'right' }]} value={descAr} onChangeText={setDescAr} placeholder={t('description') + '...'} multiline placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('targetAction').toUpperCase()}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-              {['none', 'product', 'category'].map(act => (
-                <TouchableOpacity key={act} onPress={() => setTargetType(act)} style={{ flex: 1, padding: 10, backgroundColor: targetType === act ? appColors.foreground : (theme === 'dark' ? '#171720' : 'white'), borderRadius: 10, borderWidth: 1, borderColor: targetType === act ? appColors.foreground : appColors.border, alignItems: 'center' }}>
-                  <Text style={{ color: targetType === act ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 10 }}>{t('target' + act.charAt(0).toUpperCase() + act.slice(1)).toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('targetAction').toUpperCase()}</Text>
+//             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+//               {['none', 'product', 'category'].map(act => (
+//                 <TouchableOpacity key={act} onPress={() => setTargetType(act)} style={{ flex: 1, padding: 10, backgroundColor: targetType === act ? appColors.foreground : (theme === 'dark' ? '#171720' : 'white'), borderRadius: 10, borderWidth: 1, borderColor: targetType === act ? appColors.foreground : appColors.border, alignItems: 'center' }}>
+//                   <Text style={{ color: targetType === act ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: 'bold', fontSize: 10 }}>{t('target' + act.charAt(0).toUpperCase() + act.slice(1)).toUpperCase()}</Text>
+//                 </TouchableOpacity>
+//               ))}
+//             </View>
 
-            {targetType === 'product' && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 25 }}>
-                {products.map(p => (
-                  <TouchableOpacity key={p.id} onPress={() => setTargetId(p.id)} style={{ width: 100, marginRight: 10, padding: 10, backgroundColor: targetId === p.id ? (theme === 'dark' ? '#000' : '#F2F2F7') : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 15, borderWidth: 1, borderColor: targetId === p.id ? appColors.foreground : appColors.border }}>
-                    <Image source={{ uri: p.mainImage }} style={{ width: '100%', height: 100, borderRadius: 10, marginBottom: 5 }} />
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: appColors.foreground }} numberOfLines={1}>{getName(p.name)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
+//             {targetType === 'product' && (
+//               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 25 }}>
+//                 {products.map(p => (
+//                   <TouchableOpacity key={p.id} onPress={() => setTargetId(p.id)} style={{ width: 100, marginRight: 10, padding: 10, backgroundColor: targetId === p.id ? (theme === 'dark' ? '#000' : '#F2F2F7') : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 15, borderWidth: 1, borderColor: targetId === p.id ? appColors.foreground : appColors.border }}>
+//                     <Image source={{ uri: p.mainImage }} style={{ width: '100%', height: 100, borderRadius: 10, marginBottom: 5 }} />
+//                     <Text style={{ fontSize: 9, fontWeight: '700', color: appColors.foreground }} numberOfLines={1}>{getName(p.name)}</Text>
+//                   </TouchableOpacity>
+//                 ))}
+//               </ScrollView>
+//             )}
 
-            {targetType === 'category' && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 25 }}>
-                {categories.map(c => (
-                  <TouchableOpacity key={c.id} onPress={() => setTargetId(c.id)} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: targetId === c.id ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: targetId === c.id ? appColors.foreground : appColors.border }}>
-                    <Text style={{ color: targetId === c.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600', fontSize: 12 }}>{translateCategory(getName(c.name))}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//             {targetType === 'category' && (
+//               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 25 }}>
+//                 {categories.map(c => (
+//                   <TouchableOpacity key={c.id} onPress={() => setTargetId(c.id)} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: targetId === c.id ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'), borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: targetId === c.id ? appColors.foreground : appColors.border }}>
+//                     <Text style={{ color: targetId === c.id ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '600', fontSize: 12 }}>{translateCategory(getName(c.name))}</Text>
+//                   </TouchableOpacity>
+//                 ))}
+//               </ScrollView>
+//             )}
+//           </ScrollView>
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN BANNERS ---
-function AdminBannersScreen({ onBack, t, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
+// function AdminBannersScreen({ onBack, t, profileData }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const isBrandOwner = profileData?.role === 'brand_owner';
+//   const myBrandId = profileData?.brandId;
 
-  const [banners, setBanners] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingBanner, setEditingBanner] = useState<any>(null);
-  const [titleFr, setTitleFr] = useState('');
-  const [titleAr, setTitleAr] = useState('');
-  const [subFr, setSubFr] = useState('');
-  const [subAr, setSubAr] = useState('');
-  const [image, setImage] = useState('');
-  const [uploading, setUploading] = useState(false);
+//   const [banners, setBanners] = useState<any[]>([]);
+//   const [modalVisible, setModalVisible] = useState(false);
+//   const [editingBanner, setEditingBanner] = useState<any>(null);
+//   const [titleFr, setTitleFr] = useState('');
+//   const [titleAr, setTitleAr] = useState('');
+//   const [subFr, setSubFr] = useState('');
+//   const [subAr, setSubAr] = useState('');
+//   const [image, setImage] = useState('');
+//   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { fetchBanners(); }, []);
-  const fetchBanners = async () => {
-    const snap = await getDocs(collection(db, 'banners'));
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
-  };
+//   useEffect(() => { fetchBanners(); }, []);
+//   const fetchBanners = async () => {
+//     const snap = await getDocs(collection(db, 'banners'));
+//     const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//     setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
+//   };
 
-  const handleSave = async () => {
-    if (!titleFr || !image) return Alert.alert(t('error'), t('missingFields'));
-    setUploading(true);
-    try {
-      const imgUrl = await uploadToCloudinary(image);
-      const data = {
-        title: { fr: titleFr, "ar-tn": titleAr },
-        subtitle: { fr: subFr, "ar-tn": subAr },
-        imageUrl: imgUrl,
-        updatedAt: serverTimestamp()
-      };
-      if (editingBanner) await updateDoc(doc(db, 'banners', editingBanner.id), data);
-      else await addDoc(collection(db, 'banners'), { ...data, createdAt: serverTimestamp() });
+//   const handleSave = async () => {
+//     if (!titleFr || !image) return Alert.alert(t('error'), t('missingFields'));
+//     setUploading(true);
+//     try {
+//       const imgUrl = await uploadToCloudinary(image);
+//       const data = {
+//         title: { fr: titleFr, "ar-tn": titleAr },
+//         subtitle: { fr: subFr, "ar-tn": subAr },
+//         imageUrl: imgUrl,
+//         updatedAt: serverTimestamp()
+//       };
+//       if (editingBanner) await updateDoc(doc(db, 'banners', editingBanner.id), data);
+//       else await addDoc(collection(db, 'banners'), { ...data, createdAt: serverTimestamp() });
 
-      setModalVisible(false); fetchBanners(); resetForm();
-    } catch (e) { Alert.alert(t('error'), t('failedToSave')); }
-    finally { setUploading(false); }
-  };
+//       setModalVisible(false); fetchBanners(); resetForm();
+//     } catch (e) { Alert.alert(t('error'), t('failedToSave')); }
+//     finally { setUploading(false); }
+//   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(t('delete'), t('areYouSure'), [{ text: t('cancel') }, { text: t('delete'), style: 'destructive', onPress: async () => { await deleteDoc(doc(db, 'banners', id)); fetchBanners(); } }]);
-  };
+//   const handleDelete = async (id: string) => {
+//     Alert.alert(t('delete'), t('areYouSure'), [{ text: t('cancel') }, { text: t('delete'), style: 'destructive', onPress: async () => { await deleteDoc(doc(db, 'banners', id)); fetchBanners(); } }]);
+//   };
 
-  const resetForm = () => {
-    setEditingBanner(null); setTitleFr(''); setTitleAr(''); setSubFr(''); setSubAr(''); setImage('');
-  };
+//   const resetForm = () => {
+//     setEditingBanner(null); setTitleFr(''); setTitleAr(''); setSubFr(''); setSubAr(''); setImage('');
+//   };
 
-  const openEdit = (b: any) => {
-    setEditingBanner(b);
-    setTitleFr(b.title?.fr || (typeof b.title === 'string' ? b.title : ''));
-    setTitleAr(b.title?.['ar-tn'] || '');
-    setSubFr(b.subtitle?.fr || (typeof b.subtitle === 'string' ? b.subtitle : ''));
-    setSubAr(b.subtitle?.['ar-tn'] || '');
-    setImage(b.imageUrl || '');
-    setModalVisible(true);
-  };
+//   const openEdit = (b: any) => {
+//     setEditingBanner(b);
+//     setTitleFr(b.title?.fr || (typeof b.title === 'string' ? b.title : ''));
+//     setTitleAr(b.title?.['ar-tn'] || '');
+//     setSubFr(b.subtitle?.fr || (typeof b.subtitle === 'string' ? b.subtitle : ''));
+//     setSubAr(b.subtitle?.['ar-tn'] || '');
+//     setImage(b.imageUrl || '');
+//     setModalVisible(true);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><ChevronLeft size={20} color={appColors.foreground} /></TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>BANNERS</Text>
-        <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}><Plus size={20} color={appColors.foreground} /></TouchableOpacity>
-      </View>
-      <FlatList
-        data={banners}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>No banners found</Text></View>}
-        renderItem={({ item }) => (
-          <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-            <Image source={{ uri: item.imageUrl }} style={{ width: 100, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground }} numberOfLines={1}>{getSafeString(item.title)}</Text>
-              <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2 }} numberOfLines={1}>{getSafeString(item.subtitle)}</Text>
-            </View>
-            <View style={{ gap: 12, flexDirection: 'row' }}>
-              <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
-            <View style={{
-              height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
-            }}>
-              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingBanner ? t('editBanner').toUpperCase() : t('newBanner').toUpperCase()}</Text>
-              <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
-                {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-          <ScrollView contentContainerStyle={{ padding: 25 }}>
-            <TouchableOpacity onPress={async () => {
-              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
-              if (!r.canceled) setImage(r.assets[0].uri);
-            }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
-              {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
-                <View style={{ alignItems: 'center', gap: 10 }}>
-                  <Camera size={32} color={appColors.textMuted} />
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUpload').toUpperCase()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><ChevronLeft size={20} color={appColors.foreground} /></TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>BANNERS</Text>
+//         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}><Plus size={20} color={appColors.foreground} /></TouchableOpacity>
+//       </View>
+//       <FlatList
+//         data={banners}
+//         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+//         ListEmptyComponent={<View style={styles.centered}><Text style={{ color: appColors.textMuted }}>No banners found</Text></View>}
+//         renderItem={({ item }) => (
+//           <View style={[styles.productAdminCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
+//             <Image source={{ uri: item.imageUrl }} style={{ width: 100, height: 60, borderRadius: 12, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }} />
+//             <View style={{ flex: 1, marginLeft: 16 }}>
+//               <Text style={{ fontWeight: '800', fontSize: 13, color: appColors.foreground }} numberOfLines={1}>{getSafeString(item.title)}</Text>
+//               <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2 }} numberOfLines={1}>{getSafeString(item.subtitle)}</Text>
+//             </View>
+//             <View style={{ gap: 12, flexDirection: 'row' }}>
+//               <TouchableOpacity onPress={() => openEdit(item)} style={{ padding: 5 }}><Settings size={20} color={appColors.foreground} /></TouchableOpacity>
+//               <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 5 }}><Trash2 size={20} color={appColors.error} /></TouchableOpacity>
+//             </View>
+//           </View>
+//         )}
+//       />
+//       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
+//           <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#121218' : 'white' }}>
+//             <View style={{
+//               height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
+//             }}>
+//               <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//               <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{editingBanner ? t('editBanner').toUpperCase() : t('newBanner').toUpperCase()}</Text>
+//               <TouchableOpacity onPress={handleSave} disabled={uploading} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} style={{ zIndex: 10 }}>
+//                 {uploading ? <ActivityIndicator color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
+//               </TouchableOpacity>
+//             </View>
+//           </SafeAreaView>
+//           <ScrollView contentContainerStyle={{ padding: 25 }}>
+//             <TouchableOpacity onPress={async () => {
+//               const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.5 });
+//               if (!r.canceled) setImage(r.assets[0].uri);
+//             }} style={{ width: '100%', height: 180, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1, borderColor: appColors.border, borderStyle: image ? 'solid' : 'dashed' }}>
+//               {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%', borderRadius: 20 }} /> : (
+//                 <View style={{ alignItems: 'center', gap: 10 }}>
+//                   <Camera size={32} color={appColors.textMuted} />
+//                   <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.textMuted }}>{t('tapToUpload').toUpperCase()}</Text>
+//                 </View>
+//               )}
+//             </TouchableOpacity>
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (FR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={titleFr} onChangeText={setTitleFr} placeholder={t('campaignTitle')} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (FR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={titleFr} onChangeText={setTitleFr} placeholder={t('campaignTitle')} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (AR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={titleAr} onChangeText={setTitleAr} placeholder={t('campaignTitle') + ' (AR)'} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()} (AR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={titleAr} onChangeText={setTitleAr} placeholder={t('campaignTitle') + ' (AR)'} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignSubtitle').toUpperCase()} (FR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={subFr} onChangeText={setSubFr} placeholder={t('campaignSubtitle')} placeholderTextColor="#666" />
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignSubtitle').toUpperCase()} (FR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={subFr} onChangeText={setSubFr} placeholder={t('campaignSubtitle')} placeholderTextColor="#666" />
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignSubtitle').toUpperCase()} (AR)</Text>
-            <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={subAr} onChangeText={setSubAr} placeholder={t('campaignSubtitle') + ' (AR)'} placeholderTextColor="#666" />
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignSubtitle').toUpperCase()} (AR)</Text>
+//             <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textAlign: 'right' }]} value={subAr} onChangeText={setSubAr} placeholder={t('campaignSubtitle') + ' (AR)'} placeholderTextColor="#666" />
+//           </ScrollView>
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN COUPONS ---
-function AdminCouponsScreen({ onBack, t, language, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
+// function AdminCouponsScreen({ onBack, t, language, profileData }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const isBrandOwner = profileData?.role === 'brand_owner';
+//   const myBrandId = profileData?.brandId;
 
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [code, setCode] = useState('');
-  const [type, setType] = useState<'percentage' | 'fixed' | 'free_shipping' | 'bundle_price'>('percentage');
-  const [value, setValue] = useState('');
-  const [minOrder, setMinOrder] = useState('');
-  const [isActive, setIsActive] = useState(true);
+//   const [coupons, setCoupons] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [code, setCode] = useState('');
+//   const [type, setType] = useState<'percentage' | 'fixed' | 'free_shipping' | 'bundle_price'>('percentage');
+//   const [value, setValue] = useState('');
+//   const [minOrder, setMinOrder] = useState('');
+//   const [isActive, setIsActive] = useState(true);
 
-  // Bundle State
-  const [products, setProducts] = useState<any[]>([]);
-  const [targetProductId, setTargetProductId] = useState('');
-  const [tiers, setTiers] = useState<{ qty: number, price: number }[]>([{ qty: 1, price: 0 }]);
-  const [showProductSelector, setShowProductSelector] = useState(false);
+//   // Bundle State
+//   const [products, setProducts] = useState<any[]>([]);
+//   const [targetProductId, setTargetProductId] = useState('');
+//   const [tiers, setTiers] = useState<{ qty: number, price: number }[]>([{ qty: 1, price: 0 }]);
+//   const [showProductSelector, setShowProductSelector] = useState(false);
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'coupons'), (snap) => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Brand owners only see their own brand's coupons
-      setCoupons(isBrandOwner && myBrandId ? all.filter((c: any) => c.brandId === myBrandId) : all);
-      setLoading(false);
-    });
+//   useEffect(() => {
+//     const unsub = onSnapshot(collection(db, 'coupons'), (snap) => {
+//       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//       // Brand owners only see their own brand's coupons
+//       setCoupons(isBrandOwner && myBrandId ? all.filter((c: any) => c.brandId === myBrandId) : all);
+//       setLoading(false);
+//     });
 
-    // Fetch products for bundle selection (filtered by brand if brand_owner)
-    getDocs(collection(db, 'products')).then(snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
-    });
+//     // Fetch products for bundle selection (filtered by brand if brand_owner)
+//     getDocs(collection(db, 'products')).then(snap => {
+//       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//       setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
+//     });
 
-    return unsub;
-  }, []);
+//     return unsub;
+//   }, []);
 
-  const handleCreate = async () => {
-    if (!code) { Alert.alert(t('error'), t('codeRequired')); return; }
+//   const handleCreate = async () => {
+//     if (!code) { Alert.alert(t('error'), t('codeRequired')); return; }
 
-    let couponData: any = {
-      code: code.trim().toUpperCase(),
-      type,
-      isActive,
-      createdAt: serverTimestamp(),
-      minOrder: minOrder ? parseFloat(minOrder) : 0,
-    };
+//     let couponData: any = {
+//       code: code.trim().toUpperCase(),
+//       type,
+//       isActive,
+//       createdAt: serverTimestamp(),
+//       minOrder: minOrder ? parseFloat(minOrder) : 0,
+//     };
 
-    // Tag with brandId so brand owners can only see their own coupons
-    if (isBrandOwner && myBrandId) couponData.brandId = myBrandId;
+//     // Tag with brandId so brand owners can only see their own coupons
+//     if (isBrandOwner && myBrandId) couponData.brandId = myBrandId;
 
-    if (type === 'bundle_price') {
-      if (!targetProductId) { Alert.alert(t('error'), t('selectProduct')); return; }
-      const validTiers = tiers.filter(t => t.qty > 0 && t.price >= 0);
-      if (validTiers.length === 0) { Alert.alert(t('error'), t('addPriceTier')); return; }
-      couponData.targetProductId = targetProductId;
-      couponData.tiers = validTiers;
-      couponData.value = 0;
-    } else {
-      couponData.value = value ? parseFloat(value) : 0;
-    }
+//     if (type === 'bundle_price') {
+//       if (!targetProductId) { Alert.alert(t('error'), t('selectProduct')); return; }
+//       const validTiers = tiers.filter(t => t.qty > 0 && t.price >= 0);
+//       if (validTiers.length === 0) { Alert.alert(t('error'), t('addPriceTier')); return; }
+//       couponData.targetProductId = targetProductId;
+//       couponData.tiers = validTiers;
+//       couponData.value = 0;
+//     } else {
+//       couponData.value = value ? parseFloat(value) : 0;
+//     }
 
-    try {
-      await addDoc(collection(db, 'coupons'), couponData);
-      setCode(''); setValue(''); setMinOrder('');
-      setTargetProductId(''); setTiers([{ qty: 1, price: 0 }]);
-      Alert.alert(t('successTitle'), t('couponCreated'));
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
+//     try {
+//       await addDoc(collection(db, 'coupons'), couponData);
+//       setCode(''); setValue(''); setMinOrder('');
+//       setTargetProductId(''); setTiers([{ qty: 1, price: 0 }]);
+//       Alert.alert(t('successTitle'), t('couponCreated'));
+//     } catch (e: any) {
+//       Alert.alert('Error', e.message);
+//     }
+//   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'coupons', id));
-    } catch (e: any) { Alert.alert('Error', e.message); }
-  };
+//   const handleDelete = async (id: string) => {
+//     try {
+//       await deleteDoc(doc(db, 'coupons', id));
+//     } catch (e: any) { Alert.alert('Error', e.message); }
+//   };
 
-  const toggleActive = async (item: any) => {
-    try {
-      await updateDoc(doc(db, 'coupons', item.id), { isActive: !item.isActive });
-    } catch (e) { console.error(e); }
-  };
+//   const toggleActive = async (item: any) => {
+//     try {
+//       await updateDoc(doc(db, 'coupons', item.id), { isActive: !item.isActive });
+//     } catch (e) { console.error(e); }
+//   };
 
-  const addTier = () => setTiers([...tiers, { qty: 0, price: 0 }]);
-  const removeTier = (index: number) => setTiers(tiers.filter((_, i) => i !== index));
-  const updateTier = (index: number, field: 'qty' | 'price', val: string) => {
-    const newTiers = [...tiers];
-    newTiers[index][field] = parseFloat(val) || 0;
-    setTiers(newTiers);
-  };
+//   const addTier = () => setTiers([...tiers, { qty: 0, price: 0 }]);
+//   const removeTier = (index: number) => setTiers(tiers.filter((_, i) => i !== index));
+//   const updateTier = (index: number, field: 'qty' | 'price', val: string) => {
+//     const newTiers = [...tiers];
+//     newTiers[index][field] = parseFloat(val) || 0;
+//     setTiers(newTiers);
+//   };
 
-  const getProductName = (id: string) => {
-    const p = products.find(prod => prod.id === id);
-    if (!p) return 'Unknown Product';
+//   const getProductName = (id: string) => {
+//     const p = products.find(prod => prod.id === id);
+//     if (!p) return 'Unknown Product';
 
-    // Handle localized name object
-    if (typeof p.name === 'object' && p.name !== null) {
-      return p.name.en || p.name.fr || p.name['ar-tn'] || Object.values(p.name)[0] || 'Unknown Product';
-    }
+//     // Handle localized name object
+//     if (typeof p.name === 'object' && p.name !== null) {
+//       return p.name.en || p.name.fr || p.name['ar-tn'] || Object.values(p.name)[0] || 'Unknown Product';
+//     }
 
-    return p.name || 'Unknown Product';
-  };
+//     return p.name || 'Unknown Product';
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('coupons')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
-        <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
-          <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('createCoupon')}</Text>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('coupons')}</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
+//       <ScrollView contentContainerStyle={{ padding: 20 }}>
+//         <View style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border }]}>
+//           <Text style={[styles.settingsLabel, { color: appColors.foreground }]}>{t('createCoupon')}</Text>
 
-          <TextInput
-            style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textTransform: 'uppercase', marginBottom: 15 }]}
-            placeholder="CODE (e.g. SAVE20)"
-            placeholderTextColor="#666"
-            value={code}
-            onChangeText={setCode}
-            autoCapitalize="characters"
-          />
+//           <TextInput
+//             style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, textTransform: 'uppercase', marginBottom: 15 }]}
+//             placeholder="CODE (e.g. SAVE20)"
+//             placeholderTextColor="#666"
+//             value={code}
+//             onChangeText={setCode}
+//             autoCapitalize="characters"
+//           />
 
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, flexWrap: 'wrap' }}>
-            {['percentage', 'fixed', 'free_shipping', 'bundle_price'].map((tOpt) => (
-              <TouchableOpacity
-                key={tOpt}
-                onPress={() => setType(tOpt as any)}
-                style={[styles.catChip, { backgroundColor: type === tOpt ? appColors.foreground : (theme === 'dark' ? '#171720' : '#f0f0f0') }, type === tOpt && styles.activeCatChip]}
-              >
-                <Text style={[styles.catChipText, { color: type === tOpt ? (theme === 'dark' ? '#fff' : '#000') : appColors.foreground }, type === tOpt && (theme === 'dark' ? '#FFF' : '#000')]}>
-                  {tOpt === 'free_shipping' ? t('freeShip') : tOpt === 'bundle_price' ? t('bundle') : t(tOpt).toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+//           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, flexWrap: 'wrap' }}>
+//             {['percentage', 'fixed', 'free_shipping', 'bundle_price'].map((tOpt) => (
+//               <TouchableOpacity
+//                 key={tOpt}
+//                 onPress={() => setType(tOpt as any)}
+//                 style={[styles.catChip, { backgroundColor: type === tOpt ? appColors.foreground : (theme === 'dark' ? '#171720' : '#f0f0f0') }, type === tOpt && styles.activeCatChip]}
+//               >
+//                 <Text style={[styles.catChipText, { color: type === tOpt ? (theme === 'dark' ? '#fff' : '#000') : appColors.foreground }, type === tOpt && (theme === 'dark' ? '#FFF' : '#000')]}>
+//                   {tOpt === 'free_shipping' ? t('freeShip') : tOpt === 'bundle_price' ? t('bundle') : t(tOpt).toUpperCase()}
+//                 </Text>
+//               </TouchableOpacity>
+//             ))}
+//           </View>
 
-          {type === 'bundle_price' ? (
-            <View style={{ marginBottom: 15 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', marginBottom: 5, color: appColors.foreground }}>{t('targetProductLabel')}</Text>
-              <TouchableOpacity
-                style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', borderColor: appColors.border, justifyContent: 'center' }]}
-                onPress={() => setShowProductSelector(!showProductSelector)}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  {targetProductId && products.find(p => p.id === targetProductId)?.images?.[0] && (
-                    <Image source={{ uri: products.find(p => p.id === targetProductId)?.images[0] }} style={{ width: 30, height: 30, borderRadius: 4, backgroundColor: theme === 'dark' ? '#121218' : '#eee' }} />
-                  )}
-                  <Text style={{ color: targetProductId ? appColors.foreground : '#666' }}>
-                    {targetProductId ? getProductName(targetProductId) : t('selectProductPlaceholder')}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+//           {type === 'bundle_price' ? (
+//             <View style={{ marginBottom: 15 }}>
+//               <Text style={{ fontSize: 12, fontWeight: '700', marginBottom: 5, color: appColors.foreground }}>{t('targetProductLabel')}</Text>
+//               <TouchableOpacity
+//                 style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', borderColor: appColors.border, justifyContent: 'center' }]}
+//                 onPress={() => setShowProductSelector(!showProductSelector)}
+//               >
+//                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+//                   {targetProductId && products.find(p => p.id === targetProductId)?.images?.[0] && (
+//                     <Image source={{ uri: products.find(p => p.id === targetProductId)?.images[0] }} style={{ width: 30, height: 30, borderRadius: 4, backgroundColor: theme === 'dark' ? '#121218' : '#eee' }} />
+//                   )}
+//                   <Text style={{ color: targetProductId ? appColors.foreground : '#666' }}>
+//                     {targetProductId ? getProductName(targetProductId) : t('selectProductPlaceholder')}
+//                   </Text>
+//                 </View>
+//               </TouchableOpacity>
 
-              {showProductSelector && (
-                <View style={{ maxHeight: 200, backgroundColor: theme === 'dark' ? '#171720' : '#f9f9f9', borderRadius: 8, marginTop: 5, borderWidth: 1, borderColor: appColors.border }}>
-                  <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
-                    {products.map(p => (
-                      <TouchableOpacity key={p.id} onPress={() => { setTargetProductId(p.id); setShowProductSelector(false); }} style={{
-                        padding: 10
-                        , flexDirection: 'row', alignItems: 'center', gap: 10
-                      }}>
-                        {p.images && p.images[0] && (
-                          <Image source={{ uri: p.images[0] }} style={{ width: 30, height: 30, borderRadius: 4, backgroundColor: theme === 'dark' ? '#121218' : '#eee' }} />
-                        )}
-                        <Text style={{ fontSize: 12, color: appColors.foreground }}>{getProductName(p.id)}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+//               {showProductSelector && (
+//                 <View style={{ maxHeight: 200, backgroundColor: theme === 'dark' ? '#171720' : '#f9f9f9', borderRadius: 8, marginTop: 5, borderWidth: 1, borderColor: appColors.border }}>
+//                   <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+//                     {products.map(p => (
+//                       <TouchableOpacity key={p.id} onPress={() => { setTargetProductId(p.id); setShowProductSelector(false); }} style={{
+//                         padding: 10
+//                         , flexDirection: 'row', alignItems: 'center', gap: 10
+//                       }}>
+//                         {p.images && p.images[0] && (
+//                           <Image source={{ uri: p.images[0] }} style={{ width: 30, height: 30, borderRadius: 4, backgroundColor: theme === 'dark' ? '#121218' : '#eee' }} />
+//                         )}
+//                         <Text style={{ fontSize: 12, color: appColors.foreground }}>{getProductName(p.id)}</Text>
+//                       </TouchableOpacity>
+//                     ))}
+//                   </ScrollView>
+//                 </View>
+//               )}
 
-              <Text style={{ fontSize: 12, fontWeight: '700', marginVertical: 10, color: appColors.foreground }}>{t('priceTiers')}</Text>
-              {tiers.map((tier, index) => (
-                <View key={index} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                  <TextInput
-                    style={[styles.adminInput, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]}
-                    placeholder={t('qty')}
-                    placeholderTextColor="#666"
-                    keyboardType="numeric"
-                    value={tier.qty ? tier.qty.toString() : ''}
-                    onChangeText={(v) => updateTier(index, 'qty', v)}
-                  />
-                  <TextInput
-                    style={[styles.adminInput, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]}
-                    placeholder={t('price')}
-                    placeholderTextColor="#666"
-                    keyboardType="numeric"
-                    value={tier.price ? tier.price.toString() : ''}
-                    onChangeText={(v) => updateTier(index, 'price', v)}
-                  />
-                  {tiers.length > 1 && (
-                    <TouchableOpacity onPress={() => removeTier(index)} style={{ justifyContent: 'center', padding: 5 }}>
-                      <X size={20} color={appColors.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-              <TouchableOpacity onPress={addTier} style={{ alignSelf: 'flex-start', padding: 5 }}>
-                <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 12 }}>{t('addTierBtn')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            type !== 'free_shipping' && (
-              <TextInput
-                style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, marginBottom: 15 }]}
-                placeholder={type === 'percentage' ? "Percentage (e.g. 20 for 20%)" : "Value (e.g. 10 for 10 TND)"}
-                placeholderTextColor="#666"
-                value={value}
-                onChangeText={setValue}
-                keyboardType="numeric"
-              />
-            )
-          )}
+//               <Text style={{ fontSize: 12, fontWeight: '700', marginVertical: 10, color: appColors.foreground }}>{t('priceTiers')}</Text>
+//               {tiers.map((tier, index) => (
+//                 <View key={index} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+//                   <TextInput
+//                     style={[styles.adminInput, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]}
+//                     placeholder={t('qty')}
+//                     placeholderTextColor="#666"
+//                     keyboardType="numeric"
+//                     value={tier.qty ? tier.qty.toString() : ''}
+//                     onChangeText={(v) => updateTier(index, 'qty', v)}
+//                   />
+//                   <TextInput
+//                     style={[styles.adminInput, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]}
+//                     placeholder={t('price')}
+//                     placeholderTextColor="#666"
+//                     keyboardType="numeric"
+//                     value={tier.price ? tier.price.toString() : ''}
+//                     onChangeText={(v) => updateTier(index, 'price', v)}
+//                   />
+//                   {tiers.length > 1 && (
+//                     <TouchableOpacity onPress={() => removeTier(index)} style={{ justifyContent: 'center', padding: 5 }}>
+//                       <X size={20} color={appColors.error} />
+//                     </TouchableOpacity>
+//                   )}
+//                 </View>
+//               ))}
+//               <TouchableOpacity onPress={addTier} style={{ alignSelf: 'flex-start', padding: 5 }}>
+//                 <Text style={{ color: appColors.foreground, fontWeight: '700', fontSize: 12 }}>{t('addTierBtn')}</Text>
+//               </TouchableOpacity>
+//             </View>
+//           ) : (
+//             type !== 'free_shipping' && (
+//               <TextInput
+//                 style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, marginBottom: 15 }]}
+//                 placeholder={type === 'percentage' ? "Percentage (e.g. 20 for 20%)" : "Value (e.g. 10 for 10 TND)"}
+//                 placeholderTextColor="#666"
+//                 value={value}
+//                 onChangeText={setValue}
+//                 keyboardType="numeric"
+//               />
+//             )
+//           )}
 
-          <TextInput
-            style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, marginBottom: 15 }]}
-            placeholder={t('minOrder') + " (Optional)"}
-            placeholderTextColor="#666"
-            value={minOrder}
-            onChangeText={setMinOrder}
-            keyboardType="numeric"
-          />
+//           <TextInput
+//             style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border, marginBottom: 15 }]}
+//             placeholder={t('minOrder') + " (Optional)"}
+//             placeholderTextColor="#666"
+//             value={minOrder}
+//             onChangeText={setMinOrder}
+//             keyboardType="numeric"
+//           />
 
-          <TouchableOpacity
-            style={[styles.saveBtnPremium, { marginTop: 15, backgroundColor: appColors.foreground }]}
-            onPress={handleCreate}
-          >
-            <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('createCoupon')}</Text>
-          </TouchableOpacity>
-        </View>
+//           <TouchableOpacity
+//             style={[styles.saveBtnPremium, { marginTop: 15, backgroundColor: appColors.foreground }]}
+//             onPress={handleCreate}
+//           >
+//             <Text style={[styles.saveBtnPremiumText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('createCoupon')}</Text>
+//           </TouchableOpacity>
+//         </View>
 
-        <Text style={[styles.settingsLabel, { marginTop: 30, marginBottom: 15 }]}>{t('active')}</Text>
-        {coupons.length === 0 ? (
-          <View style={{ padding: 40, alignItems: 'center' }}>
-            <Ticket size={48} color={appColors.textMuted} strokeWidth={1} style={{ opacity: 0.5 }} />
-            <Text style={{ marginTop: 15, color: appColors.textMuted, fontWeight: '600' }}>{t('noCoupons')}</Text>
-          </View>
-        ) : coupons.map((coupon) => (
-          <View key={coupon.id} style={[styles.modernCartItem, { flexDirection: 'column', padding: 20, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, borderWidth: 1, borderRadius: 28, overflow: 'hidden' }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: appColors.foreground, letterSpacing: 0.5 }}>{coupon.code}</Text>
-                  <View style={{ backgroundColor: coupon.isActive ? '#EBFDF5' : '#FEF2F2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: coupon.isActive ? '#10B981' : '#EF4444' }}>{coupon.isActive ? t('activeStatus') : t('inactiveStatus')}</Text>
-                  </View>
-                </View>
+//         <Text style={[styles.settingsLabel, { marginTop: 30, marginBottom: 15 }]}>{t('active')}</Text>
+//         {coupons.length === 0 ? (
+//           <View style={{ padding: 40, alignItems: 'center' }}>
+//             <Ticket size={48} color={appColors.textMuted} strokeWidth={1} style={{ opacity: 0.5 }} />
+//             <Text style={{ marginTop: 15, color: appColors.textMuted, fontWeight: '600' }}>{t('noCoupons')}</Text>
+//           </View>
+//         ) : coupons.map((coupon) => (
+//           <View key={coupon.id} style={[styles.modernCartItem, { flexDirection: 'column', padding: 20, backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, borderWidth: 1, borderRadius: 28, overflow: 'hidden' }]}>
+//             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+//               <View style={{ flex: 1 }}>
+//                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+//                   <Text style={{ fontSize: 18, fontWeight: '900', color: appColors.foreground, letterSpacing: 0.5 }}>{coupon.code}</Text>
+//                   <View style={{ backgroundColor: coupon.isActive ? '#EBFDF5' : '#FEF2F2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+//                     <Text style={{ fontSize: 9, fontWeight: '800', color: coupon.isActive ? '#10B981' : '#EF4444' }}>{coupon.isActive ? t('activeStatus') : t('inactiveStatus')}</Text>
+//                   </View>
+//                 </View>
 
-                <View style={{ marginTop: 10, gap: 4 }}>
-                  {coupon.type === 'free_shipping' && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Package size={14} color={appColors.accent} />
-                      <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{t('freeShip')}</Text>
-                    </View>
-                  )}
-                  {coupon.type === 'percentage' && <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{coupon.value}{t('offOrder')}</Text>}
-                  {coupon.type === 'fixed' && <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{coupon.value} {t('tndDiscount')}</Text>}
-                  {coupon.type === 'bundle_price' && (
-                    <View>
-                      <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{t('bundle')}: {getProductName(coupon.targetProductId)}</Text>
-                      {coupon.tiers?.map((tier: any, i: number) => (
-                        <Text key={i} style={{ fontSize: 12, color: appColors.textMuted, marginLeft: 15, marginTop: 2 }}>
-                          • {t('buyXforY').replace('{{qty}}', tier.qty).replace('{{price}}', tier.price)}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                  {coupon.minOrder > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                      <Text style={{ fontSize: 11, color: appColors.textMuted }}>{t('minOrderLabel')} </Text>
-                      <Text style={{ fontSize: 11, color: appColors.foreground, fontWeight: '700' }}>{coupon.minOrder} TND</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
+//                 <View style={{ marginTop: 10, gap: 4 }}>
+//                   {coupon.type === 'free_shipping' && (
+//                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+//                       <Package size={14} color={appColors.accent} />
+//                       <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{t('freeShip')}</Text>
+//                     </View>
+//                   )}
+//                   {coupon.type === 'percentage' && <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{coupon.value}{t('offOrder')}</Text>}
+//                   {coupon.type === 'fixed' && <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{coupon.value} {t('tndDiscount')}</Text>}
+//                   {coupon.type === 'bundle_price' && (
+//                     <View>
+//                       <Text style={{ fontSize: 13, color: appColors.foreground, fontWeight: '700' }}>{t('bundle')}: {getProductName(coupon.targetProductId)}</Text>
+//                       {coupon.tiers?.map((tier: any, i: number) => (
+//                         <Text key={i} style={{ fontSize: 12, color: appColors.textMuted, marginLeft: 15, marginTop: 2 }}>
+//                           • {t('buyXforY').replace('{{qty}}', tier.qty).replace('{{price}}', tier.price)}
+//                         </Text>
+//                       ))}
+//                     </View>
+//                   )}
+//                   {coupon.minOrder > 0 && (
+//                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+//                       <Text style={{ fontSize: 11, color: appColors.textMuted }}>{t('minOrderLabel')} </Text>
+//                       <Text style={{ fontSize: 11, color: appColors.foreground, fontWeight: '700' }}>{coupon.minOrder} TND</Text>
+//                     </View>
+//                   )}
+//                 </View>
+//               </View>
 
-              <View style={{ gap: 15, alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => toggleActive(coupon)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                  <RotateCcw size={18} color={appColors.foreground} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(coupon.id)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
-                  <Trash2 size={18} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            </View>
+//               <View style={{ gap: 15, alignItems: 'center' }}>
+//                 <TouchableOpacity onPress={() => toggleActive(coupon)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
+//                   <RotateCcw size={18} color={appColors.foreground} />
+//                 </TouchableOpacity>
+//                 <TouchableOpacity onPress={() => handleDelete(coupon.id)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+//                   <Trash2 size={18} color="#EF4444" />
+//                 </TouchableOpacity>
+//               </View>
+//             </View>
 
-            {/* Design Element: Dashed line Divider */}
-            <View style={{ height: 1, width: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: appColors.border, marginVertical: 15, opacity: 0.5 }} />
+//             {/* Design Element: Dashed line Divider */}
+//             <View style={{ height: 1, width: '100%', borderStyle: 'dashed', borderWidth: 1, borderColor: appColors.border, marginVertical: 15, opacity: 0.5 }} />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Clock size={12} color={appColors.textMuted} />
-              <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '600' }}>VALID UNTIL MANUALLY REMOVED</Text>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+//             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+//               <Clock size={12} color={appColors.textMuted} />
+//               <Text style={{ fontSize: 10, color: appColors.textMuted, fontWeight: '600' }}>VALID UNTIL MANUALLY REMOVED</Text>
+//             </View>
+//           </View>
+//         ))}
+//       </ScrollView>
+//     </SafeAreaView>
+//   );
+// }
 // --- ADMIN USERS (CLIENTS) ---
-function AdminUsersScreen({ onBack, t, language }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const [users, setUsers] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedUser, setExpandedUser] = useState<string | null>(null);
-  const [brands, setBrands] = useState<any[]>([]);
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState('customer');
-  const [userBrandId, setUserBrandId] = useState('');
+// function AdminUsersScreen({ onBack, t, language }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const [users, setUsers] = useState<any[]>([]);
+//   const [orders, setOrders] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [searchQuery, setSearchQuery] = useState('');
+//   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+//   const [brands, setBrands] = useState<any[]>([]);
+//   const [roleModalVisible, setRoleModalVisible] = useState(false);
+//   const [selectedUser, setSelectedUser] = useState<any>(null);
+//   const [userRole, setUserRole] = useState('customer');
+//   const [userBrandId, setUserBrandId] = useState('');
 
-  useEffect(() => {
-    fetchData();
-    fetchBrands();
-  }, []);
+//   useEffect(() => {
+//     fetchData();
+//     fetchBrands();
+//   }, []);
 
-  const fetchBrands = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'brands'));
-      setBrands(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error(e) }
-  }
+//   const fetchBrands = async () => {
+//     try {
+//       const snap = await getDocs(collection(db, 'brands'));
+//       setBrands(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+//     } catch (e) { console.error(e) }
+//   }
 
-  const fetchData = async () => {
-    try {
-      // Fetch users - matching web version query
-      const usersQuery = query(collection(db, 'users'));
-      const usersSnap = await getDocs(usersQuery);
-      const allUsers = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
-      // Clients list = non-admins (including brand owners)
-      setUsers(allUsers.filter((u: any) => u.role !== 'admin'));
+//   const fetchData = async () => {
+//     try {
+//       // Fetch users - matching web version query
+//       const usersQuery = query(collection(db, 'users'));
+//       const usersSnap = await getDocs(usersQuery);
+//       const allUsers = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+//       // Clients list = non-admins (including brand owners)
+//       setUsers(allUsers.filter((u: any) => u.role !== 'admin'));
 
-      // Fetch all orders to calculate customer stats
-      const ordersSnap = await getDocs(collection(db, 'orders'));
-      setOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+//       // Fetch all orders to calculate customer stats
+//       const ordersSnap = await getDocs(collection(db, 'orders'));
+//       setOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+//     } catch (err) {
+//       console.error(err);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  const openRoleEdit = (user: any) => {
-    setSelectedUser(user);
-    setUserRole(user.role || 'customer');
-    setUserBrandId(user.brandId || '');
-    setRoleModalVisible(true);
-  };
+//   const openRoleEdit = (user: any) => {
+//     setSelectedUser(user);
+//     setUserRole(user.role || 'customer');
+//     setUserBrandId(user.brandId || '');
+//     setRoleModalVisible(true);
+//   };
 
-  const updateRoleAndBrand = async () => {
-    if (!selectedUser) return;
-    try {
-      const b = brands.find(b => b.id === userBrandId);
-      const isBrandRole = ['brand_owner', 'nor_kam', 'admin'].includes(userRole);
-      const updates: any = {
-        role: userRole,
-        brandId: isBrandRole ? userBrandId : null,
-        brandName: (isBrandRole && b) ? (b.name?.fr || b.name) : null
-      };
-      await updateDoc(doc(db, 'users', selectedUser.uid), updates);
-      setUsers(users.map(u => u.uid === selectedUser.uid ? { ...u, ...updates } : u));
-      setRoleModalVisible(false);
-      Alert.alert(t('successTitle'), t('accountUpdated'));
-    } catch (e) {
-      console.error(e);
-      Alert.alert(t('error'), t('updateFailed'));
-    }
-  };
+//   const updateRoleAndBrand = async () => {
+//     if (!selectedUser) return;
+//     try {
+//       const b = brands.find(b => b.id === userBrandId);
+//       const isBrandRole = ['brand_owner', 'nor_kam', 'admin'].includes(userRole);
+//       const updates: any = {
+//         role: userRole,
+//         brandId: isBrandRole ? userBrandId : null,
+//         brandName: (isBrandRole && b) ? (b.name?.fr || b.name) : null
+//       };
+//       await updateDoc(doc(db, 'users', selectedUser.uid), updates);
+//       setUsers(users.map(u => u.uid === selectedUser.uid ? { ...u, ...updates } : u));
+//       setRoleModalVisible(false);
+//       Alert.alert(t('successTitle'), t('accountUpdated'));
+//     } catch (e) {
+//       console.error(e);
+//       Alert.alert(t('error'), t('updateFailed'));
+//     }
+//   };
 
-  const getUserStats = (user: any) => {
-    if (user.role === 'brand_owner' && user.brandId) {
-      // Brand Owner Stats: Revenue from their products, Orders containing their products
-      const brandOrders = orders.filter(o => o.items && o.items.some((i: any) => i.brandId === user.brandId));
-      const totalRevenue = brandOrders.reduce((sum, o) => {
-        const orderRevenue = o.items
-          .filter((i: any) => i.brandId === user.brandId)
-          .reduce((s: number, i: any) => s + ((parseFloat(i.price) || 0) * (i.quantity || 1)), 0);
-        return sum + orderRevenue;
-      }, 0);
-      const completedOrders = brandOrders.filter(o => o.status === 'delivered').length;
-      return {
-        totalOrders: brandOrders.length,
-        totalSpent: totalRevenue, // Used as Revenue for brand owners
-        completedOrders,
-        lastOrder: brandOrders.length > 0 ? brandOrders[0] : null
-      };
-    } else {
-      // Customer Stats: Orders placed by them
-      const userOrders = orders.filter(o => o.userId === user.uid);
-      const totalSpent = userOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
-      const completedOrders = userOrders.filter(o => o.status === 'delivered').length;
-      return {
-        totalOrders: userOrders.length,
-        totalSpent,
-        completedOrders,
-        lastOrder: userOrders.length > 0 ? userOrders[0] : null
-      };
-    }
-  };
+//   const getUserStats = (user: any) => {
+//     if (user.role === 'brand_owner' && user.brandId) {
+//       // Brand Owner Stats: Revenue from their products, Orders containing their products
+//       const brandOrders = orders.filter(o => o.items && o.items.some((i: any) => i.brandId === user.brandId));
+//       const totalRevenue = brandOrders.reduce((sum, o) => {
+//         const orderRevenue = o.items
+//           .filter((i: any) => i.brandId === user.brandId)
+//           .reduce((s: number, i: any) => s + ((parseFloat(i.price) || 0) * (i.quantity || 1)), 0);
+//         return sum + orderRevenue;
+//       }, 0);
+//       const completedOrders = brandOrders.filter(o => o.status === 'delivered').length;
+//       return {
+//         totalOrders: brandOrders.length,
+//         totalSpent: totalRevenue, // Used as Revenue for brand owners
+//         completedOrders,
+//         lastOrder: brandOrders.length > 0 ? brandOrders[0] : null
+//       };
+//     } else {
+//       // Customer Stats: Orders placed by them
+//       const userOrders = orders.filter(o => o.userId === user.uid);
+//       const totalSpent = userOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+//       const completedOrders = userOrders.filter(o => o.status === 'delivered').length;
+//       return {
+//         totalOrders: userOrders.length,
+//         totalSpent,
+//         completedOrders,
+//         lastOrder: userOrders.length > 0 ? userOrders[0] : null
+//       };
+//     }
+//   };
 
-  const toggleBan = async (user: any) => {
-    const action = user.isBanned ? 'unban' : 'ban';
-    Alert.alert(
-      t(action + 'User'),
-      t('confirm' + action.charAt(0).toUpperCase() + action.slice(1)),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t(action),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await updateDoc(doc(db, 'users', user.uid), { isBanned: !user.isBanned });
-              setUsers(users.map(u => u.uid === user.uid ? { ...u, isBanned: !user.isBanned } : u));
-              Alert.alert(t('successTitle'), t('accountUpdated'));
-            } catch (err) {
-              console.error(err);
-              Alert.alert(t('error'), t('updateFailed'));
-            }
-          }
-        }
-      ]
-    );
-  };
+//   const toggleBan = async (user: any) => {
+//     const action = user.isBanned ? 'unban' : 'ban';
+//     Alert.alert(
+//       t(action + 'User'),
+//       t('confirm' + action.charAt(0).toUpperCase() + action.slice(1)),
+//       [
+//         { text: t('cancel'), style: 'cancel' },
+//         {
+//           text: t(action),
+//           style: 'destructive',
+//           onPress: async () => {
+//             try {
+//               await updateDoc(doc(db, 'users', user.uid), { isBanned: !user.isBanned });
+//               setUsers(users.map(u => u.uid === user.uid ? { ...u, isBanned: !user.isBanned } : u));
+//               Alert.alert(t('successTitle'), t('accountUpdated'));
+//             } catch (err) {
+//               console.error(err);
+//               Alert.alert(t('error'), t('updateFailed'));
+//             }
+//           }
+//         }
+//       ]
+//     );
+//   };
 
-  const deleteUser = async (user: any) => {
-    Alert.alert(
-      t('deleteUser'),
-      t('confirmDeleteUser'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'users', user.uid));
-              setUsers(users.filter(u => u.uid !== user.uid));
-              Alert.alert(t('successTitle'), t('accountUpdated'));
-            } catch (err) {
-              console.error(err);
-              Alert.alert(t('error'), t('updateFailed'));
-            }
-          }
-        }
-      ]
-    );
-  };
+//   const deleteUser = async (user: any) => {
+//     Alert.alert(
+//       t('deleteUser'),
+//       t('confirmDeleteUser'),
+//       [
+//         { text: t('cancel'), style: 'cancel' },
+//         {
+//           text: t('delete'),
+//           style: 'destructive',
+//           onPress: async () => {
+//             try {
+//               await deleteDoc(doc(db, 'users', user.uid));
+//               setUsers(users.filter(u => u.uid !== user.uid));
+//               Alert.alert(t('successTitle'), t('accountUpdated'));
+//             } catch (err) {
+//               console.error(err);
+//               Alert.alert(t('error'), t('updateFailed'));
+//             }
+//           }
+//         }
+//       ]
+//     );
+//   };
 
-  const filteredUsers = users.filter(u => {
-    const q = searchQuery.toLowerCase();
-    return (u.fullName || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.phone || '').includes(q);
-  });
+//   const filteredUsers = users.filter(u => {
+//     const q = searchQuery.toLowerCase();
+//     return (u.fullName || '').toLowerCase().includes(q) ||
+//       (u.email || '').toLowerCase().includes(q) ||
+//       (u.phone || '').includes(q);
+//   });
 
-  const getInitials = (name: string) => {
-    if (!name) return '??';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-  };
+//   const getInitials = (name: string) => {
+//     if (!name) return '??';
+//     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+//   };
 
-  const totalCustomers = users.length;
-  const totalRevenue = users.reduce((sum, u) => {
-    if (u.role === 'brand_owner') return sum; // Don't add brand revenue to platform total revenue here to avoid double counting if needed, or simply sum platform orders separately. 
-    // Actually, 'totalRevenue' usually means Platform Total Revenue. 
-    // The previous logic accumulated totalSpent of ALL users. 
-    // If we change getUserStats for brand_owner, this reduce might break if we just sum totalSpent.
-    // However, existing logic used getUserStats(u.uid).totalSpent.
-    // For customers, totalSpent is what they paid. For brand owners, it is what they earned.
-    // We should probably ONLY sum up customers' spending for Platform Revenue.
-    if (u.role === 'admin' || u.role === 'brand_owner') return sum;
-    return sum + getUserStats(u).totalSpent;
-  }, 0);
-  const bannedCount = users.filter(u => u.isBanned).length;
+//   const totalCustomers = users.length;
+//   const totalRevenue = users.reduce((sum, u) => {
+//     if (u.role === 'brand_owner') return sum; // Don't add brand revenue to platform total revenue here to avoid double counting if needed, or simply sum platform orders separately. 
+//     // Actually, 'totalRevenue' usually means Platform Total Revenue. 
+//     // The previous logic accumulated totalSpent of ALL users. 
+//     // If we change getUserStats for brand_owner, this reduce might break if we just sum totalSpent.
+//     // However, existing logic used getUserStats(u.uid).totalSpent.
+//     // For customers, totalSpent is what they paid. For brand owners, it is what they earned.
+//     // We should probably ONLY sum up customers' spending for Platform Revenue.
+//     if (u.role === 'admin' || u.role === 'brand_owner') return sum;
+//     return sum + getUserStats(u).totalSpent;
+//   }, 0);
+//   const bannedCount = users.filter(u => u.isBanned).length;
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#0A0A0A' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('clients').toUpperCase()}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#0A0A0A' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('clients').toUpperCase()}</Text>
+//         <View style={{ width: 40 }} />
+//       </View>
 
-      {/* Stats Cards */}
-      <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-          <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: appColors.border }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 5 }}>{t('total').toUpperCase()}</Text>
-            <Text style={{ fontSize: 24, fontWeight: '900', color: appColors.foreground }}>{totalCustomers}</Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: appColors.border }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 5 }}>{t('revenue').toUpperCase()}</Text>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: appColors.foreground }}>{totalRevenue.toFixed(0)} TND</Text>
-          </View>
-          {bannedCount > 0 && (
-            <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#DC2626' }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', marginBottom: 5 }}>{t('banned').toUpperCase()}</Text>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: '#DC2626' }}>{bannedCount}</Text>
-            </View>
-          )}
-        </View>
+//       {/* Stats Cards */}
+//       <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
+//         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+//           <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: appColors.border }}>
+//             <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 5 }}>{t('total').toUpperCase()}</Text>
+//             <Text style={{ fontSize: 24, fontWeight: '900', color: appColors.foreground }}>{totalCustomers}</Text>
+//           </View>
+//           <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: appColors.border }}>
+//             <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 5 }}>{t('revenue').toUpperCase()}</Text>
+//             <Text style={{ fontSize: 20, fontWeight: '900', color: appColors.foreground }}>{totalRevenue.toFixed(0)} TND</Text>
+//           </View>
+//           {bannedCount > 0 && (
+//             <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#DC2626' }}>
+//               <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', marginBottom: 5 }}>{t('banned').toUpperCase()}</Text>
+//               <Text style={{ fontSize: 24, fontWeight: '900', color: '#DC2626' }}>{bannedCount}</Text>
+//             </View>
+//           )}
+//         </View>
 
-        {/* Search Bar */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderRadius: 12, paddingHorizontal: 15, height: 45, borderWidth: 1, borderColor: appColors.border }}>
-          <Search size={18} color={appColors.textMuted} />
-          <TextInput
-            style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: appColors.foreground }}
-            placeholder={t('searchClients')}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={appColors.textMuted}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <X size={16} color={appColors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+//         {/* Search Bar */}
+//         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderRadius: 12, paddingHorizontal: 15, height: 45, borderWidth: 1, borderColor: appColors.border }}>
+//           <Search size={18} color={appColors.textMuted} />
+//           <TextInput
+//             style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '600', color: appColors.foreground }}
+//             placeholder={t('searchClients')}
+//             value={searchQuery}
+//             onChangeText={setSearchQuery}
+//             placeholderTextColor={appColors.textMuted}
+//           />
+//           {searchQuery.length > 0 && (
+//             <TouchableOpacity onPress={() => setSearchQuery('')}>
+//               <X size={16} color={appColors.textMuted} />
+//             </TouchableOpacity>
+//           )}
+//         </View>
+//       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color={appColors.foreground} style={{ marginTop: 50 }} />
-      ) : (
-        <FlatList
-          data={filteredUsers}
-          contentContainerStyle={{ padding: 20, paddingTop: 0 }}
-          keyExtractor={item => item.uid}
-          renderItem={({ item }) => {
-            const stats = getUserStats(item);
-            const isExpanded = expandedUser === item.uid;
-            const isBanned = item.isBanned === true;
+//       {loading ? (
+//         <ActivityIndicator size="large" color={appColors.foreground} style={{ marginTop: 50 }} />
+//       ) : (
+//         <FlatList
+//           data={filteredUsers}
+//           contentContainerStyle={{ padding: 20, paddingTop: 0 }}
+//           keyExtractor={item => item.uid}
+//           renderItem={({ item }) => {
+//             const stats = getUserStats(item);
+//             const isExpanded = expandedUser === item.uid;
+//             const isBanned = item.isBanned === true;
 
-            return (
-              <TouchableOpacity
-                onPress={() => setExpandedUser(isExpanded ? null : item.uid)}
-                style={[
-                  styles.orderCard,
-                  {
-                    marginBottom: 12,
-                    backgroundColor: theme === 'dark' ? '#121218' : 'white',
-                    borderColor: isBanned ? '#EF4444' : appColors.border,
-                    borderWidth: isBanned ? 2 : 1
-                  }
-                ]}
-                activeOpacity={0.7}
-              >
-                {/* Customer Header */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <View style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: 25,
-                    backgroundColor: isBanned ? (theme === 'dark' ? '#311212' : '#FEE2E2') : (theme === 'dark' ? '#000' : '#F2F2F7'),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                    overflow: 'hidden'
-                  }}>
-                    {item.avatarUrl ? (
-                      <Image source={{ uri: item.avatarUrl }} style={{ width: 50, height: 50, borderRadius: 25, opacity: isBanned ? 0.5 : 1 }} />
-                    ) : (
-                      <Text style={{ fontWeight: '900', fontSize: 16, color: isBanned ? '#EF4444' : appColors.textMuted }}>{getInitials(item.fullName)}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontWeight: '800', fontSize: 15, color: isBanned ? '#EF4444' : appColors.foreground }}>
-                        {item.fullName || 'Unknown'}
-                      </Text>
-                      {isBanned && (
-                        <View style={{ backgroundColor: '#EF4444', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                          <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{t('banned').toUpperCase()}</Text>
-                        </View>
-                      )}
-                      {item.role === 'brand_owner' && (
-                        <View style={{ backgroundColor: appColors.foreground, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                          <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 8, fontWeight: '900' }}>{item.brandName?.toUpperCase() || 'OWNER'}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2 }}>
-                      {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role || 'customer'))).toUpperCase()}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => openRoleEdit(item)} style={{ marginRight: 10 }}>
-                    <Settings size={20} color={appColors.foreground} />
-                  </TouchableOpacity>
-                  <ChevronDown
-                    size={20}
-                    color={appColors.textMuted}
-                    style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}
-                  />
-                </View>
+//             return (
+//               <TouchableOpacity
+//                 onPress={() => setExpandedUser(isExpanded ? null : item.uid)}
+//                 style={[
+//                   styles.orderCard,
+//                   {
+//                     marginBottom: 12,
+//                     backgroundColor: theme === 'dark' ? '#121218' : 'white',
+//                     borderColor: isBanned ? '#EF4444' : appColors.border,
+//                     borderWidth: isBanned ? 2 : 1
+//                   }
+//                 ]}
+//                 activeOpacity={0.7}
+//               >
+//                 {/* Customer Header */}
+//                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+//                   <View style={{
+//                     width: 50,
+//                     height: 50,
+//                     borderRadius: 25,
+//                     backgroundColor: isBanned ? (theme === 'dark' ? '#311212' : '#FEE2E2') : (theme === 'dark' ? '#000' : '#F2F2F7'),
+//                     alignItems: 'center',
+//                     justifyContent: 'center',
+//                     marginRight: 12,
+//                     overflow: 'hidden'
+//                   }}>
+//                     {item.avatarUrl ? (
+//                       <Image source={{ uri: item.avatarUrl }} style={{ width: 50, height: 50, borderRadius: 25, opacity: isBanned ? 0.5 : 1 }} />
+//                     ) : (
+//                       <Text style={{ fontWeight: '900', fontSize: 16, color: isBanned ? '#EF4444' : appColors.textMuted }}>{getInitials(item.fullName)}</Text>
+//                     )}
+//                   </View>
+//                   <View style={{ flex: 1 }}>
+//                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+//                       <Text style={{ fontWeight: '800', fontSize: 15, color: isBanned ? '#EF4444' : appColors.foreground }}>
+//                         {item.fullName || 'Unknown'}
+//                       </Text>
+//                       {isBanned && (
+//                         <View style={{ backgroundColor: '#EF4444', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+//                           <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{t('banned').toUpperCase()}</Text>
+//                         </View>
+//                       )}
+//                       {item.role === 'brand_owner' && (
+//                         <View style={{ backgroundColor: appColors.foreground, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+//                           <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontSize: 8, fontWeight: '900' }}>{item.brandName?.toUpperCase() || 'OWNER'}</Text>
+//                         </View>
+//                       )}
+//                     </View>
+//                     <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 2 }}>
+//                       {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role || 'customer'))).toUpperCase()}
+//                     </Text>
+//                   </View>
+//                   <TouchableOpacity onPress={() => openRoleEdit(item)} style={{ marginRight: 10 }}>
+//                     <Settings size={20} color={appColors.foreground} />
+//                   </TouchableOpacity>
+//                   <ChevronDown
+//                     size={20}
+//                     color={appColors.textMuted}
+//                     style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}
+//                   />
+//                 </View>
 
-                {/* Quick Stats Grid */}
-                <View style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                  paddingTop: 12,
-                  borderTopWidth: 1,
-                  borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0'
-                }}>
-                  <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{t('orders').toUpperCase()}</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '900', color: appColors.foreground }}>{stats.totalOrders}</Text>
-                  </View>
-                  <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{t('completed').toUpperCase()}</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>{stats.completedOrders}</Text>
-                  </View>
-                  <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{item.role === 'brand_owner' ? t('revenue').toUpperCase() : 'AVG'}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '900', color: appColors.foreground }}>
-                      {item.role === 'brand_owner'
-                        ? stats.totalSpent.toFixed(0)
-                        : (stats.totalOrders > 0 ? (stats.totalSpent / stats.totalOrders).toFixed(0) : '0')} TND
-                    </Text>
-                  </View>
-                </View>
+//                 {/* Quick Stats Grid */}
+//                 <View style={{
+//                   flexDirection: 'row',
+//                   gap: 8,
+//                   paddingTop: 12,
+//                   borderTopWidth: 1,
+//                   borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0'
+//                 }}>
+//                   <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
+//                     <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{t('orders').toUpperCase()}</Text>
+//                     <Text style={{ fontSize: 16, fontWeight: '900', color: appColors.foreground }}>{stats.totalOrders}</Text>
+//                   </View>
+//                   <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
+//                     <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{t('completed').toUpperCase()}</Text>
+//                     <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>{stats.completedOrders}</Text>
+//                   </View>
+//                   <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9', borderRadius: 8, padding: 10 }}>
+//                     <Text style={{ fontSize: 9, fontWeight: '800', color: appColors.textMuted, marginBottom: 3 }}>{item.role === 'brand_owner' ? t('revenue').toUpperCase() : 'AVG'}</Text>
+//                     <Text style={{ fontSize: 14, fontWeight: '900', color: appColors.foreground }}>
+//                       {item.role === 'brand_owner'
+//                         ? stats.totalSpent.toFixed(0)
+//                         : (stats.totalOrders > 0 ? (stats.totalSpent / stats.totalOrders).toFixed(0) : '0')} TND
+//                     </Text>
+//                   </View>
+//                 </View>
 
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <Animatable.View animation="fadeIn" duration={300}>
-                    <View style={{ marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 10 }}>{t('contactInfo').toUpperCase()}</Text>
-                      <View style={{ gap: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                            <Mail size={14} color={appColors.foreground} />
-                          </View>
-                          <Text style={{ fontSize: 13, fontWeight: '600', flex: 1, color: appColors.foreground }}>{item.email}</Text>
-                        </View>
-                        {item.phone && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                              <Phone size={14} color={appColors.foreground} />
-                            </View>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: appColors.foreground }}>{item.phone}</Text>
-                          </View>
-                        )}
-                        {item.address && (
-                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                              <MapPin size={14} color={appColors.foreground} />
-                            </View>
-                            <Text style={{ fontSize: 13, fontWeight: '600', flex: 1, color: appColors.foreground }}>{item.address}</Text>
-                          </View>
-                        )}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                            <Calendar size={14} color={appColors.foreground} />
-                          </View>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: appColors.foreground }}>
-                            {t('joined')} {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : 'N/A'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
+//                 {/* Expanded Details */}
+//                 {isExpanded && (
+//                   <Animatable.View animation="fadeIn" duration={300}>
+//                     <View style={{ marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0' }}>
+//                       <Text style={{ fontSize: 11, fontWeight: '800', color: appColors.textMuted, marginBottom: 10 }}>{t('contactInfo').toUpperCase()}</Text>
+//                       <View style={{ gap: 8 }}>
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+//                           <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
+//                             <Mail size={14} color={appColors.foreground} />
+//                           </View>
+//                           <Text style={{ fontSize: 13, fontWeight: '600', flex: 1, color: appColors.foreground }}>{item.email}</Text>
+//                         </View>
+//                         {item.phone && (
+//                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+//                             <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
+//                               <Phone size={14} color={appColors.foreground} />
+//                             </View>
+//                             <Text style={{ fontSize: 13, fontWeight: '600', color: appColors.foreground }}>{item.phone}</Text>
+//                           </View>
+//                         )}
+//                         {item.address && (
+//                           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+//                             <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
+//                               <MapPin size={14} color={appColors.foreground} />
+//                             </View>
+//                             <Text style={{ fontSize: 13, fontWeight: '600', flex: 1, color: appColors.foreground }}>{item.address}</Text>
+//                           </View>
+//                         )}
+//                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+//                           <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
+//                             <Calendar size={14} color={appColors.foreground} />
+//                           </View>
+//                           <Text style={{ fontSize: 13, fontWeight: '600', color: appColors.foreground }}>
+//                             {t('joined')} {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : 'N/A'}
+//                           </Text>
+//                         </View>
+//                       </View>
+//                     </View>
 
-                    {/* Action Buttons */}
-                    <View style={{ marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0', flexDirection: 'row', gap: 10 }}>
-                      <TouchableOpacity
-                        onPress={() => toggleBan(item)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: isBanned ? '#10B981' : (theme === 'dark' ? '#3F2B00' : '#FEF3C7'),
-                          borderRadius: 10,
-                          paddingVertical: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 8
-                        }}
-                      >
-                        <Shield size={16} color={isBanned ? 'white' : (theme === 'dark' ? '#FFD666' : '#D97706')} />
-                        <Text style={{ fontWeight: '800', fontSize: 10, color: isBanned ? 'white' : (theme === 'dark' ? '#FFD666' : '#D97706') }}>
-                          {isBanned ? t('unban').toUpperCase() : t('banUser').toUpperCase()}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => deleteUser(item)}
-                        style={{
-                          flex: 1, // ...
-                          backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2',
-                          borderRadius: 10,
-                          paddingVertical: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 8
-                        }}
-                      >
-                        <Trash2 size={16} color="#EF4444" />
-                        <Text style={{ fontWeight: '800', fontSize: 10, color: '#EF4444' }}>{t('delete').toUpperCase()}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Animatable.View>
-                )}
-              </TouchableOpacity>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 50 }}>
-              <Text style={{ fontSize: 14, color: appColors.textMuted, fontWeight: '600' }}>{t('noClients')}</Text>
-            </View>
-          }
-        />
-      )}
+//                     {/* Action Buttons */}
+//                     <View style={{ marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme === 'dark' ? '#17171F' : '#f0f0f0', flexDirection: 'row', gap: 10 }}>
+//                       <TouchableOpacity
+//                         onPress={() => toggleBan(item)}
+//                         style={{
+//                           flex: 1,
+//                           backgroundColor: isBanned ? '#10B981' : (theme === 'dark' ? '#3F2B00' : '#FEF3C7'),
+//                           borderRadius: 10,
+//                           paddingVertical: 12,
+//                           flexDirection: 'row',
+//                           alignItems: 'center',
+//                           justifyContent: 'center',
+//                           gap: 8
+//                         }}
+//                       >
+//                         <Shield size={16} color={isBanned ? 'white' : (theme === 'dark' ? '#FFD666' : '#D97706')} />
+//                         <Text style={{ fontWeight: '800', fontSize: 10, color: isBanned ? 'white' : (theme === 'dark' ? '#FFD666' : '#D97706') }}>
+//                           {isBanned ? t('unban').toUpperCase() : t('banUser').toUpperCase()}
+//                         </Text>
+//                       </TouchableOpacity>
+//                       <TouchableOpacity
+//                         onPress={() => deleteUser(item)}
+//                         style={{
+//                           flex: 1, // ...
+//                           backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2',
+//                           borderRadius: 10,
+//                           paddingVertical: 12,
+//                           flexDirection: 'row',
+//                           alignItems: 'center',
+//                           justifyContent: 'center',
+//                           gap: 8
+//                         }}
+//                       >
+//                         <Trash2 size={16} color="#EF4444" />
+//                         <Text style={{ fontWeight: '800', fontSize: 10, color: '#EF4444' }}>{t('delete').toUpperCase()}</Text>
+//                       </TouchableOpacity>
+//                     </View>
+//                   </Animatable.View>
+//                 )}
+//               </TouchableOpacity>
+//             );
+//           }}
+//           ListEmptyComponent={
+//             <View style={{ alignItems: 'center', marginTop: 50 }}>
+//               <Text style={{ fontSize: 14, color: appColors.textMuted, fontWeight: '600' }}>{t('noClients')}</Text>
+//             </View>
+//           }
+//         />
+//       )}
 
-      {/* Role Management Modal */}
-      <Modal visible={roleModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
-          <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#000' : 'white' }}>
-            <View style={{ height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
-              <TouchableOpacity onPress={() => setRoleModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
-              </TouchableOpacity>
-              <Text style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{t('assignRole').toUpperCase()}</Text>
-              <TouchableOpacity onPress={updateRoleAndBrand} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
+//       {/* Role Management Modal */}
+//       <Modal visible={roleModalVisible} animationType="slide" presentationStyle="pageSheet">
+//         <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }}>
+//           <SafeAreaView style={{ backgroundColor: theme === 'dark' ? '#000' : 'white' }}>
+//             <View style={{ height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
+//               <TouchableOpacity onPress={() => setRoleModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//                 <Text style={{ fontWeight: '700', color: appColors.textMuted, fontSize: 10 }}>{t('cancel').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//               <Text style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, left: 80, right: 80 }]}>{t('assignRole').toUpperCase()}</Text>
+//               <TouchableOpacity onPress={updateRoleAndBrand} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//                 <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>
+//               </TouchableOpacity>
+//             </View>
+//           </SafeAreaView>
 
-          <ScrollView contentContainerStyle={{ padding: 25 }}>
-            <View style={{ alignItems: 'center', marginBottom: 30 }}>
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginBottom: 15 }}>
-                <UsersIcon size={40} color={appColors.foreground} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: appColors.foreground }}>{selectedUser?.fullName}</Text>
-              <Text style={{ fontSize: 13, color: appColors.textMuted }}>{selectedUser?.email}</Text>
-            </View>
+//           <ScrollView contentContainerStyle={{ padding: 25 }}>
+//             <View style={{ alignItems: 'center', marginBottom: 30 }}>
+//               <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginBottom: 15 }}>
+//                 <UsersIcon size={40} color={appColors.foreground} />
+//               </View>
+//               <Text style={{ fontSize: 18, fontWeight: '900', color: appColors.foreground }}>{selectedUser?.fullName}</Text>
+//               <Text style={{ fontSize: 13, color: appColors.textMuted }}>{selectedUser?.email}</Text>
+//             </View>
 
-            <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('role').toUpperCase()}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 25 }}>
-              {['customer', 'brand_owner', 'nor_kam', 'admin', 'editor', 'support'].map(r => (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => setUserRole(r)}
-                  style={{
-                    paddingHorizontal: 20, paddingVertical: 10,
-                    backgroundColor: userRole === r ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'),
-                    borderRadius: 20, borderWidth: 1, borderColor: userRole === r ? appColors.foreground : appColors.border
-                  }}
-                >
-                  <Text style={{ color: userRole === r ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '700', fontSize: 11 }}>
-                    {t(r === 'brand_owner' ? 'brandOwner' : (r === 'nor_kam' ? 'norKam' : r)).toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+//             <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('role').toUpperCase()}</Text>
+//             <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 25 }}>
+//               {['customer', 'brand_owner', 'nor_kam', 'admin', 'editor', 'support'].map(r => (
+//                 <TouchableOpacity
+//                   key={r}
+//                   onPress={() => setUserRole(r)}
+//                   style={{
+//                     paddingHorizontal: 20, paddingVertical: 10,
+//                     backgroundColor: userRole === r ? appColors.foreground : (theme === 'dark' ? '#121218' : 'white'),
+//                     borderRadius: 20, borderWidth: 1, borderColor: userRole === r ? appColors.foreground : appColors.border
+//                   }}
+//                 >
+//                   <Text style={{ color: userRole === r ? (theme === 'dark' ? '#000' : '#FFF') : appColors.foreground, fontWeight: '700', fontSize: 11 }}>
+//                     {t(r === 'brand_owner' ? 'brandOwner' : (r === 'nor_kam' ? 'norKam' : r)).toUpperCase()}
+//                   </Text>
+//                 </TouchableOpacity>
+//               ))}
+//             </View>
 
-            {['brand_owner', 'nor_kam', 'admin'].includes(userRole) && (
-              <>
-                <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('selectBrand').toUpperCase()}</Text>
-                <View style={{ gap: 10 }}>
-                  {brands.map(b => (
-                    <TouchableOpacity
-                      key={b.id}
-                      onPress={() => setUserBrandId(b.id)}
-                      style={{
-                        padding: 15, borderRadius: 12, borderWidth: 1,
-                        borderColor: userBrandId === b.id ? appColors.foreground : appColors.border,
-                        backgroundColor: userBrandId === b.id ? (theme === 'dark' ? '#121218' : '#F9F9F9') : 'transparent',
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
-                      }}
-                    >
-                      <Text style={{ color: appColors.foreground, fontWeight: '700' }}>{b.name?.fr || b.name}</Text>
-                      {userBrandId === b.id && <CheckCircle2 size={18} color={appColors.foreground} />}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+//             {['brand_owner', 'nor_kam', 'admin'].includes(userRole) && (
+//               <>
+//                 <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('selectBrand').toUpperCase()}</Text>
+//                 <View style={{ gap: 10 }}>
+//                   {brands.map(b => (
+//                     <TouchableOpacity
+//                       key={b.id}
+//                       onPress={() => setUserBrandId(b.id)}
+//                       style={{
+//                         padding: 15, borderRadius: 12, borderWidth: 1,
+//                         borderColor: userBrandId === b.id ? appColors.foreground : appColors.border,
+//                         backgroundColor: userBrandId === b.id ? (theme === 'dark' ? '#121218' : '#F9F9F9') : 'transparent',
+//                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
+//                       }}
+//                     >
+//                       <Text style={{ color: appColors.foreground, fontWeight: '700' }}>{b.name?.fr || b.name}</Text>
+//                       {userBrandId === b.id && <CheckCircle2 size={18} color={appColors.foreground} />}
+//                     </TouchableOpacity>
+//                   ))}
+//                 </View>
+//               </>
+//             )}
+//           </ScrollView>
+//         </View>
+//       </Modal>
+//     </SafeAreaView>
+//   );
+// }
 
 function PlaceholderAdminScreen({ title, onBack, t }: any) {
   const { colors, theme } = useAppTheme();
@@ -12080,476 +11119,476 @@ const styles = StyleSheet.create({
   }
 });
 // --- ADMIN FLASH SALE ---
-function AdminFlashSaleScreen({ onBack, t, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
+// function AdminFlashSaleScreen({ onBack, t, profileData }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const isBrandOwner = profileData?.role === 'brand_owner';
+//   const myBrandId = profileData?.brandId;
 
-  const [active, setActive] = useState(false);
-  const [title, setTitle] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+//   const [active, setActive] = useState(false);
+//   const [title, setTitle] = useState('');
+//   const [endTime, setEndTime] = useState('');
+//   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+//   const [products, setProducts] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchFlashSale(), fetchProducts()]);
-      setLoading(false);
-    };
-    init();
-  }, []);
+//   useEffect(() => {
+//     const init = async () => {
+//       setLoading(true);
+//       await Promise.all([fetchFlashSale(), fetchProducts()]);
+//       setLoading(false);
+//     };
+//     init();
+//   }, []);
 
-  // Use a brand-specific flash sale doc for brand owners, shared admin doc for admin
-  const flashSaleDocId = isBrandOwner && myBrandId ? `flashSale_${myBrandId}` : 'flashSale';
+//   // Use a brand-specific flash sale doc for brand owners, shared admin doc for admin
+//   const flashSaleDocId = isBrandOwner && myBrandId ? `flashSale_${myBrandId}` : 'flashSale';
 
-  const fetchFlashSale = async () => {
-    const snap = await getDoc(doc(db, 'settings', flashSaleDocId));
-    if (snap.exists()) {
-      const data = snap.data();
-      setActive(data.active || false);
-      setTitle(data.title || '');
-      setEndTime(data.endTime || '');
-      setSelectedProductIds(data.productIds || []);
-    }
-  };
+//   const fetchFlashSale = async () => {
+//     const snap = await getDoc(doc(db, 'settings', flashSaleDocId));
+//     if (snap.exists()) {
+//       const data = snap.data();
+//       setActive(data.active || false);
+//       setTitle(data.title || '');
+//       setEndTime(data.endTime || '');
+//       setSelectedProductIds(data.productIds || []);
+//     }
+//   };
 
-  const fetchProducts = async () => {
-    try {
-      const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'), limit(100));
-      const snap = await getDocs(q);
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Brand owners only see their own products in the flash sale selector
-      setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
-    } catch (err) {
-      console.error("Error fetching products for flash sale:", err);
-    }
-  };
+//   const fetchProducts = async () => {
+//     try {
+//       const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'), limit(100));
+//       const snap = await getDocs(q);
+//       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//       // Brand owners only see their own products in the flash sale selector
+//       setProducts(isBrandOwner && myBrandId ? all.filter((p: any) => p.brandId === myBrandId) : all);
+//     } catch (err) {
+//       console.error("Error fetching products for flash sale:", err);
+//     }
+//   };
 
-  const handleSave = async () => {
-    if (!title || !endTime) {
-      Alert.alert(t('error'), t('fillAllFields') || t('requiredFields'));
-      return;
-    }
-    const testDate = new Date(endTime);
-    if (isNaN(testDate.getTime())) {
-      Alert.alert(t('error'), t('invalidDateFormat') || 'Invalid date format');
-      return;
-    }
-    setLoading(true);
-    try {
-      const saveData: any = {
-        active,
-        title,
-        endTime,
-        productIds: selectedProductIds,
-        updatedAt: serverTimestamp()
-      };
-      // Brand owners have their own flash sale config
-      if (isBrandOwner && myBrandId) saveData.brandId = myBrandId;
-      await setDoc(doc(db, 'settings', flashSaleDocId), saveData);
-      Alert.alert(t('successTitle'), t('flashSaleUpdated'));
-    } catch (e: any) {
-      console.error("Error saving flash sale:", e);
-      Alert.alert(t('error'), e.message || t('failedToSave'));
-    } finally {
-      setLoading(false);
-    }
-  };
+//   const handleSave = async () => {
+//     if (!title || !endTime) {
+//       Alert.alert(t('error'), t('fillAllFields') || t('requiredFields'));
+//       return;
+//     }
+//     const testDate = new Date(endTime);
+//     if (isNaN(testDate.getTime())) {
+//       Alert.alert(t('error'), t('invalidDateFormat') || 'Invalid date format');
+//       return;
+//     }
+//     setLoading(true);
+//     try {
+//       const saveData: any = {
+//         active,
+//         title,
+//         endTime,
+//         productIds: selectedProductIds,
+//         updatedAt: serverTimestamp()
+//       };
+//       // Brand owners have their own flash sale config
+//       if (isBrandOwner && myBrandId) saveData.brandId = myBrandId;
+//       await setDoc(doc(db, 'settings', flashSaleDocId), saveData);
+//       Alert.alert(t('successTitle'), t('flashSaleUpdated'));
+//     } catch (e: any) {
+//       console.error("Error saving flash sale:", e);
+//       Alert.alert(t('error'), e.message || t('failedToSave'));
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          <ChevronLeft size={20} color={appColors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('flashSale').toUpperCase()}</Text>
-        <TouchableOpacity onPress={handleSave} disabled={loading} style={[styles.backBtnSmall, { width: undefined, paddingHorizontal: 12, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-          {loading ? <ActivityIndicator size="small" color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-        </TouchableOpacity>
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           <ChevronLeft size={20} color={appColors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>{t('flashSale').toUpperCase()}</Text>
+//         <TouchableOpacity onPress={handleSave} disabled={loading} style={[styles.backBtnSmall, { width: undefined, paddingHorizontal: 12, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//           {loading ? <ActivityIndicator size="small" color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
+//         </TouchableOpacity>
+//       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 25 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, backgroundColor: theme === 'dark' ? '#171720' : 'white', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: appColors.border }}>
-          <View>
-            <Text style={{ fontWeight: '800', fontSize: 16, color: appColors.foreground }}>{t('activeStatusLabel')}</Text>
-            <Text style={{ color: appColors.textMuted, fontSize: 12 }}>{t('showFlashSale')}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setActive(!active)}
-            style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: active ? appColors.foreground : (theme === 'dark' ? '#17171F' : '#eee'), padding: 3, alignItems: active ? 'flex-end' : 'flex-start' }}
-          >
-            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme === 'dark' ? (active ? '#000' : '#555') : 'white' }} />
-          </TouchableOpacity>
-        </View>
+//       <ScrollView contentContainerStyle={{ padding: 25 }}>
+//         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, backgroundColor: theme === 'dark' ? '#171720' : 'white', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: appColors.border }}>
+//           <View>
+//             <Text style={{ fontWeight: '800', fontSize: 16, color: appColors.foreground }}>{t('activeStatusLabel')}</Text>
+//             <Text style={{ color: appColors.textMuted, fontSize: 12 }}>{t('showFlashSale')}</Text>
+//           </View>
+//           <TouchableOpacity
+//             onPress={() => setActive(!active)}
+//             style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: active ? appColors.foreground : (theme === 'dark' ? '#17171F' : '#eee'), padding: 3, alignItems: active ? 'flex-end' : 'flex-start' }}
+//           >
+//             <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme === 'dark' ? (active ? '#000' : '#555') : 'white' }} />
+//           </TouchableOpacity>
+//         </View>
 
-        <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()}</Text>
-        <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={title} onChangeText={setTitle} placeholder={t('flashSaleTitlePlaceholder')} placeholderTextColor="#666" />
+//         <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('campaignTitle').toUpperCase()}</Text>
+//         <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={title} onChangeText={setTitle} placeholder={t('flashSaleTitlePlaceholder')} placeholderTextColor="#666" />
 
-        <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('endTimeIso')}</Text>
-        <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={endTime} onChangeText={setEndTime} placeholder="YYYY-MM-DDTHH:MM:SS" placeholderTextColor="#666" />
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, marginTop: 15 }}>
-          {[6, 12, 24, 48].map(h => (
-            <TouchableOpacity
-              key={h}
-              onPress={() => {
-                const d = new Date();
-                d.setHours(d.getHours() + h);
-                setEndTime(d.toISOString());
-              }}
-              style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderRadius: 10, borderWidth: 1, borderColor: appColors.border }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: '900', color: appColors.foreground }}>+{h}H</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <Text style={{ fontSize: 10, color: appColors.textMuted, marginBottom: 25 }}>{t('selectPresetOrIso')}</Text>
+//         <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('endTimeIso')}</Text>
+//         <TextInput style={[styles.adminInput, { backgroundColor: theme === 'dark' ? '#171720' : 'white', color: appColors.foreground, borderColor: appColors.border }]} value={endTime} onChangeText={setEndTime} placeholder="YYYY-MM-DDTHH:MM:SS" placeholderTextColor="#666" />
+//         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, marginTop: 15 }}>
+//           {[6, 12, 24, 48].map(h => (
+//             <TouchableOpacity
+//               key={h}
+//               onPress={() => {
+//                 const d = new Date();
+//                 d.setHours(d.getHours() + h);
+//                 setEndTime(d.toISOString());
+//               }}
+//               style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderRadius: 10, borderWidth: 1, borderColor: appColors.border }}
+//             >
+//               <Text style={{ fontSize: 10, fontWeight: '900', color: appColors.foreground }}>+{h}H</Text>
+//             </TouchableOpacity>
+//           ))}
+//         </View>
+//         <Text style={{ fontSize: 10, color: appColors.textMuted, marginBottom: 25 }}>{t('selectPresetOrIso')}</Text>
 
-        <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('selectProductsLabel')} ({selectedProductIds.length})</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          {products.map(p => {
-            const isSelected = selectedProductIds.includes(p.id);
-            return (
-              <TouchableOpacity
-                key={p.id}
-                onPress={() => setSelectedProductIds(isSelected ? selectedProductIds.filter(id => id !== p.id) : [...selectedProductIds, p.id])}
-                style={{ width: (width - 70) / 3, backgroundColor: theme === 'dark' ? '#171720' : 'white', borderRadius: 15, overflow: 'hidden', borderWidth: 1, borderColor: isSelected ? appColors.foreground : appColors.border }}
-              >
-                <Image source={{ uri: p.mainImage }} style={{ width: '100%', height: 80 }} />
-                <View style={{ padding: 8 }}>
-                  <Text style={{ fontSize: 8, fontWeight: '700', color: appColors.foreground }} numberOfLines={1}>{getName(p.name)}</Text>
-                </View>
-                {isSelected && <View style={{ position: 'absolute', top: 5, right: 5, backgroundColor: appColors.foreground, borderRadius: 10, padding: 2 }}><CheckCircle2 size={12} color={theme === 'dark' ? '#000' : 'white'} /></View>}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+//         <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('selectProductsLabel')} ({selectedProductIds.length})</Text>
+//         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+//           {products.map(p => {
+//             const isSelected = selectedProductIds.includes(p.id);
+//             return (
+//               <TouchableOpacity
+//                 key={p.id}
+//                 onPress={() => setSelectedProductIds(isSelected ? selectedProductIds.filter(id => id !== p.id) : [...selectedProductIds, p.id])}
+//                 style={{ width: (width - 70) / 3, backgroundColor: theme === 'dark' ? '#171720' : 'white', borderRadius: 15, overflow: 'hidden', borderWidth: 1, borderColor: isSelected ? appColors.foreground : appColors.border }}
+//               >
+//                 <Image source={{ uri: p.mainImage }} style={{ width: '100%', height: 80 }} />
+//                 <View style={{ padding: 8 }}>
+//                   <Text style={{ fontSize: 8, fontWeight: '700', color: appColors.foreground }} numberOfLines={1}>{getName(p.name)}</Text>
+//                 </View>
+//                 {isSelected && <View style={{ position: 'absolute', top: 5, right: 5, backgroundColor: appColors.foreground, borderRadius: 10, padding: 2 }}><CheckCircle2 size={12} color={theme === 'dark' ? '#000' : 'white'} /></View>}
+//               </TouchableOpacity>
+//             );
+//           })}
+//         </View>
+//       </ScrollView>
+//     </SafeAreaView>
+//   );
+// }
 
 // --- ADMIN PROMO BANNERS ---
-function AdminPromoBannersScreen({ onBack, t, profileData }: any) {
-  const { colors: appColors, theme } = useAppTheme();
-  const isBrandOwner = profileData?.role === 'brand_owner';
-  const myBrandId = profileData?.brandId;
+// function AdminPromoBannersScreen({ onBack, t, profileData }: any) {
+//   const { colors: appColors, theme } = useAppTheme();
+//   const isBrandOwner = profileData?.role === 'brand_owner';
+//   const myBrandId = profileData?.brandId;
 
-  const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#5856D6', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
-  const [banners, setBanners] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    imageUrl: '',
-    backgroundColor: '#FF2D55',
-    order: '0',
-    isActive: true
-  });
-  const [saving, setSaving] = useState(false);
+//   const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#5856D6', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
+//   const [banners, setBanners] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+//   const [editingId, setEditingId] = useState<string | null>(null);
+//   const [form, setForm] = useState({
+//     title: '',
+//     description: '',
+//     imageUrl: '',
+//     backgroundColor: '#FF2D55',
+//     order: '0',
+//     isActive: true
+//   });
+//   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchBanners();
-  }, []);
+//   useEffect(() => {
+//     fetchBanners();
+//   }, []);
 
-  const fetchBanners = async () => {
-    setLoading(true);
-    try {
-      const q = query(collection(db, 'promoBanners'), orderBy('order', 'asc'));
-      const snap = await getDocs(q);
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Brand owners only see their own brand's promo banners
-      setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+//   const fetchBanners = async () => {
+//     setLoading(true);
+//     try {
+//       const q = query(collection(db, 'promoBanners'), orderBy('order', 'asc'));
+//       const snap = await getDocs(q);
+//       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+//       // Brand owners only see their own brand's promo banners
+//       setBanners(isBrandOwner && myBrandId ? all.filter((b: any) => b.brandId === myBrandId) : all);
+//     } catch (e) {
+//       console.error(e);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  const handleEdit = (banner: any) => {
-    setEditingId(banner.id);
-    setForm({
-      title: banner.title || '',
-      description: banner.description || '',
-      imageUrl: banner.imageUrl || '',
-      backgroundColor: banner.backgroundColor || '#FF2D55',
-      order: String(banner.order || 0),
-      isActive: banner.isActive ?? true
-    });
-    setIsModalOpen(true);
-  };
+//   const handleEdit = (banner: any) => {
+//     setEditingId(banner.id);
+//     setForm({
+//       title: banner.title || '',
+//       description: banner.description || '',
+//       imageUrl: banner.imageUrl || '',
+//       backgroundColor: banner.backgroundColor || '#FF2D55',
+//       order: String(banner.order || 0),
+//       isActive: banner.isActive ?? true
+//     });
+//     setIsModalOpen(true);
+//   };
 
-  const handleAddNew = () => {
-    setEditingId(null);
-    setForm({
-      title: '',
-      description: '',
-      imageUrl: '',
-      backgroundColor: '#FF2D55',
-      order: String(banners.length),
-      isActive: true
-    });
-    setIsModalOpen(true);
-  };
+//   const handleAddNew = () => {
+//     setEditingId(null);
+//     setForm({
+//       title: '',
+//       description: '',
+//       imageUrl: '',
+//       backgroundColor: '#FF2D55',
+//       order: String(banners.length),
+//       isActive: true
+//     });
+//     setIsModalOpen(true);
+//   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.7,
-    });
+//   const pickImage = async () => {
+//     const result = await ImagePicker.launchImageLibraryAsync({
+//       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+//       allowsEditing: true,
+//       aspect: [16, 9],
+//       quality: 0.7,
+//     });
 
-    if (!result.canceled) {
-      // In a real app we'd upload to storage, for now let's simulate or use the URI
-      // Let's assume the user can provide a URL or we'd handle upload.
-      // For this demo, we'll set the URI directly (note: this only works locally)
-      setForm({ ...form, imageUrl: result.assets[0].uri });
-    }
-  };
+//     if (!result.canceled) {
+//       // In a real app we'd upload to storage, for now let's simulate or use the URI
+//       // Let's assume the user can provide a URL or we'd handle upload.
+//       // For this demo, we'll set the URI directly (note: this only works locally)
+//       setForm({ ...form, imageUrl: result.assets[0].uri });
+//     }
+//   };
 
-  const handleSave = async () => {
-    if (!form.imageUrl) {
-      Alert.alert('Error', 'Image is required');
-      return;
-    }
-    setSaving(true);
-    try {
-      const data: any = {
-        ...form,
-        order: parseInt(form.order) || 0,
-        updatedAt: serverTimestamp()
-      };
-      // Tag with brandId so brand owners only manage their own promo banners
-      if (isBrandOwner && myBrandId) data.brandId = myBrandId;
-      if (editingId) {
-        await updateDoc(doc(db, 'promoBanners', editingId), data);
-      } else {
-        await addDoc(collection(db, 'promoBanners'), { ...data, createdAt: serverTimestamp() });
-      }
-      setIsModalOpen(false);
-      fetchBanners();
-    } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  };
+//   const handleSave = async () => {
+//     if (!form.imageUrl) {
+//       Alert.alert('Error', 'Image is required');
+//       return;
+//     }
+//     setSaving(true);
+//     try {
+//       const data: any = {
+//         ...form,
+//         order: parseInt(form.order) || 0,
+//         updatedAt: serverTimestamp()
+//       };
+//       // Tag with brandId so brand owners only manage their own promo banners
+//       if (isBrandOwner && myBrandId) data.brandId = myBrandId;
+//       if (editingId) {
+//         await updateDoc(doc(db, 'promoBanners', editingId), data);
+//       } else {
+//         await addDoc(collection(db, 'promoBanners'), { ...data, createdAt: serverTimestamp() });
+//       }
+//       setIsModalOpen(false);
+//       fetchBanners();
+//     } catch (e) {
+//       console.error(e);
+//       Alert.alert('Error', 'Failed to save');
+//     } finally {
+//       setSaving(false);
+//     }
+//   };
 
-  const toggleStatus = async (banner: any) => {
-    try {
-      await updateDoc(doc(db, 'promoBanners', banner.id), { isActive: !banner.isActive });
-      fetchBanners();
-    } catch (e) {
-      console.error(e);
-    }
-  };
+//   const toggleStatus = async (banner: any) => {
+//     try {
+//       await updateDoc(doc(db, 'promoBanners', banner.id), { isActive: !banner.isActive });
+//       fetchBanners();
+//     } catch (e) {
+//       console.error(e);
+//     }
+//   };
 
-  const deleteBanner = (id: string) => {
-    Alert.alert('Delete Promotion', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'promoBanners', id));
-            fetchBanners();
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      }
-    ]);
-  };
+//   const deleteBanner = (id: string) => {
+//     Alert.alert('Delete Promotion', 'Are you sure?', [
+//       { text: 'Cancel', style: 'cancel' },
+//       {
+//         text: 'Delete',
+//         style: 'destructive',
+//         onPress: async () => {
+//           try {
+//             await deleteDoc(doc(db, 'promoBanners', id));
+//             fetchBanners();
+//           } catch (e) {
+//             console.error(e);
+//           }
+//         }
+//       }
+//     ]);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
-      <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><ChevronLeft size={20} color={appColors.foreground} /></TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>PROMOTIONS</Text>
-        <View style={{ flexDirection: 'row', gap: 15 }}>
-          <TouchableOpacity onPress={handleAddNew} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><Plus size={22} color={appColors.foreground} /></TouchableOpacity>
-          <TouchableOpacity onPress={fetchBanners} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><RotateCcw size={20} color={appColors.foreground} /></TouchableOpacity>
-        </View>
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: appColors.background }]}>
+//       <View style={[styles.modernHeader, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><ChevronLeft size={20} color={appColors.foreground} /></TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit pointerEvents="none" style={[styles.modernLogo, { color: appColors.foreground }]}>PROMOTIONS</Text>
+//         <View style={{ flexDirection: 'row', gap: 15 }}>
+//           <TouchableOpacity onPress={handleAddNew} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><Plus size={22} color={appColors.foreground} /></TouchableOpacity>
+//           <TouchableOpacity onPress={fetchBanners} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}><RotateCcw size={20} color={appColors.foreground} /></TouchableOpacity>
+//         </View>
+//       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color={Colors.foreground} style={{ marginTop: 50 }} />
-      ) : (
-        <ScrollView contentContainerStyle={{ padding: 20 }}>
-          {banners.map(banner => (
-            <View key={banner.id} style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20, padding: 15 }]}>
-              <View style={{ flexDirection: 'row', gap: 15 }}>
-                <View style={{ width: 100, height: 60, borderRadius: 12, backgroundColor: banner.backgroundColor || (theme === 'dark' ? '#17171F' : '#FF2D55'), overflow: 'hidden' }}>
-                  <Image source={{ uri: banner.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '900', fontSize: 13, color: appColors.foreground }}>{banner.title?.toUpperCase()}</Text>
-                  <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 4 }}>{banner.description}</Text>
-                </View>
-              </View>
+//       {loading ? (
+//         <ActivityIndicator size="large" color={Colors.foreground} style={{ marginTop: 50 }} />
+//       ) : (
+//         <ScrollView contentContainerStyle={{ padding: 20 }}>
+//           {banners.map(banner => (
+//             <View key={banner.id} style={[styles.settingsSectionPremium, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: appColors.border, marginBottom: 20, padding: 15 }]}>
+//               <View style={{ flexDirection: 'row', gap: 15 }}>
+//                 <View style={{ width: 100, height: 60, borderRadius: 12, backgroundColor: banner.backgroundColor || (theme === 'dark' ? '#17171F' : '#FF2D55'), overflow: 'hidden' }}>
+//                   <Image source={{ uri: banner.imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+//                 </View>
+//                 <View style={{ flex: 1 }}>
+//                   <Text style={{ fontWeight: '900', fontSize: 13, color: appColors.foreground }}>{banner.title?.toUpperCase()}</Text>
+//                   <Text style={{ fontSize: 11, color: appColors.textMuted, marginTop: 4 }}>{banner.description}</Text>
+//                 </View>
+//               </View>
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 15 }}>
-                <TouchableOpacity onPress={() => toggleStatus(banner)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={[styles.customSwitch, { width: 44, height: 26, borderRadius: 13, padding: 3 }, banner.isActive && styles.customSwitchActive, !banner.isActive && { backgroundColor: theme === 'dark' ? '#17171F' : '#f2f2f7' }]}>
-                    <View style={[styles.switchDot, { width: 20, height: 20, borderRadius: 10 }, banner.isActive && styles.switchDotActive]} />
-                  </View>
-                  <Text style={{ fontSize: 10, fontWeight: '900', color: banner.isActive ? '#34C759' : appColors.textMuted }}>
-                    {banner.isActive ? t('activeStatus') : t('inactiveStatus')}
-                  </Text>
-                </TouchableOpacity>
+//               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: appColors.border, paddingTop: 15 }}>
+//                 <TouchableOpacity onPress={() => toggleStatus(banner)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+//                   <View style={[styles.customSwitch, { width: 44, height: 26, borderRadius: 13, padding: 3 }, banner.isActive && styles.customSwitchActive, !banner.isActive && { backgroundColor: theme === 'dark' ? '#17171F' : '#f2f2f7' }]}>
+//                     <View style={[styles.switchDot, { width: 20, height: 20, borderRadius: 10 }, banner.isActive && styles.switchDotActive]} />
+//                   </View>
+//                   <Text style={{ fontSize: 10, fontWeight: '900', color: banner.isActive ? '#34C759' : appColors.textMuted }}>
+//                     {banner.isActive ? t('activeStatus') : t('inactiveStatus')}
+//                   </Text>
+//                 </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity onPress={() => handleEdit(banner)} style={{ padding: 8, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderRadius: 8, borderWidth: 1, borderColor: appColors.border }}>
-                    <Settings size={18} color={appColors.foreground} />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => deleteBanner(banner.id)} style={{ padding: 8, backgroundColor: theme === 'dark' ? '#311212' : '#FFF0F0', borderRadius: 8, borderWidth: 1, borderColor: appColors.error }}>
-                    <Trash2 size={18} color={appColors.error} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
-          {banners.length === 0 && (
-            <View style={{ alignItems: 'center', marginTop: 100 }}>
-              <Ticket size={48} color={theme === 'dark' ? '#1A1A24' : '#eee'} />
-              <Text style={{ color: appColors.textMuted, marginTop: 15, fontWeight: '700' }}>{t('noPromoBanners')}</Text>
-            </View>
-          )}
+//                 <View style={{ flexDirection: 'row', gap: 10 }}>
+//                   <TouchableOpacity onPress={() => handleEdit(banner)} style={{ padding: 8, backgroundColor: theme === 'dark' ? '#17171F' : '#f0f0f0', borderRadius: 8, borderWidth: 1, borderColor: appColors.border }}>
+//                     <Settings size={18} color={appColors.foreground} />
+//                   </TouchableOpacity>
+//                   <TouchableOpacity onPress={() => deleteBanner(banner.id)} style={{ padding: 8, backgroundColor: theme === 'dark' ? '#311212' : '#FFF0F0', borderRadius: 8, borderWidth: 1, borderColor: appColors.error }}>
+//                     <Trash2 size={18} color={appColors.error} />
+//                   </TouchableOpacity>
+//                 </View>
+//               </View>
+//             </View>
+//           ))}
+//           {banners.length === 0 && (
+//             <View style={{ alignItems: 'center', marginTop: 100 }}>
+//               <Ticket size={48} color={theme === 'dark' ? '#1A1A24' : '#eee'} />
+//               <Text style={{ color: appColors.textMuted, marginTop: 15, fontWeight: '700' }}>{t('noPromoBanners')}</Text>
+//             </View>
+//           )}
 
-          <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet">
-            <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : 'white' }}>
-              <View style={{
-                height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
-              }}>
-                <TouchableOpacity onPress={() => setIsModalOpen(false)} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', zIndex: 10 }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                  <X size={18} color={appColors.foreground} />
-                </TouchableOpacity>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, fontWeight: '900' }]}>{editingId ? t('editPromotion').toUpperCase() : t('newPromotion').toUpperCase()}</Text>
-                <TouchableOpacity onPress={handleSave} disabled={saving} style={{ paddingHorizontal: 15, height: 40, borderRadius: 20, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', justifyContent: 'center', alignItems: 'center', zIndex: 10 }} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                  {saving ? <ActivityIndicator size="small" color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
-                </TouchableOpacity>
-              </View>
+//           <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet">
+//             <View style={{ flex: 1, backgroundColor: theme === 'dark' ? '#0A0A0F' : 'white' }}>
+//               <View style={{
+//                 height: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, backgroundColor: theme === 'dark' ? '#000' : 'white'
+//               }}>
+//                 <TouchableOpacity onPress={() => setIsModalOpen(false)} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', zIndex: 10 }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//                   <X size={18} color={appColors.foreground} />
+//                 </TouchableOpacity>
+//                 <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: appColors.foreground, fontSize: 11, fontWeight: '900' }]}>{editingId ? t('editPromotion').toUpperCase() : t('newPromotion').toUpperCase()}</Text>
+//                 <TouchableOpacity onPress={handleSave} disabled={saving} style={{ paddingHorizontal: 15, height: 40, borderRadius: 20, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', justifyContent: 'center', alignItems: 'center', zIndex: 10 }} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+//                   {saving ? <ActivityIndicator size="small" color={appColors.foreground} /> : <Text style={{ fontWeight: '900', color: appColors.foreground, fontSize: 10 }}>{t('save').toUpperCase()}</Text>}
+//                 </TouchableOpacity>
+//               </View>
 
-              <ScrollView contentContainerStyle={{ padding: 25 }}>
-                <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('bannerImage')}</Text>
-                <TouchableOpacity
-                  onPress={pickImage}
-                  style={{ width: '100%', height: 180, borderRadius: 20, backgroundColor: theme === 'dark' ? '#171720' : '#f9f9fb', borderStyle: 'dashed', borderWidth: 2, borderColor: appColors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 25 }}
-                >
-                  {form.imageUrl ? (
-                    <Image source={{ uri: form.imageUrl }} style={{ width: '100%', height: '100%' }} />
-                  ) : (
-                    <View style={{ alignItems: 'center' }}>
-                      <ImageIcon size={40} color={appColors.textMuted} />
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: appColors.textMuted, marginTop: 10 }}>{t('selectImage169')}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+//               <ScrollView contentContainerStyle={{ padding: 25 }}>
+//                 <Text style={[styles.inputLabel, { color: appColors.foreground }]}>{t('bannerImage')}</Text>
+//                 <TouchableOpacity
+//                   onPress={pickImage}
+//                   style={{ width: '100%', height: 180, borderRadius: 20, backgroundColor: theme === 'dark' ? '#171720' : '#f9f9fb', borderStyle: 'dashed', borderWidth: 2, borderColor: appColors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 25 }}
+//                 >
+//                   {form.imageUrl ? (
+//                     <Image source={{ uri: form.imageUrl }} style={{ width: '100%', height: '100%' }} />
+//                   ) : (
+//                     <View style={{ alignItems: 'center' }}>
+//                       <ImageIcon size={40} color={appColors.textMuted} />
+//                       <Text style={{ fontSize: 10, fontWeight: '800', color: appColors.textMuted, marginTop: 10 }}>{t('selectImage169')}</Text>
+//                     </View>
+//                   )}
+//                 </TouchableOpacity>
 
-                <View style={styles.premiumInputGroup}>
-                  <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('promotionTitle')}</Text>
-                  <TextInput
-                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                    placeholder={t('summerSalePlaceholder')}
-                    placeholderTextColor="#666"
-                    value={form.title}
-                    onChangeText={(t) => setForm({ ...form, title: t })}
-                  />
-                </View>
+//                 <View style={styles.premiumInputGroup}>
+//                   <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('promotionTitle')}</Text>
+//                   <TextInput
+//                     style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
+//                     placeholder={t('summerSalePlaceholder')}
+//                     placeholderTextColor="#666"
+//                     value={form.title}
+//                     onChangeText={(t) => setForm({ ...form, title: t })}
+//                   />
+//                 </View>
 
-                <View style={styles.premiumInputGroup}>
-                  <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('descriptionOffer')}</Text>
-                  <TextInput
-                    style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                    placeholder={t('offerPlaceholder')}
-                    placeholderTextColor="#666"
-                    value={form.description}
-                    onChangeText={(t) => setForm({ ...form, description: t })}
-                  />
-                </View>
+//                 <View style={styles.premiumInputGroup}>
+//                   <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('descriptionOffer')}</Text>
+//                   <TextInput
+//                     style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
+//                     placeholder={t('offerPlaceholder')}
+//                     placeholderTextColor="#666"
+//                     value={form.description}
+//                     onChangeText={(t) => setForm({ ...form, description: t })}
+//                   />
+//                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 15 }}>
-                  <View style={[styles.premiumInputGroup, { flex: 1 }]}>
-                    <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('bgColorHex')}</Text>
-                    <TextInput
-                      style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                      placeholder="#FF2D55"
-                      placeholderTextColor="#666"
-                      value={form.backgroundColor}
-                      onChangeText={(t) => setForm({ ...form, backgroundColor: t })}
-                    />
-                  </View>
-                  <View style={[styles.premiumInputGroup, { flex: 0.5 }]}>
-                    <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('order')}</Text>
-                    <TextInput
-                      style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
-                      keyboardType="numeric"
-                      value={form.order}
-                      onChangeText={(t) => setForm({ ...form, order: t })}
-                    />
-                  </View>
-                </View>
+//                 <View style={{ flexDirection: 'row', gap: 15 }}>
+//                   <View style={[styles.premiumInputGroup, { flex: 1 }]}>
+//                     <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('bgColorHex')}</Text>
+//                     <TextInput
+//                       style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
+//                       placeholder="#FF2D55"
+//                       placeholderTextColor="#666"
+//                       value={form.backgroundColor}
+//                       onChangeText={(t) => setForm({ ...form, backgroundColor: t })}
+//                     />
+//                   </View>
+//                   <View style={[styles.premiumInputGroup, { flex: 0.5 }]}>
+//                     <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>{t('order')}</Text>
+//                     <TextInput
+//                       style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#171720' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border }]}
+//                       keyboardType="numeric"
+//                       value={form.order}
+//                       onChangeText={(t) => setForm({ ...form, order: t })}
+//                     />
+//                   </View>
+//                 </View>
 
-                {/* Color Picker Presets */}
-                <View style={{ marginBottom: 25 }}>
-                  <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>PRESET THEMES</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 5 }}>
-                    {PRESET_COLORS.map(color => (
-                      <TouchableOpacity
-                        key={color}
-                        onPress={() => setForm({ ...form, backgroundColor: color })}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: color,
-                          borderWidth: 3,
-                          borderColor: form.backgroundColor === color ? '#F2F2F7' : 'transparent',
-                          shadowColor: '#000',
-                          shadowOpacity: 0.1,
-                          shadowRadius: 5,
-                          elevation: 3
-                        }}
-                      />
-                    ))}
-                  </ScrollView>
-                </View>
+//                 {/* Color Picker Presets */}
+//                 <View style={{ marginBottom: 25 }}>
+//                   <Text style={[styles.inputLabelField, { color: appColors.foreground }]}>PRESET THEMES</Text>
+//                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 5 }}>
+//                     {PRESET_COLORS.map(color => (
+//                       <TouchableOpacity
+//                         key={color}
+//                         onPress={() => setForm({ ...form, backgroundColor: color })}
+//                         style={{
+//                           width: 36,
+//                           height: 36,
+//                           borderRadius: 18,
+//                           backgroundColor: color,
+//                           borderWidth: 3,
+//                           borderColor: form.backgroundColor === color ? '#F2F2F7' : 'transparent',
+//                           shadowColor: '#000',
+//                           shadowOpacity: 0.1,
+//                           shadowRadius: 5,
+//                           elevation: 3
+//                         }}
+//                       />
+//                     ))}
+//                   </ScrollView>
+//                 </View>
 
-                <View style={[styles.settingsRowSwitch, { borderBottomWidth: 0 }]}>
-                  <View>
-                    <Text style={styles.switchTitle}>Active Status</Text>
-                    <Text style={styles.switchSub}>Is this promotion currently visible?</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setForm({ ...form, isActive: !form.isActive })}
-                    style={[styles.customSwitch, { width: 44, height: 26, borderRadius: 13, padding: 3 }, form.isActive && styles.customSwitchActive]}
-                  >
-                    <View style={[styles.switchDot, { width: 20, height: 20, borderRadius: 10 }, form.isActive && styles.switchDotActive]} />
-                  </TouchableOpacity>
-                </View>
+//                 <View style={[styles.settingsRowSwitch, { borderBottomWidth: 0 }]}>
+//                   <View>
+//                     <Text style={styles.switchTitle}>Active Status</Text>
+//                     <Text style={styles.switchSub}>Is this promotion currently visible?</Text>
+//                   </View>
+//                   <TouchableOpacity
+//                     onPress={() => setForm({ ...form, isActive: !form.isActive })}
+//                     style={[styles.customSwitch, { width: 44, height: 26, borderRadius: 13, padding: 3 }, form.isActive && styles.customSwitchActive]}
+//                   >
+//                     <View style={[styles.switchDot, { width: 20, height: 20, borderRadius: 10 }, form.isActive && styles.switchDotActive]} />
+//                   </TouchableOpacity>
+//                 </View>
 
-                <TouchableOpacity
-                  onPress={handleSave}
-                  style={[styles.saveBtnPremium, { marginTop: 30 }]}
-                  disabled={saving}
-                >
-                  <Text style={styles.saveBtnPremiumText}>{saving ? 'SAVING...' : 'REGISTER PROMOTION'}</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </Modal>
-        </ScrollView>
-      )}
-    </SafeAreaView>
-  );
-}
+//                 <TouchableOpacity
+//                   onPress={handleSave}
+//                   style={[styles.saveBtnPremium, { marginTop: 30 }]}
+//                   disabled={saving}
+//                 >
+//                   <Text style={styles.saveBtnPremiumText}>{saving ? 'SAVING...' : 'REGISTER PROMOTION'}</Text>
+//                 </TouchableOpacity>
+//               </ScrollView>
+//             </View>
+//           </Modal>
+//         </ScrollView>
+//       )}
+//     </SafeAreaView>
+//   );
+// }
 
 function FlashSaleCountdown({ endTime, onEnd }: { endTime: string, onEnd?: () => void }) {
   const [timeLeft, setTimeLeft] = useState({ h: '00', m: '00', s: '00' });
@@ -12905,664 +11944,664 @@ function GenericPolicyScreen({ onBack, t, titleKey, fieldKey, defaultText, Icon 
   );
 }
 
-function AdminSupportListScreen({ onBack, onChatPress, t, theme, colors }: any) {
-  const [chats, setChats] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// function AdminSupportListScreen({ onBack, onChatPress, t, theme, colors }: any) {
+//   const [chats, setChats] = useState<any[]>([]);
+//   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const chatsRef = collection(db, 'chats');
-    const q = query(chatsRef, orderBy('lastMessageTime', 'desc'));
+//   useEffect(() => {
+//     const chatsRef = collection(db, 'chats');
+//     const q = query(chatsRef, orderBy('lastMessageTime', 'desc'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const chatList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setChats(chatList);
-      setLoading(false);
-    });
+//     const unsubscribe = onSnapshot(q, (snapshot) => {
+//       const chatList = snapshot.docs.map(doc => ({
+//         id: doc.id,
+//         ...doc.data()
+//       }));
+//       setChats(chatList);
+//       setLoading(false);
+//     });
 
-    return () => unsubscribe();
-  }, []);
+//     return () => unsubscribe();
+//   }, []);
 
-  const formatTime = (timestamp: any) => {
-    if (!timestamp?.toDate) return '';
-    const date = timestamp.toDate();
-    const now = new Date();
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
+//   const formatTime = (timestamp: any) => {
+//     if (!timestamp?.toDate) return '';
+//     const date = timestamp.toDate();
+//     const now = new Date();
+//     if (date.toDateString() === now.toDateString()) {
+//       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+//     }
+//     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+//   };
 
-  const getInitials = (name: string) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-  };
+//   const getInitials = (name: string) => {
+//     if (!name) return 'U';
+//     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={[styles.modernHeader, { borderBottomWidth: 1, borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7', paddingBottom: 10 }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', width: 36, height: 36 }]}>
-          <ChevronLeft size={18} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: colors.foreground, fontSize: 13, letterSpacing: 2 }]}>SUPPORT MANAGER</Text>
-        <View style={{ width: 36 }} />
-      </View>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+//       <View style={[styles.modernHeader, { borderBottomWidth: 1, borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7', paddingBottom: 10 }]}>
+//         <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', width: 36, height: 36 }]}>
+//           <ChevronLeft size={18} color={colors.foreground} />
+//         </TouchableOpacity>
+//         <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: colors.foreground, fontSize: 13, letterSpacing: 2 }]}>SUPPORT MANAGER</Text>
+//         <View style={{ width: 36 }} />
+//       </View>
 
-      <ScrollView
-        contentContainerStyle={{ padding: 16 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 50 }} />
-        ) : chats.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: 100 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-              <MessageCircle size={32} color={colors.textMuted} strokeWidth={1.5} />
-            </View>
-            <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>No active conversations</Text>
-          </View>
-        ) : (
-          chats.map(chat => (
-            <TouchableOpacity
-              key={chat.id}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                backgroundColor: theme === 'dark' ? '#121218' : 'white',
-                padding: 16,
-                borderRadius: 20,
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.02,
-                shadowRadius: 8,
-                elevation: 1
-              }}
-              onPress={() => onChatPress(chat.chatId, chat.customerName)}
-            >
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '800', fontSize: 16 }}>{getInitials(chat.customerName)}</Text>
-              </View>
+//       <ScrollView
+//         contentContainerStyle={{ padding: 16 }}
+//         showsVerticalScrollIndicator={false}
+//       >
+//         {loading ? (
+//           <ActivityIndicator color={colors.accent} style={{ marginTop: 50 }} />
+//         ) : chats.length === 0 ? (
+//           <View style={{ alignItems: 'center', marginTop: 100 }}>
+//             <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+//               <MessageCircle size={32} color={colors.textMuted} strokeWidth={1.5} />
+//             </View>
+//             <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>No active conversations</Text>
+//           </View>
+//         ) : (
+//           chats.map(chat => (
+//             <TouchableOpacity
+//               key={chat.id}
+//               activeOpacity={0.7}
+//               style={{
+//                 flexDirection: 'row',
+//                 backgroundColor: theme === 'dark' ? '#121218' : 'white',
+//                 padding: 16,
+//                 borderRadius: 20,
+//                 marginBottom: 12,
+//                 borderWidth: 1,
+//                 borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
+//                 alignItems: 'center',
+//                 shadowColor: '#000',
+//                 shadowOffset: { width: 0, height: 2 },
+//                 shadowOpacity: 0.02,
+//                 shadowRadius: 8,
+//                 elevation: 1
+//               }}
+//               onPress={() => onChatPress(chat.chatId, chat.customerName)}
+//             >
+//               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+//                 <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '800', fontSize: 16 }}>{getInitials(chat.customerName)}</Text>
+//               </View>
 
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <Text numberOfLines={1} style={{ color: colors.foreground, fontWeight: '800', fontSize: 15, flexShrink: 1 }}>{chat.customerName}</Text>
-                    {chat.status === 'closed' ? (
-                      <View style={{ backgroundColor: 'rgba(107, 114, 128, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ color: '#9CA3AF', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 }}>CLOSED</Text>
-                      </View>
-                    ) : (
-                      <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ color: '#22c55e', fontSize: 8, fontWeight: '900' }}>OPEN</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>{formatTime(chat.lastMessageTime)}</Text>
-                </View>
+//               <View style={{ flex: 1, marginLeft: 15 }}>
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+//                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+//                     <Text numberOfLines={1} style={{ color: colors.foreground, fontWeight: '800', fontSize: 15, flexShrink: 1 }}>{chat.customerName}</Text>
+//                     {chat.status === 'closed' ? (
+//                       <View style={{ backgroundColor: 'rgba(107, 114, 128, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+//                         <Text style={{ color: '#9CA3AF', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 }}>CLOSED</Text>
+//                       </View>
+//                     ) : (
+//                       <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+//                         <Text style={{ color: '#22c55e', fontSize: 8, fontWeight: '900' }}>OPEN</Text>
+//                       </View>
+//                     )}
+//                   </View>
+//                   <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '500' }}>{formatTime(chat.lastMessageTime)}</Text>
+//                 </View>
 
-                <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{chat.customerEmail}</Text>
+//                 <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>{chat.customerEmail}</Text>
 
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                  <Text numberOfLines={1} style={{
-                    color: chat.unreadCount > 0 ? colors.foreground : colors.textMuted,
-                    fontSize: 13,
-                    fontWeight: chat.unreadCount > 0 ? '700' : '400',
-                    flex: 1,
-                    marginRight: 10
-                  }}>
-                    {chat.lastMessage}
-                  </Text>
+//                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+//                   <Text numberOfLines={1} style={{
+//                     color: chat.unreadCount > 0 ? colors.foreground : colors.textMuted,
+//                     fontSize: 13,
+//                     fontWeight: chat.unreadCount > 0 ? '700' : '400',
+//                     flex: 1,
+//                     marginRight: 10
+//                   }}>
+//                     {chat.lastMessage}
+//                   </Text>
 
-                  {chat.unreadCount > 0 && (
-                    <View style={{
-                      backgroundColor: colors.accent,
-                      minWidth: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      paddingHorizontal: 5
-                    }}>
-                      <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{chat.unreadCount}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+//                   {chat.unreadCount > 0 && (
+//                     <View style={{
+//                       backgroundColor: colors.accent,
+//                       minWidth: 18,
+//                       height: 18,
+//                       borderRadius: 9,
+//                       alignItems: 'center',
+//                       justifyContent: 'center',
+//                       paddingHorizontal: 5
+//                     }}>
+//                       <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{chat.unreadCount}</Text>
+//                     </View>
+//                   )}
+//                 </View>
+//               </View>
+//             </TouchableOpacity>
+//           ))
+//         )}
+//       </ScrollView>
+//     </SafeAreaView>
+//   );
+// }
 
 
-function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, colors }: any) {
-  const [messages, setMessages] = useState<any[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
-  const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
-  const [chatData, setChatData] = useState<any>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+// function AdminSupportChatScreen({ onBack, chatId, customerName, user, t, theme, colors }: any) {
+//   const [messages, setMessages] = useState<any[]>([]);
+//   const [inputText, setInputText] = useState('');
+//   const [loading, setLoading] = useState(true);
+//   const [sending, setSending] = useState(false);
+//   const [uploading, setUploading] = useState(false);
+//   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+//   const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
+//   const [chatData, setChatData] = useState<any>(null);
+//   const scrollViewRef = useRef<ScrollView>(null);
 
-  useEffect(() => {
-    if (!chatId) return;
+//   useEffect(() => {
+//     if (!chatId) return;
 
-    const chatRef = doc(db, 'chats', chatId);
-    const unsubChat = onSnapshot(chatRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setChatData(snapshot.data());
-      }
-    });
+//     const chatRef = doc(db, 'chats', chatId);
+//     const unsubChat = onSnapshot(chatRef, (snapshot) => {
+//       if (snapshot.exists()) {
+//         setChatData(snapshot.data());
+//       }
+//     });
 
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+//     const messagesRef = collection(db, 'chats', chatId, 'messages');
+//     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
-    const unsubscribe = onSnapshot(q,
-      (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setMessages(msgs);
-        setLoading(false);
+//     const unsubscribe = onSnapshot(q,
+//       (snapshot) => {
+//         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+//         setMessages(msgs);
+//         setLoading(false);
 
-        snapshot.docs.forEach(async (mDoc) => {
-          const data = mDoc.data();
-          if (data.senderRole === 'customer' && !data.read) {
-            try {
-              await updateDoc(doc(db, 'chats', chatId, 'messages', mDoc.id), { read: true });
-            } catch (e) { }
-          }
-        });
+//         snapshot.docs.forEach(async (mDoc) => {
+//           const data = mDoc.data();
+//           if (data.senderRole === 'customer' && !data.read) {
+//             try {
+//               await updateDoc(doc(db, 'chats', chatId, 'messages', mDoc.id), { read: true });
+//             } catch (e) { }
+//           }
+//         });
 
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-      },
-      (err) => {
-        console.error("AdminSupportChat Error:", err);
-        setLoading(false);
-      }
-    );
+//         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+//       },
+//       (err) => {
+//         console.error("AdminSupportChat Error:", err);
+//         setLoading(false);
+//       }
+//     );
 
-    return () => {
-      unsubscribe();
-      unsubChat();
-    };
-  }, [chatId]);
+//     return () => {
+//       unsubscribe();
+//       unsubChat();
+//     };
+//   }, [chatId]);
 
-  const sendMessage = async () => {
-    if (!inputText.trim() || !user?.uid) return;
-    setSending(true);
-    const text = inputText.trim();
-    setInputText('');
+//   const sendMessage = async () => {
+//     if (!inputText.trim() || !user?.uid) return;
+//     setSending(true);
+//     const text = inputText.trim();
+//     setInputText('');
 
-    try {
-      const messagesRef = collection(db, 'chats', chatId, 'messages');
-      await addDoc(messagesRef, {
-        text: text,
-        senderId: user.uid,
-        senderName: 'Support',
-        senderRole: 'support',
-        timestamp: serverTimestamp(),
-        read: false
-      });
+//     try {
+//       const messagesRef = collection(db, 'chats', chatId, 'messages');
+//       await addDoc(messagesRef, {
+//         text: text,
+//         senderId: user.uid,
+//         senderName: 'Support',
+//         senderRole: 'support',
+//         timestamp: serverTimestamp(),
+//         read: false
+//       });
 
-      const chatDocRef = doc(db, 'chats', chatId);
-      await updateDoc(chatDocRef, {
-        lastMessage: text,
-        lastMessageTime: serverTimestamp(),
-        unreadCount: 0,
-        status: 'open'
-      });
+//       const chatDocRef = doc(db, 'chats', chatId);
+//       await updateDoc(chatDocRef, {
+//         lastMessage: text,
+//         lastMessageTime: serverTimestamp(),
+//         unreadCount: 0,
+//         status: 'open'
+//       });
 
-      if (chatData?.customerId) {
-        const userDoc = await getDoc(doc(db, 'users', chatData.customerId));
-        if (userDoc.exists() && userDoc.data().expoPushToken) {
-          sendPushNotification(
-            userDoc.data().expoPushToken,
-            'New message from Support',
-            text
-          );
-        }
-      }
-    } finally {
-      setSending(false);
-    }
-  };
+//       if (chatData?.customerId) {
+//         const userDoc = await getDoc(doc(db, 'users', chatData.customerId));
+//         if (userDoc.exists() && userDoc.data().expoPushToken) {
+//           sendPushNotification(
+//             userDoc.data().expoPushToken,
+//             'New message from Support',
+//             text
+//           );
+//         }
+//       }
+//     } finally {
+//       setSending(false);
+//     }
+//   };
 
-  const closeChat = async () => {
-    try {
-      await updateDoc(doc(db, 'chats', chatId), { status: 'closed' });
-    } catch (e) {
-      console.log('Error closing chat:', e);
-    }
-  };
+//   const closeChat = async () => {
+//     try {
+//       await updateDoc(doc(db, 'chats', chatId), { status: 'closed' });
+//     } catch (e) {
+//       console.log('Error closing chat:', e);
+//     }
+//   };
 
-  const openCamera = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Camera permission required');
-      return;
-    }
+//   const openCamera = async () => {
+//     const { status } = await ImagePicker.requestCameraPermissionsAsync();
+//     if (status !== 'granted') {
+//       alert('Camera permission required');
+//       return;
+//     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 0.7,
-    });
+//     const result = await ImagePicker.launchCameraAsync({
+//       mediaTypes: ImagePicker.MediaTypeOptions.All,
+//       allowsEditing: true,
+//       quality: 0.7,
+//     });
 
-    if (!result.canceled && result.assets && result.assets[0].uri) {
-      handleMediaUpload(result.assets[0].uri);
-    }
-  };
+//     if (!result.canceled && result.assets && result.assets[0].uri) {
+//       handleMediaUpload(result.assets[0].uri);
+//     }
+//   };
 
-  const pickMedia = async (type: 'image' | 'video' | 'all' = 'all') => {
-    const mediaTypes = type === 'image'
-      ? ImagePicker.MediaTypeOptions.Images
-      : (type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.All);
+//   const pickMedia = async (type: 'image' | 'video' | 'all' = 'all') => {
+//     const mediaTypes = type === 'image'
+//       ? ImagePicker.MediaTypeOptions.Images
+//       : (type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.All);
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes,
-      allowsEditing: true,
-      quality: 0.7,
-    });
+//     const result = await ImagePicker.launchImageLibraryAsync({
+//       mediaTypes,
+//       allowsEditing: true,
+//       quality: 0.7,
+//     });
 
-    if (!result.canceled && result.assets && result.assets[0].uri) {
-      handleMediaUpload(result.assets[0].uri);
-    }
-  };
+//     if (!result.canceled && result.assets && result.assets[0].uri) {
+//       handleMediaUpload(result.assets[0].uri);
+//     }
+//   };
 
-  const handleMediaUpload = async (uri: string) => {
-    setUploading(true);
-    try {
-      const fileType = uri.split('.').pop()?.toLowerCase();
-      const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-      const cloudinaryUrl = await uploadImageToCloudinary(uri);
+//   const handleMediaUpload = async (uri: string) => {
+//     setUploading(true);
+//     try {
+//       const fileType = uri.split('.').pop()?.toLowerCase();
+//       const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
+//       const cloudinaryUrl = await uploadImageToCloudinary(uri);
 
-      const messagesRef = collection(db, 'chats', chatId, 'messages');
-      const messageData: any = {
-        senderId: user.uid,
-        senderName: 'Support',
-        senderRole: 'support',
-        timestamp: serverTimestamp(),
-        read: false
-      };
+//       const messagesRef = collection(db, 'chats', chatId, 'messages');
+//       const messageData: any = {
+//         senderId: user.uid,
+//         senderName: 'Support',
+//         senderRole: 'support',
+//         timestamp: serverTimestamp(),
+//         read: false
+//       };
 
-      if (isVideo) {
-        messageData.videoUrl = cloudinaryUrl;
-      } else {
-        messageData.imageUrl = cloudinaryUrl;
-      }
+//       if (isVideo) {
+//         messageData.videoUrl = cloudinaryUrl;
+//       } else {
+//         messageData.imageUrl = cloudinaryUrl;
+//       }
 
-      await addDoc(messagesRef, messageData);
+//       await addDoc(messagesRef, messageData);
 
-      const chatDocRef = doc(db, 'chats', chatId);
-      await updateDoc(chatDocRef, {
-        lastMessage: isVideo ? 'Sent a video 📹' : 'Sent an image 📸',
-        lastMessageTime: serverTimestamp(),
-        unreadCount: 0,
-        status: 'open'
-      });
+//       const chatDocRef = doc(db, 'chats', chatId);
+//       await updateDoc(chatDocRef, {
+//         lastMessage: isVideo ? 'Sent a video 📹' : 'Sent an image 📸',
+//         lastMessageTime: serverTimestamp(),
+//         unreadCount: 0,
+//         status: 'open'
+//       });
 
-      if (chatData?.customerId) {
-        const userDoc = await getDoc(doc(db, 'users', chatData.customerId));
-        if (userDoc.exists() && userDoc.data().expoPushToken) {
-          sendPushNotification(
-            userDoc.data().expoPushToken,
-            'New message from Support',
-            isVideo ? 'Support sent a video' : 'Support sent an image'
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Admin media upload error:', error);
-      alert('Failed to upload media');
-    } finally {
-      setUploading(false);
-    }
-  };
+//       if (chatData?.customerId) {
+//         const userDoc = await getDoc(doc(db, 'users', chatData.customerId));
+//         if (userDoc.exists() && userDoc.data().expoPushToken) {
+//           sendPushNotification(
+//             userDoc.data().expoPushToken,
+//             'New message from Support',
+//             isVideo ? 'Support sent a video' : 'Support sent an image'
+//           );
+//         }
+//       }
+//     } catch (error) {
+//       console.error('Admin media upload error:', error);
+//       alert('Failed to upload media');
+//     } finally {
+//       setUploading(false);
+//     }
+//   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Refined Header */}
-      <View style={[styles.modernHeader, { borderBottomWidth: 1, borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7', paddingBottom: 10 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', width: 36, height: 36 }]}>
-            <ChevronLeft size={18} color={colors.foreground} />
-          </TouchableOpacity>
+//   return (
+//     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+//       {/* Refined Header */}
+//       <View style={[styles.modernHeader, { borderBottomWidth: 1, borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7', paddingBottom: 10 }]}>
+//         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+//           <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', width: 36, height: 36 }]}>
+//             <ChevronLeft size={18} color={colors.foreground} />
+//           </TouchableOpacity>
 
-          <View style={{ marginLeft: 12, flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-              <User size={18} color={theme === 'dark' ? '#000' : '#FFF'} />
-            </View>
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>{customerName?.toUpperCase()}</Text>
-                {chatData?.status && (
-                  <View style={{
-                    backgroundColor: chatData.status === 'open' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(107, 114, 128, 0.15)',
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 4
-                  }}>
-                    <Text style={{
-                      color: chatData.status === 'open' ? '#22c55e' : '#9CA3AF',
-                      fontSize: 8,
-                      fontWeight: '900',
-                      letterSpacing: 0.5
-                    }}>{chatData.status.toUpperCase()}</Text>
-                  </View>
-                )}
-              </View>
-              <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 1 }}>{chatData?.customerEmail}</Text>
-            </View>
-          </View>
-        </View>
+//           <View style={{ marginLeft: 12, flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+//             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+//               <User size={18} color={theme === 'dark' ? '#000' : '#FFF'} />
+//             </View>
+//             <View style={{ marginLeft: 10, flex: 1 }}>
+//               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+//                 <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>{customerName?.toUpperCase()}</Text>
+//                 {chatData?.status && (
+//                   <View style={{
+//                     backgroundColor: chatData.status === 'open' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(107, 114, 128, 0.15)',
+//                     paddingHorizontal: 6,
+//                     paddingVertical: 2,
+//                     borderRadius: 4
+//                   }}>
+//                     <Text style={{
+//                       color: chatData.status === 'open' ? '#22c55e' : '#9CA3AF',
+//                       fontSize: 8,
+//                       fontWeight: '900',
+//                       letterSpacing: 0.5
+//                     }}>{chatData.status.toUpperCase()}</Text>
+//                   </View>
+//                 )}
+//               </View>
+//               <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 1 }}>{chatData?.customerEmail}</Text>
+//             </View>
+//           </View>
+//         </View>
 
-        {chatData?.status === 'open' && (
-          <TouchableOpacity
-            onPress={closeChat}
-            activeOpacity={0.7}
-            style={{
-              backgroundColor: '#000',
-              paddingHorizontal: 12,
-              paddingVertical: 7,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'transparent'
-            }}
-          >
-            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>CLOSE</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+//         {chatData?.status === 'open' && (
+//           <TouchableOpacity
+//             onPress={closeChat}
+//             activeOpacity={0.7}
+//             style={{
+//               backgroundColor: '#000',
+//               paddingHorizontal: 12,
+//               paddingVertical: 7,
+//               borderRadius: 10,
+//               borderWidth: 1,
+//               borderColor: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'transparent'
+//             }}
+//           >
+//             <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>CLOSE</Text>
+//           </TouchableOpacity>
+//         )}
+//       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={{ padding: 15, paddingBottom: 30 }}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          showsVerticalScrollIndicator={false}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
-          ) : messages.map((m: any, index: number) => {
-            const isOwn = m.senderRole === 'support';
-            const showName = !isOwn; // Only show customer name
+//       <KeyboardAvoidingView
+//         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+//         style={{ flex: 1 }}
+//         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+//       >
+//         <ScrollView
+//           ref={scrollViewRef}
+//           contentContainerStyle={{ padding: 15, paddingBottom: 30 }}
+//           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+//           showsVerticalScrollIndicator={false}
+//         >
+//           {loading ? (
+//             <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
+//           ) : messages.map((m: any, index: number) => {
+//             const isOwn = m.senderRole === 'support';
+//             const showName = !isOwn; // Only show customer name
 
-            return (
-              <View key={m.id} style={{
-                alignSelf: isOwn ? 'flex-end' : 'flex-start',
-                backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderRadius: 22,
-                maxWidth: '82%',
-                marginBottom: 8,
-                borderBottomRightRadius: isOwn ? 4 : 22,
-                borderBottomLeftRadius: isOwn ? 22 : 4,
-                borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
-                borderColor: '#F2F2F7',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.04,
-                shadowRadius: 3,
-                elevation: 1,
-              }}>
-                {showName && (
-                  <Text style={{
-                    color: colors.accent,
-                    fontSize: 9,
-                    fontWeight: '900',
-                    marginBottom: 4,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5
-                  }}>
-                    {m.senderName}
-                  </Text>
-                )}
+//             return (
+//               <View key={m.id} style={{
+//                 alignSelf: isOwn ? 'flex-end' : 'flex-start',
+//                 backgroundColor: isOwn ? (theme === 'dark' ? '#FFF' : '#000') : (theme === 'dark' ? '#1C1C1E' : '#FFFFFF'),
+//                 paddingHorizontal: 16,
+//                 paddingVertical: 12,
+//                 borderRadius: 22,
+//                 maxWidth: '82%',
+//                 marginBottom: 8,
+//                 borderBottomRightRadius: isOwn ? 4 : 22,
+//                 borderBottomLeftRadius: isOwn ? 22 : 4,
+//                 borderWidth: !isOwn && theme !== 'dark' ? 1 : 0,
+//                 borderColor: '#F2F2F7',
+//                 shadowColor: '#000',
+//                 shadowOffset: { width: 0, height: 1 },
+//                 shadowOpacity: 0.04,
+//                 shadowRadius: 3,
+//                 elevation: 1,
+//               }}>
+//                 {showName && (
+//                   <Text style={{
+//                     color: colors.accent,
+//                     fontSize: 9,
+//                     fontWeight: '900',
+//                     marginBottom: 4,
+//                     textTransform: 'uppercase',
+//                     letterSpacing: 0.5
+//                   }}>
+//                     {m.senderName}
+//                   </Text>
+//                 )}
 
-                {m.imageUrl ? (
-                  <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
-                    <Image source={{ uri: m.imageUrl }} style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} resizeMode="cover" />
-                  </TouchableOpacity>
-                ) : m.videoUrl ? (
-                  <View style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, overflow: 'hidden', backgroundColor: '#000' }}>
-                    <UniversalVideoPlayer
-                      source={{ uri: m.videoUrl }}
-                      style={{ width: '100%', height: '100%' }}
-                      useNativeControls
-                      resizeMode="cover"
-                      isLooping
-                    />
-                  </View>
-                ) : (
-                  <Text style={{
-                    color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground,
-                    fontSize: 15,
-                    lineHeight: 21,
-                    fontWeight: '400'
-                  }}>{m.text}</Text>
-                )}
+//                 {m.imageUrl ? (
+//                   <TouchableOpacity onPress={() => setFullScreenImage(m.imageUrl)} activeOpacity={0.9}>
+//                     <Image source={{ uri: m.imageUrl }} style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} resizeMode="cover" />
+//                   </TouchableOpacity>
+//                 ) : m.videoUrl ? (
+//                   <View style={{ width: 230, height: 230, borderRadius: 14, marginTop: 2, overflow: 'hidden', backgroundColor: '#000' }}>
+//                     <UniversalVideoPlayer
+//                       source={{ uri: m.videoUrl }}
+//                       style={{ width: '100%', height: '100%' }}
+//                       useNativeControls
+//                       resizeMode="cover"
+//                       isLooping
+//                     />
+//                   </View>
+//                 ) : (
+//                   <Text style={{
+//                     color: isOwn ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground,
+//                     fontSize: 15,
+//                     lineHeight: 21,
+//                     fontWeight: '400'
+//                   }}>{m.text}</Text>
+//                 )}
 
-                <Text style={{
-                  color: isOwn ? (theme === 'dark' ? '#999' : 'rgba(255,255,255,0.6)') : colors.textMuted,
-                  fontSize: 8,
-                  marginTop: 6,
-                  textAlign: isOwn ? 'right' : 'left',
-                  fontWeight: '500'
-                }}>
-                  {m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                </Text>
-              </View>
-            );
-          })}
-        </ScrollView>
+//                 <Text style={{
+//                   color: isOwn ? (theme === 'dark' ? '#999' : 'rgba(255,255,255,0.6)') : colors.textMuted,
+//                   fontSize: 8,
+//                   marginTop: 6,
+//                   textAlign: isOwn ? 'right' : 'left',
+//                   fontWeight: '500'
+//                 }}>
+//                   {m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+//                 </Text>
+//               </View>
+//             );
+//           })}
+//         </ScrollView>
 
-        <Modal visible={!!fullScreenImage} transparent={true} onRequestClose={() => setFullScreenImage(null)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
-            <TouchableOpacity
-              style={{ position: 'absolute', top: 50, right: 25, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => setFullScreenImage(null)}
-            >
-              <X size={24} color="white" />
-            </TouchableOpacity>
-            {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '85%' }} resizeMode="contain" />}
-          </View>
-        </Modal>
+//         <Modal visible={!!fullScreenImage} transparent={true} onRequestClose={() => setFullScreenImage(null)}>
+//           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+//             <TouchableOpacity
+//               style={{ position: 'absolute', top: 50, right: 25, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}
+//               onPress={() => setFullScreenImage(null)}
+//             >
+//               <X size={24} color="white" />
+//             </TouchableOpacity>
+//             {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '85%' }} resizeMode="contain" />}
+//           </View>
+//         </Modal>
 
-        {/* Media Choice Modal */}
-        <Modal
-          visible={isMediaModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setIsMediaModalVisible(false)}
-        >
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
-            onPress={() => setIsMediaModalVisible(false)}
-            activeOpacity={1}
-          >
-            <View style={{
-              backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingBottom: 40,
-              paddingHorizontal: 20
-            }}>
-              <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
+//         {/* Media Choice Modal */}
+//         <Modal
+//           visible={isMediaModalVisible}
+//           transparent
+//           animationType="fade"
+//           onRequestClose={() => setIsMediaModalVisible(false)}
+//         >
+//           <TouchableOpacity
+//             style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+//             onPress={() => setIsMediaModalVisible(false)}
+//             activeOpacity={1}
+//           >
+//             <View style={{
+//               backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
+//               borderTopLeftRadius: 24,
+//               borderTopRightRadius: 24,
+//               paddingBottom: 40,
+//               paddingHorizontal: 20
+//             }}>
+//               <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
-                <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
-                  {t('chooseMedia')}
-                </Text>
-                <TouchableOpacity onPress={() => setIsMediaModalVisible(false)} style={{ padding: 4 }}>
-                  <X size={24} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
+//               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
+//                 <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
+//                   {t('chooseMedia')}
+//                 </Text>
+//                 <TouchableOpacity onPress={() => setIsMediaModalVisible(false)} style={{ padding: 4 }}>
+//                   <X size={24} color={colors.textMuted} />
+//                 </TouchableOpacity>
+//               </View>
 
-              <View style={{ gap: 12 }}>
-                <TouchableOpacity
-                  onPress={() => { setIsMediaModalVisible(false); openCamera(); }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                    padding: 16,
-                    borderRadius: 16
-                  }}
-                >
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                    <Camera size={22} color={colors.accentForeground || "#FFF"} />
-                  </View>
-                  <View>
-                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                      {t('openCamera')}
-                    </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                      {t('takePhotoVideo')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+//               <View style={{ gap: 12 }}>
+//                 <TouchableOpacity
+//                   onPress={() => { setIsMediaModalVisible(false); openCamera(); }}
+//                   style={{
+//                     flexDirection: 'row',
+//                     alignItems: 'center',
+//                     backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+//                     padding: 16,
+//                     borderRadius: 16
+//                   }}
+//                 >
+//                   <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+//                     <Camera size={22} color={colors.accentForeground || "#FFF"} />
+//                   </View>
+//                   <View>
+//                     <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+//                       {t('openCamera')}
+//                     </Text>
+//                     <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+//                       {t('takePhotoVideo')}
+//                     </Text>
+//                   </View>
+//                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => { setIsMediaModalVisible(false); pickMedia('video'); }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                    padding: 16,
-                    borderRadius: 16
-                  }}
-                >
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                    <VideoIcon size={22} color="#FFF" />
-                  </View>
-                  <View>
-                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                      {t('importVideo')}
-                    </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                      {t('fromGallery')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+//                 <TouchableOpacity
+//                   onPress={() => { setIsMediaModalVisible(false); pickMedia('video'); }}
+//                   style={{
+//                     flexDirection: 'row',
+//                     alignItems: 'center',
+//                     backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+//                     padding: 16,
+//                     borderRadius: 16
+//                   }}
+//                 >
+//                   <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+//                     <VideoIcon size={22} color="#FFF" />
+//                   </View>
+//                   <View>
+//                     <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+//                       {t('importVideo')}
+//                     </Text>
+//                     <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+//                       {t('fromGallery')}
+//                     </Text>
+//                   </View>
+//                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => { setIsMediaModalVisible(false); pickMedia('image'); }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                    padding: 16,
-                    borderRadius: 16
-                  }}
-                >
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                    <ImageIcon size={22} color="#FFF" />
-                  </View>
-                  <View>
-                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                      {t('importPhoto')}
-                    </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                      {t('fromGallery')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </Modal>
+//                 <TouchableOpacity
+//                   onPress={() => { setIsMediaModalVisible(false); pickMedia('image'); }}
+//                   style={{
+//                     flexDirection: 'row',
+//                     alignItems: 'center',
+//                     backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+//                     padding: 16,
+//                     borderRadius: 16
+//                   }}
+//                 >
+//                   <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+//                     <ImageIcon size={22} color="#FFF" />
+//                   </View>
+//                   <View>
+//                     <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+//                       {t('importPhoto')}
+//                     </Text>
+//                     <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+//                       {t('fromGallery')}
+//                     </Text>
+//                   </View>
+//                 </TouchableOpacity>
+//               </View>
+//             </View>
+//           </TouchableOpacity>
+//         </Modal>
 
-        {/* Improved Input Area */}
-        <View style={{
-          flexDirection: 'row',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-          borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
-          paddingBottom: Platform.OS === 'ios' ? 35 : 12,
-          backgroundColor: colors.background,
-          alignItems: 'center'
-        }}>
-          <TouchableOpacity
-            onPress={() => setIsMediaModalVisible(true)}
-            disabled={uploading}
-            activeOpacity={0.7}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 10
-            }}
-          >
-            {uploading ? <ActivityIndicator size="small" color={colors.accent} /> : <ImageIcon size={20} color={colors.textMuted} />}
-          </TouchableOpacity>
+//         {/* Improved Input Area */}
+//         <View style={{
+//           flexDirection: 'row',
+//           paddingHorizontal: 16,
+//           paddingVertical: 12,
+//           borderTopWidth: 1,
+//           borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
+//           paddingBottom: Platform.OS === 'ios' ? 35 : 12,
+//           backgroundColor: colors.background,
+//           alignItems: 'center'
+//         }}>
+//           <TouchableOpacity
+//             onPress={() => setIsMediaModalVisible(true)}
+//             disabled={uploading}
+//             activeOpacity={0.7}
+//             style={{
+//               width: 44,
+//               height: 44,
+//               borderRadius: 22,
+//               backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
+//               alignItems: 'center',
+//               justifyContent: 'center',
+//               marginRight: 10
+//             }}
+//           >
+//             {uploading ? <ActivityIndicator size="small" color={colors.accent} /> : <ImageIcon size={20} color={colors.textMuted} />}
+//           </TouchableOpacity>
 
-          <View style={{
-            flex: 1,
-            flexDirection: 'row',
-            backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
-            borderRadius: 25,
-            alignItems: 'center',
-            paddingHorizontal: 15,
-            borderWidth: 1,
-            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'transparent'
-          }}>
-            <TextInput
-              style={{
-                flex: 1,
-                color: colors.foreground,
-                paddingVertical: 10,
-                maxHeight: 100,
-                fontSize: 15,
-              }}
-              placeholder="Répondre..."
-              placeholderTextColor={colors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-            />
-          </View>
+//           <View style={{
+//             flex: 1,
+//             flexDirection: 'row',
+//             backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
+//             borderRadius: 25,
+//             alignItems: 'center',
+//             paddingHorizontal: 15,
+//             borderWidth: 1,
+//             borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'transparent'
+//           }}>
+//             <TextInput
+//               style={{
+//                 flex: 1,
+//                 color: colors.foreground,
+//                 paddingVertical: 10,
+//                 maxHeight: 100,
+//                 fontSize: 15,
+//               }}
+//               placeholder="Répondre..."
+//               placeholderTextColor={colors.textMuted}
+//               value={inputText}
+//               onChangeText={setInputText}
+//               multiline
+//             />
+//           </View>
 
-          <TouchableOpacity
-            onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
-            activeOpacity={0.8}
-            style={{
-              marginLeft: 10,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'),
-              alignItems: 'center',
-              justifyContent: 'center',
-              shadowColor: colors.accent,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: inputText.trim() ? 0.3 : 0,
-              shadowRadius: 6,
-              elevation: inputText.trim() ? 4 : 0
-            }}
-          >
-            {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
+//           <TouchableOpacity
+//             onPress={sendMessage}
+//             disabled={!inputText.trim() || sending}
+//             activeOpacity={0.8}
+//             style={{
+//               marginLeft: 10,
+//               width: 44,
+//               height: 44,
+//               borderRadius: 22,
+//               backgroundColor: inputText.trim() ? colors.accent : (theme === 'dark' ? '#2C2C2E' : '#E5E5EA'),
+//               alignItems: 'center',
+//               justifyContent: 'center',
+//               shadowColor: colors.accent,
+//               shadowOffset: { width: 0, height: 4 },
+//               shadowOpacity: inputText.trim() ? 0.3 : 0,
+//               shadowRadius: 6,
+//               elevation: inputText.trim() ? 4 : 0
+//             }}
+//           >
+//             {sending ? <ActivityIndicator size="small" color="white" /> : <Send size={18} color={inputText.trim() ? (theme === 'dark' ? '#000' : '#FFF') : colors.accent} />}
+//           </TouchableOpacity>
+//         </View>
+//       </KeyboardAvoidingView>
+//     </SafeAreaView>
+//   );
+// }
 

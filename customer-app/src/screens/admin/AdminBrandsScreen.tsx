@@ -44,6 +44,7 @@ import {
     SectionLabel,
     InputLabel,
     EmptyState,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 import { uploadToCloudinary } from '../../utils/cloudinary';
 import { getSafeString } from '../../utils/helpers';
@@ -61,6 +62,8 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
     const [nameFr, setNameFr] = useState('');
     const [nameAr, setNameAr] = useState('');
     const [image, setImage] = useState('');
+    const [address, setAddress] = useState('');
+    const [phone, setPhone] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -103,6 +106,8 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
             const data = {
                 name: { fr: nameFr, "ar-tn": nameAr },
                 image: imgUrl,
+                address,
+                phone,
                 isActive,
                 updatedAt: serverTimestamp()
             };
@@ -167,6 +172,8 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
         setNameFr('');
         setNameAr('');
         setImage('');
+        setAddress('');
+        setPhone('');
         setIsActive(true);
         setSelectedProductIds([]);
     };
@@ -176,6 +183,8 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
         setNameFr(b.name?.fr || (typeof b.name === 'string' ? b.name : ''));
         setNameAr(b.name?.['ar-tn'] || '');
         setImage(b.image || '');
+        setAddress(b.address || '');
+        setPhone(b.phone || '');
         setIsActive(b.isActive !== false);
 
         const associatedProducts = allProducts.filter(p => p.brandId === b.id).map(p => p.id);
@@ -204,23 +213,18 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('brands')}</Text>
+            <AdminHeader
+                title={t('brands')}
+                onBack={onBack}
+                rightElement={
                     <TouchableOpacity
                         onPress={() => { resetForm(); setModalVisible(true); }}
                         style={[sc.addBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
                     >
                         <Plus size={20} color={colors.foreground} />
                     </TouchableOpacity>
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+                }
+            />
 
             <Animated.FlatList
                 data={brands}
@@ -239,11 +243,11 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
                             {item.name?.['ar-tn'] && <Text style={[sc.brandNameAr, { color: colors.textMuted }]}>{item.name['ar-tn']}</Text>}
                         </View>
                         <View style={sc.actions}>
-                            <TouchableOpacity onPress={() => openEdit(item)} style={sc.actionBtn}>
+                            <TouchableOpacity onPress={() => openEdit(item)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
                                 <Settings size={18} color={colors.foreground} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={sc.actionBtn}>
-                                <Trash2 size={18} color={colors.error} />
+                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]}>
+                                <Trash2 size={18} color="#FF3B30" />
                             </TouchableOpacity>
                         </View>
                     </AdminCard>
@@ -300,6 +304,29 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
                                         onChangeText={setNameAr}
                                         placeholder={t('arabicName')}
                                         placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+
+                                <View style={sc.inputWrap}>
+                                    <InputLabel text={t('address')?.toUpperCase() || 'ADRESSE (POINT RELAIS)'} />
+                                    <TextInput
+                                        style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                                        value={address}
+                                        onChangeText={setAddress}
+                                        placeholder="Ex: Tunis, Tunisie 1000"
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+
+                                <View style={sc.inputWrap}>
+                                    <InputLabel text={t('phone')?.toUpperCase() || 'TÉLÉPHONE'} />
+                                    <TextInput
+                                        style={[sc.input, { backgroundColor: theme === 'dark' ? '#1A1A24' : 'white', color: colors.foreground, borderColor: colors.border }]}
+                                        value={phone}
+                                        onChangeText={setPhone}
+                                        placeholder="Ex: +216 71 000 000"
+                                        placeholderTextColor={colors.textMuted}
+                                        keyboardType="phone-pad"
                                     />
                                 </View>
 
@@ -368,13 +395,13 @@ const sc = StyleSheet.create({
     hSep: { height: StyleSheet.hairlineWidth },
     addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     listContent: { padding: 20, paddingBottom: 120 },
-    brandCard: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 24, marginBottom: 16 },
-    brandImg: { width: 70, height: 70, borderRadius: 18 },
-    brandInfo: { flex: 1, marginLeft: 16 },
-    brandName: { fontWeight: '900', fontSize: 14 },
-    brandNameAr: { fontSize: 11, marginTop: 2, writingDirection: 'rtl' },
-    actions: { flexDirection: 'row', gap: 8 },
-    actionBtn: { padding: 8 },
+    brandCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 24, marginBottom: 16 },
+    brandImg: { width: 75, height: 75, borderRadius: 18 },
+    brandInfo: { flex: 1, marginLeft: 18 },
+    brandName: { fontWeight: '900', fontSize: 16, letterSpacing: -0.2 },
+    brandNameAr: { fontSize: 13, marginTop: 4, writingDirection: 'rtl', opacity: 0.8 },
+    actions: { gap: 10, marginLeft: 12 },
+    actionBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     modalRoot: { flex: 1 },
     modalHeader: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1 },

@@ -496,6 +496,9 @@ export const en = {
   lastOrderLabel: 'LAST ORDER',
   neverLabel: 'Never',
   // ── Missing admin screen keys ──
+  profileSettings: 'PROFILE SETTINGS',
+  leaveBlankToKeep: 'Leave blank to keep',
+  currentPasswordToVerify: 'CURRENT PASSWORD TO VERIFY',
   noProductsFound: 'No products found',
   noOrdersFound: 'No orders found',
   inactive: 'INACTIVE',

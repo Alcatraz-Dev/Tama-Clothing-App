@@ -20,6 +20,7 @@ import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTi
 import { db } from '../api/firebase';
 import { ChevronLeft, Plus, Trash2, Edit, X, Save, CheckCircle, Search, Settings, ImageIcon, Camera, Globe, Instagram, Facebook, Twitter, Linkedin, Upload, Twitter as TwitterIcon, Music } from 'lucide-react-native';
 import { Theme } from '../theme';
+import { AdminHeader } from '../components/admin/AdminUI';
 import * as ImagePicker from 'expo-image-picker';
 
 const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
@@ -328,16 +329,18 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme === 'dark' ? '#0A0A0A' : 'white' }]}>
-                <TouchableOpacity onPress={onBack} style={[styles.roundBtn, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <ChevronLeft size={20} color={colors.foreground} />
-                </TouchableOpacity>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.headerTitle, { color: colors.foreground }]}>COLLABORATIONS</Text>
-                <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }} style={[styles.roundBtn, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Plus size={20} color={colors.foreground} />
-                </TouchableOpacity>
-            </View>
+            <AdminHeader
+                title={t('collaborations')}
+                onBack={onBack}
+                rightElement={
+                    <TouchableOpacity
+                        onPress={() => { resetForm(); setModalVisible(true); }}
+                        style={[styles.roundBtn, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}
+                    >
+                        <Plus size={20} color={colors.foreground} />
+                    </TouchableOpacity>
+                }
+            />
 
             {/* Search */}
             <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
@@ -496,7 +499,7 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
                             />
 
                             <Text style={[styles.label, { color: colors.foreground }]}>LINK TO SHOP BRAND (OPTIONAL)</Text>
-                            <View style={[styles.brandSelectorScroll, {marginBottom: 20}]}>
+                            <View style={[styles.brandSelectorScroll, { marginBottom: 20 }]}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                                     <TouchableOpacity
                                         style={[

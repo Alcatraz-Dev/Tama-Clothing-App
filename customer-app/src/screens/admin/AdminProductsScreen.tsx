@@ -15,6 +15,7 @@ import {
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { AdminHeader } from '../../components/admin/AdminUI';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getString(val: any): string {
@@ -58,11 +59,11 @@ function ProductListItem({ item, onEdit, onDelete, colors, theme }: any) {
             </View>
 
             <View style={sc.actionsCol}>
-                <TouchableOpacity onPress={() => onEdit(item)} style={[sc.actionBtn, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} activeOpacity={0.7}>
-                    <Settings size={18} color={colors.foreground} strokeWidth={2} />
+                <TouchableOpacity onPress={() => onEdit(item)} style={[sc.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]} activeOpacity={0.7}>
+                    <Settings size={20} color={colors.foreground} strokeWidth={2} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => onDelete(item.id)} style={[sc.actionBtn, { borderColor: isDark ? 'rgba(255,59,48,0.3)' : 'rgba(255,59,48,0.2)' }]} activeOpacity={0.7}>
-                    <Trash2 size={18} color="#FF3B30" strokeWidth={2} />
+                <TouchableOpacity onPress={() => onDelete(item.id)} style={[sc.actionBtn, { backgroundColor: isDark ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]} activeOpacity={0.7}>
+                    <Trash2 size={20} color="#FF3B30" strokeWidth={2} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -249,14 +250,10 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle2, { color: colors.foreground }]} numberOfLines={1}>{t('products')}</Text>
+            <AdminHeader
+                title={t('products')}
+                onBack={onBack}
+                rightElement={
                     <TouchableOpacity
                         onPress={() => { resetForm(); setModalVisible(true); }}
                         style={[sc.iconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
@@ -264,41 +261,42 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                     >
                         <Plus size={20} color={colors.foreground} />
                     </TouchableOpacity>
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+                }
+            />
 
             {/* Product List */}
-            {loading ? (
-                <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 60 }} />
-            ) : (
-                <Animated.FlatList
-                    data={products}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
-                    onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                    scrollEventThrottle={16}
-                    ListEmptyComponent={
-                        <View style={sc.empty}>
-                            <View style={[sc.emptyIconBox, { backgroundColor: theme === 'dark' ? '#111118' : '#F5F5F7', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
-                                <Package2 size={42} color={colors.textMuted} strokeWidth={1.2} />
+            {
+                loading ? (
+                    <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 60 }} />
+                ) : (
+                    <Animated.FlatList
+                        data={products}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+                        scrollEventThrottle={16}
+                        ListEmptyComponent={
+                            <View style={sc.empty}>
+                                <View style={[sc.emptyIconBox, { backgroundColor: theme === 'dark' ? '#111118' : '#F5F5F7', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
+                                    <Package2 size={42} color={colors.textMuted} strokeWidth={1.2} />
+                                </View>
+                                <Text style={[sc.emptyTitle, { color: colors.foreground }]}>{t('noProductsFound')}</Text>
+                                <Text style={[sc.emptySubtitle, { color: colors.textMuted }]}>{t('addFirstProduct') || 'Ajoutez votre premier produit'}</Text>
+                                <TouchableOpacity
+                                    onPress={() => { resetForm(); setModalVisible(true); }}
+                                    style={[sc.emptyBtn, { backgroundColor: colors.foreground }]}
+                                >
+                                    <Plus size={14} color={theme === 'dark' ? '#000' : '#FFF'} />
+                                    <Text style={[sc.emptyBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('newProduct').toUpperCase()}</Text>
+                                </TouchableOpacity>
                             </View>
-                            <Text style={[sc.emptyTitle, { color: colors.foreground }]}>{t('noProductsFound')}</Text>
-                            <Text style={[sc.emptySubtitle, { color: colors.textMuted }]}>{t('addFirstProduct') || 'Ajoutez votre premier produit'}</Text>
-                            <TouchableOpacity
-                                onPress={() => { resetForm(); setModalVisible(true); }}
-                                style={[sc.emptyBtn, { backgroundColor: colors.foreground }]}
-                            >
-                                <Plus size={14} color={theme === 'dark' ? '#000' : '#FFF'} />
-                                <Text style={[sc.emptyBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('newProduct').toUpperCase()}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    }
-                    renderItem={({ item }) => (
-                        <ProductListItem item={item} onEdit={openEdit} onDelete={handleDelete} colors={colors} theme={theme} />
-                    )}
-                />
-            )}
+                        }
+                        renderItem={({ item }) => (
+                            <ProductListItem item={item} onEdit={openEdit} onDelete={handleDelete} colors={colors} theme={theme} />
+                        )}
+                    />
+                )
+            }
 
             {/* Add / Edit Modal */}
             <Modal visible={modalVisible} animationType="slide" presentationStyle="formSheet">
@@ -535,7 +533,7 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                     </Animated.ScrollView>
                 </SafeAreaView>
             </Modal>
-        </View>
+        </View >
     );
 }
 
@@ -556,28 +554,28 @@ const sc = StyleSheet.create({
     listCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 14,
         borderRadius: 24,
         borderWidth: 1,
         marginBottom: 16,
         shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 16,
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
         shadowOffset: { width: 0, height: 4 },
         elevation: 2
     },
     listThumb: {
-        width: 80,
-        height: 80,
-        borderRadius: 16,
+        width: 85,
+        height: 85,
+        borderRadius: 18,
     },
     listInfo: {
         flex: 1,
-        marginLeft: 16,
+        marginLeft: 18,
         justifyContent: 'center'
     },
     listName: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '900',
         letterSpacing: -0.2,
         marginBottom: 6,
@@ -615,14 +613,13 @@ const sc = StyleSheet.create({
         opacity: 0.6
     },
     actionsCol: {
-        gap: 8,
-        marginLeft: 10,
+        gap: 10,
+        marginLeft: 12,
     },
     actionBtn: {
-        width: 40,
-        height: 40,
+        width: 44,
+        height: 44,
         borderRadius: 14,
-        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center'
     },

@@ -29,6 +29,7 @@ import {
     ChevronLeft,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
+import { AdminHeader } from '../../components/admin/AdminUI';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2; // 2 columns with 20px side padding + 12px gap
@@ -74,22 +75,11 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
         { label: t('settings'), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
     ].filter(item => item.roles.includes(role));
-
+    const iconColor = theme === 'dark' ? '#FFF' : '#000';
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            {/* Analytics-style header */}
-            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
 
-                <View style={sc.headerRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('adminConsole')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('adminConsole')} onBack={onBack} />
 
             <Animated.ScrollView
                 contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}

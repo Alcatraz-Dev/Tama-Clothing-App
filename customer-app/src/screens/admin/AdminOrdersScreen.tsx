@@ -9,9 +9,9 @@ import {
     ChevronLeft, X, Search, MapPin, Phone, Mail, User, ShoppingBag, PackageOpen,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminSearchBar, EmptyState, adminStyles, DS } from '../../components/admin/AdminUI';
+import { AdminSearchBar, EmptyState, adminStyles, DS, AdminHeader } from '../../components/admin/AdminUI';
 import {
-    collection, getDocs, query, orderBy, addDoc, updateDoc, doc, serverTimestamp,
+    collection, getDocs, query, orderBy, addDoc, updateDoc, doc, serverTimestamp, getDoc
 } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import * as Print from 'expo-print';
@@ -129,20 +129,55 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
         if (!selectedOrder) return;
         try {
             const customer = getCustomer(selectedOrder);
-            const itemsString = (selectedOrder.items || [])
-                .map((i: any) => `${i.name || 'Item'} (x${i.quantity || 1})`)
-                .join(', ');
+            const itemsList = (selectedOrder.items || []).map((i: any) => {
+                const title = typeof i.name === 'string' ? i.name : (i.name?.fr || i.name?.['ar-tn'] || i.title || 'Item');
+                return {
+                    name: title,
+                    quantity: i.quantity || 1,
+                    size: i.selectedSize || i.size || '',
+                    color: i.selectedColor || i.color || '',
+                    price: i.price || 0
+                };
+            });
+
+            // Resolve Brand Details
+            let finalSenderName = profileData?.brandName || 'TAMA LOGISTICS';
+            let finalSenderAddress = 'Tunis, Tunisie 1000';
+            let finalSenderPhone = '+216 71 000 000';
+            let finalLogoUrl = undefined;
+
+            const targetBrandId = profileData?.brandId || selectedOrder.items?.[0]?.brandId;
+            if (targetBrandId) {
+                try {
+                    const snap = await getDoc(doc(db, 'brands', targetBrandId));
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if (data.name?.fr) finalSenderName = data.name.fr;
+                        if (data.address) finalSenderAddress = data.address;
+                        if (data.phone) finalSenderPhone = data.phone;
+                        if (data.image) finalLogoUrl = data.image;
+                    }
+                } catch (err) {
+                    console.log('Failed to fetch brand for label', err);
+                }
+            }
+
             const html = generateShippingStickerHTML({
                 trackingId: selectedOrder.trackingId || selectedOrder.id,
-                senderName: profileData?.brandName || 'Tama Clothing',
+                senderName: finalSenderName,
+                senderAddress: finalSenderAddress,
+                senderPhone: finalSenderPhone,
+                brandLogoUrl: finalLogoUrl,
                 receiverName: customer.fullName,
                 receiverPhone: customer.phone,
                 deliveryAddress: customer.address,
-                items: [itemsString],
-                weight: 'Unknown',
-                serviceType: 'Standard delivery',
+                items: itemsList,
+                weight: 'Inconnu',
+                serviceType: 'Livraison standard',
                 carrierName: 'Tama Logistics',
                 carrierPhone: '+216 71 000 000',
+                totalPrice: selectedOrder.total,
+                shippingPrice: 7,
             });
             const { uri } = await Print.printToFileAsync({ html });
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
@@ -160,24 +195,14 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('orders')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('orders')} onBack={onBack} />
 
             <AdminSearchBar
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholder={t('searchOrdersPlaceholder')}
                 onClear={() => setSearchQuery('')}
+                style={{ marginTop: insets.top + 58, marginHorizontal: 20, marginBottom: 10 }}
             />
 
             {/* Orders list */}
@@ -187,7 +212,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                 <Animated.FlatList
                     data={filteredOrders}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                    contentContainerStyle={[sc.listContent, { paddingTop: 10 }]}
                     onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                     scrollEventThrottle={16}
                     ListEmptyComponent={

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,10 +7,44 @@ import {
     TouchableOpacity,
     Dimensions,
 } from 'react-native';
-import { Heart, ShoppingBag, Star, Play } from 'lucide-react-native';
+import { Heart, ShoppingBag, Star, Play, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const MiniFlashTimer = ({ endTime }: { endTime: string }) => {
+    const [timeLeft, setTimeLeft] = useState({ h: '00', m: '00', s: '00' });
+    useEffect(() => {
+        const timer = setInterval(() => {
+            const now = new Date().getTime();
+            const end = new Date(endTime).getTime();
+            const diff = end - now;
+            if (diff <= 0) {
+                clearInterval(timer);
+                setTimeLeft({ h: '00', m: '00', s: '00' });
+            } else {
+                const h = Math.floor(diff / (1000 * 60 * 60));
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((diff % (1000 * 60)) / 1000);
+                setTimeLeft({
+                    h: h.toString().padStart(2, '0'),
+                    m: m.toString().padStart(2, '0'),
+                    s: s.toString().padStart(2, '0')
+                });
+            }
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [endTime]);
+
+    return (
+        <View style={{ backgroundColor: '#FFCC00', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: 6, shadowColor: '#FFCC00', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 3 }}>
+            <Clock size={10} color="#000" strokeWidth={2.5} />
+            <Text style={{ fontSize: 10, fontWeight: '900', color: '#000', letterSpacing: 0.5 }}>
+                {timeLeft.h}:{timeLeft.m}:{timeLeft.s}
+            </Text>
+        </View>
+    );
+};
 
 interface ProductCardProps {
     product: any;
@@ -25,6 +59,8 @@ interface ProductCardProps {
     colors?: any;
     isFeaturedHero?: boolean;
     horizontal?: boolean;
+    customWidth?: number;
+    flashSaleEndTime?: string;
 }
 
 export default function ProductCard({
@@ -40,6 +76,8 @@ export default function ProductCard({
     colors: extraColors,
     isFeaturedHero = false,
     horizontal = false,
+    customWidth,
+    flashSaleEndTime,
 }: ProductCardProps) {
     const isDark = theme === 'dark';
 
@@ -254,12 +292,13 @@ export default function ProductCard({
         <TouchableOpacity
             style={[
                 styles.modernProductCard,
-                { backgroundColor: colors.background }
+                { backgroundColor: colors.background },
+                customWidth ? { width: customWidth } : {}
             ]}
             onPress={onPress}
             activeOpacity={0.9}
         >
-            <View style={{ width: '100%', height: 260, position: 'relative', borderRadius: 20, overflow: 'hidden' }}>
+            <View style={{ width: '100%', height: 280, position: 'relative', borderRadius: 20, overflow: 'hidden' }}>
                 <Image
                     source={{ uri: product.mainImage || product.image || product.imageUrl || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400' }}
                     style={[styles.modernProductImg, { opacity: product.status === 'sold_out' ? 0.6 : 1 }]}
@@ -287,6 +326,7 @@ export default function ProductCard({
                 )}
 
                 <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, zIndex: 10 }}>
+                    {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
                     {product.status === 'sold_out' && (
                         <View style={{ backgroundColor: 'rgba(20, 20, 24, 0.95)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 8 }}>
                             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B30', marginRight: 6 }} />
@@ -361,11 +401,11 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         alignItems: 'center',
         borderWidth: 1,
-        // Dribbble-like subtle shadow
-        shadowColor: 'rgba(0,0,0,0.4)',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.08,
-        shadowRadius: 15,
+        // // Dribbble-like subtle shadow
+        // shadowColor: 'rgba(0,0,0,0.1)',
+        // shadowOffset: { width: 0, height: 8 },
+        // shadowOpacity: 0.08,
+        // shadowRadius: 15,
         elevation: 5,
     },
     horizontalImageContainer: {

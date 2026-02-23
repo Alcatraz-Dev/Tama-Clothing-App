@@ -41,6 +41,7 @@ import {
     AdminChip,
     ModernSwitch,
     AdminInput,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 
@@ -185,20 +186,9 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.headerRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('broadcast')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('broadcast')} onBack={onBack} />
 
-            <View style={sc.topNav}>
+            <View style={[sc.topNav, { marginTop: insets.top + 58 }]}>
                 <AdminChip
                     label={t('send').toUpperCase()}
                     selected={activeTab === 'send'}
@@ -213,7 +203,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
 
             <Animated.ScrollView
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
+                contentContainerStyle={[sc.scrollContent, { paddingTop: 20 }]}
             >
                 {activeTab === 'send' ? (
                     <AdminCard>

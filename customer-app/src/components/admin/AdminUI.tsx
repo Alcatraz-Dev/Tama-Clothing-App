@@ -10,8 +10,16 @@ import {
     TextInputProps,
     ActivityIndicator,
     Dimensions,
+    Animated,
 } from 'react-native';
+
 import { useAppTheme } from '../../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+export { BlurView };
+import { ChevronLeft, ShieldCheck } from 'lucide-react-native';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -567,6 +575,149 @@ export function ModalHeader({ title, onClose, onSave, saveLabel = 'Save', saving
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ADMIN HEADER (Standardised Header with Blur Effect)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AdminHeaderProps {
+    title: string;
+    subtitle?: string;
+    onBack: () => void;
+    scrollY?: Animated.Value;
+    rightElement?: React.ReactNode;
+}
+
+export function AdminHeader({
+    title,
+    subtitle,
+    onBack,
+    scrollY: scrollYProp,
+    rightElement,
+}: AdminHeaderProps) {
+    const { colors, theme } = useAppTheme();
+    const isDark = theme === 'dark';
+    const insets = useSafeAreaInsets();
+
+    const fallbackScrollY = React.useRef(new Animated.Value(0)).current;
+    const scrollY = scrollYProp ?? fallbackScrollY;
+
+    const titleOpacity = scrollY.interpolate({
+        inputRange: [0, 60],
+        outputRange: [1, 0.9],
+        extrapolate: 'clamp',
+    });
+
+    const HEADER_H = insets.top + (subtitle ? 74 : 58);
+
+    return (
+        <View style={[adminStyles.headerContainer, { height: HEADER_H, paddingTop: insets.top }]}>
+            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+
+            <View
+                pointerEvents="none"
+                style={[
+                    StyleSheet.absoluteFill,
+                    {
+                        backgroundColor: isDark
+                            ? 'rgba(4, 4, 12, 0.4)'
+                            : 'rgba(255, 255, 255, 0.4)',
+                    },
+                ]}
+            />
+
+            <View style={adminStyles.headerRowFixed}>
+                <TouchableOpacity
+                    onPress={onBack}
+                    activeOpacity={0.7}
+                    style={[
+                        adminStyles.headerBackBtn,
+                        {
+                            backgroundColor: isDark
+                                ? 'rgba(255,255,255,0.1)'
+                                : 'rgba(0,0,0,0.05)',
+                        },
+                    ]}
+                >
+                    <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
+                </TouchableOpacity>
+
+                <Animated.View style={[adminStyles.headerTitleWrap, { opacity: titleOpacity }]}>
+                    <Text
+                        style={[adminStyles.headerTitleText, { color: colors.foreground }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                    >
+                        {title?.toUpperCase()}
+                    </Text>
+                    {subtitle && (
+                        <Text
+                            style={{
+                                fontSize: 11,
+                                fontWeight: '600',
+                                color: colors.textMuted,
+                                marginTop: 2,
+                                textAlign: 'center',
+                            }}
+                            numberOfLines={1}
+                        >
+                            {subtitle}
+                        </Text>
+                    )}
+                </Animated.View>
+
+                <View style={adminStyles.headerRightWrap}>
+                    {rightElement || <View style={{ width: 40 }} />}
+                </View>
+            </View>
+
+            <View style={[adminStyles.headerSeparator, { backgroundColor: colors.border, opacity: 0.5 }]} />
+        </View>
+    );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLACEHOLDER ADMIN SCREEN (Coming Soon)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PlaceholderAdminScreenProps {
+    title: string;
+    onBack: () => void;
+    t: (key: string) => string;
+}
+
+export function PlaceholderAdminScreen({ title, onBack, t }: PlaceholderAdminScreenProps) {
+    const { colors, theme } = useAppTheme();
+    const isDark = theme === 'dark';
+
+    return (
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+            <AdminHeader title={title} onBack={onBack} />
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                <View style={{
+                    width: 100, height: 100, borderRadius: 50,
+                    backgroundColor: isDark ? '#1C1C26' : '#F2F2F7',
+                    alignItems: 'center', justifyContent: 'center', marginBottom: 25
+                }}>
+                    <ShieldCheck size={48} color={isDark ? '#5856D6' : '#5856D6'} strokeWidth={1.5} />
+                </View>
+                <Text style={{
+                    fontSize: 18, fontWeight: '900', color: colors.foreground,
+                    letterSpacing: 1, textAlign: 'center'
+                }}>
+                    {t('comingSoon') || 'COMING SOON'}
+                </Text>
+                <Text style={{
+                    fontSize: 13, color: colors.textMuted,
+                    textAlign: 'center', marginTop: 10, lineHeight: 20
+                }}>
+                    This feature is currently under development. Stay tuned for updates!
+                </Text>
+            </View>
+        </View>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TAB NAV (segment control for multi-view screens)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -918,4 +1069,52 @@ export const adminStyles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700' as const,
     },
+
+    // Admin Header
+    headerContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        overflow: 'hidden',
+    },
+    headerRowFixed: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        gap: 10,
+    },
+    headerBackBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    headerTitleWrap: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    headerTitleText: {
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+        textAlign: 'center',
+    },
+    headerRightWrap: {
+        minWidth: 40,
+        alignItems: 'flex-end',
+    },
+    headerSeparator: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: StyleSheet.hairlineWidth,
+    },
 });
+

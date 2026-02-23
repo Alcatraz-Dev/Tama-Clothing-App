@@ -19,7 +19,7 @@ import {
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { AdminHeader } from '../../components/admin/AdminHeader'; // keep for now
+import { AdminHeader } from '../../components/admin/AdminUI';
 import ShipmentCreationScreen from '../ShipmentCreationScreen';
 
 export default function AdminShipmentsScreen({ onBack, t, language }: any) {
@@ -60,20 +60,9 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.headerRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('shipments')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.separator, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('shipments')} onBack={onBack} />
 
-            <View style={[sc.nav, { borderBottomColor: colors.border }]}>
+            <View style={[sc.nav, { borderBottomColor: colors.border, marginTop: insets.top + 58 }]}>
                 <TouchableOpacity
                     onPress={() => setActiveTab('list')}
                     style={[sc.navItem, activeTab === 'list' && { borderBottomColor: colors.foreground }]}
@@ -98,7 +87,7 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
                     scrollEventThrottle={16}
                     data={shipments}
                     keyExtractor={s => s.id}
-                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                    contentContainerStyle={[sc.listContent, { paddingTop: 20 }]}
                     refreshing={loading}
                     onRefresh={fetchShipments}
                     renderItem={({ item }) => (

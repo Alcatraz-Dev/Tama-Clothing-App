@@ -1,3 +1,4 @@
+import { Image } from 'react-native';
 import { db, rtdb } from '../api/firebase';
 import { sendPushNotification } from './notifications';
 import { 
@@ -44,6 +45,11 @@ export interface Shipment {
     proofOfDeliveryUrl?: string;
     rating?: number;
     ratingComment?: string;
+    shippingPrice?: number;
+    totalPrice?: number;
+    senderAddress?: string;
+    senderPhone?: string;
+    brandLogoUrl?: string;
 }
 
 export const generateTrackingId = () => {
@@ -80,206 +86,408 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
 };
 
 export const generateShippingStickerHTML = (shipment: Partial<Shipment>) => {
-    const barcodeUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${shipment.trackingId}&scale=2&rotate=N&includetext=true`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${shipment.trackingId}`;
+  const safe = (v: any) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
 
-    return `
-    <html>
-      <head>
-        <style>
-          @page { margin: 0; size: 4in 6in; }
-          body { 
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-            margin: 0; 
-            padding: 10px; 
-            width: 4in; 
-            height: 6in; 
-            box-sizing: border-box;
-            background: #fff;
-            color: #000;
-          }
-          .label-container {
-            border: 2px solid #000;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #000;
-            padding: 8px 12px;
-          }
-          .header-left {
-            font-size: 14px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-          .header-right {
-            font-size: 10px;
-            font-weight: 600;
-          }
-          .address-section {
-            padding: 12px;
-            border-bottom: 2px solid #000;
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-          }
-          .sender {
-            font-size: 10px;
-            color: #333;
-            margin-bottom: 20px;
-          }
-          .sender strong { font-size: 11px; color: #000; }
-          
-          .recipient-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-          }
-          .recipient {
-            font-size: 15px;
-            line-height: 1.4;
-          }
-          .recipient strong { 
-            font-size: 18px; 
-            display: block; 
-            margin-bottom: 4px;
-            text-transform: uppercase;
-          }
-          .qr-code {
-            width: 80px;
-            height: 80px;
-            border: 2px solid #000;
-            padding: 2px;
-          }
-          
-          .items-section {
-            padding: 8px 12px;
-            border-bottom: 2px solid #000;
-            font-size: 10px;
-            flex-grow: 0.5;
-            background: #f9f9f9;
-          }
-          .items-title {
-            font-weight: 800;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-            font-size: 9px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 2px;
-          }
-          .items-list {
-            margin: 0; padding: 0; list-style: none;
-            max-height: 45px;
-            overflow: hidden;
-          }
-          .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 10px;
-            font-weight: 600;
-          }
+  const trackingId = safe(shipment.trackingId || "N/A");
 
-          .tracking-section {
-            text-align: center;
-            padding: 15px 12px;
-          }
-          .tracking-title {
-            font-size: 12px;
-            font-weight: 800;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-            letter-spacing: 2px;
-          }
-          .barcode {
-            max-width: 90%;
-            height: 60px;
-          }
-          .tracking-number {
-            font-size: 14px;
-            font-weight: 800;
-            margin-top: 8px;
-            letter-spacing: 1px;
-          }
-          .footer {
-            border-top: 2px solid #000;
-            padding: 8px 12px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 9px;
-            font-weight: 800;
-            text-transform: uppercase;
-            background: #000;
-            color: #fff;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="label-container">
-          <!-- Header -->
-          <div class="header">
-            <div class="header-left">TAMA CLOTHING HUB</div>
-            <div class="header-right">${shipment.serviceType || 'STANDARD TND'}</div>
+  const barcodeUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(
+    trackingId
+  )}&scale=2&rotate=N&includetext=true`;
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+    trackingId
+  )}`;
+
+  const logoUri = shipment.brandLogoUrl || Image.resolveAssetSource(
+    require("../../assets/logo.png")
+  ).uri;
+
+  const formatWeight = (w?: number | string) =>
+    typeof w === "number" ? `${w.toFixed(2)} KG` : safe(w || "1.00 KG");
+
+  const formatPrice = (p?: number) =>
+    typeof p === "number" ? `${p.toFixed(2)} TND` : "";
+
+  const itemsHtml = (shipment.items || [])
+    .slice(0, 5)
+    .map((item: any) => {
+      const name = safe(typeof item === "string" ? item : item?.name || "Article");
+      const qty = Number(item?.quantity || 1);
+      const size = item?.size ? `Taille: ${safe(item.size)}` : "";
+      const color = item?.color ? `Couleur: ${safe(item.color)}` : "";
+      const attrs = [size, color].filter(Boolean).join(" | ");
+      const price = formatPrice(item?.price);
+
+      return `
+        <li class="item-row">
+          <div class="item-left">
+            <div class="item-name">${name}</div>
+            ${attrs ? `<div class="item-attrs">${attrs}</div>` : ""}
           </div>
-
-          <!-- Addresses & QR -->
-          <div class="address-section">
-            <div class="sender">
-              <strong>FROM: ${shipment.senderName || 'TAMA LOGISTICS'}</strong><br/>
-              Tama Fulfillment Center<br/>
-              Tunis, Tunisia 1000<br/>
-              ${shipment.carrierPhone || '+216 71 000 000'}
-            </div>
-            
-            <div class="recipient-container">
-              <div class="recipient">
-                <strong>TO: ${shipment.receiverName || 'CUSTOMER'}</strong>
-                ${(shipment.deliveryAddress || '').replace(/,/g, '<br/>')}<br/>
-                Phone: ${shipment.receiverPhone || 'N/A'}
-              </div>
-              <img src="${qrUrl}" class="qr-code" />
-            </div>
+          <div class="item-right">
+            <div>Qté : ${qty}</div>
+            ${price ? `<div class="item-price">${price}</div>` : ""}
           </div>
+        </li>
+      `;
+    })
+    .join("");
 
-          <!-- Items Overview -->
-          <div class="items-section">
-            <div class="items-title">PACKAGE CONTENTS (WEIGHT: ${shipment.weight || '1.0KG'})</div>
-            <ul class="items-list">
-              ${(shipment.items || []).slice(0, 3).map((item: any) => `
-                <li class="item-row">
-                  <span>${typeof item === 'string' ? item : item.name}</span>
-                  <span>Qty: ${item.quantity || 1}</span>
-                </li>
-              `).join('')}
-              ${(shipment.items && shipment.items.length > 3) ? '<li class="item-row"><i>+ more items</i></li>' : ''}
-            </ul>
-          </div>
+  const hasMore =
+    shipment.items && shipment.items.length > 5
+      ? `<li class="item-more">+ d'articles...</li>`
+      : "";
 
-          <!-- Tracking & Barcode -->
-          <div class="tracking-section">
-            <div class="tracking-title">USPS TRACKING #</div>
-            <img src="${barcodeUrl}" class="barcode" />
-            <div class="tracking-number">${shipment.trackingId || 'N/A'}</div>
-          </div>
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+@page { margin: 0; size: 4in 6in; }
 
-          <!-- Footer -->
-          <div class="footer">
-            <div>${shipment.carrierName || 'TAMA LOGISTICS'}</div>
-            <div>DATE: ${new Date().toLocaleDateString('en-GB')}</div>
-          </div>
+* {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 10px;
+  width: 4in;
+  height: 6in;
+  box-sizing: border-box;
+  background: #fff;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  position: relative;
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Tracking & Bottom Section */
+.tracking-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 0 10px;
+}
+
+.tracking-qr {
+  width: 60px;
+  height: 60px;
+  border: 2px solid #000;
+  border-radius: 10px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.tracking-qr img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.tracking-logo {
+  width: 54px;
+  height: 54px;
+  background: #000;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tracking-logo img {
+  width: 60%;
+  height: 60%;
+  object-fit: contain;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000;
+  padding: 8px 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-logo {
+  width: 38px;
+  height: 38px;
+  background: #000;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 14px;
+}
+
+.header-logo img {
+  width: 65%;
+  height: 65%;
+  object-fit: contain;
+}
+
+.section {
+  border-bottom: 2px solid #000;
+  padding: 8px;
+}
+
+.sender {
+  font-size: 11px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.recipient-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.recipient {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.recipient-name {
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.qr-box {
+  width: 90px;
+  height: 90px;
+  border: 2px solid #000;
+  border-radius: 18px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.qr-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.items {
+  background: #f5f5f5;
+  font-size: 10px;
+}
+
+.items-title {
+  font-weight: 900;
+  border-bottom: 2px solid #000;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.items ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #ccc;
+  padding: 4px 0;
+}
+
+.item-name {
+  font-weight: 800;
+  font-size: 11px;
+}
+
+.item-attrs {
+  font-size: 9px;
+  color: #444;
+}
+
+.item-right {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.item-price {
+  font-weight: 900;
+}
+
+.item-more {
+  text-align: center;
+  color: #555;
+  padding-top: 4px;
+}
+
+.tracking {
+  text-align: center;
+  padding: 8px;
+}
+
+.tracking-title {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.tracking-number {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 900;
+  flex: 1;
+  text-align: center;
+}
+.summary-section {
+  padding: 8px 10px;
+  border-bottom: 2px solid #000;
+  font-size: 11px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.total-row {
+  font-weight: 900;
+  font-size: 14px;
+  margin-top: 6px;
+  border-top: 2px dashed #000;
+  padding-top: 6px;
+}
+.footer {
+  margin-top: auto;
+  padding: 8px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  background: #000;
+  color: #fff;
+}
+</style>
+</head>
+
+<body>
+  <div class="label">
+
+    <div class="header">
+      <div class="header-left">
+        <div class="header-logo">
+          <img src="${logoUri}" />
         </div>
-      </body>
-    </html>
-    `;
-};
+        <div>${safe(shipment.senderName || "TAMA LOGISTICS")}</div>
+      </div>
+      <div>${safe(shipment.serviceType || "STANDARD TND")}</div>
+    </div>
 
+    <div class="section">
+      <div class="sender">
+        <strong>EXPÉDITEUR :</strong><br/>
+        ${safe(shipment.senderName || "TAMA LOGISTICS")}<br/>
+        ${(shipment.senderAddress || "Tunis, Tunisie 1000").split(",").map(l => safe(l.trim())).join("<br/>")}<br/>
+        Tél: ${safe(shipment.senderPhone || shipment.carrierPhone || "+216 71 000 000")}
+      </div>
+
+      <div class="recipient-container">
+        <div class="recipient">
+          <div><strong>DESTINATAIRE :</strong></div>
+          <div class="recipient-name">${safe(shipment.receiverName || "CLIENT")}</div>
+          ${(shipment.deliveryAddress || "")
+            .split(",")
+            .map((l) => safe(l.trim()))
+            .join("<br/>")}
+          <br/>
+          Tél: ${safe(shipment.receiverPhone || "N/A")}
+        </div>
+
+        <div class="qr-box">
+          <img src="${qrUrl}" />
+        </div>
+
+      </div>
+    </div>
+
+    <div class="section items">
+      <div class="items-title">
+        CONTENU DU COLIS (POIDS : ${formatWeight(shipment.weight)})
+      </div>
+      <ul>
+        ${itemsHtml}
+        ${hasMore}
+      </ul>
+    </div>
+
+    ${typeof shipment.totalPrice === 'number' ? `
+    <div class="summary-section">
+      <div class="summary-row">
+        <div>Frais de livraison</div>
+        <div>${typeof shipment.shippingPrice === 'number' ? shipment.shippingPrice.toFixed(2) + ' TND' : 'Inclus'}</div>
+      </div>
+      <div class="summary-row total-row">
+        <div>TOTAL À PAYER</div>
+        <div>${shipment.totalPrice.toFixed(2)} TND</div>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="tracking">
+      <div class="tracking-title">
+        N° DE SUIVI ${safe(shipment.carrierName || "TAMA")}
+      </div>
+      <div class="tracking-content">
+        <div class="tracking-qr">
+          <img src="${qrUrl}" />
+        </div>
+        <div class="tracking-number">${trackingId}</div>
+        <div class="tracking-logo">
+          <img src="${logoUri}" />
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>${safe(shipment.carrierName || "TAMA LOGISTICS")}</div>
+      <div>${new Date().toLocaleDateString("en-GB")}</div>
+    </div>
+
+  </div>
+</body>
+</html>
+`;
+};
 export const updateShipmentStatus = async (shipmentId: string, trackingId: string, status: ShipmentStatus, extraData: any = {}) => {
     // 1. Update Firestore
     const docRef = doc(db, 'Shipments', shipmentId);

@@ -53,6 +53,7 @@ import {
     SectionLabel,
     IconActionButton,
     SectionDivider,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 
 export default function AdminSettingsScreen({ onBack, user, t }: any) {
@@ -63,7 +64,20 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const [activeTab, setActiveTab] = useState<'account' | 'team' | 'socials' | 'legal'>('account');
     const [team, setTeam] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
+    const [newRole, setNewRole] = useState('admin');
+    const [adding, setAdding] = useState(false);
     const scrollY = useRef(new Animated.Value(0)).current;
+
+    const ROLES = [
+        { value: 'admin', label: t('admin')?.toUpperCase() || 'ADMIN' },
+        { value: 'brand_owner', label: t('brandOwner')?.toUpperCase() || 'BRAND OWNER' },
+        { value: 'nor_kam', label: t('norKam')?.toUpperCase() || 'NOR KAM' },
+        { value: 'editor', label: t('editor')?.toUpperCase() || 'EDITOR' },
+        { value: 'support', label: t('support')?.toUpperCase() || 'SUPPORT' },
+        { value: 'viewer', label: t('viewer')?.toUpperCase() || 'VIEWER' },
+        { value: 'driver', label: t('driver')?.toUpperCase() || 'DRIVER' },
+    ];
 
     // Account State
     const [currentPassword, setCurrentPassword] = useState('');
@@ -201,22 +215,58 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
         }
     };
 
+    const handleAdd = async () => {
+        if (!newEmail) return;
+        setAdding(true);
+        try {
+            const q = query(collection(db, 'users'), where('email', '==', newEmail.toLowerCase()));
+            const snap = await getDocs(q);
+            if (snap.empty) {
+                Alert.alert(t('error'), t('userNotRegistered') || 'User not found in system.');
+            } else {
+                const target = snap.docs[0];
+                await updateDoc(doc(db, 'users', target.id), { role: newRole });
+                setNewEmail('');
+                fetchTeam();
+                Alert.alert(t('successTitle'), t('memberAdded'));
+            }
+        } catch (err) {
+            Alert.alert(t('error'), t('updateFailed'));
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleRoleChange = async (uid: string, role: string) => {
+        if (uid === user?.uid) return;
+        try {
+            await updateDoc(doc(db, 'users', uid), { role });
+            fetchTeam();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleRemove = async (uid: string) => {
+        if (uid === user?.uid) return;
+        Alert.alert(t('delete') || 'Delete', t('confirmDeleteMember') || 'Are you sure you want to remove this member?', [
+            { text: t('cancel') },
+            {
+                text: t('remove') || 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                    await updateDoc(doc(db, 'users', uid), { role: 'customer' });
+                    fetchTeam();
+                }
+            }
+        ]);
+    };
+
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.header, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.headerRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{t('settings')}</Text>
-                    <View style={{ width: 42 }} />
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+            <AdminHeader title={t('settings')} onBack={onBack} />
 
-            <View style={[sc.nav, { borderBottomColor: colors.border }]}>
+            <View style={[sc.nav, { borderBottomColor: colors.border, marginTop: insets.top + 58 }]}>
                 {[
                     { id: 'account', icon: User, label: t('account') },
                     { id: 'team', icon: Users, label: t('team') },
@@ -238,7 +288,7 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
 
             <Animated.ScrollView
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
+                contentContainerStyle={[sc.scrollContent, { paddingTop: 20 }]}
             >
                 {activeTab === 'account' && (
                     <AdminCard>
@@ -302,7 +352,59 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
 
                 {activeTab === 'team' && (
                     <>
-                        <SectionLabel text={t('teamMembers')} />
+                        <AdminCard>
+                            <SectionLabel text={t('addNewMember')} />
+                            <View style={sc.inputGroup}>
+                                <InputLabel text={t('userEmail')} />
+                                <TextInput
+                                    style={[sc.input, { borderColor: colors.border, color: colors.foreground }]}
+                                    placeholder="example@email.com"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={newEmail}
+                                    onChangeText={setNewEmail}
+                                    autoCapitalize="none"
+                                />
+                            </View>
+
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+                                {ROLES.map(r => (
+                                    <TouchableOpacity
+                                        key={r.value}
+                                        onPress={() => setNewRole(r.value)}
+                                        style={[
+                                            sc.roleChip,
+                                            {
+                                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
+                                                borderColor: colors.border
+                                            },
+                                            newRole === r.value && { backgroundColor: colors.foreground, borderColor: colors.foreground }
+                                        ]}
+                                    >
+                                        <Text style={[
+                                            sc.roleChipText,
+                                            { color: colors.textMuted },
+                                            newRole === r.value && { color: isDark ? '#000' : '#FFF' }
+                                        ]}>
+                                            {r.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+
+                            <TouchableOpacity
+                                onPress={handleAdd}
+                                disabled={adding || !newEmail}
+                                style={[sc.saveBtn, { backgroundColor: colors.foreground, marginTop: 10 }]}
+                            >
+                                {adding ? <ActivityIndicator color={isDark ? '#000' : '#FFF'} /> : (
+                                    <Text style={[sc.saveBtnText, { color: isDark ? '#000' : '#FFF' }]}>
+                                        {t('invite')?.toUpperCase() || 'INVITE'}
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </AdminCard>
+
+                        <SectionLabel text={t('currentTeam')} style={{ marginTop: 20 }} />
                         {loading ? <ActivityIndicator style={{ marginTop: 20 }} color={colors.foreground} /> : (
                             team.map(member => (
                                 <AdminCard key={member.id} style={sc.memberCard}>
@@ -312,10 +414,36 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                                     <View style={{ flex: 1, marginLeft: 12 }}>
                                         <Text style={[sc.memberName, { color: colors.foreground }]}>{member.email}</Text>
                                         <Text style={[sc.memberRole, { color: colors.textMuted }]}>{member.role?.toUpperCase()}</Text>
+
+                                        {/* Quick Role Change */}
+                                        {member.id !== user?.uid && (
+                                            <View style={{ flexDirection: 'row', gap: 5, marginTop: 8 }}>
+                                                {ROLES.map(r => (
+                                                    <TouchableOpacity
+                                                        key={r.value}
+                                                        onPress={() => handleRoleChange(member.id, r.value)}
+                                                        style={[
+                                                            sc.miniRoleBtn,
+                                                            { backgroundColor: member.role === r.value ? colors.foreground : (isDark ? '#000' : '#F2F2F7') }
+                                                        ]}
+                                                    >
+                                                        <Text style={{
+                                                            fontSize: 9,
+                                                            fontWeight: '900',
+                                                            color: member.role === r.value ? (isDark ? '#000' : '#FFF') : colors.textMuted
+                                                        }}>
+                                                            {r.label[0]}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
                                     </View>
-                                    <IconActionButton onPress={() => { }} variant="danger">
-                                        <Trash2 size={16} color={colors.error} />
-                                    </IconActionButton>
+                                    {member.id !== user?.uid && (
+                                        <IconActionButton onPress={() => handleRemove(member.id)} variant="danger">
+                                            <Trash2 size={16} color={colors.error} />
+                                        </IconActionButton>
+                                    )}
                                 </AdminCard>
                             ))
                         )}
@@ -428,5 +556,8 @@ const sc = StyleSheet.create({
     memberCard: { flexDirection: 'row', alignItems: 'center', padding: 15 },
     memberIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
     memberName: { fontSize: 13, fontWeight: '700' },
-    memberRole: { fontSize: 10, fontWeight: '800', marginTop: 2 }
+    memberRole: { fontSize: 10, fontWeight: '800', marginTop: 2 },
+    roleChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+    roleChipText: { fontSize: 10, fontWeight: '800' },
+    miniRoleBtn: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
 });

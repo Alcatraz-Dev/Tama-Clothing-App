@@ -38,6 +38,7 @@ import {
     ModernSwitch,
     AdminInput,
     AdminChip,
+    AdminHeader,
 } from '../../components/admin/AdminUI';
 import { getName } from '../../utils/translationHelpers';
 
@@ -127,14 +128,10 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <View style={[sc.hdr, { paddingTop: insets.top + 10 }]}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,10,18,0.97)' : 'rgba(255,255,255,0.97)' }]} />
-                
-                <View style={sc.hdrRow}>
-                    <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={[sc.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7', /* no border */ }]}>
-                        <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
-                    </TouchableOpacity>
-                    <Text style={[sc.hdrTitle, { color: colors.foreground }]} numberOfLines={1}>{t('flashSale')}</Text>
+            <AdminHeader
+                title={t('flashSale')}
+                onBack={onBack}
+                rightElement={
                     <TouchableOpacity
                         onPress={handleSave}
                         disabled={saveLoading}
@@ -144,9 +141,8 @@ export default function AdminFlashSaleScreen({ onBack, t, profileData, language 
                             <Text style={[sc.saveText, { color: colors.foreground }]}>{t('save').toUpperCase()}</Text>
                         )}
                     </TouchableOpacity>
-                </View>
-                <View style={[sc.hSep, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
-            </View>
+                }
+            />
 
             <Animated.ScrollView
                 contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}

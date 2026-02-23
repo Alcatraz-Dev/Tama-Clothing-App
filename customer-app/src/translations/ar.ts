@@ -510,6 +510,9 @@ export const ar = {
   lastOrderLabel: 'آخر كوماندا',
   neverLabel: 'عمرها',
   // ── Missing admin screen keys ──
+  profileSettings: 'إعدادات الملف الشخصي',
+  leaveBlankToKeep: 'اتركه فارغاً للاحتفاظ به',
+  currentPasswordToVerify: 'كلمة المرور الحالية (للتحقق)',
   noProductsFound: 'ما ثماش سلع توا',
   noOrdersFound: 'ما ثماش كوماندات',
   inactive: 'مش ناشط',
