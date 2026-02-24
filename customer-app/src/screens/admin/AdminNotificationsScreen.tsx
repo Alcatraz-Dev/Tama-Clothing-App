@@ -43,7 +43,7 @@ import {
     AdminInput,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 
 export default function AdminNotificationsScreen({ onBack, t }: any) {
     const { colors, theme } = useAppTheme();
@@ -119,7 +119,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
         try {
             let imageUrl = null;
             if (image && !image.startsWith('http')) {
-                imageUrl = await uploadImageToCloudinary(image);
+                imageUrl = await uploadToBunny(image);
             } else if (image && image.startsWith('http')) {
                 imageUrl = image;
             }

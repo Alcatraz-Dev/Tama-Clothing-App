@@ -144,8 +144,7 @@ export default function HostLiveScreen(props: Props) {
     const [promoUrl, setPromoUrl] = useState<string | null>(null);
     const [isUploadingPromo, setIsUploadingPromo] = useState(false);
     const [showPromoModal, setShowPromoModal] = useState(true);
-    const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
-    const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
+    const { uploadToBunny } = require('../utils/bunny');
 
     // ✅ Sync PK state periodically for late joiners
     // ✅ Keep refs in sync for signaling listeners
@@ -1054,41 +1053,25 @@ export default function HostLiveScreen(props: Props) {
             });
 
             if (!result.canceled) {
-                uploadVideoToCloudinary(result.assets[0].uri);
+                uploadVideoToBunny(result.assets[0].uri);
             }
         } catch (error) {
             Alert.alert(t('error') || 'Error', t('failedToPickVideo') || 'Failed to pick video');
         }
     };
 
-    const uploadVideoToCloudinary = async (videoUri: string) => {
+    const uploadVideoToBunny = async (videoUri: string) => {
         setIsUploadingPromo(true);
         try {
-            const formData = new FormData();
-            formData.append('file', {
-                uri: videoUri,
-                type: 'video/mp4',
-                name: 'promo.mp4',
-            } as any);
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
-
-            const data = await response.json();
-            if (data.secure_url) {
-                setPromoUrl(data.secure_url);
+            const secure_url = await uploadToBunny(videoUri);
+            if (secure_url) {
+                setPromoUrl(secure_url);
             } else {
                 throw new Error('Upload failed');
             }
         } catch (error) {
-            console.error('Cloudinary Video Upload Error:', error);
-            Alert.alert(t('error') || 'Error', 'Failed to upload video to Cloudinary. Check your connection.');
+            console.error('Bunny.net Video Upload Error:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to upload video to Bunny.net. Check your connection.');
         } finally {
             setIsUploadingPromo(false);
         }

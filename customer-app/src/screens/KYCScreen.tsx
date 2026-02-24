@@ -29,8 +29,7 @@ interface KYCScreenProps {
     language: string;
 }
 
-const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
-const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
+import { uploadToBunny } from '../utils/bunny';
 
 export default function KYCScreen({ onBack, user, profileData, updateProfile, theme, t, language }: KYCScreenProps) {
     const isDark = theme === 'dark';
@@ -71,34 +70,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
     };
 
     const uploadImage = async (uri: string) => {
-        if (!uri) return null;
-        try {
-            const formData = new FormData();
-            // @ts-ignore
-            formData.append('file', {
-                uri: uri,
-                type: 'image/jpeg',
-                name: 'upload.jpg',
-            });
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
-
-            const data = await response.json();
-            if (data.secure_url) {
-                return data.secure_url;
-            }
-            throw new Error(data.error?.message || 'Cloudinary upload failed');
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            throw error;
-        }
+        return uploadToBunny(uri);
     };
 
     const handleSubmit = async () => {

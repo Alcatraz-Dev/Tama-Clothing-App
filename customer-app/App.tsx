@@ -164,7 +164,7 @@ import FidelityScreen from './src/screens/FidelityScreen';
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
 import { APP_ICON, width, height } from './src/constants/layout';
-import { uploadImageToCloudinary } from './src/utils/cloudinary';
+import { uploadToBunny as uploadImageToCloudinary } from './src/utils/bunny';
 import { registerForPushNotificationsAsync, sendPushNotification } from './src/utils/notifications';
 import { getName as getNameUtil, translateColor as translateColorUtil, translateCategory as translateCategoryUtil } from './src/utils/translationHelpers';
 import { updateProductRating } from './src/utils/productUtils';
@@ -193,9 +193,7 @@ if (!(isExpoGo && Platform.OS === 'android')) {
 let currentLang = 'fr';
 const API_BASE_URL = 'http://192.168.8.189:3000';
 
-// Global Cloudinary Config (legacy)
-const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
-const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
+
 
 // Legacy Colors support
 let Colors = getAppColors('light');

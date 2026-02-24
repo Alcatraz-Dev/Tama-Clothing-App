@@ -29,7 +29,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, X, Send, Image as ImagePlay, MessageCircle } from 'lucide-react-native';
 import { db } from '../api/firebase';
 import { useAppTheme } from '../context/ThemeContext';
-import { uploadImageToCloudinary } from '../utils/cloudinary';
+import { uploadToBunny } from '../utils/bunny';
 import { sendPushNotification } from '../utils/notifications';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -149,7 +149,7 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
         try {
             const fileType = uri.split('.').pop()?.toLowerCase();
             const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-            const cloudinaryUrl = await uploadImageToCloudinary(uri);
+            const bunnyUrl = await uploadToBunny(uri);
 
             const messagesRef = collection(db, 'direct_chats', chatId, 'messages');
             const senderName = currentUserData?.fullName || currentUserData?.displayName || user.displayName || 'User';
@@ -160,8 +160,8 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                 read: false
             };
 
-            if (isVideo) messageData.videoUrl = cloudinaryUrl;
-            else messageData.imageUrl = cloudinaryUrl;
+            if (isVideo) messageData.videoUrl = bunnyUrl;
+            else messageData.imageUrl = bunnyUrl;
 
             await addDoc(messagesRef, messageData);
 

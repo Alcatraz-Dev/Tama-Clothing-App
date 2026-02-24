@@ -46,7 +46,7 @@ import {
     EmptyState,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 import { getSafeString } from '../../utils/helpers';
 
 
@@ -101,7 +101,7 @@ export default function AdminBrandsScreen({ onBack, t }: any) {
         try {
             let imgUrl = image;
             if (image && !image.startsWith('http')) {
-                imgUrl = await uploadToCloudinary(image);
+                imgUrl = await uploadToBunny(image);
             }
 
             const data = {

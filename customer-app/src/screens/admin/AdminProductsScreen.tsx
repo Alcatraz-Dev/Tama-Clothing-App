@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 import { AdminHeader } from '../../components/admin/AdminUI';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -198,10 +198,10 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
         }
         setUploading(true);
         try {
-            const uploadedImages = await Promise.all(images.map(img => uploadImageToCloudinary(img)));
+            const uploadedImages = await Promise.all(images.map(img => uploadToBunny(img)));
             let finalVideoUrl = videoUrl;
             if (videoUrl && !videoUrl.startsWith('http')) {
-                finalVideoUrl = await uploadImageToCloudinary(videoUrl);
+                finalVideoUrl = await uploadToBunny(videoUrl);
             }
             const data = {
                 name: { fr: nameFr, 'ar-tn': nameAr, en: nameEn },

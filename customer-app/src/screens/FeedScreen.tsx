@@ -649,7 +649,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             const url = work.imageUrl || work.url;
             if (!url) return;
 
-            // Download file first to share "cleanly" (hides res.cloudinary.com)
+            // Download file first to share "cleanly" (hides bunny.net)
             const extension = url.split('.').pop()?.split('?')[0] || 'jpg';
             const fileUri = FileSystem.cacheDirectory + `share_${work.id}.${extension}`;
 

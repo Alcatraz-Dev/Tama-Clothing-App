@@ -40,7 +40,7 @@ import {
     AdminInput,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 
 const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#5856D6', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
 
@@ -128,7 +128,7 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
         try {
             let finalImageUrl = form.imageUrl;
             if (form.imageUrl && !form.imageUrl.startsWith('http')) {
-                finalImageUrl = await uploadToCloudinary(form.imageUrl);
+                finalImageUrl = await uploadToBunny(form.imageUrl);
             }
 
             const data: any = {

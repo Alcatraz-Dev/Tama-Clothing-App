@@ -23,8 +23,7 @@ import { Theme } from '../theme';
 import { AdminHeader } from '../components/admin/AdminUI';
 import * as ImagePicker from 'expo-image-picker';
 
-const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
-const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
+import { uploadToBunny } from '../utils/bunny';
 
 interface Collaboration {
     id: string;
@@ -116,37 +115,7 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
         }
     };
 
-    const uploadImageToCloudinary = async (uri: string) => {
-        if (!uri || uri.startsWith('http')) return uri;
 
-        try {
-            const formData = new FormData();
-            // @ts-ignore
-            formData.append('file', {
-                uri: uri,
-                type: 'image/jpeg',
-                name: 'upload.jpg',
-            });
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
-
-            const data = await response.json();
-            if (data.secure_url) {
-                return data.secure_url;
-            }
-            throw new Error(data.error?.message || 'Cloudinary upload failed');
-        } catch (error) {
-            console.error('Cloudinary upload error:', error);
-            throw error;
-        }
-    };
 
     const handlePickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -230,8 +199,8 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
         setSubmitting(true);
         setUploading(true);
         try {
-            const uploadedImageUrl = await uploadImageToCloudinary(imageUrl);
-            const uploadedCoverImageUrl = coverImageUrl ? await uploadImageToCloudinary(coverImageUrl) : null;
+            const uploadedImageUrl = await uploadToBunny(imageUrl);
+            const uploadedCoverImageUrl = coverImageUrl ? await uploadToBunny(coverImageUrl) : null;
 
             const data = {
                 name,

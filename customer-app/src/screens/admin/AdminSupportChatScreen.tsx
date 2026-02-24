@@ -40,7 +40,7 @@ import { BlurView } from 'expo-blur';
 import UniversalVideoPlayer from "../../components/common/UniversalVideoPlayer";
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 import { sendPushNotification } from '../../utils/notifications';
 
 const { width } = Dimensions.get('window');
@@ -154,7 +154,7 @@ export default function AdminSupportChatScreen({ onBack, chatId, customerName, u
         try {
             const fileType = uri.split('.').pop()?.toLowerCase();
             const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-            const cloudinaryUrl = await uploadImageToCloudinary(uri);
+            const bunnyUrl = await uploadToBunny(uri);
 
             const messagesRef = collection(db, 'chats', chatId, 'messages');
             const messageData: any = {
@@ -165,8 +165,8 @@ export default function AdminSupportChatScreen({ onBack, chatId, customerName, u
                 read: false
             };
 
-            if (isVideo) messageData.videoUrl = cloudinaryUrl;
-            else messageData.imageUrl = cloudinaryUrl;
+            if (isVideo) messageData.videoUrl = bunnyUrl;
+            else messageData.imageUrl = bunnyUrl;
 
             await addDoc(messagesRef, messageData);
 

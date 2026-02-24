@@ -18,6 +18,7 @@ import { Image, Modal } from 'react-native';
 import { db } from './src/api/firebase';
 import { getDocs, where, getDoc, doc } from 'firebase/firestore';
 import UniversalVideoPlayer from './src/components/common/UniversalVideoPlayer';
+import { uploadToBunny } from './src/utils/bunny';
 
 async function sendPushNotification(expoPushToken: string, title: string, body: string, data = {}) {
     if (!expoPushToken) return;
@@ -44,8 +45,7 @@ async function sendPushNotification(expoPushToken: string, title: string, body: 
     }
 }
 
-const CLOUDINARY_CLOUD_NAME = 'ddjzpo6p2';
-const CLOUDINARY_UPLOAD_PRESET = 'tama_clothing';
+
 
 interface Message {
     id: string;
@@ -159,39 +159,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
         }
     };
 
-    const uploadImageToCloudinary = async (uri: string) => {
-        try {
-            const fileType = uri.split('.').pop()?.toLowerCase();
-            const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-            const resourceType = isVideo ? 'video' : 'image';
 
-            const formData = new FormData();
-            // @ts-ignore
-            formData.append('file', {
-                uri: uri,
-                type: isVideo ? 'video/mp4' : 'image/jpeg',
-                name: isVideo ? 'upload.mp4' : 'upload.jpg',
-            });
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
-
-            const data = await response.json();
-            if (data.secure_url) {
-                return data.secure_url;
-            }
-            throw new Error(data.error?.message || 'Cloudinary upload failed');
-        } catch (error) {
-            console.error('Cloudinary upload error:', error);
-            throw error;
-        }
-    };
 
     const openCamera = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -232,7 +200,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
         try {
             const fileType = uri.split('.').pop()?.toLowerCase();
             const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
-            const cloudinaryUrl = await uploadImageToCloudinary(uri);
+            const bunnyUrl = await uploadToBunny(uri);
 
             const messagesRef = collection(db, 'chats', chatId, 'messages');
             const messageData: any = {
@@ -244,9 +212,9 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
             };
 
             if (isVideo) {
-                messageData.videoUrl = cloudinaryUrl;
+                messageData.videoUrl = bunnyUrl;
             } else {
-                messageData.imageUrl = cloudinaryUrl;
+                messageData.imageUrl = bunnyUrl;
             }
 
             await addDoc(messagesRef, messageData);

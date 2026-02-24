@@ -47,7 +47,7 @@ import {
     AdminInput,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadToCloudinary } from '../../utils/cloudinary';
+import { uploadToBunny } from '../../utils/bunny';
 import { getName, translateCategory } from '../../utils/translationHelpers';
 import { getSafeString } from '../../utils/helpers';
 
@@ -110,7 +110,7 @@ export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr'
         if (!titleFr || !url) return Alert.alert(t('error'), t('mediaRequired'));
         setUploading(true);
         try {
-            const mediaUrl = url.startsWith('http') ? url : await uploadToCloudinary(url);
+            const mediaUrl = url.startsWith('http') ? url : await uploadToBunny(url);
             const data: any = {
                 title: { fr: titleFr, "ar-tn": titleAr, en: titleEn },
                 description: { fr: descFr, "ar-tn": descAr, en: descEn },
