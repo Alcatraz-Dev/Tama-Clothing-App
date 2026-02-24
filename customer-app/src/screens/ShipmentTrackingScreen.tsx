@@ -17,7 +17,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { subscribeToTracking, ShipmentStatus, calculateETA, openInNativeMaps, openAddressInNativeMaps } from '../utils/shipping';
 import * as Location from 'expo-location';
 import * as Animatable from 'react-native-animatable';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { db, rtdb } from '../api/firebase';
 import {
     collection,
@@ -135,30 +135,21 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     }, [fsShipment?.deliveryAddress, fsShipment?.deliveryLocation]);
 
     useEffect(() => {
-        if (mapRef.current && fsShipment?.deliveryLocation) {
-            mapRef.current.animateToRegion({
-                latitude: fsShipment.deliveryLocation.latitude,
-                longitude: fsShipment.deliveryLocation.longitude,
-                latitudeDelta: 0.12,
-                longitudeDelta: 0.12,
-            }, 1000);
-        } else if (mapRef.current && driverLocation) {
-            mapRef.current.animateToRegion({
-                latitude: driverLocation.latitude,
-                longitude: driverLocation.longitude,
-                latitudeDelta: 0.2,
-                longitudeDelta: 0.2,
-            }, 1000);
-        }
-    }, [fsShipment?.deliveryLocation?.latitude, driverLocation?.latitude]);
+        if (mapVisible && mapRef.current) {
+            const coords: any[] = [];
+            if (driverLocation) coords.push(driverLocation);
+            if (fsShipment?.deliveryLocation) coords.push(fsShipment.deliveryLocation);
 
-    const openMaps = () => {
-        if (fsShipment?.deliveryLocation) {
-            openInNativeMaps(fsShipment.deliveryLocation.latitude, fsShipment.deliveryLocation.longitude, translate('deliveryAddress'));
-        } else if (fsShipment?.deliveryAddress) {
-            openAddressInNativeMaps(fsShipment.deliveryAddress);
+            if (coords.length > 0) {
+                setTimeout(() => {
+                    mapRef.current?.fitToCoordinates(coords, {
+                        edgePadding: { top: 150, right: 80, bottom: 150, left: 80 },
+                        animated: true,
+                    });
+                }, 500);
+            }
         }
-    };
+    }, [mapVisible, fsShipment?.deliveryLocation, driverLocation]);
 
     const callDriver = () => {
         if (fsShipment?.driverPhone) {
@@ -206,7 +197,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                 <Text style={{ color: colors.foreground, fontSize: 18, fontWeight: '800', marginTop: 20 }}>{translate('noShipments')}</Text>
                 <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 10, marginBottom: 30 }}>{translate('shipping_not_found') || "Shipment not found. Please check your tracking ID."}</Text>
                 <TouchableOpacity onPress={onBack} style={{ backgroundColor: colors.accent, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 15 }}>
-                    <Text style={{ color: '#FFF', fontWeight: '800' }}>{translate('goBack')}</Text>
+                    <Text style={{ color: colors.accentForeground, fontWeight: '800' }}>{translate('goBack')}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -453,9 +444,17 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         {fsShipment?.deliveryLocation && (
                             <Marker coordinate={fsShipment.deliveryLocation} title={translate('deliveryTo')}>
                                 <View style={[styles.markerContainer, { backgroundColor: '#10B981' }]}>
-                                    <MapPin size={20} color="#FFF" />
+                                    <Package size={20} color="#FFF" />
                                 </View>
                             </Marker>
+                        )}
+                        {(driverLocation || statusData?.location) && fsShipment?.deliveryLocation && (
+                            <Polyline
+                                coordinates={[driverLocation || statusData.location, fsShipment.deliveryLocation]}
+                                strokeColor={colors.accent}
+                                strokeWidth={4}
+                                lineDashPattern={[10, 10]}
+                            />
                         )}
                     </MapView>
 
@@ -472,15 +471,12 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     </BlurView>
 
                     <View style={styles.mapFooter}>
-                        <TouchableOpacity
-                            style={[styles.externalNavigationBtn, { backgroundColor: colors.accent }]}
-                            onPress={openMaps}
-                        >
-                            <Navigation size={20} color={colors.accentForeground} />
-                            <Text style={[styles.externalNavigationText, { color: colors.accentForeground }]}>
-                                {translate('navigate') || 'Navigate'}
-                            </Text>
-                        </TouchableOpacity>
+                        {eta ? (
+                            <BlurView intensity={90} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.etaBadge}>
+                                <Clock size={20} color={colors.foreground} />
+                                <Text style={[styles.etaBadgeText, { color: colors.foreground }]}>ETA: {eta}</Text>
+                            </BlurView>
+                        ) : null}
                     </View>
                 </View>
             </Modal>
@@ -740,28 +736,27 @@ const styles = StyleSheet.create({
     },
     mapSubTitle: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '500',
+        marginTop: 4,
     },
     mapFooter: {
         position: 'absolute',
         bottom: 40,
         left: 20,
         right: 20,
+        flexDirection: 'row',
+        justifyContent: 'center',
     },
-    externalNavigationBtn: {
+    etaBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 18,
-        borderRadius: 20,
-        gap: 12,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 25,
+        gap: 10,
+        overflow: 'hidden',
     },
-    externalNavigationText: {
+    etaBadgeText: {
         fontSize: 16,
         fontWeight: '900',
     },

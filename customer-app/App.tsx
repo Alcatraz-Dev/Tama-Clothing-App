@@ -1982,7 +1982,7 @@ export default function App() {
 
                     <TextInput
                       style={{
-                        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
+                        backgroundColor: Colors.surface,
                         borderRadius: 15,
                         padding: 18,
                         color: Colors.foreground,
@@ -1990,7 +1990,7 @@ export default function App() {
                         fontWeight: '700',
                         textAlign: 'center',
                         borderWidth: 1,
-                        borderColor: trackingInput ? Colors.accent : 'transparent'
+                        borderColor: trackingInput ? Colors.accent : Colors.border
                       }}
                       placeholder="BEY3A-XXXXXXXX"
                       placeholderTextColor={Colors.textMuted}
@@ -2006,7 +2006,9 @@ export default function App() {
                           flex: 1,
                           height: 54,
                           borderRadius: 18,
-                          backgroundColor: theme === 'dark' ? '#2C2C2E' : '#E5E5EA',
+                          backgroundColor: Colors.surface,
+                          borderWidth: 1,
+                          borderColor: Colors.border,
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
@@ -2022,7 +2024,9 @@ export default function App() {
                           flex: 2,
                           height: 54,
                           borderRadius: 18,
-                          backgroundColor: trackingInput.length >= 6 ? Colors.accent : Colors.textMuted,
+                          backgroundColor: trackingInput.length >= 6 ? Colors.accent : Colors.surface,
+                          borderWidth: 1,
+                          borderColor: trackingInput.length >= 6 ? 'transparent' : Colors.border,
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
@@ -2037,7 +2041,7 @@ export default function App() {
                           }
                         }}
                       >
-                        <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '900' }}>{t('track').toUpperCase()}</Text>
+                        <Text style={{ color: trackingInput.length >= 6 ? Colors.accentForeground : Colors.textMuted, fontWeight: '900' }}>{t('track').toUpperCase()}</Text>
                       </TouchableOpacity>
                     </View>
                   </Animatable.View>
