@@ -9,6 +9,7 @@ import {
     Dimensions,
     Linking,
     Modal,
+    Platform
 } from 'react-native';
 import {
     MapPin,
@@ -28,6 +29,9 @@ import { rtdb } from '../api/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { deliveryService } from '../services/deliveryService';
 import { Delivery, GeoPoint, Driver } from '../types/delivery';
+import { openInNativeMaps, openAddressInNativeMaps } from '../utils/shipping';
+import * as Location from 'expo-location';
+import { useRef } from 'react';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,6 +62,8 @@ export function EnhancedShipmentTracking({
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
+    const mapRef = useRef<MapView>(null);
+    const [enrichedDelivery, setEnrichedDelivery] = useState(delivery);
 
     const translate = t || ((k: string) => k);
 
@@ -97,10 +103,55 @@ export function EnhancedShipmentTracking({
         };
     }, [delivery.driverId]);
 
+    useEffect(() => {
+        if (enrichedDelivery && !enrichedDelivery.deliveryLocation && enrichedDelivery.deliveryAddress) {
+            const geocodeAddress = async () => {
+                try {
+                    const searchAddress = enrichedDelivery.deliveryAddress.toLowerCase().includes('tunisie') || enrichedDelivery.deliveryAddress.toLowerCase().includes('tunisia')
+                        ? enrichedDelivery.deliveryAddress
+                        : `${enrichedDelivery.deliveryAddress}, Tunisia`;
+
+                    const result = await Location.geocodeAsync(searchAddress);
+                    if (result && result.length > 0) {
+                        setEnrichedDelivery(prev => ({
+                            ...prev,
+                            deliveryLocation: {
+                                latitude: result[0].latitude,
+                                longitude: result[0].longitude
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.log("Geocoding failed in enhanced screen:", e);
+                }
+            };
+            geocodeAddress();
+        }
+    }, [enrichedDelivery?.deliveryAddress, enrichedDelivery?.deliveryLocation]);
+
+    useEffect(() => {
+        if (mapRef.current && enrichedDelivery?.deliveryLocation) {
+            mapRef.current.animateToRegion({
+                latitude: enrichedDelivery.deliveryLocation.latitude,
+                longitude: enrichedDelivery.deliveryLocation.longitude,
+                latitudeDelta: 0.1,
+                longitudeDelta: 0.1,
+            }, 1000);
+        } else if (mapRef.current && driverLocation) {
+            mapRef.current.animateToRegion({
+                latitude: driverLocation.latitude,
+                longitude: driverLocation.longitude,
+                latitudeDelta: 0.15,
+                longitudeDelta: 0.15,
+            }, 1000);
+        }
+    }, [enrichedDelivery?.deliveryLocation?.latitude, driverLocation?.latitude]);
+
     const openMaps = () => {
-        if (delivery.deliveryLocation) {
-            const url = `https://www.google.com/maps/dir/?api=1&destination=${delivery.deliveryLocation.latitude},${delivery.deliveryLocation.longitude}`;
-            Linking.openURL(url);
+        if (enrichedDelivery?.deliveryLocation) {
+            openInNativeMaps(enrichedDelivery.deliveryLocation.latitude, enrichedDelivery.deliveryLocation.longitude, translate('deliveryAddress'));
+        } else if (enrichedDelivery?.deliveryAddress) {
+            openAddressInNativeMaps(enrichedDelivery.deliveryAddress);
         }
     };
 
@@ -143,7 +194,7 @@ export function EnhancedShipmentTracking({
                                 >
                                     <StepIcon
                                         size={16}
-                                        color={isCompleted ? '#FFF' : colors.textMuted}
+                                        color={isCompleted ? colors.accentForeground : colors.textMuted}
                                     />
                                 </View>
                                 {index < STATUS_STEPS.length - 1 && (
@@ -210,7 +261,7 @@ export function EnhancedShipmentTracking({
                             {translate('navigate')}
                         </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.driverAction, { backgroundColor: colors.accent + '15' }]} onPress={callDriver}>
+                    <TouchableOpacity style={[styles.driverAction, { backgroundColor: colors.accent + '25' }]} onPress={callDriver}>
                         <Phone size={18} color={colors.accent} />
                         <Text style={[styles.driverActionText, { color: colors.accent }]}>
                             {translate('call')}
@@ -227,40 +278,46 @@ export function EnhancedShipmentTracking({
         return (
             <View style={styles.mapContainer}>
                 <MapView
-                    style={styles.map}
-                    provider={PROVIDER_GOOGLE}
+                    ref={mapRef}
+                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                    style={StyleSheet.absoluteFill}
                     initialRegion={{
-                        latitude: driverLocation.latitude,
-                        longitude: driverLocation.longitude,
-                        latitudeDelta: 0.05,
-                        longitudeDelta: 0.05,
+                        latitude: enrichedDelivery?.deliveryLocation?.latitude || driverLocation?.latitude || 35.8256,
+                        longitude: enrichedDelivery?.deliveryLocation?.longitude || driverLocation?.longitude || 10.6369,
+                        latitudeDelta: 0.08,
+                        longitudeDelta: 0.08,
                     }}
-                    showsUserLocation={false}
                 >
-                    <Marker
-                        coordinate={driverLocation}
-                        title={translate('driver')}
-                    >
-                        <View style={[styles.driverMarker, { backgroundColor: colors.accent }]}>
-                            <Truck size={20} color="#FFF" />
-                        </View>
-                    </Marker>
+                    {driverLocation && (
+                        <Marker
+                            coordinate={driverLocation}
+                            title={translate('driver')}
+                            description={translate('driverOnTheWay')}
+                        >
+                            <View style={[styles.markerContainer, { backgroundColor: colors.accent }]}>
+                                <Truck size={18} color={colors.accentForeground} />
+                            </View>
+                        </Marker>
+                    )}
 
-                    <Marker
-                        coordinate={delivery.deliveryLocation}
-                        title={translate('deliveryAddress')}
-                    >
-                        <View style={styles.destinationMarker}>
-                            <MapPin size={24} color="#10B981" />
-                        </View>
-                    </Marker>
-
-                    <Polyline
-                        coordinates={[driverLocation, delivery.deliveryLocation]}
-                        strokeColor={colors.accent}
-                        strokeWidth={3}
-                        lineDashPattern={[5, 5]}
-                    />
+                    {enrichedDelivery?.deliveryLocation && (
+                        <Marker
+                            coordinate={enrichedDelivery.deliveryLocation}
+                            title={translate('deliveryAddress')}
+                        >
+                            <View style={[styles.markerContainer, { backgroundColor: '#10B981' }]}>
+                                <MapPin size={18} color="#FFF" />
+                            </View>
+                        </Marker>
+                    )}
+                    {driverLocation && enrichedDelivery.deliveryLocation && (
+                        <Polyline
+                            coordinates={[driverLocation, enrichedDelivery.deliveryLocation]}
+                            strokeColor={colors.accent}
+                            strokeWidth={4}
+                            lineDashPattern={[1]}
+                        />
+                    )}
                 </MapView>
 
                 <View style={[styles.etaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -504,18 +561,19 @@ const styles = StyleSheet.create({
     map: {
         ...StyleSheet.absoluteFillObject,
     },
-    driverMarker: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    markerContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 3,
+        borderWidth: 2,
         borderColor: '#FFF',
-    },
-    destinationMarker: {
-        alignItems: 'center',
-        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
     },
     etaCard: {
         position: 'absolute',

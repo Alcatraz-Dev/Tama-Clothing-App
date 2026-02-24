@@ -114,6 +114,10 @@
             "image": "./assets/expo-icons/splash-icon.png",
             "backgroundColor": "#010100"
           },
+          "light": {
+            "image": "./assets/expo-icons/splash-icon.png",
+            "backgroundColor": "#010100"
+          },
           "imageWidth": 200
         }
       ],

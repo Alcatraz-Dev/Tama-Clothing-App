@@ -261,6 +261,8 @@ export default function App() {
   const [activeShipment, setActiveShipment] = useState<Shipment | null>(null);
   const [activeTrackingId, setActiveTrackingId] = useState<string>('');
   const [activeTabParams, setActiveTabParams] = useState<any>(null);
+  const [trackingModalVisible, setTrackingModalVisible] = useState(false);
+  const [trackingInput, setTrackingInput] = useState('');
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
   const [works, setWorks] = useState<any[]>([]);
@@ -1494,7 +1496,7 @@ export default function App() {
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen key="own-profile" user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} isPublicProfile={false} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} />;
       case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} onTrack={(tid: string) => { setActiveTrackingId(tid); setActiveTab('ShipmentTracking'); }} t={t} language={language} />;
@@ -1830,7 +1832,7 @@ export default function App() {
                   />
                 </Modal>
 
-                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'Messages' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && (
+                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'Messages' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && activeTab !== 'ShipmentTracking' && (
                   <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
                     <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
                       <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
@@ -1934,6 +1936,114 @@ export default function App() {
               onSizeGuide={navigateToSizeGuide}
               t={t}
             />
+
+            <Modal
+              visible={trackingModalVisible}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setTrackingModalVisible(false)}
+            >
+              <BlurView intensity={theme === 'dark' ? 40 : 20} tint={theme} style={StyleSheet.absoluteFill}>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                  style={{ flex: 1, justifyContent: 'center', padding: 20 }}
+                >
+                  <Animatable.View
+                    animation="zoomIn"
+                    duration={300}
+                    style={{
+                      backgroundColor: Colors.surface,
+                      borderRadius: 30,
+                      padding: 24,
+                      borderWidth: 1,
+                      borderColor: Colors.border,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 10 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 20,
+                      elevation: 5
+                    }}
+                  >
+                    <View style={{ marginBottom: 20, alignItems: 'center' }}>
+                      <View style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                        backgroundColor: Colors.accent + '20',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 12
+                      }}>
+                        <Truck size={30} color={Colors.accent} />
+                      </View>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: Colors.foreground }}>{t('shipmentTracking')}</Text>
+                      <Text style={{ fontSize: 13, color: Colors.textMuted, textAlign: 'center', marginTop: 4 }}>{t('enterTrackingId')}</Text>
+                    </View>
+
+                    <TextInput
+                      style={{
+                        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F2F2F7',
+                        borderRadius: 15,
+                        padding: 18,
+                        color: Colors.foreground,
+                        fontSize: 16,
+                        fontWeight: '700',
+                        textAlign: 'center',
+                        borderWidth: 1,
+                        borderColor: trackingInput ? Colors.accent : 'transparent'
+                      }}
+                      placeholder="BEY3A-XXXXXXXX"
+                      placeholderTextColor={Colors.textMuted}
+                      value={trackingInput}
+                      onChangeText={setTrackingInput}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          height: 54,
+                          borderRadius: 18,
+                          backgroundColor: theme === 'dark' ? '#2C2C2E' : '#E5E5EA',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        onPress={() => {
+                          setTrackingModalVisible(false);
+                          setTrackingInput('');
+                        }}
+                      >
+                        <Text style={{ color: Colors.foreground, fontWeight: '800' }}>{t('cancel')}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          flex: 2,
+                          height: 54,
+                          borderRadius: 18,
+                          backgroundColor: trackingInput.length >= 6 ? Colors.accent : Colors.textMuted,
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        disabled={trackingInput.length < 6}
+                        onPress={() => {
+                          const id = trackingInput.trim().toUpperCase();
+                          if (id) {
+                            setActiveTrackingId(id);
+                            setTrackingModalVisible(false);
+                            setTrackingInput('');
+                            setActiveTab('ShipmentTracking');
+                          }
+                        }}
+                      >
+                        <Text style={{ color: theme === 'dark' ? '#000' : '#FFF', fontWeight: '900' }}>{t('track').toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Animatable.View>
+                </KeyboardAvoidingView>
+              </BlurView>
+            </Modal>
           </View>
         )}
       </SafeAreaProvider>
@@ -3044,7 +3154,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible }: any) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -4282,24 +4392,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
 
                     <TouchableOpacity
                       style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]}
-                      onPress={() => {
-                        Alert.prompt(
-                          t('trackShipment'),
-                          t('enterTrackingId'),
-                          [
-                            { text: t('cancel'), style: "cancel" },
-                            {
-                              text: t('track'),
-                              onPress: (id?: string) => {
-                                if (id) {
-                                  setActiveTrackingId(id);
-                                  setActiveTab('ShipmentTracking');
-                                }
-                              }
-                            }
-                          ]
-                        );
-                      }}
+                      onPress={() => setTrackingModalVisible(true)}
                     >
                       <View style={styles.menuRowLeft}>
                         <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
@@ -5592,16 +5685,14 @@ function WishlistScreen({ onBack, onProductPress, wishlist, toggleWishlist, addT
   const { colors } = useAppTheme();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
-  const favorisScrollX = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [0, 1],
-    extrapolate: 'clamp'
-  });
+  const HEADER_HEIGHT = 64 + insets.top;
+  const CARD_HEIGHT = useRef(height - (190 + insets.top + (Platform.OS === 'ios' ? 130 : 80))).current;
+  const ITEM_HEIGHT = CARD_HEIGHT + 20;
 
   useEffect(() => {
     fetchWishlistProducts();
@@ -5627,74 +5718,77 @@ function WishlistScreen({ onBack, onProductPress, wishlist, toggleWishlist, addT
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      {/* Animated Blur Header */}
-      <Animated.View style={[{
+      {/* Fixed Header matching ShopScreen style */}
+      <View style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         zIndex: 1000,
-        height: 64 + insets.top,
+        height: HEADER_HEIGHT,
         paddingTop: insets.top,
-        borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
-      }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
-        </Animated.View>
-
+        backgroundColor: colors.background,
+        borderBottomWidth: scrolled ? 1 : 0,
+        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+      }}>
         <View style={styles.modernHeader}>
           <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
             <ChevronLeft size={20} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={[styles.modernLogo, { color: colors.foreground }]}>{t('wishlist')}</Text>
+          <Text pointerEvents="none" style={[styles.modernLogo, { letterSpacing: 4, color: colors.foreground }]}>{t('wishlist').toUpperCase()}</Text>
           <View style={{ width: 40 }} />
         </View>
-      </Animated.View>
+      </View>
 
-      <Animated.ScrollView
+      <FlatList
+        data={products}
+        keyExtractor={(item: any) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 64 + insets.top }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          setScrolled(y > 10);
+          scrollY.setValue(y);
+        }}
         scrollEventThrottle={16}
-      >
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 50 }} color={colors.foreground} />
-        ) : products.length === 0 ? (
-          <View style={[styles.centered, { marginTop: 100, backgroundColor: colors.background }]}>
-            <Heart size={64} color={theme === 'dark' ? '#222' : '#EEE'} />
-            <Text style={[styles.modernSectionTitle, { marginTop: 20, color: colors.textMuted }]}>{t('nothingSaved')}</Text>
+        snapToInterval={ITEM_HEIGHT}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={4}
+        windowSize={5}
+        initialNumToRender={3}
+        contentContainerStyle={{
+          paddingTop: HEADER_HEIGHT + 20,
+          paddingHorizontal: 20,
+          paddingBottom: 120
+        }}
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator style={{ marginTop: 50 }} color={colors.foreground} />
+          ) : (
+            <View style={[styles.centered, { marginTop: 100, backgroundColor: colors.background }]}>
+              <Heart size={64} color={theme === 'dark' ? '#222' : '#EEE'} />
+              <Text style={[styles.modernSectionTitle, { marginTop: 20, color: colors.textMuted }]}>{t('nothingSaved')}</Text>
+            </View>
+          )
+        }
+        renderItem={({ item: p }) => (
+          <View style={{ height: CARD_HEIGHT, marginBottom: 20 }}>
+            <ProductCard
+              product={p}
+              onPress={() => onProductPress(p)}
+              isWishlisted={true}
+              onToggleWishlist={() => toggleWishlist(p.id)}
+              onAddToCart={() => addToCart(p)}
+              showRating={true}
+              t={t}
+              theme={theme}
+              language={language}
+              colors={colors}
+            />
           </View>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 25, paddingTop: 100, gap: 15 }}
-          >
-            {products.map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={true}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                t={t}
-                theme={theme}
-                language={language}
-                colors={colors}
-                customWidth={width * 0.65}
-              />
-            ))}
-          </ScrollView>
         )}
-        <View style={{ height: 100 }} />
-      </Animated.ScrollView>
+      />
     </SafeAreaView>
   );
 }

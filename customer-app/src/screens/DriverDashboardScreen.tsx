@@ -8,7 +8,9 @@ import {
     Alert,
     ActivityIndicator,
     Linking,
-    RefreshControl
+    RefreshControl,
+    Modal,
+    Platform
 } from 'react-native';
 import {
     Truck,
@@ -18,10 +20,16 @@ import {
     Navigation,
     QrCode,
     Package,
-    ArrowLeft
+    ArrowLeft,
+    X,
+    Clock
 } from 'lucide-react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { BlurView } from 'expo-blur';
 import { useAppTheme } from '../context/ThemeContext';
 import { db, rtdb } from '../api/firebase';
+import { openAddressInNativeMaps } from '../utils/shipping';
+import * as Location from 'expo-location';
 import {
     collection,
     query,
@@ -32,7 +40,6 @@ import {
     serverTimestamp
 } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
-import * as Location from 'expo-location';
 import { updateShipmentStatus, updateShipmentLocation } from '../utils/shipping';
 
 export default function DriverDashboardScreen({ user, profileData, onBack, onOpenProof, onScanQR, t, language }: any) {
@@ -43,8 +50,46 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'available' | 'my_deliveries'>('available');
     const [activeTrackingId, setActiveTrackingId] = useState<string | null>(null);
+    const [showMap, setShowMap] = useState(false);
+    const [selectedShipment, setSelectedShipment] = useState<any>(null);
+    const [currentLocation, setCurrentLocation] = useState<any>(null);
+    const [eta, setEta] = useState<string>('');
+    const mapRef = React.useRef<MapView>(null);
 
     const translate = t || ((k: string) => k);
+
+    useEffect(() => {
+        if (selectedShipment && !selectedShipment.deliveryLocation && selectedShipment.deliveryAddress) {
+            const geocodeAddress = async () => {
+                try {
+                    const searchAddress = selectedShipment.deliveryAddress.toLowerCase().includes('tunisie') || selectedShipment.deliveryAddress.toLowerCase().includes('tunisia')
+                        ? selectedShipment.deliveryAddress
+                        : `${selectedShipment.deliveryAddress}, Tunisia`;
+
+                    const result = await Location.geocodeAsync(searchAddress);
+                    if (result && result.length > 0) {
+                        setSelectedShipment((prev: any) => ({
+                            ...prev,
+                            deliveryLocation: {
+                                latitude: result[0].latitude,
+                                longitude: result[0].longitude
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.log("Geocoding failed in driver screen:", e);
+                }
+            };
+            geocodeAddress();
+        }
+    }, [selectedShipment?.deliveryAddress, selectedShipment?.deliveryLocation]);
+
+    const handleExternalNavigation = () => {
+        if (selectedShipment?.deliveryAddress) {
+            openAddressInNativeMaps(selectedShipment.deliveryAddress);
+        }
+    };
+
 
     useEffect(() => {
         const initDriverLocation = async () => {
@@ -70,8 +115,63 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
 
         if (user?.uid) {
             initDriverLocation();
+
+            // Real-time location for map
+            const locUnsub = Location.watchPositionAsync(
+                { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+                (loc) => {
+                    setCurrentLocation(loc.coords);
+                }
+            );
+
+            return () => {
+                locUnsub.then(u => u.remove());
+            };
         }
     }, [user?.uid, profileData?.city]);
+
+    useEffect(() => {
+        if (selectedShipment?.deliveryLocation && currentLocation) {
+            const dist = calculateDistance(
+                currentLocation.latitude,
+                currentLocation.longitude,
+                selectedShipment.deliveryLocation.latitude,
+                selectedShipment.deliveryLocation.longitude
+            );
+
+            // If distance > 1000km, it's likely a simulator/empty default, don't show crazy ETA
+            if (dist > 1000) {
+                setEta('--');
+                return;
+            }
+
+            // speed 30km/h
+            const time = (dist / 30) * 60;
+            setEta(time < 1 ? "1 min" : `${Math.round(time)} min`);
+
+            // Auto-fit map to markers
+            if (mapRef.current) {
+                mapRef.current.fitToCoordinates([
+                    currentLocation,
+                    selectedShipment.deliveryLocation
+                ], {
+                    edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+                    animated: true
+                });
+            }
+        }
+    }, [selectedShipment, currentLocation]);
+
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -200,9 +300,9 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
         }
     };
 
-    const handleOpenMap = (address: string) => {
-        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-        Linking.openURL(url);
+    const handleOpenMap = (shipment: any) => {
+        setSelectedShipment(shipment);
+        setShowMap(true);
     };
 
     const getStatusLabel = (status: string) => {
@@ -241,7 +341,9 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 <View style={styles.infoRow}>
                     <Phone size={20} color={colors.accent} />
                     <View style={styles.infoCol}>
-                        <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.receiverPhone}</Text>
+                        <Text style={[styles.infoValue, { color: colors.foreground }]}>
+                            {activeTab === 'available' ? '********' : item.receiverPhone}
+                        </Text>
                     </View>
                 </View>
 
@@ -268,7 +370,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                     <>
                         <TouchableOpacity
                             style={[styles.actionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
-                            onPress={() => handleOpenMap(item.deliveryAddress)}
+                            onPress={() => handleOpenMap(item)}
                         >
                             <Navigation size={20} color={colors.foreground} />
                             <Text style={[styles.actionBtnText, { color: colors.foreground }]}>{translate('map')}</Text>
@@ -327,11 +429,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                         </TouchableOpacity>
                     </View>
 
-                    {activeTab === 'available' && driverCity && (
-                        <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
-                            <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>📍 {translate('filteredByRegion')}: {driverCity.toUpperCase()}</Text>
-                        </View>
-                    )}
+
 
                     <FlatList
                         data={activeTab === 'available' ? availableShipments : shipments}
@@ -361,110 +459,110 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                     />
                 </>
             )}
+
+            <Modal visible={showMap} animationType="slide">
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <MapView
+                        ref={mapRef}
+                        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                        style={StyleSheet.absoluteFill}
+                        customMapStyle={mapStyle}
+                        initialRegion={{
+                            latitude: currentLocation?.latitude || selectedShipment?.deliveryLocation?.latitude || 35.8256,
+                            longitude: currentLocation?.longitude || selectedShipment?.deliveryLocation?.longitude || 10.6369,
+                            latitudeDelta: 0.05,
+                            longitudeDelta: 0.05,
+                        }}
+                    >
+                        {currentLocation && (
+                            <Marker coordinate={currentLocation} title="You">
+                                <View style={styles.driverMarker}>
+                                    <Truck size={20} color="#FFF" />
+                                </View>
+                            </Marker>
+                        )}
+                        {selectedShipment?.deliveryLocation && (
+                            <Marker coordinate={selectedShipment.deliveryLocation} title="Destination">
+                                <View style={styles.destMarker}>
+                                    <MapPin size={24} color="#EF4444" fill="#EF4444" />
+                                </View>
+                            </Marker>
+                        )}
+                    </MapView>
+
+                    <BlurView intensity={80} tint="dark" style={styles.mapHeader}>
+                        <TouchableOpacity onPress={() => setShowMap(false)} style={styles.closeMapBtn}>
+                            <X color="#FFF" size={24} />
+                        </TouchableOpacity>
+                        <View>
+                            <Text style={styles.mapTitle}>{translate('deliveryDetails')}</Text>
+                            <Text style={styles.mapSubTitle}>{selectedShipment?.deliveryAddress}</Text>
+                        </View>
+                    </BlurView>
+
+                    <View style={styles.mapFooter}>
+                        <BlurView intensity={90} tint="dark" style={styles.etaBadge}>
+                            <Clock size={16} color="#FFCC00" />
+                            <Text style={styles.etaText}>ETA: {eta}</Text>
+                        </BlurView>
+
+                        <TouchableOpacity
+                            style={styles.externalMapBtn}
+                            onPress={handleExternalNavigation}
+                        >
+                            <Navigation size={20} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+const mapStyle = [
+    {
+        "elementType": "geometry",
+        "stylers": [{ "color": "#212121" }]
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 60,
-        paddingBottom: 20,
+    {
+        "elementType": "labels.icon",
+        "stylers": [{ "visibility": "off" }]
     },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '900',
-        letterSpacing: 2,
-    },
-    list: {
-        padding: 20,
-        paddingBottom: 40,
-    },
-    card: {
-        borderRadius: 24,
-        padding: 20,
-        marginBottom: 20,
-        borderWidth: 1,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
-        paddingBottom: 10,
-    },
-    statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-    },
-    statusText: {
-        fontSize: 10,
-        fontWeight: '900',
-    },
-    trackingId: {
-        fontSize: 12,
-        fontWeight: '800',
-    },
-    cardBody: {
-        gap: 15,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        gap: 15,
-        alignItems: 'flex-start',
-    },
-    infoCol: {
-        flex: 1,
-    },
-    infoLabel: {
-        fontSize: 9,
-        fontWeight: '800',
-        marginBottom: 2,
-    },
-    infoValue: {
-        fontSize: 15,
-        fontWeight: '900',
-    },
-    infoSubValue: {
-        fontSize: 13,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    cardActions: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 20,
-    },
-    actionBtn: {
-        flex: 1,
-        height: 50,
-        borderRadius: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-    },
-    actionBtnText: {
-        fontSize: 12,
-        fontWeight: '900',
-    },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 100,
-        gap: 20,
-    },
-    emptyText: {
-        fontSize: 16,
-        fontWeight: '700',
+    {
+        "elementType": "labels.text.fill",
+        "stylers": [{ "color": "#757575" }]
     }
+];
+
+const styles = StyleSheet.create({
+    container: { flex: 1 },
+    header: { padding: 20, paddingTop: 60, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 10 },
+    headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -1 },
+    list: { padding: 20, paddingBottom: 100 },
+    card: { borderRadius: 24, padding: 20, marginBottom: 20, borderWidth: 1, elevation: 2 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+    statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+    statusText: { fontSize: 10, fontWeight: '900' },
+    trackingId: { fontSize: 10, fontWeight: '600' },
+    cardBody: { gap: 15 },
+    infoRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+    infoCol: { flex: 1 },
+    infoLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 },
+    infoValue: { fontSize: 16, fontWeight: '800' },
+    infoSubValue: { fontSize: 12 },
+    cardActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+    actionBtn: { flex: 1, height: 48, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    actionBtnText: { fontSize: 14, fontWeight: '800' },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 100, gap: 15 },
+    emptyText: { fontSize: 16, fontWeight: '600' },
+    mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, padding: 20, paddingTop: 50, flexDirection: 'row', alignItems: 'center', gap: 15 },
+    closeMapBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+    mapTitle: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+    mapSubTitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
+    mapFooter: { position: 'absolute', bottom: 40, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    etaBadge: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 8, overflow: 'hidden' },
+    etaText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+    externalMapBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', elevation: 5 },
+    driverMarker: { width: 40, height: 40, backgroundColor: '#3B82F6', borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#FFF' },
+    destMarker: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }
 });

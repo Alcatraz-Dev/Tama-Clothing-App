@@ -151,7 +151,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
                         <StatusIcon size={14} color={getStatusColor(item.status)} />
                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                            {translate(item.status?.toLowerCase() || 'pending') || item.status}
+                            {translate((item.status?.toLowerCase() || 'pending').replace(/ /g, '_')) || item.status}
                         </Text>
                     </View>
                     <Text style={[styles.trackingId, { color: colors.textMuted }]}>
