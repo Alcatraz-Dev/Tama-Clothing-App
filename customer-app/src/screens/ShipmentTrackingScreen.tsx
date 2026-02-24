@@ -178,6 +178,20 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         return STATUS_STEPS.findIndex(s => s.toLowerCase() === normalized);
     };
 
+    const getStatusColor = (status?: string | null) => {
+        const s = status?.toLowerCase() || '';
+        switch (s) {
+            case 'pending': return '#F59E0B';
+            case 'in transit':
+            case 'in_transit': return '#3B82F6';
+            case 'out for delivery':
+            case 'out_for_delivery': return '#10B981';
+            case 'delivered': return '#22C55E';
+            case 'cancelled': return '#EF4444';
+            default: return colors.accent;
+        }
+    };
+
     const currentStep = statusData ? getStatusIndex(statusData.status) : 0;
     const isInTransit = statusData?.status === 'In Transit' || statusData?.status === 'in_transit' || statusData?.status === 'Out for Delivery' || statusData?.status === 'out_for_delivery';
 
@@ -219,14 +233,16 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             <Text style={[styles.trackingLabel, { color: colors.textMuted }]}>{translate('trackingNumber')}</Text>
                             <Text style={[styles.trackingId, { color: colors.foreground }]}>{trackingId}</Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: colors.accent + '20' }]}>
-                            <Text style={[styles.statusText, { color: colors.accent }]}>{statusData?.status || '...'}</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(statusData?.status) + '20' }]}>
+                            <Text style={[styles.statusText, { color: getStatusColor(statusData?.status) }]}>
+                                {translate(statusData?.status?.toLowerCase() || 'pending')?.toUpperCase() || statusData?.status?.toUpperCase()}
+                            </Text>
                         </View>
                     </View>
 
                     {eta && isInTransit && (
-                        <View style={[styles.etaContainer, { backgroundColor: colors.accent + '15' }]}>
-                            <Clock size={18} color={colors.accent} />
+                        <View style={[styles.etaContainer, { backgroundColor: getStatusColor(statusData?.status) + '15' }]}>
+                            <Clock size={18} color={getStatusColor(statusData?.status)} />
                             <Text style={[styles.etaText, { color: colors.accent }]}>
                                 {translate('arrivingIn') || 'Arriving in'}: {eta}
                             </Text>

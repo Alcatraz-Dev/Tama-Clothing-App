@@ -73,16 +73,9 @@ export default function ShipmentCreationScreen({ onBack, onComplete, t, hideHead
             const html = generateShippingStickerHTML({ ...shipmentData, trackingId: result.trackingId });
             const { uri } = await Print.printToFileAsync({ html });
 
-            // 3. Upload PDF to Storage
-            const pdfBlob = await fetch(uri).then(r => r.blob());
-            const pdfRef = ref(storage, `shipments/${result.trackingId}/label.pdf`);
-            await uploadBytes(pdfRef, pdfBlob);
-            const downloadUrl = await getDownloadURL(pdfRef);
-
-            // 4. Update shipment with sticker URL (Optional but good)
-            // Note: createShipment already returns the result, we might want to update it later if needed
-
-            // 5. Share/Print locally
+            // 3. Share/Print locally
+            // We skip Firebase Storage upload of the PDF on Mobile to avoid 'storage/unknown' blob conversion errors.
+            // The shipment details are successfully stored in Firebird database above.
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
 
             Alert.alert(

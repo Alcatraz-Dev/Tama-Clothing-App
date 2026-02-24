@@ -355,7 +355,11 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                     <View style={styles.infoRow}>
                         <Package size={16} color={colors.accent} />
                         <View style={styles.infoCol}>
-                            <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.items.join(', ')}</Text>
+                            <Text style={[styles.infoValue, { color: colors.foreground }]}>
+                                {Array.isArray(item.items)
+                                    ? item.items.map((i: any) => typeof i === 'string' ? i : (i?.name || i?.title || String(i))).join(', ')
+                                    : String(item.items)}
+                            </Text>
                         </View>
                     </View>
                 )}

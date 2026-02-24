@@ -183,7 +183,9 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                                     {translate('items')}
                                 </Text>
                                 <Text style={[styles.infoSubValue, { color: colors.textMuted }]} numberOfLines={1}>
-                                    {Array.isArray(item.items) ? item.items.join(', ') : String(item.items)}
+                                    {Array.isArray(item.items)
+                                        ? item.items.map((i: any) => typeof i === 'string' ? i : (i?.name || i?.title || String(i))).join(', ')
+                                        : String(item.items)}
                                 </Text>
                             </View>
                         </View>
@@ -242,7 +244,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('all')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'all' ? colors.foreground : colors.textMuted }]}>
-                        {translate('all')} ({shipments?.length || 0})
+                        {String(translate('all') || 'TOUT').toUpperCase()} ({shipments?.length || 0})
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -250,7 +252,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('pending')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'pending' ? colors.foreground : colors.textMuted }]}>
-                        {translate('pending')} ({shipments?.filter(s => {
+                        {String(translate('pending') || 'EN ATTENTE').toUpperCase()} ({shipments?.filter(s => {
                             const st = s?.status?.toLowerCase() || '';
                             return st !== 'delivered' && st !== 'cancelled';
                         })?.length || 0})
@@ -261,7 +263,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('delivered')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'delivered' ? colors.foreground : colors.textMuted }]}>
-                        {translate('delivered')} ({shipments?.filter(s => (s?.status?.toLowerCase() || '') === 'delivered')?.length || 0})
+                        {String(translate('delivered') || 'LIVRÉ').toUpperCase()} ({shipments?.filter(s => (s?.status?.toLowerCase() || '') === 'delivered')?.length || 0})
                     </Text>
                 </TouchableOpacity>
             </View>

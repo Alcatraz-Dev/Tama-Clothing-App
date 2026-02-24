@@ -7085,7 +7085,7 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
             activeOpacity={0.8}
           >
             <Text style={[styles.mainActionBtnText, { color: product.status === 'sold_out' ? (theme === 'dark' ? '#888' : '#666') : (theme === 'dark' ? '#000' : '#FFF') }]}>
-              {product.status === 'sold_out' ? t('soldOut').toUpperCase() : `${t('addToCart')} — ${product.price.toFixed(2)} TND`}
+              {product.status === 'sold_out' ? t('soldOut').toUpperCase() : `${t('addToCart')} — ${Number(product.discountPrice || product.price).toFixed(2)} TND`}
             </Text>
           </TouchableOpacity>
           <View style={{ height: 50 }} />
