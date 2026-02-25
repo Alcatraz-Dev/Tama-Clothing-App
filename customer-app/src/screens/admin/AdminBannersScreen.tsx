@@ -156,13 +156,27 @@ export default function AdminBannersScreen({ onBack, t, profileData }: any) {
     };
 
     const pickImage = async () => {
-        const r = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [16, 9],
-            quality: 0.5
-        });
-        if (!r.canceled) setImage(r.assets[0].uri);
+        try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert(t('permissionDenied') || 'Permission Required', t('mediaPermissionMessage') || 'Please allow access to your photo library.');
+                return;
+            }
+            
+            const r = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [16, 9],
+                quality: 0.5
+            });
+            
+            if (!r.canceled && r.assets && r.assets[0]) {
+                setImage(r.assets[0].uri);
+            }
+        } catch (error: any) {
+            console.log('Image picker error:', error);
+            Alert.alert(t('error') || 'Error', error.message || 'Failed to pick image');
+        }
     };
 
     return (

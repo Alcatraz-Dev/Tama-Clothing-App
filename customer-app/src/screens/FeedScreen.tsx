@@ -60,6 +60,10 @@ import * as MediaLibrary from 'expo-media-library';
 import { Theme } from '../theme';
 import { LiveSessionService } from '../services/LiveSessionService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '../components/ui/Button';
+import { Avatar } from '../components/ui/Avatar';
+import { Badge } from '../components/ui/Badge';
+import { Tabs } from '../components/ui/Tabs';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -410,51 +414,28 @@ export default function FeedScreen(props: FeedScreenProps) {
                 {/* Top Glass Badges - Left aligned with Host Icon */}
                 <View style={[styles.liveBadgeContainer, { top: insets.top + 20, justifyContent: 'flex-start', gap: 10 }]}>
                     {/* Host Mini Icon as requested */}
-                    <View style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        borderWidth: 1.5,
-                        borderColor: '#FF4D67',
-                        overflow: 'hidden',
-                        backgroundColor: '#333'
-                    }}>
-                        <Image source={{ uri: session.hostAvatar }} style={{ width: '100%', height: '100%' }} />
-                    </View>
+                    <Avatar
+                        source={session.hostAvatar}
+                        size={32}
+                        borderWidth={1.5}
+                        borderColor="#FF4D67"
+                    />
 
-                    <BlurView intensity={40} tint="dark" style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        borderRadius: 20,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.2)',
-                        overflow: 'hidden',
-                        gap: 6
-                    }}>
-                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>
-                            {t('enDirect') || 'EN DIRECT'}
-                        </Text>
-                    </BlurView>
+                    <Badge
+                        label={t('enDirect') || 'EN DIRECT'}
+                        variant="error"
+                        icon={<View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />}
+                        style={{ height: 24 }}
+                        textStyle={{ fontSize: 9 }}
+                    />
 
-                    <BlurView intensity={30} tint="dark" style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(0,0,0,0.4)',
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 20,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        overflow: 'hidden',
-                        gap: 5
-                    }}>
-                        <Eye size={12} color="#FFF" />
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>{Math.max(0, session.viewCount || 0)}</Text>
-                    </BlurView>
+                    <Badge
+                        label={Math.max(0, session.viewCount || 0)}
+                        variant="glass"
+                        icon={<Eye size={12} color="#FFF" />}
+                        style={{ height: 24 }}
+                        textStyle={{ fontSize: 10 }}
+                    />
                 </View>
 
                 {/* Host Info Section */}
@@ -465,18 +446,13 @@ export default function FeedScreen(props: FeedScreenProps) {
                     right: 16,
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                        <View style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
-                            backgroundColor: '#333',
-                            borderWidth: 1.5,
-                            borderColor: '#FFF',
-                            overflow: 'hidden',
-                            marginRight: 12
-                        }}>
-                            <Image source={{ uri: session.hostAvatar }} style={{ width: '100%', height: '100%' }} />
-                        </View>
+                        <Avatar
+                            source={session.hostAvatar}
+                            size={40}
+                            borderWidth={1.5}
+                            borderColor="#FFF"
+                            style={{ marginRight: 12 }}
+                        />
                         <View>
                             <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }}>
                                 {session.hostName}
@@ -509,40 +485,25 @@ export default function FeedScreen(props: FeedScreenProps) {
                     left: 16,
                     right: 16,
                 }}>
-                    <TouchableOpacity
+                    <Button
                         onPress={() => onJoinLive(session.channelId)}
-                        activeOpacity={0.8}
+                        title={(t('joinLive') || 'JOIN LIVE').toUpperCase()}
+                        variant="error"
+                        size="lg"
+                        icon={
+                            <Animatable.View animation="pulse" iterationCount="infinite" duration={1500}>
+                                <Play size={20} color="#FFF" fill="#FFF" />
+                            </Animatable.View>
+                        }
                         style={{
-                            backgroundColor: '#EF4444', // Hot Red for Live Action
-                            paddingVertical: 14,
-                            borderRadius: 12,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexDirection: 'row',
-                            gap: 10,
                             shadowColor: '#EF4444',
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.5,
                             shadowRadius: 12,
                             elevation: 8
                         }}
-                    >
-                        <Animatable.View
-                            animation="pulse"
-                            iterationCount="infinite"
-                            duration={1500}
-                        >
-                            <Play size={20} color="#FFF" fill="#FFF" />
-                        </Animatable.View>
-                        <Text style={{
-                            color: '#FFF',
-                            fontSize: 15,
-                            fontWeight: '900',
-                            letterSpacing: 1
-                        }}>
-                            {(t('joinLive') || 'JOIN LIVE').toUpperCase()}
-                        </Text>
-                    </TouchableOpacity>
+                        textStyle={{ letterSpacing: 1 }}
+                    />
                 </View>
 
                 {/* Center Pulse (Subtle Indicator) */}
@@ -734,30 +695,28 @@ export default function FeedScreen(props: FeedScreenProps) {
                 { type: 'interesting', Icon: Sparkles, color: '#A855F7' }
             ].map((r) => {
                 const count = work.reactions?.[r.type] || 0;
-                // Highlight if user reacted with this type
                 const isSelected = work.userReactions?.[user?.uid] === r.type;
-
                 if (count === 0 && !isSelected) return null;
 
                 return (
-                    <TouchableOpacity
+                    <Button
                         key={r.type}
                         onPress={() => handleReaction(work, r.type)}
+                        size="sm"
+                        variant={isSelected ? "glass" : "secondary"}
+                        icon={<r.Icon size={10} color={r.color} fill={isSelected ? r.color : "transparent"} strokeWidth={2.5} />}
+                        title={count.toString()}
                         style={{
-                            backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)',
-                            paddingHorizontal: 6,
-                            paddingVertical: 3,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            height: 24,
                             borderRadius: 8,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 3,
+                            backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)',
                             borderWidth: isSelected ? 1 : 0.5,
                             borderColor: isSelected ? r.color : 'rgba(255,255,255,0.2)'
                         }}
-                    >
-                        <r.Icon size={10} color={r.color} fill={isSelected ? r.color : "transparent"} strokeWidth={2.5} />
-                        <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{count}</Text>
-                    </TouchableOpacity>
+                        textStyle={{ fontSize: 9, fontWeight: '900', color: 'white' }}
+                    />
                 );
             })}
         </View>
@@ -818,22 +777,12 @@ export default function FeedScreen(props: FeedScreenProps) {
                     left: 20,
                     zIndex: 20
                 }}>
-                    <BlurView intensity={30} tint="dark" style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(0,0,0,0.4)',
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 30, // Fully rounded
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.2)',
-                        overflow: 'hidden',
-                    }}>
-                        <Star size={12} color="#FBBF24" fill="#FBBF24" />
-                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900', marginLeft: 6, letterSpacing: 1 }}>
-                            {tr('Ad SPONSORISÉ', 'إعلان ممول', 'SPONSORED')}
-                        </Text>
-                    </BlurView>
+                    <Badge
+                        label={tr('Ad SPONSORISÉ', 'إعلان ممول', 'SPONSORED')}
+                        variant="glass"
+                        icon={<Star size={12} color="#FBBF24" fill="#FBBF24" />}
+                        style={{ paddingVertical: 6, paddingHorizontal: 12 }}
+                    />
                 </View>
 
                 {/* Ad Content & Brand */}
@@ -892,38 +841,27 @@ export default function FeedScreen(props: FeedScreenProps) {
                 {/* Theme-Aware Floating CTA */}
                 <View style={{
                     position: 'absolute',
-                    bottom: 110, // Slightly higher for better thumb reach
+                    bottom: 110,
                     left: 16,
                     right: 16,
                 }}>
-                    <TouchableOpacity
+                    <Button
                         onPress={() => onCampaignPress?.(ad)}
-                        activeOpacity={0.8}
+                        title={tr('DÉCOUVRIR', 'اكتشف', 'DISCOVER')}
+                        variant={isDark ? "secondary" : "primary"}
+                        size="lg"
+                        icon={<ChevronRight size={20} color={isDark ? '#000' : '#FFF'} strokeWidth={3} />}
                         style={{
-                            backgroundColor: isDark ? '#FFF' : '#000', // Dynamic Theme Color
-                            paddingVertical: 14,
-                            borderRadius: 12,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexDirection: 'row',
-                            gap: 10,
                             shadowColor: '#000',
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.4,
                             shadowRadius: 10,
-                            elevation: 8
+                            elevation: 8,
+                            backgroundColor: isDark ? '#FFF' : '#000',
+                            flexDirection: 'row-reverse'
                         }}
-                    >
-                        <Text style={{
-                            color: isDark ? '#000' : '#FFF', // Inverse Text Color
-                            fontSize: 15,
-                            fontWeight: '900',
-                            letterSpacing: 1
-                        }}>
-                            {tr('DÉCOUVRIR', 'اكتشف', 'DISCOVER')}
-                        </Text>
-                        <ChevronRight size={20} color={isDark ? '#000' : '#FFF'} strokeWidth={3} />
-                    </TouchableOpacity>
+                        textStyle={{ color: isDark ? '#000' : '#FFF' }}
+                    />
                 </View>
             </View>
         );
@@ -1001,17 +939,21 @@ export default function FeedScreen(props: FeedScreenProps) {
                 />
 
                 {viral && (
-                    <View style={styles.viralBadge}>
-                        <TrendingUp size={14} color="#FFF" />
-                        <Text style={styles.viralText}>{tr('VIRAL', 'فيروسي', 'VIRAL')}</Text>
-                    </View>
+                    <Badge
+                        label={tr('VIRAL', 'فيروسي', 'VIRAL')}
+                        variant="glass"
+                        icon={<TrendingUp size={14} color="#FFF" />}
+                        style={[styles.viralBadge, { backgroundColor: 'rgba(239, 68, 68, 0.7)', borderWidth: 0 }]}
+                    />
                 )}
 
                 {item.type === 'reel' && (
-                    <View style={[styles.viralBadge, { backgroundColor: 'rgba(168, 85, 247, 0.8)', top: viral ? 100 : 70 }]}>
-                        <VideoIcon size={14} color="#FFF" />
-                        <Text style={styles.viralText}>{tr('REEL', 'ريل', 'REEL')}</Text>
-                    </View>
+                    <Badge
+                        label={tr('REEL', 'ريل', 'REEL')}
+                        variant="glass"
+                        icon={<VideoIcon size={14} color="#FFF" />}
+                        style={[styles.viralBadge, { backgroundColor: 'rgba(168, 85, 247, 0.8)', top: viral ? 100 : 70, borderWidth: 0 }]}
+                    />
                 )}
 
                 {/* Top Right Actions */}
@@ -1024,56 +966,59 @@ export default function FeedScreen(props: FeedScreenProps) {
                     zIndex: 50
                 }}>
                     {/* Comment */}
-                    <TouchableOpacity onPress={() => onCommentPress?.(work, work.userId)} style={{ alignItems: 'center' }}>
-                        <View style={{
-                            width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
-                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)'
-                        }}>
-                            <MessageSquare size={18} color="#FFF" strokeWidth={2.5} />
-                        </View>
-                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', marginTop: 6, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } }}>
+                    <View style={{ alignItems: 'center' }}>
+                        <Button
+                            onPress={() => onCommentPress?.(work, work.userId)}
+                            size="icon"
+                            variant="glass"
+                            icon={<MessageSquare size={18} color="#FFF" strokeWidth={2.5} />}
+                        />
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900', marginTop: 6, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 4 }}>
                             {work.commentsCount || 0}
                         </Text>
-                    </TouchableOpacity>
+                    </View>
 
                     {/* Repost */}
-                    <TouchableOpacity onPress={() => handleRepost(work)} style={{ alignItems: 'center' }}>
-                        <View style={{
-                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
-                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
-                        }}>
-                            <Repeat size={18} color="#FFF" strokeWidth={2} />
-                        </View>
-                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
-                            {tr('Republier', 'نشر', 'Repost')}
+                    <View style={{ alignItems: 'center' }}>
+                        <Button
+                            onPress={() => handleRepost(work)}
+                            size="icon"
+                            variant="glass"
+                            icon={<Repeat size={18} color="#FFF" strokeWidth={2} />}
+                            style={{ width: 40, height: 40 }}
+                        />
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+                            {tr('Repost', 'نشر', 'Repost')}
                         </Text>
-                    </TouchableOpacity>
+                    </View>
 
                     {/* Download */}
-                    <TouchableOpacity onPress={() => handleDownload(work)} style={{ alignItems: 'center' }}>
-                        <View style={{
-                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
-                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
-                        }}>
-                            <DownloadCloud size={18} color="#FFF" strokeWidth={2} />
-                        </View>
-                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
+                    <View style={{ alignItems: 'center' }}>
+                        <Button
+                            onPress={() => handleDownload(work)}
+                            size="icon"
+                            variant="glass"
+                            icon={<DownloadCloud size={18} color="#FFF" strokeWidth={2} />}
+                            style={{ width: 40, height: 40 }}
+                        />
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
                             {tr('Télécharger', 'تحميل', 'Download')}
                         </Text>
-                    </TouchableOpacity>
+                    </View>
 
                     {/* Share */}
-                    <TouchableOpacity onPress={() => handleShare(work)} style={{ alignItems: 'center' }}>
-                        <View style={{
-                            width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
-                            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
-                        }}>
-                            <Send size={18} color="#FFF" strokeWidth={2} />
-                        </View>
-                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3 }}>
+                    <View style={{ alignItems: 'center' }}>
+                        <Button
+                            onPress={() => handleShare(work)}
+                            size="icon"
+                            variant="glass"
+                            icon={<Send size={18} color="#FFF" strokeWidth={2} />}
+                            style={{ width: 40, height: 40 }}
+                        />
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
                             {tr('Share', 'مشاركة', 'Share')}
                         </Text>
-                    </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Bottom User Info - TikTok Style with button below avatar */}
@@ -1085,58 +1030,34 @@ export default function FeedScreen(props: FeedScreenProps) {
                     zIndex: 20
                 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap' }}>
-                        <TouchableOpacity
-                            onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
-                            style={{
-                                width: 50, height: 50,
-                                marginRight: 8,
-                                position: 'relative'
-                            }}
-                        >
+                        <View style={{ marginRight: 8, position: 'relative' }}>
                             {work.isCollab ? (
                                 <View style={{ width: 50, height: 50 }}>
-                                    {/* Main Brand/Collab Image */}
-                                    <View style={{
-                                        width: 42, height: 42, borderRadius: 21,
-                                        borderWidth: 2, borderColor: '#FFF',
-                                        overflow: 'hidden', backgroundColor: '#333'
-                                    }}>
-                                        {work.collabImage ? (
-                                            <Image source={{ uri: work.collabImage }} style={{ width: '100%', height: '100%' }} />
-                                        ) : (
-                                            <Star size={20} color="#FFF" />
-                                        )}
-                                    </View>
-                                    {/* Small User Avatar overlapping */}
-                                    <View style={{
-                                        position: 'absolute', bottom: 0, right: 0,
-                                        width: 24, height: 24, borderRadius: 12,
-                                        borderWidth: 2, borderColor: '#FFF',
-                                        overflow: 'hidden', backgroundColor: '#555',
-                                        zIndex: 5
-                                    }}>
-                                        {work.userPhoto ? (
-                                            <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} />
-                                        ) : (
-                                            <User size={12} color="#FFF" />
-                                        )}
-                                    </View>
+                                    <Avatar
+                                        source={work.collabImage}
+                                        size={42}
+                                        borderWidth={2}
+                                        borderColor="#FFF"
+                                        onPress={() => onCollabPress?.(work.userId)}
+                                    />
+                                    <Avatar
+                                        source={work.userPhoto}
+                                        size={24}
+                                        borderWidth={2}
+                                        borderColor="#FFF"
+                                        style={{ position: 'absolute', bottom: 0, right: 0, zIndex: 5 }}
+                                    />
                                 </View>
                             ) : (
-                                <View style={{
-                                    width: 44, height: 44, borderRadius: 22,
-                                    borderWidth: 2, borderColor: '#FFF',
-                                    alignItems: 'center', justifyContent: 'center',
-                                    overflow: 'hidden', backgroundColor: '#333'
-                                }}>
-                                    {work.userPhoto ? (
-                                        <Image source={{ uri: work.userPhoto }} style={{ width: '100%', height: '100%' }} />
-                                    ) : (
-                                        <User size={20} color="#FFF" />
-                                    )}
-                                </View>
+                                <Avatar
+                                    source={work.userPhoto}
+                                    size={44}
+                                    borderWidth={2}
+                                    borderColor="#FFF"
+                                    onPress={() => onUserPress?.(work.userId)}
+                                />
                             )}
-                        </TouchableOpacity>
+                        </View>
 
                         <TouchableOpacity
                             onPress={() => work.isCollab ? onCollabPress?.(work.userId) : onUserPress?.(work.userId)}
@@ -1153,76 +1074,33 @@ export default function FeedScreen(props: FeedScreenProps) {
                         </TouchableOpacity>
 
                         {work.userId !== user?.uid && (
-                            <TouchableOpacity
+                            <Button
                                 onPress={() => work.isCollab ? onFollowCollab?.(work.collabId || work.userId) : onAddFriend?.(work.userId)}
+                                variant={(work.isCollab
+                                    ? ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId))
+                                    : (profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId)))
+                                    ? "error" : "glass"}
+                                size="sm"
+                                icon={work.isCollab ? (
+                                    ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? <Check size={12} color="#FFF" /> : <Star size={12} color="#FFF" fill="#FFF" />
+                                ) : (
+                                    profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId) ? <Check size={12} color="#FFF" /> : (profileData?.pendingFriendRequests?.includes(work.userId) ? <Clock size={12} color="#FFF" /> : <UserPlus size={12} color="#FFF" />)
+                                )}
+                                title={work.isCollab ? (
+                                    ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? (t('following') || 'Suivi') : (t('follow') || 'Suivre')
+                                ) : (
+                                    profileData?.friends?.includes(work.userId) ? (t("friends") || "Amis") : (profileData?.incomingFriendRequests?.includes(work.userId) ? (t("accept") || "Accepter") : (profileData?.pendingFriendRequests?.includes(work.userId) ? (t('pending') || 'En attente') : (t('addFriend') || 'Ajouter')))
+                                )}
                                 style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: work.isCollab
-                                        ? (((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId))
-                                            ? '#EF4444' // Match red accent for active
-                                            : 'rgba(255, 255, 255, 0.25)')
-                                        : (profileData?.friends?.includes(work.userId) || profileData?.incomingFriendRequests?.includes(work.userId)
-                                            ? '#EF4444' // Match red accent for friends or incoming
-                                            : profileData?.pendingFriendRequests?.includes(work.userId)
-                                                ? '#444' // Dark for pending
-                                                : 'rgba(255, 255, 255, 0.25)'),
-                                    paddingVertical: 6,
+                                    height: 32,
+                                    paddingVertical: 0,
                                     paddingHorizontal: 12,
                                     borderRadius: 18,
-                                    gap: 5,
                                     borderWidth: 1,
                                     borderColor: 'rgba(255, 255, 255, 0.3)',
                                 }}
-                            >
-                                {work.isCollab ? (
-                                    ((work.collabId && followedCollabs.includes(work.collabId)) || profileData?.following?.includes(work.userId)) ? (
-                                        <>
-                                            <Check size={12} color="#FFF" />
-                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                {t('following') || 'Suivi'}
-                                            </Text>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Star size={12} color="#FFF" fill="#FFF" />
-                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                {t('follow') || 'Suivre'}
-                                            </Text>
-                                        </>
-                                    )
-                                ) : (
-                                    profileData?.friends?.includes(work.userId) ? (
-                                        <>
-                                            <Check size={12} color="#FFF" />
-                                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
-                                                {t("friends") || "Amis"}
-                                            </Text>
-                                        </>
-                                    ) : profileData?.incomingFriendRequests?.includes(work.userId) ? (
-                                        <>
-                                            <Check size={12} color="#FFF" />
-                                            <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "700" }}>
-                                                {t("accept") || "Accepter"}
-                                            </Text>
-                                        </>
-                                    ) : profileData?.pendingFriendRequests?.includes(work.userId) ? (
-                                        <>
-                                            <Clock size={12} color="#FFF" />
-                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                {t('pending') || 'En attente'}
-                                            </Text>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <UserPlus size={12} color="#FFF" />
-                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>
-                                                {t('addFriend') || 'Ajouter'}
-                                            </Text>
-                                        </>
-                                    )
-                                )}
-                            </TouchableOpacity>
+                                textStyle={{ fontSize: 10, fontWeight: '800' }}
+                            />
                         )}
                     </View>
                 </View>
@@ -1332,9 +1210,12 @@ export default function FeedScreen(props: FeedScreenProps) {
                 {/* Top Row */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
                     <View style={{ opacity: isSpecialActive ? 0 : 1 }}>
-                        <TouchableOpacity onPress={() => onNavigate('Camera')}>
-                            <Plus size={24} color={headerContentColor} />
-                        </TouchableOpacity>
+                        <Button
+                            onPress={() => onNavigate('Camera')}
+                            variant="ghost"
+                            size="icon"
+                            icon={<Plus size={24} color={headerContentColor} />}
+                        />
                     </View>
                     {!isAdActive && (
                         <Text style={[styles.headerTitle, {
@@ -1346,83 +1227,39 @@ export default function FeedScreen(props: FeedScreenProps) {
                         </Text>
                     )}
                     {!isAdActive && (
-                        <TouchableOpacity
-                            style={[styles.profileButton, {
-                                backgroundColor: isDark || !isEmpty
-                                    ? (isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)')
-                                    : 'rgba(0,0,0,0.05)'
-                            }]}
+                        <Button
                             onPress={() => {
                                 if (feedFilter === 'default') setFeedFilter('viral');
                                 else if (feedFilter === 'viral') setFeedFilter('comments');
                                 else setFeedFilter('default');
                             }}
-                        >
-                            <TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : headerContentColor)} />
-                        </TouchableOpacity>
+                            variant="glass"
+                            size="icon"
+                            icon={<TrendingUp size={20} color={feedFilter === 'viral' ? '#A855F7' : (feedFilter === 'comments' ? '#3B82F6' : headerContentColor)} />}
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                backgroundColor: isDark || !isEmpty
+                                    ? (isSpecialActive ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)')
+                                    : 'rgba(0,0,0,0.05)'
+                            }}
+                        />
                     )}
                 </View>
 
-                {/* Tab Bar - Instagram/TikTok Style */}
-                <View style={{
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    opacity: isSpecialActive ? 0 : 1,
-                    marginBottom: 8
-                }}>
-                    <TouchableOpacity
-                        onPress={() => setFeedTab('all')}
-                        style={{
-                            paddingHorizontal: 20,
-                            paddingVertical: 8,
-                            borderBottomWidth: feedTab === 'all' ? 2 : 0,
-                            borderBottomColor: tabActiveColor
-                        }}
-                    >
-                        <Text style={{
-                            color: feedTab === 'all' ? tabActiveColor : tabInactiveColor,
-                            fontSize: 15,
-                            fontWeight: feedTab === 'all' ? '800' : '600'
-                        }}>
-                            {t('forYou')}
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setFeedTab('following')}
-                        style={{
-                            paddingHorizontal: 15,
-                            paddingVertical: 8,
-                            borderBottomWidth: feedTab === 'following' ? 2 : 0,
-                            borderBottomColor: tabActiveColor
-                        }}
-                    >
-                        <Text style={{
-                            color: feedTab === 'following' ? tabActiveColor : tabInactiveColor,
-                            fontSize: 15,
-                            fontWeight: feedTab === 'following' ? '800' : '600'
-                        }}>
-                            {t('followingTab')}
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setFeedTab('reels')}
-                        style={{
-                            paddingHorizontal: 15,
-                            paddingVertical: 8,
-                            borderBottomWidth: feedTab === 'reels' ? 2 : 0,
-                            borderBottomColor: tabActiveColor
-                        }}
-                    >
-                        <Text style={{
-                            color: feedTab === 'reels' ? tabActiveColor : tabInactiveColor,
-                            fontSize: 15,
-                            fontWeight: feedTab === 'reels' ? '800' : '600'
-                        }}>
-                            {t('reels') || 'Reels'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+                {/* Tab Bar - BNA UI Tabs */}
+                <Tabs
+                    tabs={[
+                        { id: 'all', label: t('forYou') },
+                        { id: 'following', label: t('followingTab') },
+                        { id: 'reels', label: t('reels') || 'Reels' }
+                    ]}
+                    activeTabId={feedTab}
+                    onTabChange={(id) => setFeedTab(id)}
+                    variant="pill"
+                    style={{ opacity: isSpecialActive ? 0 : 1, width: 'auto' }}
+                />
             </View>
 
             <FlatList

@@ -52,6 +52,12 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
 
     const pickImage = async (type: 'front' | 'back' | 'selfie') => {
         try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert(t('permissionDenied') || 'Permission Required', t('mediaPermissionMessage') || 'Please allow access to your photo library.');
+                return;
+            }
+            
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
@@ -59,13 +65,14 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                 quality: 0.8,
             });
 
-            if (!result.canceled) {
+            if (!result.canceled && result.assets && result.assets[0]) {
                 if (type === 'front') setIdFront(result.assets[0].uri);
                 if (type === 'back') setIdBack(result.assets[0].uri);
                 if (type === 'selfie') setSelfie(result.assets[0].uri);
             }
-        } catch (error) {
-            Alert.alert('Error', 'Could not select image');
+        } catch (error: any) {
+            console.log('Image picker error:', error);
+            Alert.alert(t('error') || 'Error', error.message || 'Could not select image');
         }
     };
 

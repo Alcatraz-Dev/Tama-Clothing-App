@@ -14,7 +14,7 @@ import { BlurView } from 'expo-blur';
 import { ArrowLeft, MapPin, Phone, CheckCircle, Package, Clock, AlertCircle, RefreshCw, ChevronRight, XCircle, Truck, Navigation, User, X } from 'lucide-react-native';
 import { Modal } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
-import { subscribeToTracking, ShipmentStatus, calculateETA, openInNativeMaps, openAddressInNativeMaps } from '../utils/shipping';
+import { ShipmentStatus, calculateETA, openInNativeMaps, openAddressInNativeMaps } from '../utils/shipping';
 import * as Location from 'expo-location';
 import * as Animatable from 'react-native-animatable';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -68,19 +68,26 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         );
 
         unsubscribeFs = onSnapshot(q, (snap) => {
+            console.log('Tracking: Looking for shipment with trackingId:', trackingId);
+            console.log('Tracking: Found docs:', snap.size);
             if (!snap.empty) {
                 const shipmentData: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                console.log('Tracking: Found shipment:', shipmentData.id, 'status:', shipmentData.status);
                 setFsShipment(shipmentData);
 
-                // Now that we have the doc ID, listen to location using it
-                if (!unsubscribeLocation) {
-                    const driverLocationRef = ref(rtdb, `tracking/${shipmentData.id}/location`);
-                    unsubscribeLocation = onValue(driverLocationRef, (snapshot) => {
-                        if (snapshot.exists()) {
-                            const loc = snapshot.val();
+                // Subscribe to RTDB using shipment document ID - listen to /location path
+                const rtdbBaseRef = ref(rtdb, `tracking/${shipmentData.id}/location`);
+                console.log('Tracking: Listening to RTDB path:', `tracking/${shipmentData.id}/location`);
+                unsubscribeLocation = onValue(rtdbBaseRef, (snapshot) => {
+                    console.log('Tracking: RTDB location snapshot exists:', snapshot.exists());
+                    if (snapshot.exists()) {
+                        const loc = snapshot.val();
+                        console.log('Tracking: Driver location:', loc);
+                        // Since we listen to /location, val() is the location directly
+                        if (loc && loc.latitude && loc.longitude) {
                             setDriverLocation({ latitude: loc.latitude, longitude: loc.longitude });
-
-                            // Calculate ETA
+                            
+                            // Calculate ETA if we have delivery location
                             if (shipmentData.deliveryLocation) {
                                 const etaText = calculateETA(
                                     loc.latitude,
@@ -91,18 +98,13 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 setEta(etaText);
                             }
                         }
-                    });
-                }
+                        setLoading(false);
+                    }
+                });
             }
         });
 
-        const unsubscribe = subscribeToTracking(trackingId, (data) => {
-            setStatusData(data);
-            setLoading(false);
-        });
-
         return () => {
-            unsubscribe();
             if (unsubscribeFs) unsubscribeFs();
             if (unsubscribeLocation) unsubscribeLocation();
         };

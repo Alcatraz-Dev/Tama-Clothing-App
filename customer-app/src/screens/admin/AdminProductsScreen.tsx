@@ -182,13 +182,49 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     }
 
     async function handlePickImage() {
-        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [3, 4], quality: 0.8 });
-        if (!r.canceled) setImages(prev => [...prev, r.assets[0].uri]);
+        try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert(t('permissionDenied') || 'Permission Required', 'Please allow access to your photo library in Settings.');
+                return;
+            }
+            
+            const r = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [3, 4],
+                quality: 0.8
+            });
+            
+            if (!r.canceled && r.assets && r.assets[0]) {
+                setImages(prev => [...prev, r.assets[0].uri]);
+            }
+        } catch (error: any) {
+            console.log('Image picker error:', error);
+            Alert.alert(t('error') || 'Error', error.message || 'Failed to pick image');
+        }
     }
 
     async function handlePickVideo() {
-        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 0.8 });
-        if (!r.canceled) setVideoUrl(r.assets[0].uri);
+        try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert(t('permissionDenied') || 'Permission Required', 'Please allow access to your media library in Settings.');
+                return;
+            }
+            
+            const r = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                quality: 0.8
+            });
+            
+            if (!r.canceled && r.assets && r.assets[0]) {
+                setVideoUrl(r.assets[0].uri);
+            }
+        } catch (error: any) {
+            console.log('Video picker error:', error);
+            Alert.alert(t('error') || 'Error', error.message || 'Failed to pick video');
+        }
     }
 
     async function handleSave() {

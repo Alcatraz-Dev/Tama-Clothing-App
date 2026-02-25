@@ -144,13 +144,14 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
   const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
   console.log('Auto Shipment created with ID:', shipmentDoc.id);
 
-  const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
+  const rtdbRef = ref(rtdb, `tracking/${shipmentDoc.id}`);
   await set(rtdbRef, {
     status: 'pending',
     updatedAt: Date.now(),
     location: null,
     driverId: null,
-    zoneId
+    zoneId,
+    trackingId: trackingId,
   });
 
   await addDoc(collection(db, 'Deliveries'), {
@@ -232,13 +233,14 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
   const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
   console.log('Shipment created with ID:', shipmentDoc.id);
 
-  const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
+  const rtdbRef = ref(rtdb, `tracking/${shipmentDoc.id}`);
   await set(rtdbRef, {
     status: 'pending',
     updatedAt: Date.now(),
     location: null,
     driverId: null,
-    zoneId
+    zoneId,
+    trackingId: trackingId,
   });
 
   await addDoc(collection(db, 'Deliveries'), {

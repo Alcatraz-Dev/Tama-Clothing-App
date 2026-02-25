@@ -266,21 +266,40 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 driverName: user.displayName || profileData?.fullName || 'Driver'
             });
 
-            setActiveTrackingId(shipment.trackingId);
-            startLocationTracking(shipment.trackingId, shipment.id);
+            // Ensure RTDB entry exists with correct path (shipment.id)
+            const rtdbRef = ref(rtdb, `tracking/${shipment.id}`);
+            await set(rtdbRef, {
+                status: 'out_for_delivery',
+                updatedAt: Date.now(),
+                driverId: user.uid,
+                trackingId: shipment.trackingId,
+            });
+
+            setActiveTrackingId(shipment.id);
+            startLocationTracking(shipment.id, shipment.id);
 
             Alert.alert(translate('success'), translate('deliveryStarted') || 'Delivery started! Tracking is live.');
         } catch (error: any) {
+            console.error('Start delivery error:', error);
             Alert.alert(translate('error'), error.message);
         }
     };
 
     const startLocationTracking = async (trackingId: string, shipmentId: string) => {
-        const hasPermissions = await Location.requestForegroundPermissionsAsync();
-        if (hasPermissions.status === 'granted') {
+        try {
+            const hasPermissions = await Location.requestForegroundPermissionsAsync();
+            if (hasPermissions.status !== 'granted') {
+                console.log('Location permission not granted');
+                return;
+            }
+
+            console.log('Starting location tracking for shipment:', shipmentId);
+
             // Initial position
             const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            await updateShipmentLocation(trackingId, {
+            console.log('Initial location:', location.coords);
+
+            await updateShipmentLocation(shipmentId, {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude
             }, shipmentId);
@@ -289,18 +308,24 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
             const watcher = await Location.watchPositionAsync(
                 {
                     accuracy: Location.Accuracy.High,
-                    distanceInterval: 20, // Update every 20 meters
-                    timeInterval: 10000 // Or every 10 seconds
+                    distanceInterval: 20,
+                    timeInterval: 10000
                 },
                 (location) => {
-                    updateShipmentLocation(trackingId, {
+                    console.log('Location update:', location.coords);
+                    updateShipmentLocation(shipmentId, {
                         latitude: location.coords.latitude,
                         longitude: location.coords.longitude
                     }, shipmentId);
                 }
             );
 
-            return () => watcher.remove();
+            return () => {
+                console.log('Stopping location tracking');
+                watcher.remove();
+            };
+        } catch (error) {
+            console.error('Location tracking error:', error);
         }
     };
 

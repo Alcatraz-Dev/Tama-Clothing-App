@@ -10,7 +10,8 @@ import {
     Platform,
     Image,
     Modal,
-    StyleSheet
+    StyleSheet,
+    Pressable
 } from 'react-native';
 import {
     collection,
@@ -26,12 +27,15 @@ import {
 } from 'firebase/firestore';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
-import { ChevronLeft, X, Send, Image as ImagePlay, MessageCircle } from 'lucide-react-native';
+import { ChevronLeft, X, Send, Image as ImagePlay, MessageCircle, Camera, Paperclip, MoreVertical } from 'lucide-react-native';
 import { db } from '../api/firebase';
 import { useAppTheme } from '../context/ThemeContext';
 import { uploadToBunny } from '../utils/bunny';
 import { sendPushNotification } from '../utils/notifications';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '../components/ui/Button';
+import { Avatar } from '../components/ui/Avatar';
+import { Badge } from '../components/ui/Badge';
 
 export default function DirectMessageScreen({ user, targetUser, onBack, t, language, currentUserData }: any) {
     const { colors, theme } = useAppTheme();
@@ -41,6 +45,7 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
     const [sending, setSending] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
     const chatId = [user?.uid, targetUser?.uid].sort().join('_');
@@ -133,9 +138,33 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
         }
     };
 
-    const pickMedia = async () => {
+    const pickMedia = () => {
+        setIsMediaModalVisible(true);
+    };
+
+    const handleCameraCapture = async () => {
+        setIsMediaModalVisible(false);
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            alert('Camera permission required');
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images', 'videos'],
+            allowsEditing: true,
+            quality: 0.7,
+        });
+
+        if (!result.canceled && result.assets && result.assets[0].uri) {
+            handleMediaUpload(result.assets[0].uri);
+        }
+    };
+
+    const handleGalleryPick = async () => {
+        setIsMediaModalVisible(false);
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
+            mediaTypes: ['images', 'videos'],
             allowsEditing: true,
             quality: 0.7,
         });
@@ -198,31 +227,46 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
             <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: 20,
-                height: 60,
+                paddingHorizontal: 12,
+                height: 64,
                 borderBottomWidth: 1,
-                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'
+                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
+                justifyContent: 'space-between'
             }}>
-                <TouchableOpacity onPress={onBack} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-                    <ChevronLeft size={24} color={colors.foreground} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Button
+                        onPress={onBack}
+                        variant="ghost"
+                        size="icon"
+                        icon={<ChevronLeft size={24} color={colors.foreground} />}
+                    />
 
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 10 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                        {targetUser.avatarUrl || targetUser.photoURL ? (
-                            <Image source={{ uri: targetUser.avatarUrl || targetUser.photoURL }} style={{ width: '100%', height: '100%' }} />
-                        ) : (
-                            <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 14 }}>
-                                {(targetUser.fullName || targetUser.displayName || 'A')[0].toUpperCase()}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+                        <Avatar
+                            source={targetUser.avatarUrl || targetUser.photoURL}
+                            size={40}
+                            borderWidth={1.5}
+                            borderColor={colors.border}
+                        />
+                        <View style={{ marginLeft: 10 }}>
+                            <Text style={{ color: colors.foreground, fontWeight: '900', fontSize: 16 }}>
+                                {targetUser.fullName || targetUser.displayName || 'User'}
                             </Text>
-                        )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#2ECC71' }} />
+                                <Text style={{ color: '#2ECC71', fontSize: 11, fontWeight: '700' }}>Active Now</Text>
+                            </View>
+                        </View>
                     </View>
-                    <View style={{ marginLeft: 10 }}>
-                        <Text style={{ color: colors.foreground, fontWeight: '900', fontSize: 15 }}>
-                            {targetUser.fullName || targetUser.displayName || 'User'}
-                        </Text>
-                        <Text style={{ color: '#2ECC71', fontSize: 10, fontWeight: '700' }}>Active Now</Text>
-                    </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Button
+                        onPress={() => { }}
+                        variant="ghost"
+                        size="icon"
+                        icon={<MoreVertical size={20} color={colors.textMuted} />}
+                    />
                 </View>
             </View>
 
@@ -256,15 +300,10 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                             }}>
                                 {!isOwn && (
                                     <View style={{ marginRight: 8, alignSelf: 'flex-end' }}>
-                                        {targetUser.avatarUrl || targetUser.photoURL ? (
-                                            <Image source={{ uri: targetUser.avatarUrl || targetUser.photoURL }} style={{ width: 24, height: 24, borderRadius: 12 }} />
-                                        ) : (
-                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                                                <Text style={{ fontSize: 9, fontWeight: '900', color: colors.textMuted }}>
-                                                    {(targetUser.fullName || targetUser.displayName || 'A')[0].toUpperCase()}
-                                                </Text>
-                                            </View>
-                                        )}
+                                        <Avatar
+                                            source={targetUser.avatarUrl || targetUser.photoURL}
+                                            size={24}
+                                        />
                                     </View>
                                 )}
 
@@ -390,6 +429,87 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                     </TouchableOpacity>
                     {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
                 </View>
+            </Modal>
+
+            {/* Media Selection Modal */}
+            <Modal
+                visible={isMediaModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsMediaModalVisible(false)}
+            >
+                <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+                    onPress={() => setIsMediaModalVisible(false)}
+                >
+                    <Pressable style={{
+                        backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        paddingBottom: useSafeAreaInsets().bottom + 20,
+                        paddingHorizontal: 20
+                    }}>
+                        {/* Modal Handle */}
+                        <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
+                            <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
+                                {tr('Envoyer un média', 'إرسال وسائط', 'Send Media')}
+                            </Text>
+                            <TouchableOpacity onPress={() => setIsMediaModalVisible(false)} style={{ padding: 4 }}>
+                                <X size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ gap: 12 }}>
+                            <TouchableOpacity
+                                onPress={handleCameraCapture}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <Camera size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Appareil photo', 'كاميرا', 'Camera')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Prendre une photo ou vidéo', 'التقط صورة أو فيديو', 'Take a photo or video')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={handleGalleryPick}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <ImagePlay size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Galerie', 'معرض الصور', 'Gallery')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Choisir depuis la galerie', 'اختر من المعرض', 'Choose from gallery')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Pressable>
             </Modal>
         </SafeAreaView>
     );

@@ -1047,7 +1047,7 @@ export default function HostLiveScreen(props: Props) {
     const pickPromoVideo = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                mediaTypes: 'videos',
                 allowsEditing: true,
                 quality: 1,
             });

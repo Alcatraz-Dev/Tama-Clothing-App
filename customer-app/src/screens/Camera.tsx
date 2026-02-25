@@ -29,7 +29,10 @@ import { db } from '../api/firebase';
 import Svg, { Circle } from 'react-native-svg';
 import * as Animatable from 'react-native-animatable';
 import * as Device from 'expo-device';
-import { Camera, RotateCcw, Zap, ZapOff, Video as VideoIcon, Camera as CameraIcon, Check, X, ChevronLeft, Download, Send, MonitorOff } from 'lucide-react-native';
+import { Camera, RotateCcw, Zap, ZapOff, Video as VideoIcon, Camera as CameraIcon, Check, X, ChevronLeft, Download, Send, MonitorOff, Plus, Star } from 'lucide-react-native';
+import { uploadToBunny } from '../utils/bunny';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 
 const { width, height } = Dimensions.get("window");
 
@@ -237,10 +240,13 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
         setUploading(true);
         try {
+            // Upload to Bunny first
+            const bunnyUrl = await uploadToBunny(uri);
+
             const workId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const workData = {
                 id: workId,
-                url: uri,
+                url: bunnyUrl, // Use the uploaded URL, not local URI
                 type: type,
                 text: '',
                 createdAt: serverTimestamp(),
@@ -262,7 +268,7 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         } catch (e) {
             console.log("Upload error:", e);
             setUploading(false);
-            Alert.alert(t('error'), 'Failed to upload');
+            Alert.alert(t('error'), 'Failed to upload' + (e instanceof Error ? `: ${e.message}` : ''));
             return false;
         }
     };
@@ -275,17 +281,22 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
         setUploading(true);
         try {
+            // Upload to Bunny first
+            const bunnyUrl = await uploadToBunny(uri);
+
             const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const reelData = {
                 id: reelId,
-                url: uri,
+                url: bunnyUrl, // Use the uploaded URL, not local URI
                 type: type,
                 text: '',
                 createdAt: serverTimestamp(),
                 userId: user.uid,
                 reactions: {},
                 commentsCount: 0,
-                totalLikes: 0
+                totalLikes: 0,
+                userName: user.displayName || 'User',
+                userPhoto: user.photoURL || '',
             };
 
             await setDoc(doc(db, 'global_reels', reelId), reelData);
@@ -305,7 +316,7 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
         } catch (e) {
             console.log("Reel Upload error:", e);
             setUploading(false);
-            Alert.alert(t('error'), 'Failed to publish reel');
+            Alert.alert(t('error'), 'Failed to publish reel' + (e instanceof Error ? `: ${e.message}` : ''));
             return false;
         }
     };
@@ -389,45 +400,43 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
                 <View style={[styles.previewBottomContent, { paddingBottom: insets.bottom + 30 }]}>
                     <Animatable.View animation="fadeInUp" duration={600} style={styles.previewButtonsContainer}>
                         <View style={styles.previewMainButtons}>
-                            <TouchableOpacity onPress={reset} style={styles.retakeBtn} disabled={uploading}>
-                                <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
-                                <RotateCcw size={20} color="white" />
-                                <Text style={styles.previewBtnText}>{t('retake')}</Text>
-                            </TouchableOpacity>
+                            <Button
+                                onPress={reset}
+                                variant="glass"
+                                icon={<RotateCcw size={20} color="white" />}
+                                title={t('retake')}
+                                disabled={uploading}
+                                style={styles.retakeBtn}
+                            />
 
-                            <TouchableOpacity onPress={saveToGalleryOnly} style={styles.saveBtn} disabled={uploading}>
-                                <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
-                                <Download size={20} color="white" />
-                                <Text style={styles.previewBtnText}>{tr('Enregistrer', 'حفظ بالجهاز', 'Save to Device')}</Text>
-                            </TouchableOpacity>
+                            <Button
+                                onPress={saveToGalleryOnly}
+                                variant="glass"
+                                icon={<Download size={20} color="white" />}
+                                title={tr('Enregistrer', 'حفظ بالجهاز', 'Save')}
+                                disabled={uploading}
+                                style={styles.saveBtn}
+                            />
                         </View>
 
-                        <TouchableOpacity onPress={publishToWorks} style={styles.publishBtn} disabled={uploading}>
-                            {uploading ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <>
-                                    <Send size={20} color="white" style={{ marginRight: 8 }} />
-                                    <Text style={styles.publishBtnText}>{tr('Publier comme Travail', 'نشر كعمل', 'Publish to Works')}</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
+                        <Button
+                            onPress={publishToWorks}
+                            variant="primary"
+                            icon={<Send size={20} color="white" />}
+                            title={tr('Publier comme Travail', 'نشر كعمل', 'Publish to Works')}
+                            loading={uploading}
+                            style={styles.publishBtn}
+                        />
 
                         {(capturedPhoto || capturedVideo) && (
-                            <TouchableOpacity
+                            <Button
                                 onPress={publishAsReel}
-                                style={[styles.publishBtn, { backgroundColor: '#A855F7', marginTop: 10 }]}
-                                disabled={uploading}
-                            >
-                                {uploading ? (
-                                    <ActivityIndicator color="white" />
-                                ) : (
-                                    <>
-                                        <VideoIcon size={20} color="white" style={{ marginRight: 8 }} />
-                                        <Text style={styles.publishBtnText}>{tr('Publier comme Reel', 'نشر كريم ريل', 'Publish as Reel')}</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
+                                variant="primary"
+                                icon={<VideoIcon size={20} color="white" />}
+                                title={tr('Publier comme Reel', 'نشر كريم ريل', 'Publish as Reel')}
+                                loading={uploading}
+                                style={[styles.publishBtn, { backgroundColor: '#A855F7', marginTop: 10, borderWidth: 0 }]}
+                            />
                         )}
                     </Animatable.View>
                 </View>
