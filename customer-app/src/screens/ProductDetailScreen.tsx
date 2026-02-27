@@ -1,54 +1,62 @@
+import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/text';
+import { useColor } from '@/hooks/useColor';
+import { ChevronLeft, Heart, Share2, ShoppingBag } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { Dimensions, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Theme } from '../theme';
-import { ChevronLeft, ShoppingBag, Heart, Share2 } from 'lucide-react-native';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
-// import { useCart, CartItem } from '../context/CartContext';
 
-
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ProductDetailScreen({ route, navigation }: any) {
     const { product } = route.params;
-    // const { addToCart } = useCart();
     const [selectedSize, setSelectedSize] = useState('M');
+    const [isWishlisted, setIsWishlisted] = useState(false);
+
+    const backgroundColor = useColor('background');
+    const cardColor = useColor('card');
+    const foregroundColor = useColor('foreground');
+    const mutedColor = useColor('muted');
+    const textMutedColor = useColor('textMuted');
+    const primaryColor = useColor('primary');
+    const redColor = useColor('red');
 
     const handleAddToCart = () => {
-        /*
-        const item: CartItem = {
-            id: product.id,
-            name: product.name,
-            price: parseFloat(product.price),
-            quantity: 1,
-            image: product.mainImage,
-            size: selectedSize,
-        };
-        addToCart(item);
-        */
         navigation.navigate('Cart');
     };
 
-
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor }]}>
+            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                    <ChevronLeft color={Theme.light.colors.foreground} size={24} />
-                </TouchableOpacity>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    icon={ChevronLeft}
+                    iconColor={foregroundColor}
+                    onPress={() => navigation.goBack()}
+                />
                 <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.iconBtn}>
-                        <Share2 color={Theme.light.colors.foreground} size={22} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Cart')}>
-                        <ShoppingBag color={Theme.light.colors.foreground} size={22} />
-                    </TouchableOpacity>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        icon={Share2}
+                        iconColor={foregroundColor}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        icon={ShoppingBag}
+                        iconColor={foregroundColor}
+                        onPress={() => navigation.navigate('Cart')}
+                    />
                 </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Image Gallery */}
-                <View style={styles.imageGallery}>
+                <View style={[styles.imageGallery, { backgroundColor: mutedColor }]}>
                     {product.videoUrl ? (
                         <UniversalVideoPlayer
                             source={{ uri: product.videoUrl }}
@@ -59,64 +67,87 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                             shouldPlay
                         />
                     ) : product.mainImage || product.image || product.imageUrl ? (
-                        <Image source={{ uri: product.mainImage || product.image || product.imageUrl }} style={styles.fullImage} />
+                        <Image
+                            source={{ uri: product.mainImage || product.image || product.imageUrl }}
+                            style={styles.fullImage}
+                        />
                     ) : (
                         <View style={styles.placeholderImage} />
                     )}
-                    <TouchableOpacity style={styles.wishlistBtnAbsolute}>
-                        <Heart size={24} color={Theme.light.colors.foreground} />
-                    </TouchableOpacity>
+
+                    <Button
+                        variant="glass"
+                        size="icon"
+                        icon={Heart}
+                        iconColor={isWishlisted ? redColor : foregroundColor}
+                        onPress={() => setIsWishlisted(!isWishlisted)}
+                        style={styles.wishlistBtnAbsolute}
+                    />
                 </View>
 
                 {/* Product Info */}
                 <View style={styles.infoSection}>
                     <View style={styles.titleRow}>
-                        <Text style={styles.brandName}>TAMA PREMIUM</Text>
-                        <Text style={styles.price}>{String(parseFloat(String(product.price || 0)).toFixed(3))} TND</Text>
-
+                        <Text variant="caption" style={{ color: textMutedColor, letterSpacing: 2 }}>
+                            TAMA PREMIUM
+                        </Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <Text variant="title" style={{ color: primaryColor }}>
+                                {String(parseFloat(String(product.discountPrice && Number(product.discountPrice) > 0 ? product.discountPrice : (product.price || 0))).toFixed(3))} TND
+                            </Text>
+                            {product.discountPrice && Number(product.discountPrice) > 0 && (
+                                <Text variant="caption" style={{ color: textMutedColor, textDecorationLine: 'line-through' }}>
+                                    {String(parseFloat(String(product.price || 0)).toFixed(3))} TND
+                                </Text>
+                            )}
+                        </View>
                     </View>
-                    <Text style={styles.productName}>{product.name.fr}</Text>
 
-                    <Text style={styles.description}>
+                    <Text variant="heading" style={styles.productName}>
+                        {product.name?.fr || product.name || "Produit Tama"}
+                    </Text>
+
+                    <Text variant="body" style={[styles.description, { color: textMutedColor }]}>
                         {product.description || "Un vêtement d'exception conçu avec soin dans les ateliers Tama. Qualité premium et coupe intemporelle."}
                     </Text>
 
                     {/* Size Selector */}
                     <View style={styles.selectorSection}>
-                        <Text style={styles.selectorTitle}>TAILLE</Text>
+                        <Text variant="subtitle" style={styles.selectorTitle}>
+                            TAILLE
+                        </Text>
                         <View style={styles.sizeGrid}>
                             {['XS', 'S', 'M', 'L', 'XL'].map((size) => (
-                                <TouchableOpacity
+                                <Button
                                     key={size}
+                                    variant={selectedSize === size ? 'primary' : 'outline'}
+                                    label={size}
                                     onPress={() => setSelectedSize(size)}
-                                    style={[
-                                        styles.sizeBox,
-                                        selectedSize === size && styles.selectedSizeBox
-                                    ]}
-                                >
-                                    <Text style={[
-                                        styles.sizeText,
-                                        selectedSize === size && styles.selectedSizeText
-                                    ]}>{size}</Text>
-                                </TouchableOpacity>
+                                    style={styles.sizeButton}
+                                    textStyle={{ fontSize: 13 }}
+                                />
                             ))}
                         </View>
                     </View>
 
                     {/* CTA */}
-                    <TouchableOpacity style={styles.addToCartBtn} onPress={handleAddToCart}>
-                        <Text style={styles.addToCartText}>AJOUTER AU PANIER</Text>
-                    </TouchableOpacity>
+                    <Button
+                        variant="primary"
+                        label={`AJOUTER AU PANIER - ${parseFloat(String(product.discountPrice && Number(product.discountPrice) > 0 ? product.discountPrice : (product.price || 0))).toFixed(3)} TND`}
+                        onPress={handleAddToCart}
+                        style={styles.addToCartBtn}
+                        size="lg"
+                    />
 
                     {/* Extra Info */}
-                    <View style={styles.extraInfo}>
+                    <View style={[styles.extraInfo, { borderTopColor: mutedColor }]}>
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Composition</Text>
-                            <Text style={styles.infoValue}>Premium Mix</Text>
+                            <Text variant="caption" style={{ color: textMutedColor }}>Composition</Text>
+                            <Text variant="body" style={styles.infoValue}>Premium Mix</Text>
                         </View>
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Livraison</Text>
-                            <Text style={styles.infoValue}>24h - 48h (Tunis)</Text>
+                            <Text variant="caption" style={{ color: textMutedColor }}>Livraison</Text>
+                            <Text variant="body" style={styles.infoValue}>24h - 48h (Tunis)</Text>
                         </View>
                     </View>
                 </View>
@@ -128,35 +159,26 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Theme.light.colors.background,
     },
     header: {
         height: 60,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: Theme.spacing.lg,
+        paddingHorizontal: 16,
         zIndex: 10,
     },
     headerRight: {
         flexDirection: 'row',
-        gap: 16,
-    },
-    iconBtn: {
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
+        gap: 8,
     },
     imageGallery: {
-        width: width,
-        height: width * 1.3,
-        backgroundColor: Theme.light.colors.muted,
+        width: SCREEN_WIDTH,
+        height: SCREEN_WIDTH * 1.3,
     },
     fullImage: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
     },
     placeholderImage: {
         flex: 1,
@@ -165,112 +187,57 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 20,
         right: 20,
+        borderRadius: 25,
         width: 50,
         height: 50,
-        backgroundColor: Theme.light.colors.white,
-        borderRadius: 25,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
     },
     infoSection: {
-        padding: Theme.spacing.lg,
+        padding: 24,
     },
     titleRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
-    },
-    brandName: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Theme.light.colors.textMuted,
-        letterSpacing: 2,
-    },
-    price: {
-        fontSize: 18,
-        fontWeight: '700',
+        marginBottom: 4,
     },
     productName: {
-        fontSize: 24,
-        fontWeight: '700',
-        marginBottom: Theme.spacing.md,
-        letterSpacing: -0.5,
+        marginBottom: 16,
     },
     description: {
-        fontSize: 15,
         lineHeight: 22,
-        color: Theme.light.colors.textMuted,
-        marginBottom: Theme.spacing.xl,
+        marginBottom: 32,
     },
     selectorSection: {
-        marginBottom: Theme.spacing.xl,
+        marginBottom: 32,
     },
     selectorTitle: {
-        fontSize: 12,
-        fontWeight: '700',
         letterSpacing: 1,
-        marginBottom: Theme.spacing.md,
+        marginBottom: 16,
     },
     sizeGrid: {
         flexDirection: 'row',
         gap: 12,
     },
-    sizeBox: {
-        width: 45,
-        height: 45,
-        borderWidth: 1,
-        borderColor: Theme.light.colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 4,
-    },
-    selectedSizeBox: {
-        backgroundColor: Theme.light.colors.foreground,
-        borderColor: Theme.light.colors.foreground,
-    },
-    sizeText: {
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    selectedSizeText: {
-        color: Theme.light.colors.white,
+    sizeButton: {
+        width: 50,
+        height: 50,
+        paddingHorizontal: 0,
     },
     addToCartBtn: {
-        backgroundColor: Theme.light.colors.foreground,
         height: 56,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 4,
-        marginBottom: Theme.spacing.xl,
-    },
-    addToCartText: {
-        color: Theme.light.colors.background,
-        fontSize: 16,
-        fontWeight: '700',
-        letterSpacing: 1,
+        marginBottom: 32,
     },
     extraInfo: {
         borderTopWidth: 1,
-        borderTopColor: Theme.light.colors.border,
-        paddingTop: Theme.spacing.lg,
+        paddingTop: 24,
         gap: 12,
     },
     infoRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-    },
-    infoLabel: {
-        fontSize: 14,
-        color: Theme.light.colors.textMuted,
+        alignItems: 'center',
     },
     infoValue: {
-        fontSize: 14,
-        fontWeight: '500',
+        fontWeight: '600',
     },
 });

@@ -21,7 +21,7 @@ const UniversalVideoPlayer: React.FC<UniversalVideoPlayerProps> = ({
     isLooping = false,
     isMuted = false,
     useNativeControls = false,
-    contentFit
+    contentFit,
 }) => {
     const videoSource = typeof source === 'number' ? source : source.uri;
 
@@ -66,6 +66,7 @@ const UniversalVideoPlayer: React.FC<UniversalVideoPlayerProps> = ({
             fullscreenOptions={{ enable: useNativeControls }}
             allowsPictureInPicture={false}
             contentFit={finalContentFit}
+
         />
     );
 };

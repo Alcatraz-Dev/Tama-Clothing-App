@@ -57,29 +57,46 @@ export const Text = forwardRef<RNText, TextProps>(
         case 'caption':
           return {
             ...baseStyle,
-            fontSize: FONT_SIZE,
+            fontSize: FONT_SIZE.sm || 14,
             fontWeight: '400',
             color: mutedColor,
           };
         case 'link':
           return {
             ...baseStyle,
-            fontSize: FONT_SIZE,
+            fontSize: FONT_SIZE.default || 16,
             fontWeight: '500',
             textDecorationLine: 'underline',
           };
         default: // 'body'
           return {
             ...baseStyle,
-            fontSize: FONT_SIZE,
+            fontSize: FONT_SIZE.default || 16,
             fontWeight: '400',
           };
       }
     };
 
+    const renderChildren = () => {
+      if (typeof children === 'string' || typeof children === 'number' || React.isValidElement(children)) {
+        return children;
+      }
+      if (Array.isArray(children)) {
+        return children.map((child, index) => {
+          if (typeof child === 'string' || typeof child === 'number' || React.isValidElement(child)) {
+            return child;
+          }
+          if (child === null || child === undefined) return null;
+          return <React.Fragment key={index}>{JSON.stringify(child)}</React.Fragment>;
+        });
+      }
+      if (children === null || children === undefined) return null;
+      return JSON.stringify(children);
+    };
+
     return (
       <RNText ref={ref} style={[getTextStyle(), style]} {...props}>
-        {children}
+        {renderChildren()}
       </RNText>
     );
   }

@@ -1,24 +1,26 @@
+
+
 import React from 'react';
-import { Theme } from '../theme';
+import { Colors } from '../theme/colors';
 
 export const getAppColors = (theme: 'light' | 'dark') => {
-    const t = theme === 'dark' ? Theme.dark.colors : Theme.light.colors;
+    const t = theme === 'dark' ? Colors.dark : Colors.light;
     return {
         background: t.background,
         foreground: t.foreground,
-        glass: theme === 'dark' ? 'rgba(20, 20, 25, 0.94)' : 'rgba(255, 255, 255, 0.94)',
+        glass: theme === 'dark' ? 'rgba(2, 6, 23, 0.94)' : 'rgba(255, 255, 255, 0.94)',
         glassDark: theme === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.7)',
         border: t.border,
-        borderDark: t.borderStrong,
+        borderDark: theme === 'dark' ? '#1E293B' : '#CBD5E1',
         textMuted: t.textMuted,
-        white: t.white,
+        white: '#FFFFFF',
         accent: t.primary,
         accentForeground: t.primaryForeground,
-        error: t.error,
-        secondary: t.muted,
-        success: t.success,
-        warning: t.warning,
-        surface: theme === 'dark' ? '#1A1A24' : '#F2F2F7',
+        error: t.red,
+        secondary: t.secondary,
+        success: t.green,
+        warning: t.orange,
+        surface: theme === 'dark' ? '#0F172A' : '#F8FAFC',
     };
 };
 

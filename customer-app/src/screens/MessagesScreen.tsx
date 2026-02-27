@@ -1,46 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import { db } from '@/api/firebase';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Text } from '@/components/ui/text';
+import { width as SCREEN_WIDTH } from '@/constants/layout';
+import { useAppTheme } from '@/context/ThemeContext';
+import { uploadToBunny } from '@/utils/bunny';
+import * as ImagePicker from 'expo-image-picker';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
-    View,
-    Text,
-    TouchableOpacity,
-    FlatList,
+    collection,
+    deleteDoc,
+    doc,
+    getDoc,
+    limit,
+    onSnapshot,
+    query,
+    serverTimestamp,
+    setDoc,
+    where
+} from 'firebase/firestore';
+import {
+    Camera,
+    ChevronLeft,
+    Image as ImageIcon,
+    MessageCircle,
+    Plus,
+    Search,
+    Shield,
+    Trash2,
+    Video,
+    X
+} from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
     ActivityIndicator,
     Alert,
+    Dimensions,
+    FlatList,
     Image,
-    TextInput,
-    ScrollView,
-    StyleSheet,
     Modal,
     Pressable,
-    Dimensions
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import {
-    getDoc,
-    doc,
-    collection,
-    query,
-    where,
-    onSnapshot,
-    limit,
-    deleteDoc,
-    setDoc,
-    serverTimestamp
-} from 'firebase/firestore';
-import { uploadToBunny } from '../utils/bunny';
-import { MessageCircle, Shield, Trash2, ChevronLeft, Search, Camera, Edit, Plus, Video, X, Image as ImageIcon, Send } from 'lucide-react-native';
-import { Button } from '../components/ui/Button';
-import { Avatar } from '../components/ui/Avatar';
-import { Badge } from '../components/ui/Badge';
-import { db } from '../api/firebase';
-import { useAppTheme } from '../context/ThemeContext';
-import { width } from '../constants/layout';
-import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColor } from '@/hooks/useColor';
+import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate, t, tr }: any) {
-    const { colors, theme } = useAppTheme();
+    const { theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+
+    // BNA Colors
+    const colors = {
+        background: useColor('background'),
+        foreground: useColor('foreground'),
+        card: useColor('card'),
+        accent: useColor('accent'),
+        border: useColor('border'),
+        textMuted: useColor('textMuted'),
+        cardForeground: useColor('foreground'),
+        error: useColor('red'),
+        blue: useColor('blue'),
+    };
+
     const [chats, setChats] = useState<any[]>([]);
     const [friends, setFriends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -149,59 +179,39 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
         };
     }, [user?.uid]);
 
-    const handlePickReelMedia = async (type: 'image' | 'video') => {
-        setIsReelModalVisible(false);
+    const handleMediaSelection = async (assets: MediaAsset[]) => {
+        if (assets.length === 0) return;
+        const asset = assets[0];
+        setUploading(true);
         try {
-            // Request permissions first
-            const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!mediaPermission.granted) {
-                Alert.alert(
-                    tr('Permission Required', 'الإذن مطلوب', 'Permission Required'),
-                    tr('Please allow access to your photo library in Settings.', 'الرجاء السماح بالوصول إلى مكتبة الصور في الإعدادات.', 'Please allow access to your photo library in Settings.')
-                );
-                return;
-            }
-            
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [9, 16],
-                quality: 0.8,
-            });
+            // Upload to Bunny
+            const bunnyUrl = await uploadToBunny(asset.uri);
 
-            if (!result.canceled && result.assets && result.assets[0]) {
-                const asset = result.assets[0];
-                setUploading(true);
+            const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const reelData = {
+                id: reelId,
+                url: bunnyUrl,
+                type: asset.type,
+                text: '',
+                createdAt: serverTimestamp(),
+                userId: user.uid,
+                reactions: {},
+                commentsCount: 0,
+                totalLikes: 0,
+                userName: user.displayName || user.fullName || 'User',
+                userPhoto: user.avatarUrl || user.photoURL || '',
+            };
 
-                // Upload to Bunny
-                const bunnyUrl = await uploadToBunny(asset.uri);
+            await setDoc(doc(db, 'global_reels', reelId), reelData);
 
-                const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                const reelData = {
-                    id: reelId,
-                    url: bunnyUrl,
-                    type: type,
-                    text: '',
-                    createdAt: serverTimestamp(),
-                    userId: user.uid,
-                    reactions: {},
-                    commentsCount: 0,
-                    totalLikes: 0,
-                    userName: user.displayName || 'User',
-                    userPhoto: user.photoURL || '',
-                };
-
-                await setDoc(doc(db, 'global_reels', reelId), reelData);
-
-                Alert.alert(
-                    tr('Succès', 'نجاح', 'Success'),
-                    tr(
-                        type === 'video' ? 'Reel publié avec succès !' : 'Photo publiée en tant que Reel !',
-                        type === 'video' ? 'تم نشر الريل بنجاح' : 'تم نشر الصورة كـ ريل بنجاح',
-                        type === 'video' ? 'Reel published successfully!' : 'Photo published as Reel successfully!'
-                    )
-                );
-            }
+            Alert.alert(
+                tr('Succès', 'نجاح', 'Success'),
+                tr(
+                    asset.type === 'video' ? 'Story publiée avec succès !' : 'Photo publiée avec succès !',
+                    asset.type === 'video' ? 'تم نشر القصة بنجاح' : 'تم نشر الصورة بنجاح',
+                    asset.type === 'video' ? 'Story published successfully!' : 'Photo published successfully!'
+                )
+            );
         } catch (error) {
             console.error("Error picking/uploading reel media:", error);
             Alert.alert("Erreur", "Impossible de publier votre story");
@@ -219,59 +229,68 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            {/* Messenger Header */}
             <View style={{
+                paddingHorizontal: 20,
+                paddingTop: 16,
+                paddingBottom: 8,
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 12,
                 justifyContent: 'space-between'
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Button
-                        onPress={onBack}
-                        variant="ghost"
-                        size="icon"
-                        icon={<ChevronLeft size={28} color={colors.foreground} />}
-                        style={{ marginRight: 8 }}
-                    />
-                    <Text style={{ color: colors.foreground, fontSize: 24, fontWeight: '800' }}>
-                        Chats
-                    </Text>
+                    <TouchableOpacity
+                        onPress={() => onBack?.()}
+                        style={{
+                            marginRight: 10,
+                            padding: 5
+                        }}
+                    >
+                        <ChevronLeft size={28} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <View>
+                        <Text variant="title" style={{ fontSize: 32, fontWeight: '800' }}>Messages</Text>
+                        <Text variant="caption" style={{ opacity: 0.5, marginTop: 2 }}>
+                            {chats.length} {tr('conversations actives', 'مادثة نشطة', 'active conversations')}
+                        </Text>
+                    </View>
                 </View>
-                <Button
-                    onPress={() => onNavigate?.('Camera')}
-                    variant="glass"
-                    size="icon"
-                    icon={<Camera size={20} color={colors.foreground} />}
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7',
-                    }}
-                />
+                <MediaPicker
+                    gallery={true}
+                    mediaType="all"
+                    onSelectionChange={handleMediaSelection}
+                >
+                    <TouchableOpacity
+                        style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: theme === 'dark' ? '#2c2c2e' : '#f2f2f7',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onPress={() => onNavigate('Camera')}
+                    >
+                        <Camera size={22} color={colors.foreground} />
+                    </TouchableOpacity>
+                </MediaPicker>
             </View>
 
             {/* Search Bar */}
-            <View style={{ paddingHorizontal: 16, marginBottom: 15 }}>
-                <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#f0f0f0',
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    height: 38
-                }}>
-                    <Search size={18} color={colors.textMuted} />
-                    <TextInput
-                        style={{ flex: 1, marginLeft: 8, color: colors.foreground, fontSize: 16 }}
-                        placeholder="Search"
-                        placeholderTextColor={colors.textMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                </View>
+            <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
+                <Input
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder={tr('Rechercher un contact...', 'بحث عن جهة اتصال...', 'Search a contact...')}
+                    icon={Search}
+                    variant="filled"
+                    containerStyle={{
+                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                        borderRadius: 14,
+                        borderWidth: 0,
+                        height: 48
+                    }}
+                    inputStyle={{ fontSize: 16, color: colors.foreground }}
+                />
             </View>
 
             {loading ? (
@@ -281,7 +300,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
             ) : error ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
                     <Shield size={50} color={colors.error} strokeWidth={1.5} />
-                    <Text style={{ color: colors.foreground, marginTop: 20, fontWeight: '700', fontSize: 16 }}>
+                    <Text variant="title" style={{ color: colors.foreground, marginTop: 20, fontWeight: '700' }}>
                         Config Required
                     </Text>
                 </View>
@@ -301,7 +320,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         }}>
                             <View style={{ backgroundColor: colors.background, padding: 20, borderRadius: 15, alignItems: 'center' }}>
                                 <ActivityIndicator color={colors.accent} />
-                                <Text style={{ color: colors.foreground, marginTop: 10, fontWeight: '600' }}>
+                                <Text variant="subtitle" style={{ color: colors.foreground, marginTop: 10, fontWeight: '600' }}>
                                     {tr('Publication...', 'جاري النشر...', 'Publishing...')}
                                 </Text>
                             </View>
@@ -312,107 +331,127 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         keyExtractor={(item) => item.id}
                         showsVerticalScrollIndicator={false}
                         ListHeaderComponent={() => (
-                            <View style={{ marginBottom: 5 }}>
+                            <View style={{ marginBottom: 20 }}>
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingLeft: 16, paddingVertical: 10 }}
+                                    contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10 }}
                                 >
                                     {/* Your Reel / Create Button */}
-                                    <View style={{ alignItems: 'center', marginRight: 15, width: 72 }}>
-                                        <View style={{ position: 'relative', width: 68, height: 68 }}>
-                                            <Avatar
-                                                source={user.photoURL || user.avatarUrl}
-                                                size={68}
-                                                onPress={() => setIsReelModalVisible(true)}
-                                                borderWidth={1.5}
-                                                borderColor={colors.border}
-                                            />
-                                            <View style={{
-                                                position: 'absolute',
-                                                bottom: 0,
-                                                right: 0,
-                                                width: 24,
-                                                height: 24,
-                                                borderRadius: 12,
-                                                backgroundColor: '#0084ff', // standard messenger blue
-                                                borderWidth: 3,
-                                                borderColor: colors.background,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                shadowColor: '#000',
-                                                shadowOffset: { width: 0, height: 2 },
-                                                shadowOpacity: 0.2,
-                                                shadowRadius: 3,
-                                                elevation: 3
-                                            }}>
-                                                <Plus size={14} color="#FFF" strokeWidth={3} />
-                                            </View>
-                                        </View>
-                                        <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 11, fontWeight: '700', marginTop: 10, textAlign: 'center', opacity: 1 }}>
-                                            {t('yourStory') || 'Your Story'}
-                                        </Text>
-                                    </View>
-
-                                    {/* Friends / Reels Bar */}
-                                    {reels.slice(0, 15).map((reel: any) => {
-                                        const profile = usersCache[reel.userId] || {};
-                                        return (
-                                            <TouchableOpacity
-                                                key={reel.id}
-                                                onPress={() => onNavigate?.('Feed', { initialTab: 'reels' })}
-                                                style={{ alignItems: 'center', marginRight: 15, width: 68 }}
-                                            >
+                                    <View style={{ alignItems: 'center', marginRight: 20 }}>
+                                        <TouchableOpacity
+                                            onPress={() => onNavigate?.('StoryCreate')}
+                                        >
+                                            <View style={{ position: 'relative' }}>
+                                                <Avatar
+                                                    source={user.avatarUrl || user.photoURL}
+                                                    size={SCREEN_WIDTH * 0.16}
+                                                    fallback={user.displayName?.[0] || 'V'}
+                                                    style={{
+                                                        borderWidth: 2,
+                                                        borderColor: theme === 'dark' ? '#2c2c2e' : '#f2f2f7'
+                                                    }}
+                                                />
                                                 <View style={{
-                                                    width: 68,
-                                                    height: 68,
-                                                    borderRadius: 34,
+                                                    position: 'absolute',
+                                                    bottom: 0,
+                                                    right: 0,
+                                                    width: 24,
+                                                    height: 24,
+                                                    borderRadius: 12,
+                                                    backgroundColor: colors.blue,
                                                     borderWidth: 2,
-                                                    borderColor: colors.accent,
-                                                    padding: 2,
+                                                    borderColor: colors.background,
                                                     alignItems: 'center',
                                                     justifyContent: 'center'
                                                 }}>
-                                                    <View style={{
-                                                        width: 60,
-                                                        height: 60,
-                                                        borderRadius: 30,
-                                                        backgroundColor: colors.accent,
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        overflow: 'hidden'
-                                                    }}>
-                                                        {profile.avatarUrl || profile.photoURL ? (
-                                                            <Image source={{ uri: profile.avatarUrl || profile.photoURL }} style={{ width: '100%', height: '100%' }} />
-                                                        ) : (
-                                                            <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 22 }}>
-                                                                {(profile.fullName || profile.displayName || 'A')[0].toUpperCase()}
-                                                            </Text>
-                                                        )}
-                                                    </View>
-                                                    <View style={{
-                                                        position: 'absolute',
-                                                        bottom: 0,
-                                                        right: 0,
-                                                        width: 20,
-                                                        height: 20,
-                                                        borderRadius: 10,
-                                                        backgroundColor: '#000',
-                                                        borderWidth: 1,
-                                                        borderColor: '#FFF',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center'
-                                                    }}>
-                                                        <Video size={10} color="#FFF" fill="#FFF" />
-                                                    </View>
+                                                    <Plus size={14} color="white" />
                                                 </View>
-                                                <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: 11, marginTop: 6, textAlign: 'center' }}>
-                                                    {(profile.fullName || profile.displayName || 'User').split(' ')[0]}
+                                            </View>
+                                        </TouchableOpacity>
+                                        <Text variant="caption" style={{ textAlign: 'center', marginTop: 8, fontSize: 12, fontWeight: '600', color: colors.foreground }}>
+                                            {tr('Votre story', 'قصتك', 'Your story')}
+                                        </Text>
+                                    </View>
+
+                                    {/* Active Reels */}
+                                    {reels.slice(0, 15).map((reel: any) => {
+                                        const profile = usersCache[reel.userId] || {};
+                                        // Check if story is less than 24 hours old
+                                        const storyAge = reel.createdAt?.toDate ? Date.now() - reel.createdAt.toDate().getTime() : 0;
+                                        const isLessThan24h = storyAge < 24 * 60 * 60 * 1000;
+                                        const progress = Math.min(storyAge / (24 * 60 * 60 * 1000), 1);
+                                        
+                                        return (
+                                            <TouchableOpacity
+                                                key={reel.id}
+                                                onPress={() => {
+                                                    const mappedReels = reels.map(r => {
+                                                        const p = usersCache[r.userId] || {};
+                                                        return {
+                                                            ...r,
+                                                            userName: p.displayName || p.fullName || p.name || r.userName || 'User',
+                                                            userPhoto: p.avatarUrl || p.photoURL || p.photo || r.userPhoto || null
+                                                        };
+                                                    });
+                                                    const mappedInitial = mappedReels.find(r => r.id === reel.id);
+                                                    onNavigate?.('ReelsDetail', { initialReel: mappedInitial, allReels: mappedReels });
+                                                }}
+                                                activeOpacity={0.8}
+                                                style={{ alignItems: 'center', marginRight: 20 }}
+                                            >
+                                                <View style={{ position: 'relative' }}>
+                                                    {/* Circular progress ring for stories < 24h old */}
+                                                    {isLessThan24h ? (
+                                                        <View style={{
+                                                            width: 70,
+                                                            height: 70,
+                                                            borderRadius: 35,
+                                                            borderWidth: 3,
+                                                            borderColor: '#FF0080',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            backgroundColor: '#000'
+                                                        }}>
+                                                            <Avatar
+                                                                source={profile.avatarUrl || profile.photoURL}
+                                                                size={60}
+                                                                fallback={profile.displayName?.[0] || 'U'}
+                                                            />
+                                                        </View>
+                                                    ) : (
+                                                        <View style={{
+                                                            width: 70,
+                                                            height: 70,
+                                                            borderRadius: 35,
+                                                            borderWidth: 3,
+                                                            borderColor: '#888',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            backgroundColor: '#000'
+                                                        }}>
+                                                            <Avatar
+                                                                source={profile.avatarUrl || profile.photoURL}
+                                                                size={60}
+                                                                fallback={profile.displayName?.[0] || 'U'}
+                                                            />
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <Text variant="caption" numberOfLines={1} style={{ textAlign: 'center', marginTop: 8, fontSize: 12, fontWeight: '500', width: 70 }}>
+                                                    {profile.displayName || profile.fullName || 'User'}
                                                 </Text>
                                             </TouchableOpacity>
                                         );
                                     })}
                                 </ScrollView>
+
+                                <View style={{
+                                    height: 1,
+                                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                    marginHorizontal: 20,
+                                    marginTop: 4
+                                }} />
                             </View>
                         )}
                         renderItem={({ item }) => {
@@ -425,28 +464,24 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                             return (
                                 <TouchableOpacity
                                     onPress={() => onSelectChat(item, otherId)}
+                                    activeOpacity={0.7}
                                     style={{
                                         flexDirection: 'row',
-                                        paddingHorizontal: 16,
-                                        paddingVertical: 10,
-                                        alignItems: 'center'
+                                        paddingHorizontal: 20,
+                                        paddingVertical: 12,
+                                        alignItems: 'center',
                                     }}
                                 >
                                     <View style={{ position: 'relative' }}>
-                                        <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                            {(otherData.photo || otherData.avatarUrl || otherData.photoURL) ? (
-                                                <Image source={{ uri: otherData.photo || otherData.avatarUrl || otherData.photoURL }} style={{ width: '100%', height: '100%' }} />
-                                            ) : (
-                                                <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 20 }}>
-                                                    {(otherData.name || otherData.fullName || otherData.displayName || 'A')[0]?.toUpperCase()}
-                                                </Text>
-                                            )}
-                                        </View>
-                                        {/* Small dot if recently active (mock) */}
+                                        <Avatar
+                                            source={otherData.avatarUrl || otherData.photoURL || otherData.photo}
+                                            size={60}
+                                            fallback={(otherData.displayName || otherData.fullName || otherData.name || 'A')[0]?.toUpperCase()}
+                                        />
                                         <View style={{
                                             position: 'absolute',
-                                            bottom: 1,
-                                            right: 1,
+                                            bottom: 2,
+                                            right: 2,
                                             width: 14,
                                             height: 14,
                                             borderRadius: 7,
@@ -456,49 +491,44 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                         }} />
                                     </View>
 
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={{
-                                            color: colors.foreground,
-                                            fontWeight: unread > 0 ? '700' : '500',
-                                            fontSize: 17
-                                        }}>
-                                            {otherData.name || otherData.fullName || otherData.displayName}
-                                        </Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                            <Text numberOfLines={1} style={{
+                                    <View style={{ flex: 1, marginLeft: 16 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text variant="subtitle" style={{
+                                                fontWeight: unread > 0 ? '700' : '600',
+                                                fontSize: 17,
+                                                color: colors.foreground
+                                            }}>
+                                                {otherData.name || otherData.fullName || otherData.displayName}
+                                            </Text>
+                                            <Text variant="caption" style={{ color: unread > 0 ? colors.accent : colors.textMuted, fontSize: 12, fontWeight: unread > 0 ? '600' : '400' }}>
+                                                {item.lastMessageTime?.toDate ? item.lastMessageTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                            <Text variant="body" numberOfLines={1} style={{
                                                 color: unread > 0 ? colors.foreground : colors.textMuted,
-                                                fontSize: 15,
+                                                fontSize: 14,
                                                 flex: 1,
-                                                fontWeight: unread > 0 ? '700' : '400'
+                                                fontWeight: unread > 0 ? '600' : '400',
+                                                opacity: unread > 0 ? 1 : 0.8
                                             }}>
                                                 {item.lastMessage}
                                             </Text>
-                                            <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 8 }}>
-                                                • {item.lastMessageTime?.toDate ? item.lastMessageTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                            </Text>
+                                            {unread > 0 && (
+                                                <View style={{
+                                                    backgroundColor: colors.blue,
+                                                    borderRadius: 10,
+                                                    minWidth: 20,
+                                                    height: 20,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    paddingHorizontal: 6,
+                                                    marginLeft: 8
+                                                }}>
+                                                    <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>{unread}</Text>
+                                                </View>
+                                            )}
                                         </View>
-                                    </View>
-
-                                    <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
-                                        {unread > 0 ? (
-                                            <View style={{ backgroundColor: '#0084ff', width: 12, height: 12, borderRadius: 6 }} />
-                                        ) : (
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    Alert.alert(
-                                                        'Delete Chat',
-                                                        'Are you sure you want to delete this conversation?',
-                                                        [
-                                                            { text: 'Cancel', style: 'cancel' },
-                                                            { text: 'Delete', style: 'destructive', onPress: () => deleteDoc(doc(db, 'direct_chats', item.id)) }
-                                                        ]
-                                                    );
-                                                }}
-                                                style={{ padding: 8 }}
-                                            >
-                                                <Trash2 size={18} color={colors.textMuted} />
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -506,8 +536,8 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         ListEmptyComponent={() => !loading && (
                             <View style={{ alignItems: 'center', marginTop: 100, opacity: 0.5 }}>
                                 <MessageCircle size={60} color={colors.textMuted} strokeWidth={1} />
-                                <Text style={{ color: colors.textMuted, marginTop: 20, fontSize: 16 }}>
-                                    {searchQuery ? 'No results found' : 'No messages yet'}
+                                <Text variant="title" style={{ color: colors.textMuted, marginTop: 20, fontSize: 16 }}>
+                                    {searchQuery ? tr('Aucun résultat trouvé', 'لم يتم العثور على نتائج', 'No results found') : tr('Aucun message pour le moment', 'لا توجد رسائل بعد', 'No messages yet')}
                                 </Text>
                             </View>
                         )}
@@ -515,113 +545,37 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                 </>
             )}
 
-            {/* Reel Action Choice Modal */}
-            <Modal
-                visible={isReelModalVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsReelModalVisible(false)}
-            >
-                <Pressable
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
-                    onPress={() => setIsReelModalVisible(false)}
-                >
-                    <Pressable style={{
-                        backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
-                        borderTopLeftRadius: 24,
-                        borderTopRightRadius: 24,
-                        paddingBottom: useSafeAreaInsets().bottom + 20,
-                        paddingHorizontal: 20
-                    }}>
-                        {/* Modal Handle */}
-                        <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
-
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
-                            <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
-                                {tr('Créer un Reel', 'إنشاء ريل', 'Create a Reel')}
-                            </Text>
-                            <TouchableOpacity onPress={() => setIsReelModalVisible(false)} style={{ padding: 4 }}>
-                                <X size={24} color={colors.textMuted} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={{ gap: 12 }}>
-                            <TouchableOpacity
-                                onPress={() => { setIsReelModalVisible(false); onNavigate?.('Camera'); }}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
-                            >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <Camera size={22} color={colors.accentForeground || "#FFF"} />
-                                </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {tr('Ouvrir la caméra', 'فتح الكاميرا', 'Open Camera')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {tr('Enregistrer maintenant', 'سجل الآن', 'Record now')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => handlePickReelMedia('video')}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
-                            >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <Video size={22} color="#FFF" />
-                                </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {tr('Importer une vidéo', 'استيراد فيديو', 'Import Video')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {tr('Depuis votre galerie', 'من المعرض الخاص بك', 'From your gallery')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => handlePickReelMedia('image')}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
-                            >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <ImageIcon size={22} color="#FFF" />
-                                </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {tr('Importer une photo', 'استيراد صورة', 'Import Photo')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {tr('Utiliser une image', 'استخدم صورة', 'Use an image')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        </View>
-                    </Pressable>
-                </Pressable>
-            </Modal>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    // (Styles are mostly the same, I can omit or keep them. Since I'm using write_to_file, I must include all or the file will be truncated)
+    storyProgressContainer: {
+        position: 'absolute',
+        top: -4,
+        left: 0,
+        right: 0,
+        height: 4,
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    storyProgressBackground: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+        borderRadius: 2,
+    },
+    storyProgressFill: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        borderRadius: 2,
+    }
 });
+
+

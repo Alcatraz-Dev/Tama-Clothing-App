@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text as RNText, View, ScrollView, TouchableOpacity, Image, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView, Dimensions } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
@@ -33,6 +34,7 @@ import AdminMenuScreen from './src/screens/admin/AdminMenuScreen';
 import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as Location from 'expo-location';
 import {
   collection,
   getDocs,
@@ -147,6 +149,10 @@ import ChatScreen from './ChatScreen';
 import Constants from 'expo-constants';
 import CollaborationScreen from './src/screens/CollaborationScreen';
 import AdminCollaborationScreen from './src/screens/AdminCollaborationScreen';
+import StoryDetailScreen from './src/screens/StoryDetailScreen';
+import StoryCreateScreen from './src/screens/StoryCreateScreen';
+import MessagesScreen from './src/screens/MessagesScreen';
+import DirectMessageScreen from './src/screens/DirectMessageScreen';
 import CollaborationDetailScreen from './src/screens/CollaborationDetailScreen';
 import LiveStreamScreen from './src/screens/LiveStreamScreen';
 import HostLiveScreen from './src/screens/HostLiveScreen';
@@ -171,8 +177,7 @@ import { updateProductRating } from './src/utils/productUtils';
 import Translations from './src/translations';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
-import MessagesScreen from './src/screens/MessagesScreen';
-import DirectMessageScreen from './src/screens/DirectMessageScreen';
+import HomeScreen from './src/screens/HomeScreen';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 if (!(isExpoGo && Platform.OS === 'android')) {
@@ -1510,13 +1515,8 @@ export default function App() {
         user={user}
         initialFile={activeTabParams?.initialFile}
         fileType={activeTabParams?.fileType}
-      />;
-      case 'Feed': return <FeedScreen
-        {...commonProps}
-        onJoinLive={handleJoinLive}
-        onNavigate={handleTabChange}
-        ads={ads}
-        followedCollabs={followedCollabs}
+        // @ts-ignore
+        onCapture={activeTabParams?.onCapture}
       />;
       case 'Messages': return <MessagesScreen
         user={user}
@@ -1747,6 +1747,27 @@ export default function App() {
         t={t}
       />;
 
+      case 'StoryCreate': return <StoryCreateScreen
+        user={user}
+        media={activeTabParams?.media}
+        onClose={() => setActiveTab('Messages')}
+        onPublish={(story) => {
+          // Optionally handle story publish callback
+          setActiveTab('Messages');
+        }}
+        t={t}
+        theme={theme}
+      />;
+
+      case 'ReelsDetail': return <StoryDetailScreen
+        initialReel={activeTabParams?.initialReel}
+        allReels={activeTabParams?.allReels}
+        onClose={() => setActiveTab('Messages')}
+        t={t}
+        theme={theme}
+        user={user}
+      />;
+
       case 'ShippingPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="freeShipping" fieldKey="shippingPolicy" defaultText={t('shippingPolicyDefault')} Icon={Package} />;
       case 'PaymentPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="securePayment" fieldKey="paymentPolicy" defaultText={t('paymentPolicyDefault')} Icon={Shield} />;
       case 'ReturnPolicy': return <GenericPolicyScreen onBack={() => setActiveTab('Home')} t={t} titleKey="easyReturns" fieldKey="returnPolicy" defaultText={t('returnPolicyDefault')} Icon={RotateCcw} />;
@@ -1772,1121 +1793,292 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <ThemeContext.Provider value={{ theme, colors: getAppColors(theme), setTheme }}>
-      <SafeAreaProvider>
-        <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} />
-        {appState === 'Onboarding' ? (
-          <OnboardingScreen onFinish={() => setAppState('Auth')} t={t} />
-        ) : appState === 'Auth' ? (
-          <AuthScreen isLogin={isLogin} toggleAuth={() => setIsLogin(!isLogin)} onComplete={() => setAppState('Main')} t={t} language={language} />
-        ) : (
-          <View style={[styles.mainContainer, { backgroundColor: theme === 'dark' ? Theme.dark.colors.background : Theme.light.colors.background }]}>
-            {appState === 'SizeGuide' ? (
-              <SizeGuideScreen onBack={handleBackToMain} t={t} language={language} />
-            ) : (
-              <>
-                {renderMainContent()}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeContext.Provider value={{ theme, colors: getAppColors(theme), setTheme }}>
+        <SafeAreaProvider>
+          <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} />
+          {appState === 'Onboarding' ? (
+            <OnboardingScreen onFinish={() => setAppState('Auth')} t={t as any} />
+          ) : appState === 'Auth' ? (
+            <AuthScreen isLogin={isLogin} toggleAuth={() => setIsLogin(!isLogin)} onComplete={() => setAppState('Main')} t={t} language={language} />
+          ) : (
+            <View style={[styles.mainContainer, { backgroundColor: theme === 'dark' ? Theme.dark.colors.background : Theme.light.colors.background }]}>
+              {appState === 'SizeGuide' ? (
+                <SizeGuideScreen onBack={handleBackToMain} t={t} language={language} />
+              ) : (
+                <>
+                  {renderMainContent()}
 
-                {/* USER BADGE MODAL */}
-                <Modal
-                  visible={showBadge}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={() => setShowBadge(false)}
-                >
-                  <UserBadge
-                    userProfile={{
-                      id: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.uid || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.id || '',
-                      fullName: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.fullName || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.displayName || 'USER',
-                      avatarUrl: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.avatarUrl || '',
-                      role: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.role || 'User',
-                      wallet: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.wallet
-                    }}
-                    isDark={theme === 'dark'}
-                    language={language}
-                    onClose={() => setShowBadge(false)}
-                    onVisitProfile={(uid: string) => {
-                      setShowBadge(false);
-                      setTargetUid(uid);
-                      setPreviousTab(activeTab);
-                      setActiveTab('PublicProfile');
-                    }}
-                    t={t}
-                  />
-                </Modal>
-
-                {/* QR SCANNER MODAL */}
-                <Modal
-                  visible={showScanner}
-                  transparent={false}
-                  animationType="slide"
-                  onRequestClose={() => setShowScanner(false)}
-                >
-                  <QRScanner
-                    onScan={handleScan}
-                    onClose={() => setShowScanner(false)}
-                    isDark={theme === 'dark'}
-                    t={t}
-                  />
-                </Modal>
-
-                {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'Messages' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && activeTab !== 'ShipmentTracking' && (
-                  <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
-                    <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
-                      <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
-                      <TouchableOpacity onPress={() => setActiveTab('Home')} style={styles.tabItem}>
-                        <Home size={22} color={activeTab === 'Home' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Home' ? 2.5 : 2} />
-                        <Text style={[styles.tabLabel, activeTab === 'Home' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('home')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setActiveTab('Feed')} style={styles.tabItem}>
-                        <LayoutGrid size={22} color={activeTab === 'Feed' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Feed' ? 2.5 : 2} />
-                        <Text style={[styles.tabLabel, activeTab === 'Feed' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('feed')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => { setFilterCategory(null); setActiveTab('Shop'); }} style={styles.tabItem}>
-                        <Search size={22} color={activeTab === 'Shop' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Shop' ? 2.5 : 2} />
-                        <Text style={[styles.tabLabel, activeTab === 'Shop' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('shop')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setActiveTab('Collaboration')} style={styles.tabItem}>
-                        <Handshake size={22} color={activeTab === 'Collaboration' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Collaboration' ? 2.5 : 2} />
-                        <Text style={[styles.tabLabel, activeTab === 'Collaboration' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('collab')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setActiveTab('Cart')} style={styles.tabItem}>
-                        <View>
-                          <ShoppingBag size={22} color={activeTab === 'Cart' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Cart' ? 2.5 : 2} />
-                          {cart.length > 0 && <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{cart.length}</Text></View>}
-                        </View>
-                        <Text style={[styles.tabLabel, activeTab === 'Cart' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('bag')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setActiveTab('Profile')} style={styles.tabItem}>
-                        <View>
-                          <User size={22} color={activeTab === 'Profile' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Profile' ? 2.5 : 2} />
-                          {(totalUnread + pendingRequestsCount) > 0 && <View style={[styles.cartBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.cartBadgeText}>{(totalUnread + pendingRequestsCount) > 99 ? '99+' : (totalUnread + pendingRequestsCount)}</Text></View>}
-                        </View>
-                        <Text style={[styles.tabLabel, activeTab === 'Profile' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('me')}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* GLOBAL COMMENTS BOTTOM SHEET */}
-            <Modal
-              visible={isCommentSheetVisible}
-              animationType="slide"
-              transparent
-              onRequestClose={() => setIsCommentSheetVisible(false)}
-            >
-              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                <TouchableOpacity
-                  activeOpacity={1}
-                  onPress={() => setIsCommentSheetVisible(false)}
-                  style={{ flex: 1 }}
-                />
-                <Animatable.View
-                  animation="slideInUp"
-                  duration={300}
-                  style={{
-                    height: height * 0.75,
-                    backgroundColor: Theme[theme].colors.background,
-                    borderTopLeftRadius: 30,
-                    borderTopRightRadius: 30,
-                    overflow: 'hidden'
-                  }}
-                >
-                  <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    style={{ flex: 1 }}
+                  {/* USER BADGE MODAL */}
+                  <Modal
+                    visible={showBadge}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowBadge(false)}
                   >
-                    <CommentsSectionComponent
-                      selectedWork={selectedWork}
-                      comments={comments}
-                      loadingComments={loadingComments}
-                      commentText={commentText}
-                      setCommentText={setCommentText}
-                      handleComment={handleComment}
-                      handleCommentReact={handleCommentReact}
-                      handleDeleteComment={handleDeleteComment}
-                      replyingTo={replyingTo}
-                      setReplyingTo={setReplyingTo}
-                      editingComment={editingComment}
-                      setEditingComment={setEditingComment}
-                      expandedReplies={expandedReplies}
-                      setExpandedReplies={setExpandedReplies}
-                      onClose={() => setIsCommentSheetVisible(false)}
-                      colors={Theme[theme].colors}
-                      theme={theme}
-                      tr={tr}
-                      user={user}
-                      isPostOwner={selectedWork?.userId === user?.uid}
-                      getInitials={getInitials}
+                    <UserBadge
+                      userProfile={{
+                        id: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.uid || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.id || '',
+                        fullName: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.fullName || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.displayName || 'USER',
+                        avatarUrl: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.avatarUrl || '',
+                        role: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.role || 'User',
+                        wallet: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.wallet
+                      }}
+                      isDark={theme === 'dark'}
+                      language={language}
+                      onClose={() => setShowBadge(false)}
+                      onVisitProfile={(uid: string) => {
+                        setShowBadge(false);
+                        setTargetUid(uid);
+                        setPreviousTab(activeTab);
+                        setActiveTab('PublicProfile');
+                      }}
+                      t={t}
                     />
-                  </KeyboardAvoidingView>
-                </Animatable.View>
-              </View>
-            </Modal>
+                  </Modal>
 
-            <QuickAddModal
-              isVisible={!!quickAddProduct}
-              product={quickAddProduct}
-              onClose={() => setQuickAddProduct(null)}
-              onAddToCart={addToCart}
-              onSizeGuide={navigateToSizeGuide}
-              t={t}
-            />
+                  {/* QR SCANNER MODAL */}
+                  <Modal
+                    visible={showScanner}
+                    transparent={false}
+                    animationType="slide"
+                    onRequestClose={() => setShowScanner(false)}
+                  >
+                    <QRScanner
+                      onScan={handleScan}
+                      onClose={() => setShowScanner(false)}
+                      isDark={theme === 'dark'}
+                      t={t}
+                    />
+                  </Modal>
 
-            <Modal
-              visible={trackingModalVisible}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setTrackingModalVisible(false)}
-            >
-              <BlurView intensity={theme === 'dark' ? 40 : 20} tint={theme} style={StyleSheet.absoluteFill}>
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  style={{ flex: 1, justifyContent: 'center', padding: 20 }}
-                >
+                  {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && activeTab !== 'ShipmentTracking' && activeTab !== 'ReelsDetail' && activeTab !== 'StoryCreate' && (
+                    <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
+                      <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
+                        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
+                        <TouchableOpacity onPress={() => setActiveTab('Home')} style={styles.tabItem}>
+                          <Home size={22} color={activeTab === 'Home' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Home' ? 2.5 : 2} />
+                          <Text style={[styles.tabLabel, activeTab === 'Home' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('home')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('Feed')} style={styles.tabItem}>
+                          <LayoutGrid size={22} color={activeTab === 'Feed' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Feed' ? 2.5 : 2} />
+                          <Text style={[styles.tabLabel, activeTab === 'Feed' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('feed')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setFilterCategory(null); setActiveTab('Shop'); }} style={styles.tabItem}>
+                          <Search size={22} color={activeTab === 'Shop' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Shop' ? 2.5 : 2} />
+                          <Text style={[styles.tabLabel, activeTab === 'Shop' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('shop')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('Collaboration')} style={styles.tabItem}>
+                          <Handshake size={22} color={activeTab === 'Collaboration' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Collaboration' ? 2.5 : 2} />
+                          <Text style={[styles.tabLabel, activeTab === 'Collaboration' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('collab')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('Cart')} style={styles.tabItem}>
+                          <View>
+                            <ShoppingBag size={22} color={activeTab === 'Cart' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Cart' ? 2.5 : 2} />
+                            {cart.length > 0 && <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{cart.length}</Text></View>}
+                          </View>
+                          <Text style={[styles.tabLabel, activeTab === 'Cart' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('bag')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('Profile')} style={styles.tabItem}>
+                          <View>
+                            <User size={22} color={activeTab === 'Profile' ? (theme === 'dark' ? '#FFF' : '#000') : '#AEAEB2'} strokeWidth={activeTab === 'Profile' ? 2.5 : 2} />
+                            {(totalUnread + pendingRequestsCount) > 0 && <View style={[styles.cartBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.cartBadgeText}>{(totalUnread + pendingRequestsCount) > 99 ? '99+' : (totalUnread + pendingRequestsCount)}</Text></View>}
+                          </View>
+                          <Text style={[styles.tabLabel, activeTab === 'Profile' && { color: theme === 'dark' ? '#FFF' : '#000' }]}>{t('me')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* GLOBAL COMMENTS BOTTOM SHEET */}
+              <Modal
+                visible={isCommentSheetVisible}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setIsCommentSheetVisible(false)}
+              >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                  <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => setIsCommentSheetVisible(false)}
+                    style={{ flex: 1 }}
+                  />
                   <Animatable.View
-                    animation="zoomIn"
+                    animation="slideInUp"
                     duration={300}
                     style={{
-                      backgroundColor: Colors.surface,
-                      borderRadius: 30,
-                      padding: 24,
-                      borderWidth: 1,
-                      borderColor: Colors.border,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 10 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 20,
-                      elevation: 5
+                      height: height * 0.75,
+                      backgroundColor: Theme[theme].colors.background,
+                      borderTopLeftRadius: 30,
+                      borderTopRightRadius: 30,
+                      overflow: 'hidden'
                     }}
                   >
-                    <View style={{ marginBottom: 20, alignItems: 'center' }}>
-                      <View style={{
-                        width: 60,
-                        height: 60,
-                        borderRadius: 30,
-                        backgroundColor: Colors.accent + '20',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: 12
-                      }}>
-                        <Truck size={30} color={Colors.accent} />
-                      </View>
-                      <Text style={{ fontSize: 18, fontWeight: '900', color: Colors.foreground }}>{t('shipmentTracking')}</Text>
-                      <Text style={{ fontSize: 13, color: Colors.textMuted, textAlign: 'center', marginTop: 4 }}>{t('enterTrackingId')}</Text>
-                    </View>
+                    <KeyboardAvoidingView
+                      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                      style={{ flex: 1 }}
+                    >
+                      <CommentsSectionComponent
+                        selectedWork={selectedWork}
+                        comments={comments}
+                        loadingComments={loadingComments}
+                        commentText={commentText}
+                        setCommentText={setCommentText}
+                        handleComment={handleComment}
+                        handleCommentReact={handleCommentReact}
+                        handleDeleteComment={handleDeleteComment}
+                        replyingTo={replyingTo}
+                        setReplyingTo={setReplyingTo}
+                        editingComment={editingComment}
+                        setEditingComment={setEditingComment}
+                        expandedReplies={expandedReplies}
+                        setExpandedReplies={setExpandedReplies}
+                        onClose={() => setIsCommentSheetVisible(false)}
+                        colors={Theme[theme].colors}
+                        theme={theme}
+                        tr={tr}
+                        user={user}
+                        isPostOwner={selectedWork?.userId === user?.uid}
+                        getInitials={getInitials}
+                      />
+                    </KeyboardAvoidingView>
+                  </Animatable.View>
+                </View>
+              </Modal>
 
-                    <TextInput
+              <QuickAddModal
+                isVisible={!!quickAddProduct}
+                product={quickAddProduct}
+                onClose={() => setQuickAddProduct(null)}
+                onAddToCart={addToCart}
+                onSizeGuide={navigateToSizeGuide}
+                t={t}
+              />
+
+              <Modal
+                visible={trackingModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setTrackingModalVisible(false)}
+              >
+                <BlurView intensity={theme === 'dark' ? 40 : 20} tint={theme} style={StyleSheet.absoluteFill}>
+                  <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1, justifyContent: 'center', padding: 20 }}
+                  >
+                    <Animatable.View
+                      animation="zoomIn"
+                      duration={300}
                       style={{
                         backgroundColor: Colors.surface,
-                        borderRadius: 15,
-                        padding: 18,
-                        color: Colors.foreground,
-                        fontSize: 16,
-                        fontWeight: '700',
-                        textAlign: 'center',
+                        borderRadius: 30,
+                        padding: 24,
                         borderWidth: 1,
-                        borderColor: trackingInput ? Colors.accent : Colors.border
+                        borderColor: Colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 20,
+                        elevation: 5
                       }}
-                      placeholder="BEY3A-XXXXXXXX"
-                      placeholderTextColor={Colors.textMuted}
-                      value={trackingInput}
-                      onChangeText={setTrackingInput}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                    />
+                    >
+                      <View style={{ marginBottom: 20, alignItems: 'center' }}>
+                        <View style={{
+                          width: 60,
+                          height: 60,
+                          borderRadius: 30,
+                          backgroundColor: Colors.accent + '20',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: 12
+                        }}>
+                          <Truck size={30} color={Colors.accent} />
+                        </View>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: Colors.foreground }}>{t('shipmentTracking')}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.textMuted, textAlign: 'center', marginTop: 4 }}>{t('enterTrackingId')}</Text>
+                      </View>
 
-                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
-                      <TouchableOpacity
+                      <TextInput
                         style={{
-                          flex: 1,
-                          height: 54,
-                          borderRadius: 18,
                           backgroundColor: Colors.surface,
+                          borderRadius: 15,
+                          padding: 18,
+                          color: Colors.foreground,
+                          fontSize: 16,
+                          fontWeight: '700',
+                          textAlign: 'center',
                           borderWidth: 1,
-                          borderColor: Colors.border,
-                          alignItems: 'center',
-                          justifyContent: 'center'
+                          borderColor: trackingInput ? Colors.accent : Colors.border
                         }}
-                        onPress={() => {
-                          setTrackingModalVisible(false);
-                          setTrackingInput('');
-                        }}
-                      >
-                        <Text style={{ color: Colors.foreground, fontWeight: '800' }}>{t('cancel')}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{
-                          flex: 2,
-                          height: 54,
-                          borderRadius: 18,
-                          backgroundColor: trackingInput.length >= 6 ? Colors.accent : Colors.surface,
-                          borderWidth: 1,
-                          borderColor: trackingInput.length >= 6 ? 'transparent' : Colors.border,
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        disabled={trackingInput.length < 6}
-                        onPress={() => {
-                          const id = trackingInput.trim().toUpperCase();
-                          if (id) {
-                            setActiveTrackingId(id);
+                        placeholder="BEY3A-XXXXXXXX"
+                        placeholderTextColor={Colors.textMuted}
+                        value={trackingInput}
+                        onChangeText={setTrackingInput}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+
+                      <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                        <TouchableOpacity
+                          style={{
+                            flex: 1,
+                            height: 54,
+                            borderRadius: 18,
+                            backgroundColor: Colors.surface,
+                            borderWidth: 1,
+                            borderColor: Colors.border,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          onPress={() => {
                             setTrackingModalVisible(false);
                             setTrackingInput('');
-                            setActiveTab('ShipmentTracking');
-                          }
-                        }}
-                      >
-                        <Text style={{ color: trackingInput.length >= 6 ? Colors.accentForeground : Colors.textMuted, fontWeight: '900' }}>{t('track').toUpperCase()}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Animatable.View>
-                </KeyboardAvoidingView>
-              </BlurView>
-            </Modal>
-          </View>
-        )}
-      </SafeAreaProvider>
-    </ThemeContext.Provider >
+                          }}
+                        >
+                          <Text style={{ color: Colors.foreground, fontWeight: '800' }}>{t('cancel')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{
+                            flex: 2,
+                            height: 54,
+                            borderRadius: 18,
+                            backgroundColor: trackingInput.length >= 6 ? Colors.accent : Colors.surface,
+                            borderWidth: 1,
+                            borderColor: trackingInput.length >= 6 ? 'transparent' : Colors.border,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          disabled={trackingInput.length < 6}
+                          onPress={() => {
+                            const id = trackingInput.trim().toUpperCase();
+                            if (id) {
+                              setActiveTrackingId(id);
+                              setTrackingModalVisible(false);
+                              setTrackingInput('');
+                              setActiveTab('ShipmentTracking');
+                            }
+                          }}
+                        >
+                          <Text style={{ color: trackingInput.length >= 6 ? Colors.accentForeground : Colors.textMuted, fontWeight: '900' }}>{t('track').toUpperCase()}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </Animatable.View>
+                  </KeyboardAvoidingView>
+                </BlurView>
+              </Modal>
+            </View>
+          )}
+        </SafeAreaProvider>
+      </ThemeContext.Provider >
+    </GestureHandlerRootView>
   );
 }
 
 // --- COMPONENTS ---
 
-function HomeScreen({ user, profileData, onProductPress, onCategoryPress, onCampaignPress, onNavigate, wishlist, toggleWishlist, notifications, addToCart, t, language, setFilterBrand, onJoinLive }: any) {
-  const { colors, theme } = useAppTheme();
-  const [categories, setCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
-  const [featured, setFeatured] = useState<any[]>([]);
-  const [banners, setBanners] = useState<any[]>([]);
-  const [ads, setAds] = useState<any[]>([]);
-  const [flashSale, setFlashSale] = useState<any>(null);
-  const [flashProducts, setFlashProducts] = useState<any[]>([]);
-  const [promoBanners, setPromoBanners] = useState<any[]>([]);
-  const [collaborations, setCollaborations] = useState<any[]>([]);
-  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
-  const [liveChannels, setLiveChannels] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
-  const featuredScrollX = useRef(new Animated.Value(0)).current;
-  const selectionScrollX = useRef(new Animated.Value(0)).current;
-  const randomColors = [
-    "#FF6B6B",
-    "#FF4757",
-    "#FF9F1C",
-    "#FF922B",
-    "#FFD93D",
-    "#F9C74F",
 
-    "#6BCB77",
-    "#2ECC71",
-    "#06D6A0",
-    "#00C896",
-
-    "#00B4D8",
-    "#48CAE4",
-    "#4D96FF",
-    "#3A86FF",
-    "#4361EE",
-
-    "#7209B7",
-    "#9D4EDD",
-    "#8338EC",
-    "#B5179E",
-    "#F72585",
-    "#FF4D6D",
-
-    "#FB5607",
-  ];
-  const [randomBorderColor, setRandomBorderColor] = useState("#FF6B6B")
-  useEffect(() => {
-    const randomColor = randomColors[Math.floor(Math.random() * randomColors.length)];
-    setRandomBorderColor(randomColor);
-  }, []);
-
-  const unreadCount = notifications?.filter((n: any) => !n.read).length || 0;
-
-  // Header background opacity based on scroll
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const headerBackgroundColor = headerOpacity.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.95)'],
-  });
-
-  useEffect(() => {
-    fetchData();
-
-    // Subscribe to live sessions
-    const unsubscribeLive = LiveSessionService.subscribeToAllSessions((sessions: LiveSession[]) => {
-      const now = Date.now();
-      const active = sessions.filter(s => {
-        const start = s.startedAt?.toMillis?.() || (s.startedAt?.seconds ? s.startedAt.seconds * 1000 : 0);
-        return s.status === 'live' && (now - start) < (6 * 60 * 60 * 1000); // Only show sessions from last 6 hours
-      });
-      setLiveSessions(active);
-      const liveIds = active.flatMap(s => [s.brandId, s.collabId, s.channelId]).filter(Boolean) as string[];
-      setLiveChannels(liveIds);
-    });
-
-    return () => unsubscribeLive();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      // Fetch categories
-      const catSnap = await getDocs(collection(db, 'categories'));
-      const catList = catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCategories(catList);
-
-      // Fetch brands (only active brands)
-      const brandsSnap = await getDocs(collection(db, 'brands'));
-      const allBrands: any[] = brandsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const activeBrands = allBrands.filter((b: any) => b.isActive !== false);
-      setBrands(activeBrands);
-
-      // Fetch featured products
-      const prodSnap = await getDocs(query(collection(db, 'products'), limit(6)));
-      const prodList = prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setFeatured(prodList);
-
-      // Fetch banners
-      const bannerSnap = await getDocs(collection(db, 'banners'));
-      const bannerList = bannerSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((b: any) => (b as any).isActive !== false)
-        .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-      setBanners(bannerList);
-
-      // Fetch ads
-      const adsSnap = await getDocs(collection(db, 'ads'));
-      const adsList = adsSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((a: any) => (a as any).isActive !== false)
-        .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-      setAds(adsList);
-
-      // Fetch Flash Sale
-      try {
-        const settingsSnap = await getDocs(collection(db, 'settings'));
-        const now = new Date().getTime();
-
-        let activeFlashSales: any[] = settingsSnap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter((d: any) => d.id.startsWith('flashSale') && d.active);
-
-        // Filter out expired ones
-        activeFlashSales = activeFlashSales.filter((fs: any) => {
-          const end = fs.endTime ? new Date(fs.endTime).getTime() : 0;
-          return end > now;
-        });
-
-        if (activeFlashSales.length > 0) {
-          // Pick the one that ends SOONEST for the big timer
-          const soonestFlashSale = activeFlashSales.reduce((prev: any, curr: any) => {
-            const prevEnd = new Date(prev.endTime).getTime();
-            const currEnd = new Date(curr.endTime).getTime();
-            return currEnd < prevEnd ? curr : prev;
-          });
-          setFlashSale(soonestFlashSale);
-
-          // Combine all product IDs from all active flash sales
-          let allProductIds: string[] = [];
-          activeFlashSales.forEach((fs: any) => {
-            if (fs.productIds && Array.isArray(fs.productIds)) {
-              allProductIds.push(...fs.productIds);
-            }
-          });
-
-          // unique product IDs
-          allProductIds = [...new Set(allProductIds)];
-
-          if (allProductIds.length > 0) {
-            // chunk up to 10
-            const pSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', allProductIds.slice(0, 10))));
-            const productsData = pSnap.docs.map(d => {
-              const pId = d.id;
-              // find which flash sale this belongs to in order to get ITS end time
-              const relatedFs = activeFlashSales.find((fs: any) => fs.productIds.includes(pId));
-              return { ...d.data(), id: pId, flashSaleEndTime: relatedFs?.endTime };
-            });
-            setFlashProducts(productsData);
-          } else {
-            setFlashProducts([]);
-          }
-        } else {
-          setFlashSale(null);
-          setFlashProducts([]);
-        }
-      } catch (fsErr) {
-        console.log("Error fetching flash sale", fsErr);
-        setFlashSale(null);
-      }
-      // Fetch Promo Banners
-      const promoSnap = await getDocs(collection(db, 'promoBanners'));
-      setPromoBanners(promoSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter((b: any) => b.isActive !== false)
-        .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
-      );
-
-      // Fetch collaborations
-      const collabSnap = await getDocs(query(collection(db, 'collaborations'), where('isActive', '==', true)));
-      setCollaborations(collabSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const bannerRef = useRef<FlatList>(null);
-  const scrollIndex = useRef(0);
-
-  const promoRef = useRef<FlatList>(null);
-  const promoScrollIndex = useRef(0);
-
-  useEffect(() => {
-    if (banners.length <= 1) return;
-
-    const interval = setInterval(() => {
-      scrollIndex.current = (scrollIndex.current + 1) % banners.length;
-      bannerRef.current?.scrollToIndex({
-        index: scrollIndex.current,
-        animated: true
-      });
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [banners]);
-
-  useEffect(() => {
-    if (promoBanners.length <= 1) return;
-
-    const interval = setInterval(() => {
-      promoScrollIndex.current = (promoScrollIndex.current + 1) % promoBanners.length;
-      promoRef.current?.scrollToIndex({
-        index: promoScrollIndex.current,
-        animated: true
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [promoBanners]);
-
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.foreground} />
-      </View>
-    );
-  }
-
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Animated.View style={[styles.modernHeader, {
-        backgroundColor: 'transparent', // Let the blur view handle the background
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
-        height: 64 + insets.top,
-        paddingTop: insets.top,
-        borderBottomWidth: headerOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
-      }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
-          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + '66' }]} />
-        </Animated.View>
-
-        <TouchableOpacity onPress={() => onNavigate('Profile')} activeOpacity={0.7} style={{ borderWidth: 2, borderColor: randomBorderColor, borderRadius: 50 }}>
-          <View style={[styles.headerAvatarContainer, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
-            {profileData?.avatarUrl ? (
-              <Image source={{ uri: profileData.avatarUrl }} style={styles.headerAvatar} />
-            ) : user?.photoURL ? (
-              <Image source={{ uri: user.photoURL }} style={styles.headerAvatar} />
-            ) : (
-              <View style={[styles.headerAvatar, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.border }]}>
-                <User size={20} color={colors.foreground} strokeWidth={2} />
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-        {/* 
-        <Text pointerEvents="none" style={[styles.modernLogo, {
-          top: insets.top,
-          height: 64,
-          lineHeight: 64,
-          fontSize: 18,
-          letterSpacing: 0.5,
-          fontWeight: '900' as any,
-          color: colors.foreground
-        }]}>TAMA CLOTHING</Text> */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 90 }}>
-          <Image
-            source={require("./assets/logo.png")}
-            style={{ width: 300, height: 200, resizeMode: 'contain' }}
-          />
-        </View>
-
-
-        <TouchableOpacity style={[styles.searchCircle, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} activeOpacity={0.7} onPress={() => onNavigate('Notifications')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Bell size={20} color={colors.foreground} strokeWidth={2.5} />
-          {unreadCount > 0 && <View style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error, borderWidth: 1.5, borderColor: theme === 'dark' ? '#000' : '#FFF' }} />}
-        </TouchableOpacity>
-      </Animated.View>
-
-      <Animated.ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 64 + insets.top + 15, paddingBottom: 100 + insets.bottom }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-      >
-        {/* Live Event Banner - Dynamic */}
-        {(() => {
-          const now = Date.now();
-          // Filter out sessions that were started more than 6 hours ago to avoid "ghost" sessions
-          const activeSessions = liveSessions.filter(s => {
-            const start = s.startedAt?.toMillis?.() || (s.startedAt?.seconds ? s.startedAt.seconds * 1000 : 0);
-            return s.status === 'live' && (now - start) < (6 * 60 * 60 * 1000);
-          });
-
-          const bestLiveSession = activeSessions.length > 0
-            ? activeSessions.reduce((prev, current) => (Math.max(0, prev.viewCount) > Math.max(0, current.viewCount)) ? prev : current)
-            : null;
-
-          if (!bestLiveSession) return null;
-
-          const bestCollab = collaborations.find(c =>
-            c.id === bestLiveSession.collabId ||
-            c.id === bestLiveSession.channelId ||
-            (c.brandId && c.brandId === bestLiveSession.brandId)
-          );
-
-          return (
-            <TouchableOpacity
-              onPress={() => {
-                onJoinLive && onJoinLive({
-                  channelId: bestLiveSession.channelId,
-                  isHost: false, // Joining an existing live from banner is always Audience
-                  userName: profileData?.fullName || user?.displayName || 'Guest',
-                  userId: user?.uid,
-                  brandId: bestCollab?.brandId || bestLiveSession.brandId,
-                  hostAvatar: bestCollab?.coverImageUrl || bestCollab?.imageUrl || bestLiveSession.hostAvatar
-                });
-              }}
-              activeOpacity={0.9}
-              style={{
-                marginHorizontal: 15,
-                marginTop: 10,
-                marginBottom: 10,
-                borderRadius: 20,
-                overflow: 'hidden',
-                backgroundColor: theme === 'dark' ? '#121218' : '#FFF',
-                borderWidth: 1.5,
-                borderColor: '#EF4444',
-                shadowColor: '#EF4444',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2,
-                shadowRadius: 10,
-                elevation: 8
-              }}
-            >
-              <LinearGradient
-                colors={theme === 'dark' ? ['#1A1A1A', '#000000'] : ['#FFF5F5', '#FFFFFF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}
-              >
-                <View style={{ width: 64, height: 64, position: 'relative', marginRight: 16, alignItems: 'center', justifyContent: 'center' }}>
-                  <Animatable.View
-                    animation="pulse"
-                    iterationCount="infinite"
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 32,
-                      borderWidth: 2,
-                      borderColor: '#EF4444',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'transparent'
-                    }}
-                  >
-                    <Image
-                      source={
-                        (bestCollab?.imageUrl || bestLiveSession.hostAvatar)
-                          ? { uri: bestCollab?.imageUrl || bestLiveSession.hostAvatar }
-                          : APP_ICON
-                      }
-                      style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.border }}
-                    />
-                  </Animatable.View>
-
-                  <Animatable.View
-                    animation="bounceIn"
-                    style={{
-                      position: 'absolute',
-                      bottom: -2,
-                      backgroundColor: '#EF4444',
-                      paddingHorizontal: 7,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                      borderWidth: 1.5,
-                      borderColor: theme === 'dark' ? '#121218' : '#FFF',
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 0.5 }}>{t('enDirect') || 'EN DIRECT'}</Text>
-                  </Animatable.View>
-                </View>
-
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                  <Text style={{ color: colors.foreground, fontWeight: '900', fontSize: 14, letterSpacing: -0.5, marginBottom: 2 }} numberOfLines={1}>
-                    {((bestCollab ? getName(bestCollab.name) : (bestLiveSession.hostName || 'BROADCASTER'))).toUpperCase()}
-                  </Text>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ position: 'relative', width: 8, height: 8, alignItems: 'center', justifyContent: 'center' }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
-                      <Animatable.View
-                        animation="pulse"
-                        iterationCount="infinite"
-                        style={{ position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(239, 68, 68, 0.3)' }}
-                      />
-                    </View>
-                    <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '800', opacity: 0.8 }}>
-                      {Math.max(0, bestLiveSession.viewCount)} {t('viewers')} • {t('joinNow')}
-                    </Text>
-                  </View>
-                </View>
-
-                <Animatable.View animation="pulse" iterationCount="infinite" style={{ marginLeft: 10 }}>
-                  <View style={{
-                    backgroundColor: '#EF4444',
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
-                    borderRadius: 12,
-                    shadowColor: '#EF4444',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.4,
-                    shadowRadius: 6,
-                    elevation: 4
-                  }}>
-                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 10, letterSpacing: 1.5 }}>{t('join').toUpperCase()}</Text>
-                  </View>
-                </Animatable.View>
-              </LinearGradient>
-            </TouchableOpacity>
-          );
-        })()}
-
-        {/* Live Now Collaborations */}
-        {collaborations.filter(c => liveChannels.includes(c.id) || (c.brandId && liveChannels.includes(c.brandId))).length > 0 && (
-          <View style={{ marginTop: 20 }}>
-            <View style={[styles.sectionHeader, { marginBottom: 15 }]}>
-              <View>
-                <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('liveNow').toUpperCase()}</Text>
-                <View style={{ width: 25, height: 2, backgroundColor: '#EF4444', marginTop: 4 }} />
-              </View>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}>
-              {collaborations.filter(c => liveChannels.includes(c.id) || (c.brandId && liveChannels.includes(c.brandId))).map(c => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={{ alignItems: 'center' }}
-                  onPress={() => {
-                    // Find actual session to get correct channelId
-                    const session = liveSessions.find(s =>
-                      s.brandId === c.brandId ||
-                      s.collabId === c.id ||
-                      s.channelId === c.id ||
-                      (c.brandId && s.channelId === c.brandId) // fallback check
-                    );
-
-                    const targetChannelId = session?.channelId || c.id;
-
-                    onJoinLive && onJoinLive({
-                      channelId: targetChannelId,
-                      isHost: false, // Joining from Live Now list is always Audience
-                      userName: profileData?.fullName || user?.displayName || 'Guest',
-                      userId: user?.uid,
-                      brandId: c.brandId,
-                      hostAvatar: c.coverImageUrl || c.imageUrl
-                    });
-                  }}
-                >
-                  <View style={{ position: 'relative', alignItems: 'center' }}>
-                    <Animatable.View
-                      animation="pulse"
-                      easing="ease-out"
-                      iterationCount="infinite"
-                      style={{
-                        width: 58,
-                        height: 58,
-                        borderRadius: 29,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderWidth: 2,
-                        borderColor: '#EF4444'
-                      }}
-                    >
-                      <Image
-                        source={c.imageUrl ? { uri: c.imageUrl } : APP_ICON}
-                        style={{
-                          width: 50,
-                          height: 50,
-                          borderRadius: 25,
-                          backgroundColor: colors.border,
-                          borderWidth: 1.5,
-                          borderColor: colors.background
-                        }}
-                      />
-                    </Animatable.View>
-                    <Animatable.View
-                      animation="bounceIn"
-                      style={{
-                        position: 'absolute',
-                        bottom: -4,
-                        backgroundColor: '#EF4444',
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 6,
-                        borderWidth: 1.5,
-                        borderColor: colors.background,
-                        shadowColor: '#EF4444',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 4,
-                        elevation: 4
-                      }}
-                    >
-                      <Text style={{ fontSize: 7, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 }}>{t('enDirect') || 'EN DIRECT'}</Text>
-                    </Animatable.View>
-                  </View>
-                  <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '800', marginTop: 8, color: colors.foreground, width: 70, textAlign: 'center' }}>
-                    {getName(c.name).toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Banner Carousel */}
-        <View style={{ marginTop: 15 }}>
-          <FlatList
-            ref={bannerRef}
-            data={banners.length > 0 ? banners : [{ id: '1', imageUrl: 'https://images.unsplash.com/photo-1539106609512-725e3652e361?w=800' }]}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={item => item.id}
-            snapToInterval={width - 30 + 15}
-            decelerationRate="fast"
-            snapToAlignment="start"
-            contentContainerStyle={{ paddingLeft: 15 }}
-            onScrollToIndexFailed={() => { }}
-            renderItem={({ item }) => (
-              <View style={{ width: width - 30, marginRight: 15 }}>
-                <View style={[styles.modernHero, { borderRadius: 25, overflow: 'hidden' }]}>
-                  <Image
-                    source={{ uri: item.imageUrl }}
-                    style={styles.modernHeroImg}
-                  />
-                  <View style={styles.heroGlassBadge}>
-                    <Text style={styles.heroBadgeText}>{getName(item.subtitle).toUpperCase() || t('newDrop')}</Text>
-                  </View>
-                  <View style={styles.modernHeroFooter}>
-                    <Text style={styles.modernHeroTitle}>{getName(item.title).toUpperCase() || t('futureMinimalism')}</Text>
-                    <TouchableOpacity style={styles.modernHeroBtn} onPress={() => onNavigate('Shop')}>
-                      <Text style={styles.modernHeroBtnText}>{t('viewAll')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            )}
-          />
-        </View>
-
-        {/* Collections Section */}
-        <View style={[styles.modernSection, { marginTop: 10 }]}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('collections') || 'COLLECTIONS'}</Text>
-              <View style={{ width: 25, height: 2, backgroundColor: colors.accent, marginTop: 4 }} />
-            </View>
-            <TouchableOpacity style={styles.exploreBtn} onPress={() => onNavigate('Shop')}>
-              <Text style={[styles.modernSectionLink, { color: colors.accent }]}>{t('seeAll')}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, gap: 15, alignItems: 'flex-start' }}
-          >
-            {/* Categories Section */}
-            <View>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 12, letterSpacing: 1 }}>{t('categories').toUpperCase()}</Text>
-              <View style={{ flexDirection: 'row', gap: 15 }}>
-                {categories.map((cat: any) => (
-                  <TouchableOpacity key={cat.id} style={{ alignItems: 'center' }} onPress={() => onCategoryPress(cat.id)}>
-                    <View style={[styles.modernCatCard, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9F9' }]}>
-                      <Image source={{ uri: cat.image || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400' }} style={styles.catBgImage} />
-                    </View>
-                    <Text style={{ fontSize: 9, fontWeight: '800', marginTop: 8, color: colors.foreground, letterSpacing: 1 }}>{String(translateCategory(getName(cat.name))).toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Separator */}
-            {categories.length > 0 && brands.length > 0 && (
-              <View style={{ width: 1, height: '80%', backgroundColor: colors.border, marginHorizontal: 5, marginTop: 25 }} />
-            )}
-
-            {/* Brands Section */}
-            <View>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 12, letterSpacing: 1 }}>{t('brands').toUpperCase()}</Text>
-              <View style={{ flexDirection: 'row', gap: 15 }}>
-                {brands.map((brand: any) => (
-                  <TouchableOpacity
-                    key={brand.id}
-                    style={{ alignItems: 'center' }}
-                    onPress={() => {
-                      setFilterBrand(brand.id);
-                      onNavigate('Shop');
-                    }}
-                  >
-                    <View style={[styles.modernCatCard, { backgroundColor: theme === 'dark' ? '#17171F' : '#FFF' }]}>
-                      <Image source={{ uri: brand.image }} style={styles.catBgImage} resizeMode="cover" />
-                    </View>
-                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '800', marginTop: 8, color: colors.foreground, letterSpacing: 1 }}>{String(getName(brand.name)).toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-
-        {/* Flash Sale Redesign */}
-        {
-          flashSale && (
-            <View style={{ marginTop: 30 }}>
-              <View style={[styles.sectionHeader, { marginBottom: 16 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  <View>
-                    <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('flashSale')}</Text>
-                    <View style={{ width: 25, height: 2, backgroundColor: colors.accent, marginTop: 4 }} />
-                  </View>
-                  <FlashSaleCountdown
-                    endTime={flashSale.endTime}
-                    onEnd={() => setFlashSale(null)}
-                  />
-                </View>
-                <TouchableOpacity onPress={() => onNavigate('Shop')}>
-                  <Text style={[styles.modernSectionLink, { color: colors.accent }]}>{t('seeAll')}</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}>
-                {flashProducts.map((p: any) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    onPress={() => onProductPress(p)}
-                    isWishlisted={wishlist?.includes(p.id)}
-                    onToggleWishlist={() => toggleWishlist(p.id)}
-                    onAddToCart={() => addToCart(p)}
-                    showRating={true}
-                    theme={theme}
-                    language={language}
-                    t={t}
-                    customWidth={width * 0.65}
-                    flashSaleEndTime={p.flashSaleEndTime}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          )
-        }
-
-
-        {/* Ads Section */}
-        {
-          ads.length > 0 && (
-            <View style={styles.modernSection}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('campaigns')}</Text>
-                  <View style={{ width: 25, height: 2, backgroundColor: colors.accent, marginTop: 4 }} />
-                </View>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}>
-                {ads.map((ad: any) => (
-                  <View key={ad.id} style={[styles.adCard, { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#F2F2F7' }]}>
-                    {ad.type === 'video' ? (
-                      <UniversalVideoPlayer
-                        source={{ uri: ad.url }}
-                        style={styles.adMedia}
-                        resizeMode="cover"
-                        shouldPlay
-                        isLooping
-                        isMuted
-                      />
-                    ) : (
-                      <Image source={{ uri: ad.url }} style={styles.adMedia} />
-                    )}
-                    <View style={styles.adContent}>
-                      <Text style={styles.adTitle}>{getName(ad.title).toUpperCase()}</Text>
-                      {ad.link || ad.targetId ? (
-                        <TouchableOpacity style={styles.adBtn} onPress={() => onCampaignPress(ad)}>
-                          <Text style={styles.adBtnText}>{t('discover')}</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          )
-        }
-
-        {/* Featured Products */}
-        <View style={[styles.modernSection, { marginTop: 30 }]}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.modernSectionTitle, { color: colors.foreground }]}>{t('featured')}</Text>
-              <View style={{ width: 25, height: 2, backgroundColor: colors.accent, marginTop: 4 }} />
-            </View>
-            <TouchableOpacity style={styles.exploreBtn} onPress={() => onNavigate('Shop')}>
-              <Text style={[styles.modernSectionLink, { color: colors.accent }]}>{t('refineGallery')}</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 25, paddingTop: 10, gap: 15 }}
-          >
-            {featured.map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={wishlist?.includes(p.id)}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                theme={theme}
-                language={language}
-                t={t}
-                colors={colors}
-                customWidth={width * 0.65}
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Dynamic Promo Banners Carousel (last) */}
-        {
-          promoBanners.length > 0 && (
-            <View style={{ height: 180, marginTop: 20 }}>
-              <FlatList
-                ref={promoRef}
-                data={promoBanners}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={item => item.id}
-                onScrollToIndexFailed={() => { }}
-                renderItem={({ item: banner }) => (
-                  <View style={{ width: width }}>
-                    <TouchableOpacity
-                      style={[styles.promoBannerContainer, { backgroundColor: banner.backgroundColor || '#FF2D55', width: width - 40 }]}
-                      activeOpacity={0.9}
-                      onPress={() => onNavigate('Shop')}
-                    >
-                      <Image source={{ uri: banner.imageUrl }} style={styles.promoBannerImg} resizeMode="cover" />
-                      <View style={styles.promoBannerContent}>
-                        <Text style={styles.promoSmallText}>{String(banner.title || '').toUpperCase()}</Text>
-                        <Text style={styles.promoMainText}>{String(banner.description || '').toUpperCase()}</Text>
-                        <View style={styles.promoShopNowBtn}>
-                          <Text style={[styles.promoBtnText, { color: banner.backgroundColor || '#FF2D55' }]}>{t('shop')}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
-            </View>
-          )
-        }
-
-        {/* Community & Trust Section */}
-        <View style={[styles.modernSection, { marginTop: 10, paddingBottom: 20 }]}>
-          <Text style={[styles.modernSectionTitle, { textAlign: 'center', marginBottom: 20, letterSpacing: 2, color: theme === 'dark' ? '#FFFFFF' : '#000000' }]}>{t('ourSelection')}</Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 25, paddingTop: 10, gap: 15 }}
-          >
-            {featured.slice(0, 5).map((p: any) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onPress={() => onProductPress(p)}
-                isWishlisted={wishlist?.includes(p.id)}
-                onToggleWishlist={() => toggleWishlist(p.id)}
-                onAddToCart={() => addToCart(p)}
-                showRating={true}
-                theme={theme}
-                language={language}
-                t={t}
-                customWidth={width * 0.65}
-              />
-            ))}
-          </ScrollView>
-
-          <View style={{ marginTop: 30, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 10 }}>
-            <TouchableOpacity onPress={() => onNavigate && onNavigate('ShippingPolicy')} style={{ alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                <Package size={22} color={colors.foreground} strokeWidth={1.5} />
-              </View>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{t('freeShipping')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onNavigate && onNavigate('PaymentPolicy')} style={{ alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                <Shield size={22} color={colors.foreground} strokeWidth={1.5} />
-              </View>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{t('securePayment')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onNavigate && onNavigate('ReturnPolicy')} style={{ alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }}>
-                <RotateCcw size={22} color={colors.foreground} strokeWidth={1.5} />
-              </View>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted }}>{t('easyReturns')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-      </Animated.ScrollView >
-    </View >
-  );
-}
 
 // --- REUSABLE COMMENTS COMPONENT ---
 function CommentsSectionComponent({
@@ -5369,11 +4561,11 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </KeyboardAvoidingView >
+      </Modal >
 
       {/* Quick Exchange Modal */}
-      <Modal visible={showQuickExchange} transparent animationType="fade">
+      < Modal visible={showQuickExchange} transparent animationType="fade" >
         <BlurView intensity={20} style={StyleSheet.absoluteFill} tint="dark" />
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
           <View style={{ backgroundColor: colors.background, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: colors.border }}>
@@ -5421,10 +4613,10 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </Modal >
 
       {/* Transfer Diamonds Modal */}
-      <Modal visible={showTransferModal} transparent animationType="slide">
+      < Modal visible={showTransferModal} transparent animationType="slide" >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, minHeight: height * 0.7 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -5499,7 +4691,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
             )}
           </View>
         </View>
-      </Modal>
+      </Modal >
     </View >
   );
 }
@@ -6265,6 +5457,7 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
   const [addresses, setAddresses] = useState<any[]>(profileData?.addresses || []);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [tempAddress, setTempAddress] = useState('');
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [avatar, setAvatar] = useState(profileData?.avatarUrl || null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -6357,7 +5550,7 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
     Alert.alert(t('successTitle'), t('profileUpdated'));
   };
 
-  const handleAddAddress = () => {
+  const handleAddAddress = (): void => {
     if (!tempAddress.trim()) return;
     const newAddr = { id: Date.now().toString(), text: tempAddress, isDefault: addresses.length === 0 };
     const newList = [...addresses, newAddr];
@@ -6366,6 +5559,42 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
     setShowAddressForm(false);
     updateProfile({ addresses: newList });
     Alert.alert(t('successTitle'), t('addressAdded'));
+  };
+
+  const getCurrentLocation = async (): Promise<void> => {
+    setGettingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('error') || 'Error', t('locationPermissionDenied') || 'Location permission denied');
+        return;
+      }
+      
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      
+      // Reverse geocode to get address
+      const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      if (reverseGeocode && reverseGeocode.length > 0) {
+        const addr = reverseGeocode[0];
+        const addressParts = [
+          addr.streetNumber,
+          addr.street,
+          addr.district,
+          addr.city,
+          addr.region,
+          addr.country
+        ].filter(Boolean);
+        
+        setTempAddress(addressParts.join(', '));
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert(t('error') || 'Error', t('locationError') || 'Failed to get location');
+    } finally {
+      setGettingLocation(false);
+    }
   };
 
   const handleDeleteAddress = (id: string) => {
@@ -6537,6 +5766,21 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
 
           {showAddressForm && (
             <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: appColors.textMuted }}>{t('addNewAddress') || 'Add new address'}</Text>
+                <TouchableOpacity 
+                  onPress={getCurrentLocation} 
+                  disabled={gettingLocation}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: appColors.accent + '20' }}
+                >
+                  {gettingLocation ? (
+                    <ActivityIndicator size={14} color={appColors.accent} />
+                  ) : (
+                    <MapPin size={14} color={appColors.accent} />
+                  )}
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: appColors.accent }}>{t('useLocation') || 'Use Location'}</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={[styles.premiumInput, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB', color: appColors.foreground, borderColor: appColors.border, borderWidth: 1, minHeight: 80, textAlignVertical: 'top', paddingTop: 15 }]}
                 placeholder={t('defaultAddress')}
@@ -6885,6 +6129,15 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
             onScroll={(e) => setActiveImg(Math.round(e.nativeEvent.contentOffset.x / width))}
             scrollEventThrottle={16}
           >
+
+            {allImages.map((img: string, idx: number) => (
+              <Image
+                key={idx}
+                source={{ uri: img }}
+                style={styles.detailFullImage}
+                resizeMode="cover"
+              />
+            ))}
             {product.videoUrl && (
               <View style={styles.detailFullVideo}>
                 <UniversalVideoPlayer
@@ -6897,14 +6150,6 @@ function ProductDetailScreen({ product, onBack, onAddToCart, toggleWishlist, isW
                 />
               </View>
             )}
-            {allImages.map((img: string, idx: number) => (
-              <Image
-                key={idx}
-                source={{ uri: img }}
-                style={styles.detailFullImage}
-                resizeMode="cover"
-              />
-            ))}
           </ScrollView>
 
           {/* Image Pagination Dots */}
@@ -11635,44 +10880,7 @@ const styles = StyleSheet.create({
 //   );
 // }
 
-function FlashSaleCountdown({ endTime, onEnd }: { endTime: string, onEnd?: () => void }) {
-  const [timeLeft, setTimeLeft] = useState({ h: '00', m: '00', s: '00' });
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const end = new Date(endTime).getTime();
-      const diff = end - now;
-
-      if (diff <= 0) {
-        clearInterval(timer);
-        setTimeLeft({ h: '00', m: '00', s: '00' });
-        if (onEnd) onEnd();
-      } else {
-        const h = Math.floor(diff / (1000 * 60 * 60));
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeLeft({
-          h: h.toString().padStart(2, '0'),
-          m: m.toString().padStart(2, '0'),
-          s: s.toString().padStart(2, '0')
-        });
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [endTime]);
-
-  return (
-    <View style={styles.timerPill}>
-      <Clock size={12} color="#333" strokeWidth={3} style={{ marginRight: 2 }} />
-      <View style={styles.timerBox}><Text style={styles.timerText}>{timeLeft.h}</Text></View>
-      <Text style={{ fontWeight: '900', color: 'rgba(0,0,0,0.3)', fontSize: 12 }}>:</Text>
-      <View style={styles.timerBox}><Text style={styles.timerText}>{timeLeft.m}</Text></View>
-      <Text style={{ fontWeight: '900', color: 'rgba(0,0,0,0.3)', fontSize: 12 }}>:</Text>
-      <View style={styles.timerBox}><Text style={styles.timerText}>{timeLeft.s}</Text></View>
-    </View>
-  );
-}
 
 function PrivacyPolicyScreen({ onBack, t }: any) {
   const { colors, theme } = useAppTheme();

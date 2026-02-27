@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import {
     View,
-    Text,
     TouchableOpacity,
-    TextInput,
     Image,
     ActivityIndicator,
     Alert,
-    StyleSheet,
-    Dimensions
+    StyleSheet
 } from 'react-native';
 import {
     signInWithEmailAndPassword,
@@ -21,10 +18,13 @@ import {
     doc,
     serverTimestamp
 } from 'firebase/firestore';
-import { Eye, EyeOff } from 'lucide-react-native';
+import { Eye, EyeOff, User, Mail, Lock as LockIcon, ChevronRight } from 'lucide-react-native';
 import { auth, db } from '../api/firebase';
 import { useAppTheme } from '../context/ThemeContext';
 import { APP_ICON } from '../constants/layout';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/text';
 
 export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, language }: any) {
     const { colors, theme } = useAppTheme();
@@ -34,6 +34,8 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    const inputBgColor = theme === 'dark' ? '#121218' : '#F9F9F9';
 
     const handleAuth = async () => {
         setLoading(true);
@@ -101,67 +103,95 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
 
     return (
         <View style={[styles.authContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.authTopDecoration, { opacity: theme === 'dark' ? 0.4 : 1, backgroundColor: colors.foreground }]} />
-            <View style={[styles.authContent, { backgroundColor: colors.background }]}>
-                <Text style={[styles.authTitle, { color: colors.foreground }]}>{isLogin ? t('welcomeBack') : t('createAccount')}</Text>
-                <Image source={APP_ICON} style={[styles.logo, { alignSelf: 'center', width: 180, height: 180 }]} />
+            <View style={[styles.authTopDecoration, {
+                opacity: theme === 'dark' ? 0.2 : 0.05,
+                backgroundColor: theme === 'dark' ? '#FFF' : '#000'
+            }]} />
 
-                <View style={[styles.formCard, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
-                    {error ? <Text style={{ color: colors.error, fontSize: 13, marginBottom: 15, textAlign: 'center', fontWeight: '600' }}>{error}</Text> : null}
+            <View style={styles.authContent}>
+                <View style={styles.headerSection}>
+                    <Image source={APP_ICON} style={styles.logo} />
+                    <Text variant="heading" style={[styles.authTitle, { color: colors.foreground }]}>
+                        {isLogin ? t('welcomeBack') : t('createAccount')}
+                    </Text>
+                </View>
+
+                <View style={styles.formSection}>
+                    {error ? (
+                        <Text style={{ color: colors.error, fontSize: 13, marginBottom: 15, textAlign: 'center', fontWeight: '600' }}>
+                            {error}
+                        </Text>
+                    ) : null}
+
                     {!isLogin && (
-                        <TextInput
-                            style={[styles.modernInput, { color: colors.foreground, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderColor: colors.border, textAlign: language === 'ar' ? 'right' : 'left' }]}
+                        <Input
                             placeholder={t('fullName')}
-                            placeholderTextColor={colors.textMuted}
                             value={fullName}
                             onChangeText={setFullName}
+                            variant="filled"
+                            containerStyle={styles.inputContainer}
+                            autoCapitalize="none"
+                            icon={User}
+                            //@ts-ignore
+                            style={{ fontSize: 13, color: colors.foreground }}
                         />
                     )}
-                    <TextInput
-                        style={[styles.modernInput, { color: colors.foreground, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderColor: colors.border, textAlign: language === 'ar' ? 'right' : 'left' }]}
+
+                    <Input
                         placeholder={t('email')}
-                        keyboardType="email-address"
-                        placeholderTextColor={colors.textMuted}
-                        autoCapitalize="none"
                         value={email}
                         onChangeText={setEmail}
+                        variant="filled"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        containerStyle={styles.inputContainer}
+                        icon={Mail}
+                        //@ts-ignore
+                        style={{ fontSize: 13, color: colors.foreground }}
                     />
-                    <View style={{ width: '100%', position: 'relative', justifyContent: 'center' }}>
-                        <TextInput
-                            style={[styles.modernInput, { color: colors.foreground, backgroundColor: theme === 'dark' ? '#121218' : '#F9F9F9', borderColor: colors.border, paddingRight: 50, textAlign: language === 'ar' ? 'right' : 'left' }]}
+
+                    <View style={styles.inputContainer}>
+                        <Input
                             placeholder={t('password')}
-                            secureTextEntry={!showPassword}
-                            placeholderTextColor={colors.textMuted}
                             value={password}
                             onChangeText={setPassword}
+                            variant="filled"
+                            secureTextEntry={!showPassword}
+                            icon={LockIcon}
+                            //@ts-ignore
+                            style={{ fontSize: 14, color: colors.foreground }}
+                            rightComponent={() => (
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword(!showPassword)}
+                                    style={{ padding: 4 }}
+                                >
+                                    {showPassword ? <EyeOff size={16} color={colors.textMuted} /> : <Eye size={16} color={colors.textMuted} />}
+                                </TouchableOpacity>
+                            )}
                         />
-                        <TouchableOpacity
-                            style={{ position: 'absolute', right: 15, height: '100%', justifyContent: 'center', paddingHorizontal: 5, marginBottom: 10 }}
-                            onPress={() => setShowPassword(!showPassword)}
-                        >
-                            {showPassword ? <EyeOff size={20} color={colors.textMuted} /> : <Eye size={20} color={colors.textMuted} />}
-                        </TouchableOpacity>
                     </View>
 
                     {isLogin && (
-                        <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginTop: 10, marginBottom: 20 }}>
-                            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{t('forgotPassword')}</Text>
+                        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+                            <Text variant="caption" style={{ fontWeight: '600' }}>{t('forgotPassword')}</Text>
                         </TouchableOpacity>
                     )}
 
-                    <TouchableOpacity style={[styles.modernPrimaryBtn, { backgroundColor: colors.foreground }]} onPress={handleAuth} disabled={loading}>
-                        {loading ? (
-                            <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} />
-                        ) : (
-                            <Text style={[styles.modernPrimaryBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{isLogin ? t('signIn') : t('getStarted')}</Text>
-                        )}
-                    </TouchableOpacity>
+                    <Button
+                        onPress={handleAuth}
+                        loading={loading}
+                        size="lg"
+                        style={{ marginTop: 20 }}
+                    >
+                        {isLogin ? t('signIn') : t('getStarted')}
+                    </Button>
                 </View>
 
-                <TouchableOpacity onPress={toggleAuth} style={{ marginTop: 20 }}>
-                    <Text style={[styles.authToggleText, { color: colors.textMuted }]}>
+                <TouchableOpacity onPress={toggleAuth} style={styles.toggleContainer} activeOpacity={0.7}>
+                    <Text variant="body" style={[styles.authToggleText, { color: colors.textMuted }]}>
                         {isLogin ? t('signup') : t('login')}
                     </Text>
+                    <ChevronRight size={16} color={colors.textMuted} style={{ marginLeft: 4 }} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -171,65 +201,54 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
 const styles = StyleSheet.create({
     authContainer: {
         flex: 1,
-        justifyContent: 'center',
     },
     authTopDecoration: {
         position: 'absolute',
-        top: -150,
+        top: -200,
         right: -100,
-        width: 400,
-        height: 400,
-        borderRadius: 200,
-        transform: [{ scale: 1.5 }],
+        width: 500,
+        height: 500,
+        borderRadius: 250,
     },
     authContent: {
         flex: 1,
-        paddingHorizontal: 35,
+        paddingHorizontal: 24,
         justifyContent: 'center',
+    },
+    headerSection: {
+        alignItems: 'center',
+        marginBottom: 40,
     },
     logo: {
-        marginBottom: 0,
+        width: 140,
+        height: 140,
+        resizeMode: 'contain',
+        marginBottom: 10,
     },
     authTitle: {
-        fontSize: 28,
-        fontWeight: '900',
         textAlign: 'center',
-        marginBottom: 40,
-        letterSpacing: -0.5,
+        letterSpacing: -1,
     },
-    formCard: {
+    formSection: {
         width: '100%',
     },
-    modernInput: {
-        height: 60,
-        borderWidth: 1.5,
-        borderRadius: 18,
-        paddingHorizontal: 20,
-        marginBottom: 15,
-        fontSize: 15,
-        fontWeight: '600',
+    inputContainer: {
+        marginBottom: 16,
     },
-    modernPrimaryBtn: {
-        height: 62,
-        borderRadius: 20,
+    forgotPassword: {
+        alignSelf: 'flex-end',
+        marginTop: 4,
+        marginBottom: 24,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 15,
-        elevation: 5,
-    },
-    modernPrimaryBtnText: {
-        fontSize: 16,
-        fontWeight: '800',
-        letterSpacing: 1,
+        marginTop: 40,
+        paddingVertical: 10,
     },
     authToggleText: {
-        textAlign: 'center',
-        fontSize: 14,
-        fontWeight: '700',
-        letterSpacing: 0.5,
+        fontSize: 15,
+        fontWeight: '600',
     }
 });

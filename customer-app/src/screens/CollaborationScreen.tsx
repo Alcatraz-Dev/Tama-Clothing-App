@@ -361,7 +361,7 @@ export default function CollaborationScreen({ t, theme, language, onNavigate, on
                             <Animated.Text entering={FadeIn.delay(500).springify()} style={[styles.bottomTitle, { marginTop: 30, marginBottom: -40, color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>{t('collabWelcome')}</Animated.Text>
                             <Animated.View entering={FadeIn.delay(600).springify()} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: -25, marginRight: "15%" }}>
                                 <Animated.Image
-                                    entering={FadeIn.delay(700).springify()}
+                                    entering={FadeIn.delay(800).springify()}
                                     style={{ width: 300, height: 160, resizeMode: 'contain', marginRight: -95, marginBottom: -20 }}
                                     source={APP_ICON_2}
                                 />
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     cardName: {
-        fontSize: 22,
+        fontSize: 9,
         fontWeight: '800',
         textAlign: 'center',
         letterSpacing: -0.5,

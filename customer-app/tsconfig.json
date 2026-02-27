@@ -3,6 +3,29 @@
   "compilerOptions": {
     "strict": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
-  }
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@/components/*": ["src/components/*"],
+      "@/components/ui/*": ["src/components/ui/*"],
+      "@/components/ui/Button": ["src/components/ui/button"],
+      "@/components/ui/button": ["src/components/ui/button"],
+      "@/components/ui/Progress": ["src/components/ui/progress"],
+      "@/components/ui/progress": ["src/components/ui/progress"],
+      "@/components/ui/Text": ["src/components/ui/text"],
+      "@/components/ui/text": ["src/components/ui/text"],
+      "@/components/charts/*": ["src/components/charts/*"],
+      "@/api/*": ["src/api/*"],
+      "@/constants/*": ["src/constants/*"],
+      "@/context/*": ["src/context/*"],
+      "@/hooks/*": ["src/hooks/*"],
+      "@/theme/*": ["src/theme/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@lib/*": ["./lib/*"],
+      "@/components/ui": ["src/components/ui"],
+      "@/services/*": ["src/services/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "docs/contents/audio-waveform.mdx"]
 }

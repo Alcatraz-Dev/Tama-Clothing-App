@@ -1,15 +1,16 @@
+import { useColor } from '@/hooks/useColor';
+import { User } from 'lucide-react-native';
 import React from 'react';
 import {
-    View,
     Image,
-    StyleSheet,
-    ViewStyle,
     ImageStyle,
+    StyleProp,
+    StyleSheet,
     TouchableOpacity,
-    StyleProp
+    View,
+    ViewStyle
 } from 'react-native';
-import { User } from 'lucide-react-native';
-import { Theme } from '../../theme';
+import { Text } from './text';
 
 interface AvatarProps {
     source?: string | null;
@@ -19,6 +20,7 @@ interface AvatarProps {
     imageStyle?: ImageStyle;
     borderWidth?: number;
     borderColor?: string;
+    fallback?: string;
 }
 
 export function Avatar({
@@ -28,17 +30,19 @@ export function Avatar({
     style,
     imageStyle,
     borderWidth = 0,
-    borderColor = 'transparent'
+    borderColor = 'transparent',
+    fallback
 }: AvatarProps) {
-    const isDark = true;
-    const colors = isDark ? Theme.dark.colors : Theme.light.colors;
+    const backgroundColor = useColor('muted');
+    const textSubtleColor = useColor('textMuted');
+    const foregroundColor = useColor('foreground');
 
     const containerStyles: StyleProp<ViewStyle> = [
         {
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: colors.muted,
+            backgroundColor,
             overflow: 'hidden',
             borderWidth,
             borderColor,
@@ -48,7 +52,7 @@ export function Avatar({
         style
     ];
 
-    const content = source ? (
+    const content = (source && source.trim() !== '') ? (
         <Image
             source={{ uri: source }}
             style={[
@@ -57,8 +61,12 @@ export function Avatar({
             ]}
             resizeMode="cover"
         />
+    ) : fallback ? (
+        <Text variant="subtitle" style={{ color: foregroundColor, fontSize: size * 0.4 }}>
+            {fallback}
+        </Text>
     ) : (
-        <User size={size * 0.5} color={colors.textSubtle} />
+        <User size={size * 0.5} color={textSubtleColor} />
     );
 
     if (onPress) {

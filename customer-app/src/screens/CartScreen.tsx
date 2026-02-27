@@ -1,18 +1,25 @@
-import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Theme } from '../theme';
-// import { useCart } from '../context/CartContext';
+import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/text';
+import { useColor } from '@/hooks/useColor';
 import {
     ChevronLeft as ChevronLeftIcon,
-    Trash2 as Trash2Icon,
-    Plus as PlusIcon,
     Minus as MinusIcon,
-    ShoppingBag as ShoppingBagIcon
+    Plus as PlusIcon,
+    ShoppingBag as ShoppingBagIcon,
+    Trash2 as Trash2Icon
 } from 'lucide-react-native';
-
+import React from 'react';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CartScreen({ navigation }: any) {
+    const background = useColor('background');
+    const foreground = useColor('foreground');
+    const border = useColor('border');
+    const textMuted = useColor('textMuted');
+    const card = useColor('card');
+    const red = useColor('red');
+
     // const { cart, total, removeFromCart, updateQuantity, clearCart } = useCart();
     const cart: any[] = [];
     const total = 0;
@@ -20,51 +27,59 @@ export default function CartScreen({ navigation }: any) {
     const updateQuantity = (id: string, s: string, d: number) => { };
     const clearCart = () => { };
 
-
     const handleCheckout = () => {
         Alert.alert('Prochainement', 'Le système de paiement sera disponible bientôt.');
     };
 
     if (cart.length === 0) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <ChevronLeftIcon color={Theme.light.colors.foreground} size={24} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>PANIER</Text>
-                    <View style={{ width: 24 }} />
+            <SafeAreaView style={[styles.container, { backgroundColor: background }]}>
+                <View style={[styles.header, { borderBottomColor: border }]}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        icon={ChevronLeftIcon}
+                        onPress={() => navigation.goBack()}
+                    />
+                    <Text variant="heading" style={styles.headerTitle}>PANIER</Text>
+                    <View style={{ width: 44 }} />
                 </View>
                 <View style={styles.emptyContainer}>
-                    <ShoppingBagIcon size={80} color={Theme.light.colors.muted} strokeWidth={1} />
-                    <Text style={styles.emptyText}>Votre panier est vide</Text>
-                    <TouchableOpacity
-                        style={styles.continueBtn}
+                    <ShoppingBagIcon size={80} color={textMuted} strokeWidth={1} />
+                    <Text variant="title" style={[styles.emptyText, { color: textMuted }]}>Votre panier est vide</Text>
+                    <Button
+                        label="DÉCOUVRIR NOS PRODUITS"
+                        variant="primary"
                         onPress={() => navigation.navigate('Home')}
-                    >
-                        <Text style={styles.continueBtnText}>DÉCOUVRIR NOS PRODUITS</Text>
-                    </TouchableOpacity>
+                        style={styles.continueBtn}
+                    />
                 </View>
             </SafeAreaView>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <ChevronLeftIcon color={Theme.light.colors.foreground} size={24} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>PANIER ({cart.length})</Text>
-                <TouchableOpacity onPress={() => clearCart()}>
-                    <Trash2Icon color={Theme.light.colors.textMuted} size={20} />
-                </TouchableOpacity>
+        <SafeAreaView style={[styles.container, { backgroundColor: background }]}>
+            <View style={[styles.header, { borderBottomColor: border }]}>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    icon={ChevronLeftIcon}
+                    onPress={() => navigation.goBack()}
+                />
+                <Text variant="heading" style={styles.headerTitle}>PANIER ({cart.length})</Text>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    icon={Trash2Icon}
+                    onPress={() => clearCart()}
+                />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
                 {cart.map((item) => (
                     <View key={`${item.id}-${item.size}`} style={styles.cartItem}>
-                        <View style={styles.itemImage}>
+                        <View style={[styles.itemImage, { backgroundColor: card }]}>
                             {item.image ? (
                                 <Image source={{ uri: item.image }} style={styles.fullImage} />
                             ) : (
@@ -73,42 +88,51 @@ export default function CartScreen({ navigation }: any) {
                         </View>
                         <View style={styles.itemInfo}>
                             <View style={styles.itemHeader}>
-                                <Text style={styles.itemName} numberOfLines={1}>{item.name.fr}</Text>
-                                <TouchableOpacity onPress={() => removeFromCart(item.id, item.size)}>
-                                    <Trash2Icon color={Theme.light.colors.error} size={16} />
-                                </TouchableOpacity>
+                                <Text variant="subtitle" style={styles.itemName} numberOfLines={1}>{item.name.fr}</Text>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    icon={Trash2Icon}
+                                    iconColor={red}
+                                    onPress={() => removeFromCart(item.id, item.size)}
+                                />
                             </View>
-                            <Text style={styles.itemSize}>Taille: {item.size}</Text>
-                            <Text style={styles.itemPrice}>{typeof item.price === 'number' ? item.price.toFixed(3) : parseFloat(item.price).toFixed(3)} TND</Text>
+                            <Text variant="caption" style={[styles.itemSize, { color: textMuted }]}>Taille: {item.size}</Text>
+                            <Text variant="title" style={styles.itemPrice}>{typeof item.price === 'number' ? item.price.toFixed(3) : parseFloat(item.price).toFixed(3)} TND</Text>
 
-                            <View style={styles.quantityContainer}>
-                                <TouchableOpacity
-                                    style={styles.qtyBtn}
+                            <View style={[styles.quantityContainer, { borderColor: border }]}>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    icon={MinusIcon}
                                     onPress={() => updateQuantity(item.id, item.size, -1)}
-                                >
-                                    <MinusIcon size={16} color={Theme.light.colors.foreground} />
-                                </TouchableOpacity>
-                                <Text style={styles.qtyText}>{item.quantity}</Text>
-                                <TouchableOpacity
                                     style={styles.qtyBtn}
+                                />
+                                <Text variant="body" style={styles.qtyText}>{item.quantity}</Text>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    icon={PlusIcon}
                                     onPress={() => updateQuantity(item.id, item.size, 1)}
-                                >
-                                    <PlusIcon size={16} color={Theme.light.colors.foreground} />
-                                </TouchableOpacity>
+                                    style={styles.qtyBtn}
+                                />
                             </View>
                         </View>
                     </View>
                 ))}
             </ScrollView>
 
-            <View style={styles.footer}>
+            <View style={[styles.footer, { borderTopColor: border, backgroundColor: background }]}>
                 <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>TOTAL</Text>
-                    <Text style={styles.totalValue}>{total.toFixed(3)} TND</Text>
+                    <Text variant="caption" style={[styles.totalLabel, { color: textMuted }]}>TOTAL</Text>
+                    <Text variant="heading" style={styles.totalValue}>{total.toFixed(3)} TND</Text>
                 </View>
-                <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout}>
-                    <Text style={styles.checkoutText}>PASSER LA COMMANDE</Text>
-                </TouchableOpacity>
+                <Button
+                    label="PASSER LA COMMANDE"
+                    variant="primary"
+                    onPress={handleCheckout}
+                    style={styles.checkoutBtn}
+                />
             </View>
         </SafeAreaView>
     );
@@ -117,16 +141,14 @@ export default function CartScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Theme.light.colors.background,
     },
     header: {
-        height: 60,
+        height: 64,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: Theme.spacing.lg,
+        paddingHorizontal: 12,
         borderBottomWidth: 1,
-        borderBottomColor: Theme.light.colors.border,
     },
     headerTitle: {
         fontSize: 16,
@@ -134,18 +156,17 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     scroll: {
-        padding: Theme.spacing.lg,
+        padding: 20,
     },
     cartItem: {
         flexDirection: 'row',
-        marginBottom: Theme.spacing.xl,
+        marginBottom: 24,
         gap: 16,
     },
     itemImage: {
         width: 100,
         aspectRatio: 3 / 4,
-        backgroundColor: Theme.light.colors.muted,
-        borderRadius: 4,
+        borderRadius: 12,
         overflow: 'hidden',
     },
     fullImage: {
@@ -167,74 +188,53 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     itemName: {
-        fontSize: 15,
-        fontWeight: '600',
         flex: 1,
         marginRight: 8,
     },
     itemSize: {
-        fontSize: 12,
-        color: Theme.light.colors.textMuted,
         marginBottom: 4,
     },
     itemPrice: {
-        fontSize: 14,
-        fontWeight: '700',
         marginBottom: 12,
     },
     quantityContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 16,
+        gap: 12,
         borderWidth: 1,
-        borderColor: Theme.light.colors.border,
         alignSelf: 'flex-start',
-        borderRadius: 4,
+        borderRadius: 12,
         padding: 4,
     },
     qtyBtn: {
-        padding: 4,
+        width: 32,
+        height: 32,
     },
     qtyText: {
-        fontSize: 14,
-        fontWeight: '600',
         minWidth: 20,
         textAlign: 'center',
+        fontWeight: '700',
     },
     footer: {
-        padding: Theme.spacing.lg,
+        padding: 20,
         borderTopWidth: 1,
-        borderTopColor: Theme.light.colors.border,
-        backgroundColor: Theme.light.colors.background,
     },
     totalRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: Theme.spacing.lg,
+        marginBottom: 20,
     },
     totalLabel: {
-        fontSize: 12,
         fontWeight: '700',
-        color: Theme.light.colors.textMuted,
         letterSpacing: 1,
     },
     totalValue: {
-        fontSize: 20,
-        fontWeight: '800',
+        fontSize: 24,
     },
     checkoutBtn: {
-        backgroundColor: Theme.light.colors.foreground,
         height: 56,
-        borderRadius: 4,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    checkoutText: {
-        color: Theme.light.colors.background,
-        fontSize: 14,
-        fontWeight: '700',
-        letterSpacing: 1,
+        borderRadius: 16,
     },
     emptyContainer: {
         flex: 1,
@@ -243,22 +243,10 @@ const styles = StyleSheet.create({
         padding: 40,
     },
     emptyText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: Theme.light.colors.textMuted,
         marginTop: 20,
         marginBottom: 32,
     },
     continueBtn: {
-        backgroundColor: Theme.light.colors.foreground,
-        paddingVertical: 16,
         paddingHorizontal: 32,
-        borderRadius: 4,
-    },
-    continueBtnText: {
-        color: Theme.light.colors.background,
-        fontSize: 12,
-        fontWeight: '700',
-        letterSpacing: 1,
     },
 });

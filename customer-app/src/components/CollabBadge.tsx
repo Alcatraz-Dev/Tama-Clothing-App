@@ -357,6 +357,7 @@ const styles = StyleSheet.create({
         padding: 24,
         justifyContent: 'space-between',
         marginTop: -30,
+        width: '100%',
     },
     header: {
         flexDirection: 'row',
@@ -398,6 +399,7 @@ const styles = StyleSheet.create({
     centerSection: {
         alignItems: 'center',
         gap: 20,
+        width: '100%',
     },
     badgeTopRow: {
         flexDirection: 'row',

@@ -100,7 +100,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
                 onPress={handleFinish}
                 style={{ position: 'absolute', top: 60, right: 30, zIndex: 10 }}
             >
-                <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', letterSpacing: 1, opacity: 0.7 }}>
+                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700', letterSpacing: 1, opacity: 0.7 }}>
                     {t('skipForNow') || 'SKIP'}
                 </Text>
             </TouchableOpacity>
@@ -139,7 +139,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
                         elevation: 10
                     }}
                 >
-                    <Text style={{ color: '#000', fontSize: 15, fontWeight: '800', letterSpacing: 1 }}>
+                    <Text style={{ color: '#000',  fontSize: 15, fontWeight: '800', letterSpacing: 1 }}>
                         {currentIndex === slides.length - 1 ? t('onboardGetStarted') : t('onboardNext')}
                     </Text>
                     <ArrowRight size={20} color="#000" strokeWidth={3} style={{ marginLeft: 10 }} />
