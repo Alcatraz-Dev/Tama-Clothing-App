@@ -628,6 +628,8 @@ export const ar = {
   arrivingIn: 'يصل في',
   driverOnTheWay: 'سائقك في الطريق!',
   yourDriver: 'سائقك',
+  callDriver: 'اتصل',
+  messageDriver: 'رسالة',
   openMaps: 'فتح الخريطة',
   permissionDenied: 'الإذن مرفوض',
   mediaPermissionMessage: 'الرجاء السماح بالوصول إلى مكتبة الصور في الإعدادات.',

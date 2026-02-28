@@ -47,6 +47,7 @@ import {
     where,
     onSnapshot,
     doc,
+    getDoc,
     updateDoc
 } from 'firebase/firestore';
 import { ref, onValue } from 'firebase/database';
@@ -70,6 +71,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const [loading, setLoading] = useState(true);
     const [shipment, setShipment] = useState<any>(null);
     const [driverLocation, setDriverLocation] = useState<any>(null);
+    const [driverProfile, setDriverProfile] = useState<any>(null);
     const [eta, setEta] = useState<string>('');
     const [mapVisible, setMapVisible] = useState(false);
     const [rating, setRating] = useState(0);
@@ -147,6 +149,23 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         };
     }, [trackingId]);
 
+    // Fetch driver profile when shipment has a driverId
+    useEffect(() => {
+        if (shipment?.driverId) {
+            const fetchDriverProfile = async () => {
+                try {
+                    const driverDoc = await getDoc(doc(db, 'Drivers', shipment.driverId));
+                    if (driverDoc.exists()) {
+                        setDriverProfile({ id: driverDoc.id, ...driverDoc.data() });
+                    }
+                } catch (error) {
+                    console.log('Error fetching driver profile:', error);
+                }
+            };
+            fetchDriverProfile();
+        }
+    }, [shipment?.driverId]);
+
     // Handle map camera on location change
     useEffect(() => {
         if (mapRef.current && (driverLocation || shipment?.deliveryLocation)) {
@@ -198,10 +217,48 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         return translate(translatedKey) || translatedKey;
     };
 
+    // Determine delivery phase based on status
+    const getDeliveryPhase = () => {
+        if (!shipment?.status) return 'pending';
+        const status = shipment.status.toLowerCase();
+        if (status === 'pending' || status === 'en_attente' || status === 'confirmed' || status === 'order_confirmed') {
+            return 'pending'; // Order not yet picked up
+        }
+        if (status === 'picked_up' || status === 'pickedup' || status === 'collected') {
+            return 'picking_up'; // Driver at merchant location
+        }
+        if (status === 'in_transit' || status === 'intransit') {
+            return 'in_transit'; // On the way
+        }
+        if (status === 'out_for_delivery' || status === 'outfordelivery' || status === 'delivery') {
+            return 'out_for_delivery'; // Last mile
+        }
+        if (status === 'delivered' || status === 'livré' || status === 'livre') {
+            return 'delivered';
+        }
+        if (status === 'cancelled' || status === 'annulé') {
+            return 'cancelled';
+        }
+        if (status === 'failed' || status === 'échoué') {
+            return 'failed';
+        }
+        return 'pending';
+    };
+
+    const deliveryPhase = useMemo(() => getDeliveryPhase(), [shipment?.status]);
     const currentIndex = useMemo(() => getStatusIndex(shipment?.status), [shipment?.status]);
+    const hasDriver = !!shipment?.driverId;
+    const hasPickupLocation = !!shipment?.pickupLocation;
+    const hasDeliveryLocation = !!shipment?.deliveryLocation;
 
     const handleCall = () => {
-        if (shipment?.driverPhone) Linking.openURL(`tel:${shipment.driverPhone}`);
+        const phone = driverProfile?.phone || shipment?.driverPhone;
+        if (phone) Linking.openURL(`tel:${phone}`);
+    };
+
+    const handleMessage = () => {
+        const phone = driverProfile?.phone || shipment?.driverPhone;
+        if (phone) Linking.openURL(`sms:${phone}`);
     };
 
     const submitRating = async (val: number) => {
@@ -294,32 +351,82 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         }}
                         customMapStyle={theme === 'dark' ? darkMapStyle : []}
                     >
-                        {shipment.deliveryLocation && (
-                            <Marker coordinate={shipment.deliveryLocation}>
-                                <View style={styles.destinationMarker}>
-                                    <View style={[styles.markerInner, { backgroundColor: '#10B981' }]}>
+                        {/* Merchant/Pickup Location Marker - shown when order is pending or being picked up */}
+                        {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && (shipment.pickupLocation || shipment.senderLocation)) && (
+                            <Marker coordinate={shipment.pickupLocation || shipment.senderLocation}>
+                                <View style={styles.pickupMarker}>
+                                    <View style={[styles.markerInner, { backgroundColor: '#F59E0B' }]}>
                                         <MapPin size={20} color="#FFF" />
                                     </View>
                                     <View style={styles.markerShadow} />
                                 </View>
                             </Marker>
                         )}
-                        {driverLocation && (
+
+                        {/* Delivery Location Marker - always shown when available */}
+                        {shipment.deliveryLocation && (
+                            <Marker coordinate={shipment.deliveryLocation}>
+                                <View style={styles.destinationMarker}>
+                                    <View style={[styles.markerInner, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
+                                        <MapPin size={20} color="#FFF" />
+                                    </View>
+                                    <View style={styles.markerShadow} />
+                                </View>
+                            </Marker>
+                        )}
+
+                        {/* Driver Location Marker - shown when driver is assigned */}
+                        {hasDriver && driverLocation && (
                             <Marker coordinate={driverLocation}>
-                                <Animatable.View animation="pulse" iterationCount="infinite" style={styles.driverMarker}>
+                                <Animatable.View 
+                                    animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'} 
+                                    iterationCount="infinite" 
+                                    style={styles.driverMarker}
+                                >
                                     <View style={[styles.markerInner, { backgroundColor: colors.accent }]}>
                                         <Truck size={20} color={colors.accentForeground} />
                                     </View>
                                 </Animatable.View>
                             </Marker>
                         )}
-                        {driverLocation && shipment.deliveryLocation && (
-                            <Polyline
-                                coordinates={[driverLocation, shipment.deliveryLocation]}
-                                strokeColor={colors.accent}
-                                strokeWidth={3}
-                                lineDashPattern={[6, 3]}
-                            />
+
+                        {/* Route: From pickup to delivery when in transit */}
+                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && 
+                         shipment.deliveryLocation && (
+                            <>
+                                {/* Show route from driver to delivery */}
+                                {driverLocation && (
+                                    <Polyline
+                                        coordinates={[driverLocation, shipment.deliveryLocation]}
+                                        strokeColor={colors.accent}
+                                        strokeWidth={4}
+                                        lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [8, 4]}
+                                    />
+                                )}
+                                {/* Show route from pickup to delivery when driver is at pickup */}
+                                {(shipment.pickupLocation || shipment.senderLocation) && !driverLocation && (
+                                    <Polyline
+                                        coordinates={[
+                                            shipment.pickupLocation || shipment.senderLocation,
+                                            shipment.deliveryLocation
+                                        ]}
+                                        strokeColor="#F59E0B"
+                                        strokeWidth={3}
+                                        lineDashPattern={[6, 3]}
+                                    />
+                                )}
+                            </>
+                        )}
+
+                        {/* Route: From driver to delivery when out for delivery */}
+                        {deliveryPhase === 'out_for_delivery' && driverLocation && shipment.deliveryLocation && (
+                            <>
+                                <Polyline
+                                    coordinates={[driverLocation, shipment.deliveryLocation]}
+                                    strokeColor="#10B981"
+                                    strokeWidth={4}
+                                />
+                            </>
                         )}
                     </MapView>
                     <LinearGradient
@@ -338,13 +445,21 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 {getStatusLabel(shipment.status)}
                             </Text>
                             <Text style={[styles.statusSubtitle, { color: colors.textMuted }]}>
-                                {eta ? `${translate('arriving_in')} ${eta}` : translate('processing_order')}
+                                {deliveryPhase === 'pending' && (translate('order_confirmed'))}
+                                {deliveryPhase === 'picking_up' && (translate('picked_up'))}
+                                {deliveryPhase === 'in_transit' && (eta ? `${translate('arriving_in')} ${eta}` : translate('in_transit'))}
+                                {deliveryPhase === 'out_for_delivery' && (eta ? `${translate('arriving_in')} ${eta}` : translate('out_for_delivery'))}
+                                {deliveryPhase === 'delivered' && (translate('delivered'))}
+                                {deliveryPhase === 'cancelled' && (translate('cancelled'))}
+                                {deliveryPhase === 'failed' && (translate('failed'))}
                             </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: colors.accent + '20' }]}>
-                            <Clock size={16} color={colors.accent} />
-                            <Text style={[styles.badgeText, { color: colors.accent }]}>{eta || '...'}</Text>
-                        </View>
+                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
+                            <View style={[styles.statusBadge, { backgroundColor: colors.accent + '20' }]}>
+                                <Clock size={16} color={colors.accent} />
+                                <Text style={[styles.badgeText, { color: colors.accent }]}>{eta || '...'}</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Progress Bar */}
@@ -372,14 +487,14 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         <Animatable.View animation="fadeIn" delay={300} style={[styles.driverBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                             <View style={styles.driverMain}>
                                 <Image
-                                    source={{ uri: shipment.driverImage || 'https://images.unsplash.com/photo-1542736667-069246bdbc6d?q=80&w=2071&auto=format&fit=crop' }}
+                                    source={{ uri: driverProfile?.photoUrl || shipment.driverImage || 'https://images.unsplash.com/photo-1542736667-069246bdbc6d?q=80&w=2071&auto=format&fit=crop' }}
                                     style={styles.driverAvatar}
                                 />
                                 <View style={styles.driverInfo}>
-                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{shipment.driverName || translate('driver_default_name')}</Text>
+                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || shipment.driverName || translate('driver_default_name')}</Text>
                                     <View style={styles.driverRating}>
                                         <Star size={14} color="#FBBF24" fill="#FBBF24" />
-                                        <Text style={[styles.ratingText, { color: colors.textMuted }]}>{shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
+                                        <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
                                     </View>
                                 </View>
                             </View>
@@ -387,8 +502,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 <TouchableOpacity onPress={handleCall} style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
                                     <Phone size={20} color={colors.accent} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
-                                    <MessageCircle size={20} color={colors.accent} />
+                                <TouchableOpacity onPress={handleMessage} style={[styles.actionBtn, { backgroundColor: '#10B98115' }]}>
+                                    <MessageCircle size={20} color="#10B981" />
                                 </TouchableOpacity>
                             </View>
                         </Animatable.View>
@@ -931,6 +1046,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     destinationMarker: {
+        alignItems: 'center',
+    },
+    pickupMarker: {
         alignItems: 'center',
     },
     driverMarker: {

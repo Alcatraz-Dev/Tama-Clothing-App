@@ -759,6 +759,8 @@ export const en = {
   arrivingIn: 'Arriving in',
   driverOnTheWay: 'Your driver is on the way!',
   yourDriver: 'Your Driver',
+  callDriver: 'Call',
+  messageDriver: 'Message',
   openMaps: 'Open in Maps',
   validUntilRemoved: 'VALID UNTIL MANUALLY REMOVED',
   yourStory: 'Your Story',

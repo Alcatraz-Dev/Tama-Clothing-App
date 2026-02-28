@@ -542,6 +542,8 @@ export const fr = {
   arrivingIn: 'Arrive dans',
   driverOnTheWay: 'Votre chauffeur est en route!',
   yourDriver: 'Votre Chauffeur',
+  callDriver: 'Appeler',
+  messageDriver: 'Message',
   openMaps: 'Ouvrir Maps',
   validUntilRemoved: 'VALABLE JUSQU\'À SUPPRESSION MANUELLE',
   yourStory: 'Votre Story',
