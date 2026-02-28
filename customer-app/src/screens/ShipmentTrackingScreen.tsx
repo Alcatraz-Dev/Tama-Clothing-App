@@ -78,6 +78,25 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const [rating, setRating] = useState(0);
     const [submittingRating, setSubmittingRating] = useState(false);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<any>(null);
+    const [demoMode, setDemoMode] = useState(false); // Demo mode for testing tracking
+
+    // Demo path - simulates driver route for testing (remove when real tracking is ready)
+    const demoPath = useMemo(() => {
+        if (!shipment?.deliveryLocation) return [];
+        const delivery = shipment.deliveryLocation;
+        // Create a path starting from a pickup point to delivery location
+        return [
+            { latitude: delivery.latitude - 0.03, longitude: delivery.longitude - 0.02 }, // Starting point (far)
+            { latitude: delivery.latitude - 0.02, longitude: delivery.longitude - 0.015 },
+            { latitude: delivery.latitude - 0.015, longitude: delivery.longitude - 0.01 },
+            { latitude: delivery.latitude - 0.01, longitude: delivery.longitude - 0.005 },
+            { latitude: delivery.latitude - 0.005, longitude: delivery.longitude - 0.002 },
+            { latitude: delivery.latitude - 0.002, longitude: delivery.longitude },
+            { latitude: delivery.latitude + 0.001, longitude: delivery.longitude + 0.001 }, // Near
+            delivery, // Destination
+        ];
+    }, [shipment?.deliveryLocation]);
 
     const translate = t || ((k: string) => k);
 
@@ -150,22 +169,29 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         };
     }, [trackingId]);
 
-    // Fetch driver profile when shipment has a driverId
+    // Fetch driver profile when shipment has a driverId or driver object
     useEffect(() => {
-        if (shipment?.driverId) {
-            const fetchDriverProfile = async () => {
+        const fetchDriverProfile = async () => {
+            // First try driverId
+            if (shipment?.driverId) {
                 try {
                     const driverDoc = await getDoc(doc(db, 'Drivers', shipment.driverId));
                     if (driverDoc.exists()) {
                         setDriverProfile({ id: driverDoc.id, ...driverDoc.data() });
+                        return;
                     }
                 } catch (error) {
-                    console.log('Error fetching driver profile:', error);
+                    console.log('Error fetching driver profile by ID:', error);
                 }
-            };
-            fetchDriverProfile();
-        }
-    }, [shipment?.driverId]);
+            }
+            
+            // Try driver object inside shipment
+            if (shipment?.driver && typeof shipment.driver === 'object') {
+                setDriverProfile(shipment.driver);
+            }
+        };
+        fetchDriverProfile();
+    }, [shipment?.driverId, shipment?.driver]);
 
     // Handle map camera on location change
     useEffect(() => {
@@ -248,12 +274,57 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
 
     const deliveryPhase = useMemo(() => getDeliveryPhase(), [shipment?.status]);
     const currentIndex = useMemo(() => getStatusIndex(shipment?.status), [shipment?.status]);
+
+    // Demo mode: animate driver along path when no real location available
+    // TODO: Remove this demo code when real-time GPS tracking is fully implemented
+    useEffect(() => {
+        // Only run demo if in delivery phase and no real driver location
+        const isInDelivery = deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery';
+        const hasDriverAssigned = shipment?.driverId || shipment?.driverName || shipment?.driver;
+        
+        if (isInDelivery && hasDriverAssigned && !driverLocation && demoPath.length > 0 && !demoMode) {
+            // Auto-enable demo mode for testing
+            setDemoMode(true);
+        }
+    }, [deliveryPhase, driverLocation, demoPath, demoMode, shipment]);
+
+    // Animate demo driver position along path
+    useEffect(() => {
+        if (!demoMode || demoPath.length === 0 || driverLocation) return;
+
+        let pathIndex = 0;
+        const interval = setInterval(() => {
+            if (pathIndex < demoPath.length) {
+                const newLoc = demoPath[pathIndex];
+                setDriverLocation(newLoc);
+                
+                // Calculate ETA for demo
+                if (shipment?.deliveryLocation && newLoc.latitude && newLoc.longitude) {
+                    const demoEta = calculateETA(
+                        newLoc.latitude,
+                        newLoc.longitude,
+                        shipment.deliveryLocation.latitude,
+                        shipment.deliveryLocation.longitude
+                    );
+                    setEta(demoEta);
+                }
+                
+                pathIndex++;
+            } else {
+                // Reset to start for continuous demo
+                pathIndex = 0;
+                setDriverLocation(demoPath[0]);
+            }
+        }, 3000); // Update every 3 seconds
+
+        return () => clearInterval(interval);
+    }, [demoMode, demoPath, driverLocation, shipment?.deliveryLocation]);
     const hasDriver = !!shipment?.driverId;
     const hasPickupLocation = !!shipment?.pickupLocation;
     const hasDeliveryLocation = !!shipment?.deliveryLocation;
 
     const handleCall = () => {
-        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone;
+        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone || shipment?.driver?.phone || shipment?.driver?.phoneNumber;
         if (phone) {
             Linking.openURL(`tel:${phone}`);
         } else {
@@ -262,7 +333,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     };
 
     const handleMessage = () => {
-        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone;
+        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone || shipment?.driver?.phone || shipment?.driver?.phoneNumber;
         if (phone) {
             Linking.openURL(`sms:${phone}`);
         } else {
@@ -353,8 +424,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         style={StyleSheet.absoluteFill}
                         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
                         initialRegion={{
-                            latitude: shipment.deliveryLocation?.latitude || 35.8256,
-                            longitude: shipment.deliveryLocation?.longitude || 10.6369,
+                            latitude: shipment?.deliveryLocation?.latitude || 35.8256,
+                            longitude: shipment?.deliveryLocation?.longitude || 10.6369,
                             latitudeDelta: 0.05,
                             longitudeDelta: 0.05,
                         }}
@@ -372,14 +443,39 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             </Marker>
                         )}
 
-                        {/* Delivery Location Marker - always shown when available */}
-                        {shipment.deliveryLocation && (
+                        {/* Delivery Location Marker - always shown when available (or default) */}
+                        {shipment.deliveryLocation ? (
                             <Marker coordinate={shipment.deliveryLocation}>
                                 <View style={styles.destinationMarker}>
                                     <View style={[styles.markerInner, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
                                         <MapPin size={20} color="#FFF" />
                                     </View>
                                     <View style={styles.markerShadow} />
+                                </View>
+                            </Marker>
+                        ) : (
+                            // Default marker when no delivery location
+                            <Marker 
+                                coordinate={{ latitude: 35.8256, longitude: 10.6369 }}
+                                title={translate('delivery_address')}
+                                description={shipment.deliveryAddress || translate('address_placeholder')}
+                            >
+                                <View style={styles.destinationMarker}>
+                                    <View style={[styles.markerInner, { backgroundColor: '#6366F1' }]}>
+                                        <MapPin size={20} color="#FFF" />
+                                    </View>
+                                    <View style={styles.markerShadow} />
+                                </View>
+                            </Marker>
+                        )}
+
+                        {/* Show delivery address label during delivery phase */}
+                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && shipment.deliveryAddress && (
+                            <Marker coordinate={shipment.deliveryLocation || { latitude: 35.8256, longitude: 10.6369 }}>
+                                <View style={[styles.addressLabel, { backgroundColor: colors.surface }]}>
+                                    <Text style={[styles.addressLabelText, { color: colors.foreground }]} numberOfLines={1}>
+                                        {shipment.deliveryAddress}
+                                    </Text>
                                 </View>
                             </Marker>
                         )}
@@ -437,6 +533,26 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 />
                             </>
                         )}
+
+                        {/* Demo Path - show full route when in demo mode */}
+                        {demoMode && demoPath.length > 0 && (deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
+                            <>
+                                <Polyline
+                                    coordinates={demoPath}
+                                    strokeColor={colors.accent}
+                                    strokeWidth={3}
+                                    lineDashPattern={[8, 4]}
+                                />
+                                {/* Show remaining path from current position to delivery */}
+                                {driverLocation && shipment.deliveryLocation && (
+                                    <Polyline
+                                        coordinates={[driverLocation, shipment.deliveryLocation]}
+                                        strokeColor="#10B981"
+                                        strokeWidth={4}
+                                    />
+                                )}
+                            </>
+                        )}
                     </MapView>
                     <LinearGradient
                         colors={['transparent', colors.background]}
@@ -469,6 +585,13 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 <Text style={[styles.badgeText, { color: colors.accent }]}>{eta || '...'}</Text>
                             </View>
                         )}
+                        {/* Demo Mode Indicator - for testing only */}
+                        {demoMode && (
+                            <View style={[styles.statusBadge, { backgroundColor: '#F59E0B20' }]}>
+                                <Text style={{ fontSize: 10 }}>🧪</Text>
+                                <Text style={[styles.badgeText, { color: '#F59E0B' }]}>Demo</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Progress Bar */}
@@ -492,12 +615,12 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     </View>
 
                     {/* Driver Card - show when driver is assigned (driverId) OR when driver info exists in shipment */}
-                    {(shipment.driverId || shipment.driverName) && (
+                    {(shipment.driverId || shipment.driverName || shipment.driver) && (
                         <Animatable.View animation="fadeIn" delay={300} style={[styles.driverBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                             <View style={styles.driverMain}>
-                                {(driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage) ? (
+                                {(driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage) ? (
                                     <Image
-                                        source={{ uri: driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage }}
+                                        source={{ uri: driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage }}
                                         style={styles.driverAvatar}
                                     />
                                 ) : (
@@ -506,7 +629,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                     </View>
                                 )}
                                 <View style={styles.driverInfo}>
-                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || translate('driver_default_name')}</Text>
+                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || shipment.driver?.name || shipment.driver?.fullName || translate('driver_default_name')}</Text>
                                     <View style={styles.driverRating}>
                                         <Star size={14} color="#FBBF24" fill="#FBBF24" />
                                         <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
@@ -552,6 +675,57 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         <Text style={styles.safetyText}>{translate('contactless_delivery')}</Text>
                     </View>
 
+                    {/* Items Card - check multiple possible field names */}
+                    {shipment.items || shipment.products || shipment.orderItems || shipment.articles ? (
+                        <View style={[styles.itemsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                            <Text style={[styles.itemsTitle, { color: colors.foreground }]}>
+                                {translate('items')} ({(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).length})
+                            </Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+                                {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).map((item: any, index: number) => (
+                                    <TouchableOpacity 
+                                        key={index} 
+                                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.border }]}
+                                        onPress={() => setSelectedItem(item)}
+                                        activeOpacity={0.7}
+                                    >
+                                        {(item.image || item.mainImage || item.productImage || item.thumbnail) ? (
+                                            <Image 
+                                                source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }} 
+                                                style={styles.itemImage}
+                                                resizeMode="cover"
+                                            />
+                                        ) : (
+                                            <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.accent + '20' }]}>
+                                                <Package size={24} color={colors.accent} />
+                                            </View>
+                                        )}
+                                        <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={2}>
+                                            {item.name || item.title || item.productName || item.product?.name || 'Item'}
+                                        </Text>
+                                        <View style={styles.itemMetaRow}>
+                                            {(item.selectedColor || item.color) && (
+                                                <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                    {item.selectedColor || item.color}
+                                                </Text>
+                                            )}
+                                            {(item.selectedSize || item.size) && (
+                                                <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                    {item.selectedSize || item.size}
+                                                </Text>
+                                            )}
+                                            {item.quantity && (
+                                                <Text style={[styles.itemQty, { color: colors.textMuted }]}>
+                                                    x{item.quantity}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    ) : null}
+
                     {/* Address Card */}
                     <View style={styles.detailCol}>
                         <View style={[styles.detailIcon, { backgroundColor: colors.accent + '10' }]}>
@@ -565,7 +739,21 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         </View>
                         <TouchableOpacity 
                             style={[styles.mapButton, { backgroundColor: colors.accent + '15' }]} 
-                            onPress={() => shipment.deliveryLocation && openInNativeMaps(shipment.deliveryLocation.latitude, shipment.deliveryLocation.longitude, shipment.deliveryAddress)}
+                            onPress={() => {
+                                if (shipment?.deliveryLocation?.latitude && shipment?.deliveryLocation?.longitude) {
+                                    try {
+                                        openInNativeMaps(
+                                            shipment.deliveryLocation.latitude,
+                                            shipment.deliveryLocation.longitude,
+                                            shipment.deliveryAddress
+                                        );
+                                    } catch (err) {
+                                        console.log('Error opening maps:', err);
+                                    }
+                                } else {
+                                    console.log('No delivery location available');
+                                }
+                            }}
                         >
                             <MapPin size={16} color={colors.accent} />
                             <Text style={[styles.mapButtonText, { color: colors.accent }]}>{translate('open_in_maps')}</Text>
@@ -573,7 +761,10 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     </View>
 
                     {/* Timeline Expansion */}
-                    <TouchableOpacity style={styles.expandTimeline}>
+                    <TouchableOpacity 
+                        style={styles.expandTimeline}
+                        onPress={() => setShowHistoryModal(true)}
+                    >
                         <Text style={[styles.expandText, { color: colors.accent }]}>{translate('view_detailed_history')}</Text>
                         <ChevronUp size={16} color={colors.accent} />
                     </TouchableOpacity>
@@ -753,6 +944,87 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                         {shipment.updatedAt.toDate ? shipment.updatedAt.toDate().toLocaleString() : new Date(shipment.updatedAt.seconds * 1000).toLocaleString()}
                                     </Text>
                                 </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Item Detail Modal */}
+            <Modal
+                visible={!!selectedItem}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setSelectedItem(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{translate('item_details') || 'Item Details'}</Text>
+                            <TouchableOpacity onPress={() => setSelectedItem(null)}>
+                                <X size={24} color={colors.foreground} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={styles.modalScroll}>
+                            {selectedItem && (
+                                <>
+                                    {/* Item Image */}
+                                    {(selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail) ? (
+                                        <Image 
+                                            source={{ uri: selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail }} 
+                                            style={styles.itemDetailImage}
+                                            resizeMode="contain"
+                                        />
+                                    ) : (
+                                        <View style={[styles.itemDetailImagePlaceholder, { backgroundColor: colors.accent + '20' }]}>
+                                            <Package size={64} color={colors.accent} />
+                                        </View>
+                                    )}
+
+                                    {/* Item Name */}
+                                    <Text style={[styles.itemDetailName, { color: colors.foreground }]}>
+                                        {selectedItem.name || selectedItem.title || selectedItem.productName || selectedItem.product?.name || 'Item'}
+                                    </Text>
+
+                                    {/* Item Details */}
+                                    {selectedItem.quantity && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('quantity') || 'Quantity'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.quantity}</Text>
+                                        </View>
+                                    )}
+
+                                    {selectedItem.price !== undefined && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('price') || 'Price'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>
+                                                {typeof selectedItem.price === 'number' ? selectedItem.price.toFixed(2) : selectedItem.price} TND
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {(selectedItem.selectedColor || selectedItem.color) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('color') || 'Color'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.selectedColor || selectedItem.color}</Text>
+                                        </View>
+                                    )}
+
+                                    {selectedItem.selectedSize && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('size') || 'Size'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.selectedSize}</Text>
+                                        </View>
+                                    )}
+
+                                    {selectedItem.description && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('description') || 'Description'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.description}</Text>
+                                        </View>
+                                    )}
+                                </>
                             )}
                         </ScrollView>
                     </View>
@@ -1005,6 +1277,84 @@ const styles = StyleSheet.create({
         gap: 15,
         marginBottom: 20,
     },
+    // Items Display Styles
+    itemsCard: {
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+    },
+    itemsTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        marginBottom: 12,
+    },
+    itemsScroll: {
+        marginHorizontal: -4,
+    },
+    itemCard: {
+        width: 80,
+        marginRight: 10,
+        borderRadius: 12,
+        padding: 8,
+        borderWidth: 1,
+    },
+    itemImage: {
+        width: 64,
+        height: 64,
+        borderRadius: 8,
+        marginBottom: 6,
+    },
+    itemImagePlaceholder: {
+        width: 64,
+        height: 64,
+        borderRadius: 8,
+        marginBottom: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    itemName: {
+        fontSize: 10,
+        fontWeight: '600',
+        lineHeight: 12,
+    },
+    itemQty: {
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 2,
+    },
+    itemMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginTop: 2,
+    },
+    itemMeta: {
+        fontSize: 10,
+        fontWeight: '500',
+    },
+    // Item Detail Modal Styles
+    itemDetailImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    itemDetailImagePlaceholder: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        marginBottom: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    itemDetailName: {
+        fontSize: 20,
+        fontWeight: '800',
+        marginBottom: 16,
+    },
+    // Detail Column Styles
       detailCol: {
         flexDirection: 'column',
         alignItems: 'center',
@@ -1136,6 +1486,21 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.2)',
         borderRadius: 10,
         marginTop: 2,
+    },
+    addressLabel: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        maxWidth: 200,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    addressLabelText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     // Modal Styles
     modalOverlay: {

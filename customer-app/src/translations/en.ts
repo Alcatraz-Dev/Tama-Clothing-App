@@ -327,6 +327,8 @@ export const en = {
   pickup_time: 'Pickup Time',
   estimated_arrival: 'Estimated Arrival',
   driver_phone_unavailable: 'Driver phone number not available',
+  item_details: 'Item Details',
+  quantity: 'Quantity',
   orderNumber: 'ORDER #',
   statusPending: 'PENDING',
   statusDelivered: 'DELIVERED',
@@ -840,6 +842,5 @@ export const en = {
   noHiddenCommands: 'No hidden commands',
   hiddenCommands: 'hidden command',
   usedTimes: 'Used',
-  quantity: 'Qty',
 
 };

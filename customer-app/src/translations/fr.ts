@@ -106,6 +106,7 @@ export const fr = {
   darkMode: 'MODE SOMBRE', profileUpdated: 'Profil mis à jour', deliveryTime: '2-4 jours ouvrables',
   pickup_time: 'Heure de retrait', estimated_arrival: 'Arrivée estimée',
   driver_phone_unavailable: 'Numéro de téléphone du chauffeur non disponible',
+  item_details: 'Détails de l\'article',
   orderNumber: 'COMMANDE #', statusPending: 'EN ATTENTE', statusDelivered: 'LIVRÉ',
   statusShipped: 'EXPÉDIÉ', statusInTransit: 'EN TRANSIT', statusOutForDelivery: 'EN COURS DE LIVRAISON', statusCancelled: 'ANNULÉ', statusProcessing: 'EN COURS',
   pending: 'En attente',

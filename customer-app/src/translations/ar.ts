@@ -173,6 +173,7 @@ export const ar = {
   pickup_time: 'وقت الاستلام',
   estimated_arrival: 'الوصول المتوقع',
   driver_phone_unavailable: 'رقم هاتف السائق غير متوفر',
+  item_details: 'تفاصيل المنتج',
   orderNumber: 'نمرة الكوماندا #',
   statusPending: 'تحت الانتظار',
   statusDelivered: 'وصلت',
