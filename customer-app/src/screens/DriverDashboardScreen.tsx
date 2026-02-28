@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -25,6 +25,7 @@ import {
     Clock
 } from 'lucide-react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../context/ThemeContext';
@@ -59,6 +60,33 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
     const mapRef = React.useRef<MapView>(null);
 
     const translate = t || ((k: string) => k);
+
+    // Determine delivery phase based on status
+    const getDeliveryPhase = (status: string) => {
+        if (!status) return 'pending';
+        const s = status.toLowerCase();
+        if (s === 'pending' || s === 'en_attente' || s === 'confirmed' || s === 'order_confirmed') {
+            return 'pending';
+        }
+        if (s === 'picked_up' || s === 'pickedup' || s === 'collected') {
+            return 'picking_up';
+        }
+        if (s === 'in_transit' || s === 'intransit') {
+            return 'in_transit';
+        }
+        if (s === 'out_for_delivery' || s === 'outfordelivery' || s === 'delivery') {
+            return 'out_for_delivery';
+        }
+        if (s === 'delivered' || s === 'livré' || s === 'livre') {
+            return 'delivered';
+        }
+        return 'pending';
+    };
+
+    const deliveryPhase = useMemo(() => 
+        selectedShipment ? getDeliveryPhase(selectedShipment.status) : 'pending', 
+        [selectedShipment?.status]
+    );
 
     useEffect(() => {
         if (selectedShipment && !selectedShipment.deliveryLocation && selectedShipment.deliveryAddress) {
@@ -455,10 +483,10 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                 <>
                     <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 15 }}>
                         <TouchableOpacity style={{ flex: 1, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: activeTab === 'available' ? colors.foreground : 'transparent' }} onPress={() => setActiveTab('available')}>
-                            <Text style={{ textAlign: 'center', fontWeight: '800', fontSize: 16, color: activeTab === 'available' ? colors.foreground : colors.textMuted }}>{translate('available')}</Text>
+                            <Text style={{ textAlign: 'center', fontWeight: '800', fontSize: 13, color: activeTab === 'available' ? colors.foreground : colors.textMuted }}>{translate('available')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={{ flex: 1, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: activeTab === 'my_deliveries' ? colors.foreground : 'transparent' }} onPress={() => setActiveTab('my_deliveries')}>
-                            <Text style={{ textAlign: 'center', fontWeight: '800', fontSize: 16, color: activeTab === 'my_deliveries' ? colors.foreground : colors.textMuted }}>{translate('myDeliveries')} ({shipments.length})</Text>
+                            <Text style={{ textAlign: 'center', fontWeight: '800', fontSize: 13, color: activeTab === 'my_deliveries' ? colors.foreground : colors.textMuted }}>{translate('myDeliveries')} ({shipments.length})</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -507,26 +535,50 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                             longitudeDelta: 0.05,
                         }}
                     >
-                        {currentLocation && (
-                            <Marker coordinate={currentLocation} title="You">
-                                <View style={styles.driverMarker}>
-                                    <Truck size={20} color="#FFF" />
+                        {/* Pickup/Merchant Location - shown when picking up */}
+                        {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && selectedShipment?.pickupLocation) && (
+                            <Marker coordinate={selectedShipment.pickupLocation} title={translate('pickupLocation') || 'Pickup Location'}>
+                                <View style={[styles.driverMarker, { backgroundColor: '#F59E0B' }]}>
+                                    <MapPin size={20} color="#FFF" />
                                 </View>
                             </Marker>
                         )}
+
+                        {/* Driver Location */}
+                        {currentLocation && (
+                            <Marker coordinate={currentLocation} title="You">
+                                <Animatable.View animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'} iterationCount="infinite" style={styles.driverMarker}>
+                                    <Truck size={20} color="#FFF" />
+                                </Animatable.View>
+                            </Marker>
+                        )}
+
+                        {/* Delivery Location */}
                         {selectedShipment?.deliveryLocation && (
                             <Marker coordinate={selectedShipment.deliveryLocation} title="Destination">
-                                <View style={[styles.driverMarker, { backgroundColor: '#10B981' }]}>
+                                <View style={[styles.driverMarker, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
                                     <Package size={20} color="#FFF" />
                                 </View>
                             </Marker>
                         )}
-                        {currentLocation && selectedShipment?.deliveryLocation && (
+
+                        {/* Route: From driver to delivery when in transit */}
+                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && currentLocation && selectedShipment?.deliveryLocation && (
                             <Polyline
                                 coordinates={[currentLocation, selectedShipment.deliveryLocation]}
-                                strokeColor="#3B82F6"
+                                strokeColor={deliveryPhase === 'out_for_delivery' ? '#10B981' : '#3B82F6'}
                                 strokeWidth={4}
-                                lineDashPattern={[10, 10]}
+                                lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [10, 10]}
+                            />
+                        )}
+
+                        {/* Route: From pickup to delivery when at pickup phase */}
+                        {deliveryPhase === 'picking_up' && selectedShipment?.pickupLocation && selectedShipment?.deliveryLocation && (
+                            <Polyline
+                                coordinates={[selectedShipment.pickupLocation, selectedShipment.deliveryLocation]}
+                                strokeColor="#F59E0B"
+                                strokeWidth={3}
+                                lineDashPattern={[6, 3]}
                             />
                         )}
                     </MapView>
@@ -573,20 +625,20 @@ const styles = StyleSheet.create({
     header: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 30, borderBottomRightRadius: 30, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, zIndex: 10 },
     headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
     list: { padding: 20, paddingBottom: 100 },
-    card: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 15 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    statusBadge: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
-    statusText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
-    trackingId: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-    cardBody: { gap: 16 },
-    infoRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+    card: { borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 15 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+    trackingId: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
+    cardBody: { gap: 10 },
+    infoRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     infoCol: { flex: 1, justifyContent: 'center' },
-    infoLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 1 },
-    infoValue: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
-    infoSubValue: { fontSize: 12, fontWeight: '500' },
-    cardActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-    actionBtn: { flex: 1, height: 46, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    actionBtnText: { fontSize: 13, fontWeight: '800' },
+    infoLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2, letterSpacing: 0.5 },
+    infoValue: { fontSize: 12, fontWeight: '700', marginBottom: 1 },
+    infoSubValue: { fontSize: 10, fontWeight: '500' },
+    cardActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    actionBtn: { flex: 1, height: 36, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+    actionBtnText: { fontSize: 11, fontWeight: '700' },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 100, gap: 15 },
     emptyText: { fontSize: 16, fontWeight: '600' },
     mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, padding: 20, paddingTop: 60, flexDirection: 'row', alignItems: 'center', gap: 15 },

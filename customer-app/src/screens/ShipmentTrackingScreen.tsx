@@ -12,7 +12,8 @@ import {
     Modal,
     Animated,
     Image,
-    StatusBar
+    StatusBar,
+    Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import {
@@ -252,13 +253,21 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const hasDeliveryLocation = !!shipment?.deliveryLocation;
 
     const handleCall = () => {
-        const phone = driverProfile?.phone || shipment?.driverPhone;
-        if (phone) Linking.openURL(`tel:${phone}`);
+        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone;
+        if (phone) {
+            Linking.openURL(`tel:${phone}`);
+        } else {
+            Alert.alert(translate('error') || 'Error', translate('driver_phone_unavailable') || 'Driver phone number not available');
+        }
     };
 
     const handleMessage = () => {
-        const phone = driverProfile?.phone || shipment?.driverPhone;
-        if (phone) Linking.openURL(`sms:${phone}`);
+        const phone = driverProfile?.phone || driverProfile?.phoneNumber || shipment?.driverPhone;
+        if (phone) {
+            Linking.openURL(`sms:${phone}`);
+        } else {
+            Alert.alert(translate('error') || 'Error', translate('driver_phone_unavailable') || 'Driver phone number not available');
+        }
     };
 
     const submitRating = async (val: number) => {
@@ -482,22 +491,52 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         ))}
                     </View>
 
-                    {/* Driver Card */}
-                    {shipment.driverId && (
+                    {/* Driver Card - show when driver is assigned (driverId) OR when driver info exists in shipment */}
+                    {(shipment.driverId || shipment.driverName) && (
                         <Animatable.View animation="fadeIn" delay={300} style={[styles.driverBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                             <View style={styles.driverMain}>
-                                <Image
-                                    source={{ uri: driverProfile?.photoUrl || shipment.driverImage || 'https://images.unsplash.com/photo-1542736667-069246bdbc6d?q=80&w=2071&auto=format&fit=crop' }}
-                                    style={styles.driverAvatar}
-                                />
+                                {(driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage) ? (
+                                    <Image
+                                        source={{ uri: driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage }}
+                                        style={styles.driverAvatar}
+                                    />
+                                ) : (
+                                    <View style={[styles.driverAvatar, { backgroundColor: colors.accent + '30', alignItems: 'center', justifyContent: 'center' }]}>
+                                        <User size={28} color={colors.accent} />
+                                    </View>
+                                )}
                                 <View style={styles.driverInfo}>
-                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || shipment.driverName || translate('driver_default_name')}</Text>
+                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || translate('driver_default_name')}</Text>
                                     <View style={styles.driverRating}>
                                         <Star size={14} color="#FBBF24" fill="#FBBF24" />
                                         <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
                                     </View>
                                 </View>
                             </View>
+                            
+                            {/* Pickup & Delivery Time */}
+                            <View style={styles.timeRow}>
+                                {(shipment.pickupTime || shipment.estimatedPickupTime) && (
+                                    <View style={styles.timeItem}>
+                                        <Clock size={14} color={colors.accent} />
+                                        <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('pickup_time')}</Text>
+                                        <Text style={[styles.timeValue, { color: colors.foreground }]}>
+                                            {shipment.pickupTime ? new Date(shipment.pickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 
+                                             shipment.estimatedPickupTime ? new Date(shipment.estimatedPickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                        </Text>
+                                    </View>
+                                )}
+                                {(shipment.deliveryTime || shipment.estimatedDeliveryTime || eta) && (
+                                    <View style={styles.timeItem}>
+                                        <MapPin size={14} color="#10B981" />
+                                        <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('estimated_arrival')}</Text>
+                                        <Text style={[styles.timeValue, { color: '#10B981' }]}>
+                                            {eta || '-'}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                            
                             <View style={styles.driverActions}>
                                 <TouchableOpacity onPress={handleCall} style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
                                     <Phone size={20} color={colors.accent} />
@@ -508,8 +547,6 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             </View>
                         </Animatable.View>
                     )}
-
-                    {/* Safety Badge */}
                     <View style={[styles.safetyBadge, { backgroundColor: '#10B98110' }]}>
                         <Shield size={16} color="#10B981" />
                         <Text style={styles.safetyText}>{translate('contactless_delivery')}</Text>
@@ -767,7 +804,7 @@ const styles = StyleSheet.create({
     },
     headerTitleContainer: {
         alignItems: 'center',
-       marginTop:35
+        marginTop:45
     },
     headerSub: {
         fontSize: 10,
@@ -916,6 +953,7 @@ const styles = StyleSheet.create({
     driverActions: {
         flexDirection: 'row',
         gap: 10,
+        marginTop: 12,
     },
     actionBtn: {
         width: 44,
@@ -923,6 +961,30 @@ const styles = StyleSheet.create({
         borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    // Time Display Styles
+    timeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.1)',
+        gap: 12,
+    },
+    timeItem: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    timeLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    timeValue: {
+        fontSize: 13,
+        fontWeight: '800',
     },
     safetyBadge: {
         flexDirection: 'row',
