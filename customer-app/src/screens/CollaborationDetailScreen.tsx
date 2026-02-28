@@ -497,15 +497,15 @@ export default function CollaborationDetailScreen({
                                     contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingBottom: 20 }}
                                 >
                                     {products.map((p) => (
-                                        <View key={p.id} style={{ width: SCREEN_WIDTH * 0.45 }}>
-                                            <ProductCard
-                                                product={p}
-                                                onPress={() => onProductPress(p)}
-                                                theme={theme}
-                                                language={language}
-                                                showRating={true}
-                                            />
-                                        </View>
+                                        <ProductCard
+                                            key={p.id}
+                                            product={p}
+                                            onPress={() => onProductPress(p)}
+                                            theme={theme}
+                                            language={language}
+                                            showRating={true}
+                                            customWidth={SCREEN_WIDTH * 0.45}
+                                        />
                                     ))}
                                 </ScrollView>
                                 <View style={{ paddingHorizontal: 20 }}>
