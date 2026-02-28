@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Theme } from '../../theme';
+import { useAppTheme } from '../../context/ThemeContext';
 
 type BadgeVariant = 'primary' | 'secondary' | 'error' | 'success' | 'warning' | 'glass';
 
@@ -27,7 +28,8 @@ export function Badge({
     style,
     textStyle
 }: BadgeProps) {
-    const isDark = true;
+    const { theme } = useAppTheme();
+    const isDark = theme === 'dark';
     const colors = isDark ? Theme.dark.colors : Theme.light.colors;
 
     const variantStyles: Record<BadgeVariant, ViewStyle> = {
@@ -45,8 +47,8 @@ export function Badge({
     };
 
     const textStyles: Record<BadgeVariant, TextStyle> = {
-        primary: { color: isDark ? colors.primaryForeground : colors.white },
-        secondary: { color: colors.primaryForeground },
+        primary: { color: isDark ? colors.background : colors.white },
+        secondary: { color: colors.foreground },
         error: { color: colors.white },
         success: { color: colors.white },
         warning: { color: colors.white },

@@ -70,6 +70,7 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('coupons'), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55' },
         { label: t('flashSale'), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FFCC00' },
         { label: t('promoBanners'), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#EC4899' },
+        { label: t('ourSelection'), icon: ListTree, route: 'AdminNotreSelection', roles: ['admin', 'nor_kam', 'editor'], color: '#10B981' },
         { label: t('support'), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
         { label: t('identityVerification'), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
         { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },

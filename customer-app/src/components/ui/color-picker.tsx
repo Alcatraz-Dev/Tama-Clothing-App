@@ -295,7 +295,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 alignItems: 'center',
                 marginBottom: 30,
                 justifyContent: 'center',
-                borderRadius: BORDER_RADIUS,
+                borderRadius: BORDER_RADIUS.default,
                 backgroundColor: currentColor,
               }}
             >
@@ -399,14 +399,14 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     marginBottom: 30,
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     overflow: 'hidden',
   },
   colorBase: {
     position: 'absolute',
     width: PICKER_SIZE,
     height: PICKER_SIZE,
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
   },
   gradientLayer: {
     position: 'absolute',

@@ -13,12 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, ChevronLeft, User, MessageCircle, Image as ImageIcon, Camera, X, Video as VideoIcon, ImagePlay } from 'lucide-react-native';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import * as ImagePicker from 'expo-image-picker';
 import { Image, Modal } from 'react-native';
 import { db } from './src/api/firebase';
 import { getDocs, where, getDoc, doc } from 'firebase/firestore';
 import UniversalVideoPlayer from './src/components/common/UniversalVideoPlayer';
 import { uploadToBunny } from './src/utils/bunny';
+import { MediaPicker, MediaAsset } from './src/components/ui/media-picker';
 
 async function sendPushNotification(expoPushToken: string, title: string, body: string, data = {}) {
     if (!expoPushToken) return;
@@ -65,9 +65,10 @@ interface ChatScreenProps {
     t: (key: string) => string;
     theme: 'light' | 'dark';
     colors: any;
+    friend?: any;
 }
 
-export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScreenProps) {
+export default function ChatScreen({ onBack, user, t, theme, colors, friend }: ChatScreenProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
@@ -76,7 +77,9 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
-    const chatId = `chat_${user?.uid}`;
+    // If friend is provided, create a unique chat ID based on both user IDs (sorted to ensure consistency)
+    const chatId = friend ? [user?.uid, friend.uid].sort().join('_') : `chat_${user?.uid}`;
+    const chatTitle = friend ? friend.fullName || friend.displayName || 'Chat' : t('Support');
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -161,38 +164,10 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
 
 
 
-    const openCamera = async () => {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-            alert('Camera permission required');
-            return;
-        }
-
-        const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: true,
-            quality: 0.7,
-        });
-
-        if (!result.canceled && result.assets && result.assets[0].uri) {
-            handleMediaUpload(result.assets[0].uri);
-        }
-    };
-
-    const pickMedia = async (type: 'image' | 'video' | 'all' = 'all') => {
-        const mediaTypes = type === 'image'
-            ? ImagePicker.MediaTypeOptions.Images
-            : (type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.All);
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes,
-            allowsEditing: true,
-            quality: 0.7,
-        });
-
-        if (!result.canceled && result.assets && result.assets[0].uri) {
-            handleMediaUpload(result.assets[0].uri);
-        }
+    const handleMediaSelection = async (assets: MediaAsset[]) => {
+        if (assets.length === 0) return;
+        const asset = assets[0];
+        handleMediaUpload(asset.uri);
     };
 
     const handleMediaUpload = async (uri: string) => {
@@ -263,7 +238,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                 >
                     {!isOwnMessage && (
                         <Text style={[styles.senderName, { color: colors.accent, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }]}>
-                            Support
+                            {friend ? (friend.fullName || friend.displayName || 'User') : 'Support'}
                         </Text>
                     )}
                     {message.imageUrl ? (
@@ -323,7 +298,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                 </TouchableOpacity>
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: colors.foreground, position: 'relative', left: 0, right: 0 }]}>
-                        {t('support')}
+                        {chatTitle}
                     </Text>
                 </View>
                 <View style={{ width: 36 }} />
@@ -354,10 +329,10 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                                 <MessageCircle size={48} color={colors.textMuted} strokeWidth={1.5} />
                             </View>
                             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                                {t('support')}
+                                {friend ? t('startConversation') : t('support')}
                             </Text>
                             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                                {t('startConversation')}
+                                {friend ? t('sendMessage') : t('startConversation')}
                             </Text>
                         </View>
                     ) : (
@@ -478,74 +453,89 @@ export default function ChatScreen({ onBack, user, t, theme, colors }: ChatScree
                         </View>
 
                         <View style={{ gap: 12 }}>
-                            <TouchableOpacity
-                                onPress={() => { setIsMediaModalVisible(false); openCamera(); }}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
+                            <MediaPicker
+                                mediaType="all"
+                                gallery={true}
+                                onSelectionChange={handleMediaSelection}
                             >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <Camera size={22} color={colors.accentForeground || "#FFF"} />
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                        padding: 16,
+                                        borderRadius: 16
+                                    }}
+                                >
+                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                        <Camera size={22} color={colors.accentForeground || "#FFF"} />
+                                    </View>
+                                    <View>
+                                        <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                            {t('openCamera')}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                            {t('takePhotoVideo')}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {t('openCamera')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {t('takePhotoVideo')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                            </MediaPicker>
 
-                            <TouchableOpacity
-                                onPress={() => { setIsMediaModalVisible(false); pickMedia('video'); }}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
+                            <MediaPicker
+                                mediaType="video"
+                                gallery={true}
+                                onSelectionChange={handleMediaSelection}
                             >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <VideoIcon size={22} color="#FFF" />
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                        padding: 16,
+                                        borderRadius: 16
+                                    }}
+                                >
+                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                        <VideoIcon size={22} color="#FFF" />
+                                    </View>
+                                    <View>
+                                        <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                            {t('importVideo')}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                            {t('fromGallery')}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {t('importVideo')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {t('fromGallery')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                            </MediaPicker>
 
-                            <TouchableOpacity
-                                onPress={() => { setIsMediaModalVisible(false); pickMedia('image'); }}
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
-                                    padding: 16,
-                                    borderRadius: 16
-                                }}
+                            <MediaPicker
+                                mediaType="image"
+                                gallery={true}
+                                onSelectionChange={handleMediaSelection}
                             >
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
-                                    <ImageIcon size={22} color="#FFF" />
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                        padding: 16,
+                                        borderRadius: 16
+                                    }}
+                                >
+                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                        <ImageIcon size={22} color="#FFF" />
+                                    </View>
+                                    <View>
+                                        <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                            {t('importPhoto')}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                            {t('fromGallery')}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
-                                        {t('importPhoto')}
-                                    </Text>
-                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
-                                        {t('fromGallery')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                            </MediaPicker>
                         </View>
                     </View>
                 </TouchableOpacity>

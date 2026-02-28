@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { Colors } from '../theme/colors';
 
@@ -14,13 +12,38 @@ export const getAppColors = (theme: 'light' | 'dark') => {
         borderDark: theme === 'dark' ? '#1E293B' : '#CBD5E1',
         textMuted: t.textMuted,
         white: '#FFFFFF',
-        accent: t.primary,
+        accent: t.coral,
         accentForeground: t.primaryForeground,
         error: t.red,
         secondary: t.secondary,
         success: t.green,
         warning: t.orange,
-        surface: theme === 'dark' ? '#0F172A' : '#F8FAFC',
+        surface: theme === 'dark' ? '#1C1C1E' : '#FFFFFF',
+        card: t.card,
+        cardForeground: t.cardForeground,
+        // Additional colors
+        primary: t.primary,
+        primaryForeground: t.primaryForeground,
+        muted: t.muted,
+        mutedForeground: t.mutedForeground,
+        destructive: t.destructive,
+        destructiveForeground: t.destructiveForeground,
+        input: t.input,
+        ring: t.ring,
+        // Brand colors
+        coral: t.coral,
+        coralLight: t.coralLight,
+        coralDark: t.coralDark,
+        // Category colors
+        blue: t.coral, // Use coral instead of blue for brand consistency
+        green: t.green,
+        red: t.red,
+        orange: t.orange,
+        yellow: t.yellow,
+        pink: t.pink,
+        purple: t.purple,
+        teal: t.teal,
+        indigo: t.indigo,
     };
 };
 

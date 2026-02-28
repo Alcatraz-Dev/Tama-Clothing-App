@@ -19,7 +19,7 @@ export function Card({ children, style }: CardProps) {
         {
           width: '100%',
           backgroundColor: cardColor,
-          borderRadius: BORDER_RADIUS,
+          borderRadius: BORDER_RADIUS.default,
           padding: 18,
           shadowColor: foregroundColor,
           shadowOffset: { width: 0, height: 2 },

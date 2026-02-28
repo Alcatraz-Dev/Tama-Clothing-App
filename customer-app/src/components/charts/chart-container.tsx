@@ -24,7 +24,7 @@ export const ChartContainer = ({
       style={[
         {
           backgroundColor: cardColor,
-          borderRadius: BORDER_RADIUS,
+          borderRadius: BORDER_RADIUS.default,
           padding: 16,
           width: '100%', // Full container width
         },

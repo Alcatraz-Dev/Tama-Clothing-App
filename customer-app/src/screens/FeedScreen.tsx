@@ -22,7 +22,7 @@ import {
     ScrollView
 } from 'react-native';
 import { Text } from '../components/ui/text';
-import { collection, query, where, limit, onSnapshot, getDoc, doc, updateDoc, increment, deleteField, getDocs, collectionGroup, setDoc, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, limit, onSnapshot, getDoc, doc, updateDoc, increment, deleteField, getDocs, collectionGroup, setDoc, addDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
 import { db } from '../api/firebase';
 import { BlurView } from 'expo-blur';
@@ -426,8 +426,26 @@ export default function FeedScreen(props: FeedScreenProps) {
                 return { id: doc.id, ...data } as any;
             });
 
+            // Filter out stories older than 24 hours and auto-delete them
+            const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+            const validReels: any[] = [];
+            
+            for (const reel of reelDocs) {
+                const storyAge = reel.createdAt?.toDate ? reel.createdAt.toDate().getTime() : 0;
+                if (storyAge < twentyFourHoursAgo) {
+                    // Auto-delete expired stories
+                    try {
+                        await deleteDoc(doc(db, 'global_reels', reel.id));
+                    } catch (e) {
+                        console.log('Error deleting expired story:', e);
+                    }
+                } else {
+                    validReels.push(reel);
+                }
+            }
+
             // Fetch missing profiles
-            const missingUids = [...new Set(reelDocs.filter((r: any) => !userProfiles[r.userId]).map((r: any) => r.userId))];
+            const missingUids = [...new Set(validReels.filter((r: any) => !userProfiles[r.userId]).map((r: any) => r.userId))];
             if (missingUids.length > 0) {
                 await Promise.all(missingUids.map(async (uid: any) => {
                     try {
@@ -460,7 +478,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                 }));
             }
 
-            const reelItems: FeedItem[] = reelDocs.map((data: any) => {
+            const reelItems: FeedItem[] = validReels.map((data: any) => {
                 const profile = userProfiles[data.userId];
                 const isCollab = profile?.isPartner || profile?.isCollab || profile?.role === 'partner' || profile?.role === 'brand_owner' || profile?.brandId || false;
                 // Check if the media is a video based on URL or type field

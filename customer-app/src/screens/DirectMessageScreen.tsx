@@ -27,7 +27,6 @@ import {
     arrayUnion
 } from 'firebase/firestore';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
-import * as ImagePicker from 'expo-image-picker';
 import {
     Check,
     CheckCheck,
@@ -42,7 +41,8 @@ import {
     Plus,
     Trash,
     EyeOff,
-    Shield
+    Shield,
+    Send
 } from 'lucide-react-native';
 import { db } from '../api/firebase';
 import { useAppTheme } from '../context/ThemeContext';
@@ -62,6 +62,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColor } from '@/hooks/useColor';
+import { router } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -241,14 +242,15 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
         handleMediaUpload(asset.uri);
     };
 
-    const handleCameraCapture = async () => {
+    // Media choice modal handlers - using MediaPicker component
+    const openCamera = async () => {
+        // Camera functionality is handled by MediaPicker component
         setIsMediaModalVisible(false);
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-            alert('Camera permission required');
-            return;
-        }
-        setViewMode('camera');
+    };
+
+    const handleCameraCapture = async () => {
+        // Camera is handled by MediaPicker component
+        setIsMediaModalVisible(false);
     };
 
     const handleCameraResult = async (uri: string, type: 'image' | 'video') => {
@@ -259,15 +261,8 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
     };
 
     const handleGalleryPick = async () => {
+        // Gallery is handled by MediaPicker component
         setIsMediaModalVisible(false);
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: true,
-            quality: 0.7,
-        });
-        if (!result.canceled && result.assets && result.assets[0].uri) {
-            handleMediaUpload(result.assets[0].uri);
-        }
     };
 
     const handleMediaUpload = async (uri: string) => {
@@ -354,30 +349,24 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                     elevation: 1,
                 }}>
                     {isOwn ? (
-                        <LinearGradient
-                            colors={['#3b82f6', '#2563eb']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
+                        <View
                             style={{
                                 padding: item.imageUrl || item.videoUrl ? 4 : 12,
                                 paddingHorizontal: item.imageUrl || item.videoUrl ? 4 : 16,
                                 borderRadius: 20,
-                                borderTopRightRadius: isFirstInGroup ? 20 : 6,
-                                borderBottomRightRadius: isLastInGroup ? 20 : 6,
+                                borderBottomRightRadius: isLastInGroup ? 4 : 20,
+                                backgroundColor: theme === 'dark' ? '#FFFFFF' : '#000000',
                             }}
                         >
                             {renderMessageContent(item, true)}
-                        </LinearGradient>
+                        </View>
                     ) : (
                         <View style={{
                             padding: item.imageUrl || item.videoUrl ? 4 : 12,
                             paddingHorizontal: item.imageUrl || item.videoUrl ? 4 : 16,
                             borderRadius: 20,
-                            borderTopLeftRadius: isFirstInGroup ? 20 : 6,
-                            borderBottomLeftRadius: isLastInGroup ? 20 : 6,
-                            backgroundColor: theme === 'dark' ? '#262629' : '#FFFFFF',
-                            borderWidth: 1,
-                            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                            borderBottomLeftRadius: isLastInGroup ? 4 : 20,
+                            backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7',
                         }}>
                             {renderMessageContent(item, false)}
                         </View>
@@ -414,7 +403,7 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                     </View>
                 ) : (
                     <Text style={{
-                        color: isOwn ? 'white' : colors.foreground,
+                        color: isOwn ? (theme === 'dark' ? 'black' : 'white') : colors.foreground,
                         fontSize: 16,
                         lineHeight: 22,
                         fontWeight: '500'
@@ -431,17 +420,17 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                     paddingBottom: item.imageUrl || item.videoUrl ? 8 : 0,
                 }}>
                     <Text style={{
-                        color: isOwn ? 'rgba(255,255,255,0.8)' : colors.textMuted,
+                        color: isOwn ? (theme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)') : colors.textMuted,
                         fontSize: 10,
                         fontWeight: '600',
-                        textShadowColor: item.imageUrl || item.videoUrl ? 'rgba(0,0,0,0.5)' : 'transparent',
-                        textShadowRadius: item.imageUrl || item.videoUrl ? 4 : 0,
+                        textShadowColor: item.imageUrl || item.videoUrl ? 'rgba(0,0,0,0.3)' : 'transparent',
+                        textShadowRadius: item.imageUrl || item.videoUrl ? 2 : 0,
                     }}>
                         {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                     {isOwn && (
                         <View style={{ marginLeft: 4 }}>
-                            <CheckCheck size={12} color={item.read ? '#A855F7' : 'rgba(255,255,255,0.6)'} />
+                            <CheckCheck size={12} color={item.read ? '#A855F7' : (theme === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)')} />
                         </View>
                     )}
                 </View>
@@ -463,6 +452,10 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                 </View>
             </GestureHandlerRootView>
         );
+    }
+
+    function onNavigate(arg0: string): void {
+        router.push(arg0)
     }
 
     return (
@@ -590,40 +583,36 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                 borderTopWidth: 1,
                 borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
             }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
-                    <MediaPicker
-                        onSelectionChange={handleMediaSelection}
-                        mediaType="all"
-                        showPreview={false}
-                    >
-                        <View style={{
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity
+                        onPress={() => setIsMediaModalVisible(true)}
+                        disabled={uploading}
+                        style={{
                             width: 44,
                             height: 44,
-                            borderRadius: 22,
                             backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            marginBottom: 2
-                        }}>
-                            {uploading ? <ActivityIndicator size="small" color={colors.blue} /> : <Plus size={24} color={colors.foreground} />}
-                        </View>
-                    </MediaPicker>
+                            borderRadius: 12,
+                        }}
+                    >
+                        {uploading ? <ActivityIndicator size="small" color={colors.blue} /> : <ImageIcon size={24} color={colors.foreground} />}
+                    </TouchableOpacity>
 
                     <View style={{ flex: 1 }}>
                         <Input
                             ref={inputRef}
                             value={inputText}
                             onChangeText={setInputText}
-                            placeholder={tr('Votre message...', 'رسالتك...', 'Your message...')}
+                            placeholder={tr('Tapez votre message...', 'اكتب رسالة...', 'Type a message...')}
                             variant="ghost"
                             multiline
                             containerStyle={{
                                 minHeight: 44,
-                                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7',
                                 borderRadius: 22,
-                                paddingHorizontal: 16,
-                                borderWidth: 1,
-                                borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                paddingHorizontal: 5,
+                                borderWidth: 0,
                             }}
                             inputStyle={{
                                 maxHeight: 120,
@@ -634,43 +623,27 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                         />
                     </View>
 
-                    {inputText.trim() ? (
-                        <TouchableOpacity
-                            onPress={sendMessage}
-                            disabled={sending}
-                            style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: colors.blue,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: 2,
-                                shadowColor: colors.blue,
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 8,
-                                elevation: 4
-                            }}
-                        >
-                            {sending ? <ActivityIndicator size="small" color="white" /> : <SendHorizonal size={20} color="white" />}
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            onPress={handleCameraCapture}
-                            style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 22,
-                                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: 2
-                            }}
-                        >
-                            <Camera size={22} color={colors.foreground} />
-                        </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                        onPress={inputText.trim() ? sendMessage : handleCameraCapture}
+                        disabled={sending || (uploading && !inputText.trim())}
+                        style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: colors.foreground,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: sending ? 0.7 : 1
+                        }}
+                    >
+                        {sending ? (
+                            <ActivityIndicator size="small" color={theme === 'dark' ? 'black' : 'white'} />
+                        ) : inputText.trim() ? (
+                            <SendHorizonal size={20} color={theme === 'dark' ? 'black' : 'white'} />
+                        ) : (
+                            <Camera size={20} color={theme === 'dark' ? 'black' : 'white'} />
+                        )}
+                    </TouchableOpacity>
                 </View>
             </BlurView>
 
@@ -685,6 +658,131 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
                     </TouchableOpacity>
                     {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
                 </View>
+            </Modal>
+
+            {/* Media Choice Modal - like ChatScreen */}
+            <Modal
+                visible={isMediaModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsMediaModalVisible(false)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+                    onPress={() => setIsMediaModalVisible(false)}
+                    activeOpacity={1}
+                >
+                    <View style={{
+                        backgroundColor: theme === 'dark' ? '#1c1c1e' : '#FFF',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        paddingBottom: 40,
+                        paddingHorizontal: 20
+                    }}>
+                        <View style={{ width: 40, height: 4, backgroundColor: theme === 'dark' ? '#3a3a3c' : '#E5E5EA', borderRadius: 2, alignSelf: 'center', marginTop: 12 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 25 }}>
+                            <Text style={{ color: colors.foreground, fontSize: 19, fontWeight: '700' }}>
+                                {tr('Choisir un média', 'اختر وسائط', 'Choose media')}
+                            </Text>
+                            <TouchableOpacity onPress={() => setIsMediaModalVisible(false)} style={{ padding: 4 }}>
+                                <X size={24} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ gap: 12 }}>
+                            <MediaPicker
+                                mediaType="all"
+                                gallery={true}
+                                onSelectionChange={handleMediaSelection}
+                            >
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                        padding: 16,
+                                        borderRadius: 16
+                                    }}
+                                >
+                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                        <Camera size={22} color="#FFF" />
+                                    </View>
+                                    <View>
+                                        <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                            {tr('Appareil photo', 'كاميرا', 'Camera')}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                            {tr('Prendre une photo ou vidéo', 'التقط صورة أو فيديو', 'Take a photo or video')}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </MediaPicker>
+
+                            <TouchableOpacity
+                                onPress={() => <MediaPicker
+                                    mediaType='video'
+                                    onSelectionChange={(assets) => {
+                                        console.log('Selected assets:', assets);
+                                    }}
+                                    onError={(error) => {
+                                        console.error('Media picker error:', error);
+                                    }}
+                                />}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <MessageSquare size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Vidéo', 'فيديو', 'Video')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Depuis la galerie', 'من الاستوديو', 'From gallery')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => <MediaPicker
+                                    mediaType='image'
+                                    onSelectionChange={(assets) => {
+                                        console.log('Selected assets:', assets);
+                                    }}
+                                    onError={(error) => {
+                                        console.error('Media picker error:', error);
+                                    }}
+                                />}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? '#2c2c2e' : '#F2F2F7',
+                                    padding: 16,
+                                    borderRadius: 16
+                                }}
+                            >
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginRight: 15 }}>
+                                    <ImageIcon size={22} color="#FFF" />
+                                </View>
+                                <View>
+                                    <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '600' }}>
+                                        {tr('Photo', 'صورة', 'Photo')}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 1 }}>
+                                        {tr('Depuis la galerie', 'من الاستوديو', 'From gallery')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </TouchableOpacity>
             </Modal>
 
         </SafeAreaView >

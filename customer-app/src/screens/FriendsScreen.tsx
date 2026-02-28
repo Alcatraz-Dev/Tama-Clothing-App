@@ -369,7 +369,10 @@ export default function FriendsScreen({ onBack, user, profileData, theme, t, lan
             <View style={styles.userActions}>
                 {type === 'friend' && (
                     <>
-                        <TouchableOpacity style={[styles.actionBtnIcon, { backgroundColor: colors.info + '20' }]}>
+                        <TouchableOpacity 
+                            onPress={() => onNavigate?.('DirectMessage', { targetUser: item })}
+                            style={[styles.actionBtnIcon, { backgroundColor: colors.info + '20' }]}
+                        >
                             <MessageCircle size={18} color={colors.info} />
                         </TouchableOpacity>
                         <TouchableOpacity

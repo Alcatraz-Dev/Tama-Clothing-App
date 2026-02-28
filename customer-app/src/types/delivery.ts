@@ -1,224 +1,275 @@
-export type DriverStatus = 'offline' | 'online' | 'busy' | 'on_delivery';
-
-export type DeliveryPriority = 'low' | 'normal' | 'high' | 'urgent';
-
+// Delivery order status types
 export type DeliveryStatus = 
-    | 'pending' 
-    | 'assigned' 
-    | 'picked_up' 
-    | 'in_transit' 
-    | 'out_for_delivery' 
-    | 'delivered' 
-    | 'cancelled'
-    | 'failed';
+  | 'pending'           // Order created, waiting for driver
+  | 'accepted'          // Driver accepted the order
+  | 'picked_up'         // Driver picked up the order
+  | 'in_transit'        // Driver is on the way
+  | 'delivered'         // Order delivered successfully
+  | 'cancelled';        // Order cancelled
 
-export interface GeoPoint {
+// Delivery order interface
+export interface DeliveryOrder {
+  id: string;
+  orderId: string;           // Reference to original order
+  customerId: string;
+  customerName: string;
+  customerPhone?: string;
+  
+  // Delivery address
+  deliveryAddress: string;
+  deliveryLatitude: number;
+  deliveryLongitude: number;
+  
+  // Pickup location (store location)
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  
+  // Driver info (when assigned)
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverLocation?: {
     latitude: number;
     longitude: number;
-}
-
-export interface DeliveryZone {
-    id: string;
-    name: string;
-    boundaries: GeoPoint[];
-    basePrice: number;
-    pricePerKm: number;
-    estimatedDeliveryTime: number;
-}
-
-export interface TimeWindow {
-    start: string;
-    end: string;
-    label: string;
-    additionalCost: number;
-}
-
-export interface DriverMetrics {
-    totalDeliveries: number;
-    completedDeliveries: number;
-    cancelledDeliveries: number;
-    onTimeRate: number;
-    averageRating: number;
-    totalEarnings: number;
-    currentStreak: number;
-    bestStreak: number;
-    weeklyDeliveries: number;
-    monthlyDeliveries: number;
-    totalDistanceKm: number;
-}
-
-export interface Driver {
-    id: string;
-    uid: string;
-    fullName: string;
-    phone: string;
-    email?: string;
-    profileImage?: string;
-    status: DriverStatus;
-    currentLocation?: GeoPoint;
-    lastActive?: Date;
-    
-    vehicleType: 'car' | 'motorcycle' | 'bicycle' | 'van';
-    vehiclePlate?: string;
-    vehicleCapacity: number;
-    
-    serviceAreas: string[];
-    
-    metrics: DriverMetrics;
-    
-    isVerified: boolean;
-    isAvailable: boolean;
-    
-    currentDeliveryId?: string;
-    currentBatchId?: string;
-    
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface DeliveryBatch {
-    id: string;
-    driverId: string;
-    status: 'pending' | 'active' | 'completed' | 'cancelled';
-    deliveries: string[];
-    route: GeoPoint[];
-    optimizedOrder: number[];
-    estimatedDuration: number;
-    estimatedDistance: number;
-    startedAt?: Date;
-    completedAt?: Date;
-    createdAt: Date;
-}
-
-export interface Delivery {
-    id: string;
-    trackingId: string;
-    orderId?: string;
-    
-    senderId: string;
-    senderName: string;
-    senderPhone: string;
-    senderAddress: string;
-    senderLocation?: GeoPoint;
-    
-    receiverName: string;
-    receiverPhone: string;
-    deliveryAddress: string;
-    deliveryLocation?: GeoPoint;
-    
-    zoneId?: string;
-    
-    items: DeliveryItem[];
-    weight: number;
-    dimensions?: {
-        length: number;
-        width: number;
-        height: number;
-    };
-    
-    status: DeliveryStatus;
-    priority: DeliveryPriority;
-    
-    driverId?: string;
-    batchId?: string;
-    
-    scheduledDate?: string;
-    timeWindow?: TimeWindow;
-    estimatedDeliveryTime?: Date;
-    
-    route: GeoPoint[];
-    
-    currentLocation?: GeoPoint;
-    
-    proofOfDelivery?: ProofOfDelivery;
-    
-    rating?: number;
-    ratingComment?: string;
-    
-    pricing: {
-        basePrice: number;
-        distancePrice: number;
-        timeWindowCost: number;
-        priorityCost: number;
-        total: number;
-    };
-    
-    timeline: DeliveryTimelineEvent[];
-    
-    notes?: string;
-    specialInstructions?: string;
-    
-    createdAt: Date;
-    updatedAt: Date;
-    assignedAt?: Date;
-    pickedUpAt?: Date;
-    deliveredAt?: Date;
-}
-
-export interface DeliveryItem {
-    name: string;
-    quantity: number;
-    weight?: number;
-    price?: number;
-    sku?: string;
-    imageUrl?: string;
-}
-
-export interface ProofOfDelivery {
-    photoUrl?: string;
-    signatureUrl?: string;
-    recipientName?: string;
-    notes?: string;
-    verified: boolean;
-    verifiedAt?: Date;
-}
-
-export interface DeliveryTimelineEvent {
-    status: DeliveryStatus;
     timestamp: Date;
-    location?: GeoPoint;
-    notes?: string;
+  };
+  
+  // Order status
+  status: DeliveryStatus;
+  
+  // Timestamps
+  createdAt: Date;
+  acceptedAt?: Date;
+  pickedUpAt?: Date;
+  deliveredAt?: Date;
+  cancelledAt?: Date;
+  
+  // Order items summary
+  itemsCount: number;
+  totalAmount: number;
+  
+  // Route info
+  estimatedDistance?: number;  // in kilometers
+  estimatedDuration?: number;  // in minutes
 }
 
-export interface DriverMatchResult {
-    driver: Driver;
-    score: number;
-    estimatedPickupTime: number;
-    estimatedDeliveryTime: number;
-    distanceToPickup: number;
-    reasons: string[];
+// Driver location update
+export interface DriverLocation {
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  heading?: number;
+  speed?: number;
+  timestamp: Date;
 }
 
-export interface RoutePoint {
-    location: GeoPoint;
-    type: 'pickup' | 'delivery';
-    deliveryId: string;
-    sequence: number;
-    estimatedArrival?: Date;
-    actualArrival?: Date;
+// Location coordinates
+export interface Coordinates {
+  latitude: number;
+  longitude: number;
 }
 
-export interface RouteOptimizationResult {
-    totalDistance: number;
-    totalDuration: number;
-    optimizedRoute: RoutePoint[];
-    savings: {
-        distanceSaved: number;
-        timeSaved: number;
-    };
+// Map region
+export interface MapRegion {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
+// Time window for delivery
+export interface TimeWindow {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  price: number;
 }
 
 export const DEFAULT_TIME_WINDOWS: TimeWindow[] = [
-    { start: '09:00', end: '12:00', label: 'Morning (9AM-12PM)', additionalCost: 0 },
-    { start: '12:00', end: '14:00', label: 'Midday (12PM-2PM)', additionalCost: 0 },
-    { start: '14:00', end: '17:00', label: 'Afternoon (2PM-5PM)', additionalCost: 0 },
-    { start: '17:00', end: '20:00', label: 'Evening (5PM-8PM)', additionalCost: 2 },
-    { start: '20:00', end: '22:00', label: 'Night (8PM-10PM)', additionalCost: 5 },
+  { id: 'morning', label: 'Morning (8AM-12PM)', startTime: '08:00', endTime: '12:00', price: 5 },
+  { id: 'afternoon', label: 'Afternoon (12PM-5PM)', startTime: '12:00', endTime: '17:00', price: 3 },
+  { id: 'evening', label: 'Evening (5PM-9PM)', startTime: '17:00', endTime: '21:00', price: 5 },
 ];
 
-export const PRIORITY_LEVELS: Record<DeliveryPriority, { multiplier: number; label: string }> = {
-    low: { multiplier: 0.8, label: 'Low Priority' },
-    normal: { multiplier: 1.0, label: 'Normal' },
-    high: { multiplier: 1.3, label: 'High Priority' },
-    urgent: { multiplier: 1.5, label: 'Urgent' },
+// Driver interface
+export interface Driver {
+  id: string;
+  name: string;
+  phone: string;
+  photoUrl?: string;
+  vehicleType?: string;
+  rating?: number;
+  isOnline?: boolean;
+  currentLocation?: Coordinates;
+}
+
+// GeoPoint for Firestore
+export interface GeoPoint {
+  latitude: number;
+  longitude: number;
+}
+
+// Delivery batch for grouped deliveries
+export interface DeliveryBatch {
+  id: string;
+  driverId: string;
+  deliveries: string[];
+  status: 'pending' | 'in_progress' | 'completed';
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+// Export Delivery as an alias for DeliveryOrder for backward compatibility
+export type Delivery = DeliveryOrder;
+
+// QR Code data for delivery verification
+export interface DeliveryQRCode {
+  deliveryId: string;
+  orderId: string;
+  customerId: string;
+  customerName: string;
+  deliveryAddress: string;
+  pickupAddress: string;
+  verificationCode: string;
+  timestamp: Date;
+}
+
+// Proof of delivery
+export interface ProofOfDelivery {
+  deliveryId: string;
+  photoUrl?: string;
+  signatureData?: string;
+  notes?: string;
+  completedAt: Date;
+  completedBy: string; // driver ID
+  location?: Coordinates;
+}
+
+// Driver review by customer
+export interface DriverReview {
+  id: string;
+  deliveryId: string;
+  customerId: string;
+  driverId: string;
+  rating: number; // 1-5
+  comment?: string;
+  createdAt: Date;
+}
+
+// Driver performance metrics
+export interface DriverPerformance {
+  driverId: string;
+  driverName: string;
+  totalDeliveries: number;
+  completedDeliveries: number;
+  cancelledDeliveries: number;
+  averageRating: number;
+  totalReviews: number;
+  onTimeDeliveries: number;
+  lateDeliveries: number;
+  averageDeliveryTime: number; // in minutes
+}
+
+// Notification types
+export type NotificationType = 
+  | 'delivery_assigned'
+  | 'driver_picked_up'
+  | 'driver_in_transit'
+  | 'delivery_completed'
+  | 'delivery_cancelled'
+  | 'driver_reminder'
+  | 'performance_alert';
+
+export interface DeliveryNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  deliveryId: string;
+  recipientId: string;
+  senderId?: string;
+  data?: Record<string, any>;
+  read: boolean;
+  createdAt: Date;
+}
+
+// Delivery status colors
+export const getDeliveryStatusColor = (status: DeliveryStatus): string => {
+  switch (status) {
+    case 'pending': return '#FF9500';    // Orange
+    case 'accepted': return '#5856D6';   // Purple
+    case 'picked_up': return '#007AFF';  // Blue
+    case 'in_transit': return '#FF2D55'; // Pink/Red
+    case 'delivered': return '#34C759';  // Green
+    case 'cancelled': return '#FF3B30';  // Red
+    default: return '#8E8E93';          // Gray
+  }
+};
+
+// Delivery status labels (multilingual)
+export const getDeliveryStatusLabel = (status: DeliveryStatus, language: string = 'en'): string => {
+  const labels: Record<string, Record<DeliveryStatus, string>> = {
+    en: {
+      pending: 'Waiting for Driver',
+      accepted: 'Driver Assigned',
+      picked_up: 'Picked Up',
+      in_transit: 'In Transit',
+      delivered: 'Delivered',
+      cancelled: 'Cancelled',
+    },
+    fr: {
+      pending: 'En attente',
+      accepted: 'Chauffeur assigné',
+      picked_up: 'Retiré',
+      in_transit: 'En livraison',
+      delivered: 'Livré',
+      cancelled: 'Annulé',
+    },
+    ar: {
+      pending: 'في الانتظار',
+      accepted: 'السائق تم',
+      picked_up: 'تم الاستلام',
+      in_transit: 'في الطريق',
+      delivered: 'تم التوصيل',
+      cancelled: 'ملغى',
+    },
+  };
+  
+  return labels[language]?.[status] || labels.en[status];
+};
+
+// Calculate distance between two coordinates (Haversine formula)
+export const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371; // Earth's radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const toRad = (deg: number): number => {
+  return deg * (Math.PI / 180);
+};
+
+// Check if a location is within radius (in km)
+export const isWithinRadius = (
+  centerLat: number,
+  centerLon: number,
+  pointLat: number,
+  pointLon: number,
+  radiusKm: number
+): boolean => {
+  const distance = calculateDistance(centerLat, centerLon, pointLat, pointLon);
+  return distance <= radiusKm;
 };

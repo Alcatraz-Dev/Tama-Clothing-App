@@ -17,7 +17,7 @@ import {
     where
 } from 'firebase/firestore';
 import styles from "./products.module.css";
-import { Plus, Trash2, Edit, ImageIcon, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, ImageIcon, X, Loader2, Copy } from "lucide-react";
 
 interface Product {
     id: string;
@@ -260,6 +260,38 @@ export default function ProductsPage() {
         }
     };
 
+    const handleDuplicate = async (product: Product) => {
+        try {
+            // Create a copy of the product with modified name
+            const duplicateData = {
+                name: {
+                    fr: product.name.fr + " (Copie)",
+                    "ar-tn": product.name["ar-tn"] ? product.name["ar-tn"] + " (نسخة)" : ""
+                },
+                price: product.price,
+                discountPrice: product.discountPrice || null,
+                deliveryPrice: product.deliveryPrice || 7,
+                categoryId: product.categoryId,
+                mainImage: product.mainImage,
+                images: product.images || [],
+                description: product.description || { fr: "", "ar-tn": "" },
+                sizes: product.sizes || [],
+                colors: product.colors || [],
+                brandId: product.brandId || null,
+                brandName: product.brandName || "",
+                status: "draft", // Set as draft so it needs review
+                createdAt: serverTimestamp()
+            };
+
+            await addDoc(collection(db, "products"), duplicateData);
+            fetchData();
+            alert(isRTL ? "تم نسخ المنتج بنجاح" : "Produit copié avec succès");
+        } catch (error) {
+            console.error("Error duplicating product:", error);
+            alert(isRTL ? "خطأ في نسخ المنتج" : "Erreur lors de la copie du produit");
+        }
+    };
+
     const toggleSize = (size: string) => {
         setSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
     };
@@ -352,6 +384,7 @@ export default function ProductsPage() {
                                     </td>
                                     <td>
                                         <div className={styles.actions}>
+                                            <button onClick={() => handleDuplicate(p)} className={styles.iconBtn} title={isRTL ? "نسخ" : "Copier"}><Copy size={16} /></button>
                                             <button onClick={() => handleEdit(p)} className={styles.iconBtn} title="Modifier"><Edit size={16} /></button>
                                             <button
                                                 className={styles.iconBtn}

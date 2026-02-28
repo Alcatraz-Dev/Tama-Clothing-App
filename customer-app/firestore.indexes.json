@@ -13,6 +13,34 @@
           "mode": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "Shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "senderId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "mode": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "Shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "receiverPhone",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "mode": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -9,7 +9,8 @@ import {
     RefreshControl,
     Alert,
 } from 'react-native';
-import { ArrowLeft, Package, MapPin, Clock, ChevronRight, Truck, CheckCircle, XCircle } from 'lucide-react-native';
+import { ArrowLeft, Package, MapPin, Clock, ChevronRight, Truck, CheckCircle, XCircle, Trash2, MapPinned } from 'lucide-react-native';
+import { deliveryService } from '../services/deliveryService';
 import { useAppTheme } from '../context/ThemeContext';
 import { auth, db } from '../api/firebase';
 import { collection, query, where, orderBy, onSnapshot, or } from 'firebase/firestore';
@@ -20,6 +21,9 @@ interface ShipmentItem {
     status: string;
     receiverName: string;
     deliveryAddress: string;
+    senderId?: string;
+    receiverPhone?: string;
+    deletedForCustomer?: boolean;
     items?: string[];
     createdAt?: { toDate: () => Date };
 }
@@ -48,30 +52,43 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
         }
 
         try {
-            const conditions = [where('senderId', '==', auth.currentUser.uid)];
-            if (profileData?.phone) {
-                conditions.push(where('receiverPhone', '==', profileData.phone));
-            }
-
+            // Use a simpler query to avoid Firestore index requirements
+            // We'll filter client-side instead of using multiple where clauses
             const q = query(
                 collection(db, 'Shipments'),
-                or(...conditions),
                 orderBy('createdAt', 'desc')
             );
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                const shipmentsList = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        trackingId: data.trackingId || '',
-                        status: data.status || 'Pending',
-                        receiverName: data.receiverName || '',
-                        deliveryAddress: data.deliveryAddress || '',
-                        items: data.items || [],
-                        createdAt: data.createdAt,
-                    };
-                });
+                const shipmentsList = snapshot.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            trackingId: data.trackingId || '',
+                            status: data.status || 'Pending',
+                            receiverName: data.receiverName || '',
+                            deliveryAddress: data.deliveryAddress || '',
+                            senderId: data.senderId || '',
+                            receiverPhone: data.receiverPhone || '',
+                            deletedForCustomer: data.deletedForCustomer || false,
+                            items: data.items || [],
+                            createdAt: data.createdAt,
+                        };
+                    })
+                    // Client-side filtering to avoid composite index requirement
+                    .filter(shipment => {
+                        // Filter out deleted shipments
+                        if (shipment.deletedForCustomer === true) return false;
+                        
+                        // Filter by sender or receiver
+                        const isSender = shipment.senderId === auth.currentUser?.uid;
+                        const isReceiver = profileData?.phone && 
+                            shipment.receiverPhone === profileData.phone;
+                        
+                        return isSender || isReceiver;
+                    });
+                
                 setShipments(shipmentsList);
                 setLoading(false);
                 setRefreshing(false);
@@ -87,7 +104,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [profileData?.phone]);
 
     useEffect(() => {
         let unsubscribe: (() => void) | undefined;
@@ -131,78 +148,118 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
         }
     };
 
+    const handleDeleteShipment = (id: string) => {
+        Alert.alert(
+            translate('deleteOrder') || 'Delete Order',
+            translate('confirmDeleteOrder') || 'Are you sure you want to delete this order from your history?',
+            [
+                { text: translate('cancel'), style: 'cancel' },
+                {
+                    text: translate('delete'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deliveryService.deleteDelivery(id);
+                        } catch (error) {
+                            console.error('Error deleting shipment:', error);
+                            Alert.alert(translate('error'), 'Failed to delete shipment');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const filteredShipments = (shipments || []).filter(s => {
         const status = s?.status?.toLowerCase() || '';
-        if (activeTab === 'pending') return status !== 'delivered' && status !== 'cancelled';
-        if (activeTab === 'delivered') return status === 'delivered';
+        if (activeTab === 'pending') return status !== 'delivered' && status !== 'cancelled' && status !== 'livré' && status !== 'annulé';
+        if (activeTab === 'delivered') return status === 'delivered' || status === 'livré';
         return true;
     });
 
-    const renderShipment = ({ item }: { item: ShipmentItem }) => {
-        const StatusIcon = getStatusIcon(item.status);
+    const renderShipment = ({ item: shipment }: { item: ShipmentItem }) => {
+        const StatusIcon = getStatusIcon(shipment.status);
+        const canDelete = shipment.status?.toLowerCase() === 'delivered' ||
+            shipment.status?.toLowerCase() === 'cancelled' ||
+            shipment.status?.toLowerCase() === 'livré' ||
+            shipment.status?.toLowerCase() === 'annulé';
 
         return (
             <TouchableOpacity
                 style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => item.trackingId && onTrackShipment(item.trackingId)}
-                disabled={!item.trackingId}
+                onPress={() => shipment.trackingId && onTrackShipment(shipment.trackingId)}
+                activeOpacity={0.7}
             >
                 <View style={styles.cardHeader}>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                        <StatusIcon size={14} color={getStatusColor(item.status)} />
-                        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                            {translate((item.status?.toLowerCase() || 'pending').replace(/ /g, '_')) || item.status}
-                        </Text>
+                    <View style={styles.headerLeft}>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(shipment.status) + '15' }]}>
+                            <StatusIcon size={14} color={getStatusColor(shipment.status)} />
+                            <Text style={[styles.statusText, { color: getStatusColor(shipment.status) }]}>
+                                {translate((shipment.status?.toLowerCase() || 'pending').replace(/ /g, '_')) || shipment.status}
+                            </Text>
+                        </View>
                     </View>
-                    <Text style={[styles.trackingId, { color: colors.textMuted }]}>
-                        {item.trackingId || 'N/A'}
-                    </Text>
+                    <View style={styles.headerRight}>
+                        <Text style={[styles.trackingId, { color: colors.textMuted }]}>
+                            #{shipment.id.slice(-6).toUpperCase()}
+                        </Text>
+                        {canDelete && (
+                            <TouchableOpacity
+                                style={styles.deleteBtn}
+                                onPress={() => handleDeleteShipment(shipment.id)}
+                            >
+                                <Trash2 size={18} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 <View style={styles.cardBody}>
                     <View style={styles.infoRow}>
-                        <MapPin size={18} color={colors.accent} />
+                        <View style={[styles.iconContainer, { backgroundColor: colors.accent + '10' }]}>
+                            <MapPinned size={18} color={colors.accent} />
+                        </View>
                         <View style={styles.infoCol}>
                             <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                                {translate('deliveryTo')}
+                                {translate('deliveryAddress')}
                             </Text>
-                            <Text style={[styles.infoValue, { color: colors.foreground }]}>
-                                {item.receiverName || 'N/A'}
-                            </Text>
-                            <Text style={[styles.infoSubValue, { color: colors.textMuted }]} numberOfLines={1}>
-                                {item.deliveryAddress || 'N/A'}
+                            <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={2}>
+                                {shipment.deliveryAddress || 'N/A'}
                             </Text>
                         </View>
                     </View>
 
-                    {item.items && item.items.length > 0 && (
+                    {shipment.items && shipment.items.length > 0 && (
                         <View style={styles.infoRow}>
-                            <Package size={18} color={colors.accent} />
+                            <View style={[styles.iconContainer, { backgroundColor: colors.accent + '10' }]}>
+                                <Package size={18} color={colors.accent} />
+                            </View>
                             <View style={styles.infoCol}>
                                 <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-                                    {translate('items')}
+                                    {translate('items')} ({shipment.items.length})
                                 </Text>
                                 <Text style={[styles.infoSubValue, { color: colors.textMuted }]} numberOfLines={1}>
-                                    {Array.isArray(item.items)
-                                        ? item.items.map((i: any) => typeof i === 'string' ? i : (i?.name || i?.title || String(i))).join(', ')
-                                        : String(item.items)}
+                                    {Array.isArray(shipment.items)
+                                        ? shipment.items.map((i: any) => typeof i === 'string' ? i : (i?.name || i?.title || String(i))).join(', ')
+                                        : String(shipment.items)}
                                 </Text>
                             </View>
                         </View>
                     )}
                 </View>
 
-                <View style={styles.cardFooter}>
+                <View style={[styles.cardFooter, { borderTopColor: colors.border + '30' }]}>
                     <View style={styles.footerLeft}>
                         <Clock size={14} color={colors.textMuted} />
                         <Text style={[styles.dateText, { color: colors.textMuted }]}>
-                            {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : ''}
+                            {shipment.createdAt?.toDate ? shipment.createdAt.toDate().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
                         </Text>
                     </View>
-                    <View style={styles.footerRight}>
-                        <Text style={[styles.trackText, { color: colors.accent }]}>
-                            {translate('track')} →
+                    <View style={[styles.trackBtn, { backgroundColor: colors.accent }]}>
+                        <Text style={styles.trackBtnText}>
+                            {translate('track')}
                         </Text>
+                        <ChevronRight size={14} color={colors.accentForeground} />
                     </View>
                 </View>
             </TouchableOpacity>
@@ -336,66 +393,94 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     card: {
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 14,
+        borderRadius: 24,
+        padding: 20,
+        marginBottom: 16,
         borderWidth: 1,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
+    },
+    headerLeft: {
+        flex: 1,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
         gap: 6,
     },
     statusText: {
-        fontSize: 11,
-        fontWeight: '800',
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 0.5,
     },
     trackingId: {
         fontSize: 12,
         fontWeight: '700',
+        opacity: 0.6,
+    },
+    deleteBtn: {
+        padding: 4,
     },
     cardBody: {
-        gap: 12,
+        gap: 16,
     },
     infoRow: {
         flexDirection: 'row',
-        gap: 12,
-        alignItems: 'flex-start',
+        gap: 14,
+        alignItems: 'center',
+    },
+    iconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     infoCol: {
         flex: 1,
     },
     infoLabel: {
         fontSize: 10,
-        fontWeight: '800',
+        fontWeight: '900',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
         marginBottom: 2,
     },
     infoValue: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '800',
+        lineHeight: 20,
     },
     infoSubValue: {
         fontSize: 13,
-        fontWeight: '500',
+        fontWeight: '600',
         marginTop: 2,
+        opacity: 0.8,
     },
     cardFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 14,
-        paddingTop: 12,
+        marginTop: 20,
+        paddingTop: 16,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.05)',
     },
     footerLeft: {
         flexDirection: 'row',
@@ -403,30 +488,38 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     dateText: {
-        fontSize: 12,
-        fontWeight: '500',
+        fontSize: 13,
+        fontWeight: '700',
     },
-    footerRight: {
+    trackBtn: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 10,
+        gap: 6,
     },
-    trackText: {
+    trackBtnText: {
         fontSize: 13,
-        fontWeight: '800',
+        fontWeight: '900',
+        color: '#FFF',
     },
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 80,
-        gap: 10,
+        marginTop: 100,
+        gap: 12,
+        paddingHorizontal: 40,
     },
     emptyText: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: 18,
+        fontWeight: '900',
+        textAlign: 'center',
     },
     emptySubText: {
-        fontSize: 14,
-        fontWeight: '500',
+        fontSize: 15,
+        fontWeight: '600',
         textAlign: 'center',
+        lineHeight: 22,
     },
 });

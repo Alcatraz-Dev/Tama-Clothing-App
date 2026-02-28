@@ -445,7 +445,7 @@ export function Table<T = any>({
       style={[
         {
           width: '100%',
-          borderRadius: BORDER_RADIUS,
+          borderRadius: BORDER_RADIUS.default,
           borderWidth: 1,
           borderColor: borderColor,
           backgroundColor: cardColor,

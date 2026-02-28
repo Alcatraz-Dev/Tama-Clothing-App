@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     margin: 16,
   },
   imageContainer: {

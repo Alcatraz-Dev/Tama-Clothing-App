@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { ChevronLeft, Plus, Settings, Trash2, Camera, X, Package2 } from 'lucide-react-native';
+import { ChevronLeft, Plus, Settings, Trash2, Camera, X, Package2, Copy } from 'lucide-react-native';
 import UniversalVideoPlayer from '../../components/common/UniversalVideoPlayer';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -25,23 +25,33 @@ function getString(val: any): string {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function ProductListItem({ item, onEdit, onDelete, colors, theme }: any) {
+function ProductListItem({ item, onEdit, onDuplicate, onDelete, colors, theme, language }: any) {
     const isDark = theme === 'dark';
+    const name = getString(item.name);
+    const category = getString(item.category);
+
     return (
         <View style={[sc.listCard, { backgroundColor: isDark ? '#111118' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
-            <Image
-                source={{ uri: item.images?.[0] || item.mainImage }}
-                style={sc.listThumb}
-            />
+            <View style={sc.thumbWrapper}>
+                <Image
+                    source={{ uri: item.images?.[0] || item.mainImage }}
+                    style={sc.listThumb}
+                />
+                {item.status === 'sold_out' && (
+                    <View style={sc.soldOutBadge}>
+                        <Text style={sc.soldOutText}>STOCK ÉPUISÉ</Text>
+                    </View>
+                )}
+            </View>
 
             <View style={sc.listInfo}>
                 <Text style={[sc.listName, { color: colors.foreground }]} numberOfLines={1}>
-                    {getString(item.name)}
+                    {name}
                 </Text>
 
                 <View style={sc.listMetaRow}>
                     <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
-                        <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{getString(item.category)}</Text>
+                        <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{category}</Text>
                     </View>
                     {item.brandName ? (
                         <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
@@ -50,20 +60,39 @@ function ProductListItem({ item, onEdit, onDelete, colors, theme }: any) {
                     ) : null}
                 </View>
 
-                <View style={sc.priceRow}>
-                    <Text style={[sc.priceMain, { color: colors.foreground }]}>{item.discountPrice ?? item.price} TND</Text>
-                    {item.discountPrice ? (
-                        <Text style={[sc.priceOld, { color: colors.textMuted }]}>{item.price} TND</Text>
-                    ) : null}
+                <View style={sc.priceAndStockRow}>
+                    <View style={sc.priceCol}>
+                        <Text style={[sc.priceMain, { color: colors.foreground }]}>{item.discountPrice ?? item.price} TND</Text>
+                        {item.discountPrice ? (
+                            <Text style={[sc.priceOld, { color: colors.textMuted }]}>{item.price} TND</Text>
+                        ) : null}
+                    </View>
                 </View>
             </View>
 
             <View style={sc.actionsCol}>
-                <TouchableOpacity onPress={() => onEdit(item)} style={[sc.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]} activeOpacity={0.7}>
-                    <Settings size={20} color={colors.foreground} strokeWidth={2} />
+                <TouchableOpacity
+                    onPress={() => onEdit(item)}
+                    style={[sc.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
+                    activeOpacity={0.7}
+                >
+                    <Settings size={18} color={colors.foreground} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => onDelete(item.id)} style={[sc.actionBtn, { backgroundColor: isDark ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]} activeOpacity={0.7}>
-                    <Trash2 size={20} color="#FF3B30" strokeWidth={2} />
+
+                <TouchableOpacity
+                    onPress={() => onDuplicate(item)}
+                    style={[sc.actionBtn, { backgroundColor: 'rgba(88,86,214,0.1)' }]}
+                    activeOpacity={0.7}
+                >
+                    <Copy size={18} color="#5856D6" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => onDelete(item.id)}
+                    style={[sc.actionBtn, { backgroundColor: 'rgba(255,59,48,0.1)' }]}
+                    activeOpacity={0.7}
+                >
+                    <Trash2 size={18} color="#FF3B30" />
                 </TouchableOpacity>
             </View>
         </View>
@@ -188,14 +217,14 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                 Alert.alert(t('permissionDenied') || 'Permission Required', 'Please allow access to your photo library in Settings.');
                 return;
             }
-            
+
             const r = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [3, 4],
                 quality: 0.8
             });
-            
+
             if (!r.canceled && r.assets && r.assets[0]) {
                 setImages(prev => [...prev, r.assets[0].uri]);
             }
@@ -212,12 +241,12 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                 Alert.alert(t('permissionDenied') || 'Permission Required', 'Please allow access to your media library in Settings.');
                 return;
             }
-            
+
             const r = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                mediaTypes: ['videos'],
                 quality: 0.8
             });
-            
+
             if (!r.canceled && r.assets && r.assets[0]) {
                 setVideoUrl(r.assets[0].uri);
             }
@@ -276,6 +305,47 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
         }
     }
 
+    async function handleDuplicate(p: any) {
+        Alert.alert(
+            t('duplicate') || 'Duplicate',
+            t('confirmDuplicate') || 'Are you sure you want to duplicate this product?',
+            [
+                { text: t('cancel'), style: 'cancel' },
+                {
+                    text: t('duplicate'),
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            // Extract data excluding Firebase-specific fields if needed, 
+                            // but basic spread + delete id is usually enough for local data
+                            const { id, ...cleanData } = p;
+                            const data = {
+                                ...cleanData,
+                                name: {
+                                    fr: (p.name?.fr || getString(p.name)) + ' (Copy)',
+                                    'ar-tn': (p.name?.['ar-tn'] || '') + ' (نسخة)',
+                                    en: (p.name?.en || '') + ' (Copy)'
+                                },
+                                createdAt: serverTimestamp(),
+                                updatedAt: serverTimestamp(),
+                                status: 'in_stock', // Reset status as copy might be different
+                            };
+
+                            await addDoc(collection(db, 'products'), data);
+                            fetchProducts();
+                            Alert.alert(t('successTitle'), t('productCreated'));
+                        } catch (err) {
+                            console.error(err);
+                            Alert.alert(t('error'), t('failedToSave'));
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    }
+
     function handleDelete(id: string) {
         Alert.alert(t('delete'), t('areYouSure'), [
             { text: t('cancel'), style: 'cancel' },
@@ -328,7 +398,14 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                             </View>
                         }
                         renderItem={({ item }) => (
-                            <ProductListItem item={item} onEdit={openEdit} onDelete={handleDelete} colors={colors} theme={theme} />
+                            <ProductListItem
+                                item={item}
+                                onEdit={openEdit}
+                                onDuplicate={handleDuplicate}
+                                onDelete={handleDelete}
+                                colors={colors}
+                                theme={theme}
+                            />
                         )}
                     />
                 )
@@ -601,61 +678,85 @@ const sc = StyleSheet.create({
         elevation: 2
     },
     listThumb: {
-        width: 85,
-        height: 85,
-        borderRadius: 18,
+        width: 80,
+        height: 80,
+        borderRadius: 16,
+    },
+    thumbWrapper: {
+        position: 'relative',
+    },
+    soldOutBadge: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(255,59,48,0.85)',
+        paddingVertical: 3,
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
+        alignItems: 'center',
+    },
+    soldOutText: {
+        color: 'white',
+        fontSize: 7,
+        fontWeight: '900',
     },
     listInfo: {
         flex: 1,
-        marginLeft: 18,
+        marginLeft: 15,
         justifyContent: 'center'
     },
     listName: {
-        fontSize: 16,
-        fontWeight: '900',
+        fontSize: 15,
+        fontWeight: '800',
         letterSpacing: -0.2,
-        marginBottom: 6,
+        marginBottom: 4,
     },
     listMetaRow: {
         flexDirection: 'row',
-        gap: 6,
-        marginBottom: 8,
+        gap: 4,
+        marginBottom: 6,
         flexWrap: 'wrap'
     },
     metaTag: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
     },
     metaTagText: {
-        fontSize: 10,
-        fontWeight: '800',
-        letterSpacing: 0.5
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 0.3
     },
-    priceRow: {
+    priceAndStockRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    priceCol: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6
     },
     priceMain: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '900',
-        letterSpacing: -0.2
+        color: '#000'
     },
     priceOld: {
-        fontSize: 12,
+        fontSize: 11,
         textDecorationLine: 'line-through',
-        fontWeight: '700',
-        opacity: 0.6
+        fontWeight: '600',
+        opacity: 0.5
     },
     actionsCol: {
-        gap: 10,
-        marginLeft: 12,
+        gap: 8,
+        marginLeft: 10,
     },
     actionBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
+        width: 38,
+        height: 38,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center'
     },

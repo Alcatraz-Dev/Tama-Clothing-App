@@ -448,7 +448,7 @@ export function CarouselItem({ children, style }: CarouselItemProps) {
       style={[
         {
           backgroundColor,
-          borderRadius: BORDER_RADIUS,
+          borderRadius: BORDER_RADIUS.default,
           borderWidth: 1,
           borderColor,
           padding: 16,

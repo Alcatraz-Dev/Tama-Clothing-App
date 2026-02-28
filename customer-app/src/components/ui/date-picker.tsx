@@ -677,7 +677,7 @@ export function DatePicker(props: DatePickerProps) {
             padding: 20,
             paddingHorizontal: 36,
             backgroundColor: mutedColor,
-            borderRadius: BORDER_RADIUS,
+            borderRadius: BORDER_RADIUS.default,
           }}
         >
           <Text variant='subtitle' style={{ flex: 1 }}>

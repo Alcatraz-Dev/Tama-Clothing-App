@@ -59,7 +59,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             }
             
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: type === 'selfie' ? [1, 1] : [4, 3],
                 quality: 0.8,

@@ -156,10 +156,28 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
         // Fetch Global Reels for the bar
         const reelsQuery = query(collection(db, 'global_reels'), limit(20));
         const unsubscribeReels = onSnapshot(reelsQuery, async (snapshot) => {
-            const reelsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const allReels: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Filter out stories older than 24 hours and auto-delete them
+            const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+            const validReels: any[] = [];
+            
+            for (const reel of allReels) {
+                const storyAge = reel.createdAt?.toDate ? reel.createdAt.toDate().getTime() : 0;
+                if (storyAge < twentyFourHoursAgo) {
+                    // Auto-delete expired stories
+                    try {
+                        await deleteDoc(doc(db, 'global_reels', reel.id));
+                    } catch (e) {
+                        console.log('Error deleting expired story:', e);
+                    }
+                } else {
+                    validReels.push(reel);
+                }
+            }
 
             // Fetch profiles for reels if not in cache
-            const missingUids = [...new Set(reelsList.filter((r: any) => !usersCache[r.userId]).map((r: any) => r.userId))];
+            const missingUids = [...new Set(validReels.filter((r: any) => !usersCache[r.userId]).map((r: any) => r.userId))];
             if (missingUids.length > 0) {
                 const newCache: Record<string, any> = {};
                 await Promise.all(missingUids.map(async (uid: any) => {
@@ -170,7 +188,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                 }));
                 setUsersCache(prev => ({ ...prev, ...newCache }));
             }
-            setReels(reelsList);
+            setReels(validReels);
         });
 
         return () => {

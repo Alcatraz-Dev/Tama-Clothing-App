@@ -260,7 +260,7 @@ export function AudioPlayer({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     padding: 16,
     margin: 8,
   },

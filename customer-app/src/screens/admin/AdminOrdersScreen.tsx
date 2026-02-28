@@ -225,6 +225,13 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                     renderItem={({ item }) => {
                         const customer = getCustomer(item);
                         const statusColor = getStatusColor(item.status || 'pending');
+                        // Get first product info for preview
+                        const firstItem = item.items?.[0];
+                        const productName = firstItem ? getName(firstItem.name) : '';
+                        const productSize = firstItem?.selectedSize || '';
+                        const productColor = firstItem?.selectedColor || '';
+                        const productImage = firstItem?.mainImage || firstItem?.image || '';
+                        
                         return (
                             <TouchableOpacity
                                 onPress={() => setSelectedOrder(item)}
@@ -237,10 +244,49 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                                         {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : ''}
                                     </Text>
                                 </View>
-                                <Text style={[sc.customerName, { color: colors.foreground }]}>{customer.fullName}</Text>
+                                
+                                {/* Product Preview - Show first product with image, name, size, color */}
+                                {firstItem && (
+                                    <View style={[sc.productPreview, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F8F8FA' }]}>
+                                        {productImage ? (
+                                            <Image 
+                                                source={{ uri: productImage }} 
+                                                style={[sc.productPreviewImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]} 
+                                            />
+                                        ) : (
+                                            <View style={[sc.productPreviewImage, sc.productPlaceholder, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}>
+                                                <PackageOpen size={20} color={colors.textMuted} />
+                                            </View>
+                                        )}
+                                        <View style={sc.productPreviewInfo}>
+                                            <Text style={[sc.productPreviewName, { color: colors.foreground }]} numberOfLines={1}>
+                                                {productName.toUpperCase()}
+                                            </Text>
+                                            <View style={sc.productPreviewMeta}>
+                                                {productSize ? (
+                                                    <View style={[sc.metaTag, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}>
+                                                        <Text style={[sc.metaTagTextSmall, { color: colors.textMuted }]}>{productSize}</Text>
+                                                    </View>
+                                                ) : null}
+                                                {productColor ? (
+                                                    <>
+                                                        <Text style={[sc.metaDot, { color: colors.border }]}>·</Text>
+                                                        <Text style={[sc.metaValueSmall, { color: colors.textMuted }]}>{productColor}</Text>
+                                                    </>
+                                                ) : null}
+                                            </View>
+                                        </View>
+                                        {item.items?.length > 1 && (
+                                            <View style={[sc.moreItemsBadge, { backgroundColor: colors.accent + '20' }]}>
+                                                <Text style={[sc.moreItemsText, { color: colors.accent }]}>+{item.items.length - 1}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                                
                                 <View style={sc.orderCardBottom}>
                                     <Text style={[sc.orderMeta, { color: colors.textMuted }]}>
-                                        {item.items?.length || 0} {t('itemsLabel')} • {item.total} TND
+                                        {customer.fullName} • {item.total} TND
                                     </Text>
                                     <View style={[sc.statusBadge, { backgroundColor: statusColor + '20' }]}>
                                         <Text style={[sc.statusText, { color: statusColor }]}>
@@ -411,6 +457,53 @@ const sc = StyleSheet.create({
     customerName: { fontSize: 16, fontWeight: '800', marginBottom: 12, letterSpacing: -0.2 },
     orderCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     orderMeta: { fontSize: 12, fontWeight: '700' },
+    // Product Preview Styles
+    productPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 12,
+        marginVertical: 8,
+    },
+    productPreviewImage: {
+        width: 44,
+        height: 44,
+        borderRadius: 10,
+    },
+    productPlaceholder: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    productPreviewInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    productPreviewName: {
+        fontSize: 13,
+        fontWeight: '800',
+        marginBottom: 2,
+    },
+    productPreviewMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    metaTagTextSmall: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    metaValueSmall: {
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    moreItemsBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    moreItemsText: {
+        fontSize: 11,
+        fontWeight: '800',
+    },
 
     statusBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
     statusText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },

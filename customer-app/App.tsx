@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text as RNText, View, ScrollView, TouchableOpacity, Image, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView, Dimensions } from 'react-native';
+import { StyleSheet, Text as RNText, View, ScrollView, TouchableOpacity, Image, StatusBar, TextInput, ImageBackground, ActivityIndicator, Platform, FlatList, Linking, Alert, Modal, Animated, I18nManager, Switch, KeyboardAvoidingView, Dimensions, Clipboard } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Animatable from 'react-native-animatable';
@@ -31,6 +31,7 @@ import AdminSettingsScreen from './src/screens/admin/AdminSettingsScreen';
 import AdminSupportListScreen from './src/screens/admin/AdminSupportListScreen';
 import AdminSupportChatScreen from './src/screens/admin/AdminSupportChatScreen';
 import AdminMenuScreen from './src/screens/admin/AdminMenuScreen';
+import AdminNotreSelectionScreen from './src/screens/admin/AdminNotreSelectionScreen';
 import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -138,6 +139,7 @@ import {
   QrCode,
   Scan,
   Gift,
+  Copy,
 } from 'lucide-react-native';
 import UserBadge from './src/components/UserBadge';
 import QRScanner from './src/components/QRScanner';
@@ -148,7 +150,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import ChatScreen from './ChatScreen';
 import Constants from 'expo-constants';
 import CollaborationScreen from './src/screens/CollaborationScreen';
-import AdminCollaborationScreen from './src/screens/AdminCollaborationScreen';
+import AdminCollaborationScreen from './src/screens/admin/AdminCollaborationScreen';
 import StoryDetailScreen from './src/screens/StoryDetailScreen';
 import StoryCreateScreen from './src/screens/StoryCreateScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
@@ -159,20 +161,22 @@ import HostLiveScreen from './src/screens/HostLiveScreen';
 import AudienceLiveScreen from './src/screens/AudienceLiveScreen';
 import LiveAnalyticsScreen from './src/screens/LiveAnalyticsScreen';
 import KYCScreen from './src/screens/KYCScreen';
-import AdminKYCScreen from './src/screens/AdminKYCScreen';
+import AdminKYCScreen from './src/screens/admin/AdminKYCScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
 import FeedScreen from './src/screens/FeedScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
 import CameraScreen from './src/screens/Camera';
 import FidelityScreen from './src/screens/FidelityScreen';
+import DriverDeliveryScreen from './src/screens/delivery/DriverDeliveryScreen';
+import OrderTrackingScreen from './src/screens/delivery/OrderTrackingScreen';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
 import { APP_ICON, width, height } from './src/constants/layout';
 import { uploadToBunny as uploadImageToCloudinary } from './src/utils/bunny';
 import { registerForPushNotificationsAsync, sendPushNotification } from './src/utils/notifications';
-import { getName as getNameUtil, translateColor as translateColorUtil, translateCategory as translateCategoryUtil } from './src/utils/translationHelpers';
+import { getName as getNameUtil, translateColor as translateColorUtil, translateCategory as translateCategoryUtil, colorNameToHex } from './src/utils/translationHelpers';
 import { updateProductRating } from './src/utils/productUtils';
 import Translations from './src/translations';
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -1534,7 +1538,7 @@ export default function App() {
       />;
       case 'DirectMessage': return <DirectMessageScreen
         user={user}
-        targetUser={selectedChatUser}
+        targetUser={activeTabParams?.targetUser || selectedChatUser}
         onBack={() => setActiveTab('Messages')}
         t={t}
         language={language}
@@ -1550,6 +1554,8 @@ export default function App() {
         }
       }} />;
       case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} user={user} t={t} theme={theme} />;
+      case 'DriverDelivery': return <DriverDeliveryScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} theme={theme} t={t} language={language} />;
+      case 'OrderTracking': return <OrderTrackingScreen orderId={activeTabParams?.orderId || ''} onBack={() => setActiveTab('Orders')} user={user} theme={theme} t={t} language={language} />;
       case 'Friends': return <FriendsScreen
         onBack={() => setActiveTab('Profile')}
         user={user}
@@ -1562,12 +1568,15 @@ export default function App() {
             setTargetUserProfile(params);
             setPreviousTab('Friends');
             setActiveTab('PublicProfile');
+          } else if (screen === 'DirectMessage') {
+            setActiveTab('DirectMessage');
+            setActiveTabParams(params);
           } else {
             setActiveTab(screen);
           }
         }}
       />;
-      case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} />;
+      case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} friend={activeTabParams?.friend} />;
       case 'PrivacyPolicy': return <PrivacyPolicyScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'TermsOfService': return <TermsOfServiceScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'LiveAnalytics': return (
@@ -1589,12 +1598,13 @@ export default function App() {
 
       // Admin Routes
       case 'AdminMenu': return <AdminMenuScreen onBack={() => setActiveTab('Profile')} onNavigate={setActiveTab} profileData={profileData} t={t} />;
-      case 'AdminDashboard': return <AdminDashboardScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} language={language} />;
+      case 'AdminDashboard': return <AdminDashboardScreen onBack={() => setActiveTab('AdminMenu')} onNavigate={setActiveTab} user={user} profileData={profileData} t={t} language={language} />;
       case 'AdminProducts': return <AdminProductsScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} />;
       case 'AdminCategories': return <AdminCategoriesScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminBrands': return <AdminBrandsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminAds': return <AdminAdsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminFlashSale': return <AdminFlashSaleScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
+      case 'AdminNotreSelection': return <AdminNotreSelectionScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} language={language} />;
       case 'AdminPromoBanners': return <AdminPromoBannersScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminBanners': return <AdminBannersScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminOrders': return <AdminOrdersScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} language={language} />;
@@ -5141,28 +5151,89 @@ function OrdersScreen({ onBack, onTrack, t, language }: any) {
           orders.map((order, index) => (
             <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border }]}>
               <View style={styles.orderHeader}>
-                <View>
-                  <Text style={[styles.orderId, { color: colors.foreground }]}>{t('orderNumber')}{order.id.slice(-6).toUpperCase()}</Text>
-                  <Text style={[styles.orderDate, { color: colors.textMuted }]}>{order.createdAt?.toDate().toLocaleDateString()}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={[styles.orderId, { color: colors.foreground }]}>
+                      {order.trackingId ? order.trackingId : (t('orderNumber') + order.id.slice(-6).toUpperCase())}
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        Clipboard.setString(order.trackingId || order.id);
+                        Alert.alert(
+                          language === 'ar' ? 'تم النسخ' : (language === 'fr' ? 'Copié !' : 'Copied!'),
+                          t('commandCopied'),
+                          [{ text: 'OK' }]
+                        );
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Copy size={14} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  {!order.trackingId && <Text style={[styles.orderDate, { color: colors.textMuted }]}>{order.createdAt?.toDate().toLocaleDateString()}</Text>}
                 </View>
                 <View style={[styles.statusTag, { backgroundColor: getStatusColor(order.status) + '15' }]}>
                   <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>{t(statusMap[order.status] || order.status)}</Text>
                 </View>
               </View>
-              <View style={styles.orderItemsPreview}>
-                {order.items?.map((item: any, idx: number) => (
-                  <Image key={idx} source={{ uri: item.mainImage }} style={styles.orderItemThumb} />
-                ))}
-              </View>
+              
+              {/* Product Details - Show first product with name, size, color */}
+              {order.items?.[0] && (
+                <View style={[styles.productDetailsRow, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F8F8FA' }]}>
+                  <Image 
+                    source={{ uri: order.items[0].mainImage }} 
+                    style={[styles.productDetailImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]} 
+                  />
+                  <View style={styles.productDetailInfo}>
+                    <Text style={[styles.productDetailName, { color: colors.foreground }]} numberOfLines={1}>
+                      {getName(order.items[0].name).toUpperCase()}
+                    </Text>
+                    <View style={styles.productDetailMeta}>
+                      {order.items[0].selectedSize && (
+                        <Text style={[styles.variantText, { color: colors.textMuted }]}>
+                          {t('size')} : {order.items[0].selectedSize}
+                        </Text>
+                      )}
+                      {order.items[0].selectedSize && order.items[0].selectedColor && (
+                        <Text style={[styles.variantDot, { color: colors.border }]}> , </Text>
+                      )}
+                      {order.items[0].selectedColor && (
+                        <View style={styles.colorSwatchContainer}>
+                          <Text style={[styles.variantText, { color: colors.textMuted }]}>
+                            {t('color')} : 
+                          </Text>
+                          <View 
+                            style={[styles.colorSwatch, { backgroundColor: colorNameToHex(order.items[0].selectedColor) }]} 
+                          />
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  {order.items.length > 1 && (
+                    <View style={[styles.moreItemsBadge, { backgroundColor: colors.accent + '20' }]}>
+                      <Text style={[styles.moreItemsText, { color: colors.accent }]}>+{order.items.length - 1}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              
               <View style={styles.orderFooter}>
                 <Text style={[styles.orderTotalLabel, { color: colors.textMuted }]}>{t('total')}</Text>
                 <Text style={[styles.orderTotalValue, { color: colors.foreground }]}>{order.total.toFixed(2)} TND</Text>
               </View>
 
-              {order.trackingId && (
+              {order.trackingId ? (
                 <TouchableOpacity
                   style={[styles.trackOrderBtn, { backgroundColor: colors.accent + '20', borderColor: colors.accent }]}
                   onPress={() => onTrack(order.trackingId)}
+                >
+                  <Truck size={14} color={colors.accent} />
+                  <Text style={[styles.trackOrderBtnText, { color: colors.accent }]}>{language === 'ar' ? 'تتبع الطلبية' : (language === 'fr' ? 'Suivre la commande' : 'Track Order')}</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.trackOrderBtn, { backgroundColor: colors.accent + '20', borderColor: colors.accent }]}
+                  onPress={() => onTrack(order.id)}
                 >
                   <Truck size={14} color={colors.accent} />
                   <Text style={[styles.trackOrderBtnText, { color: colors.accent }]}>{language === 'ar' ? 'تتبع الطلبية' : (language === 'fr' ? 'Suivre la commande' : 'Track Order')}</Text>
@@ -5569,13 +5640,13 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
         Alert.alert(t('error') || 'Error', t('locationPermissionDenied') || 'Location permission denied');
         return;
       }
-      
+
       const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
-      
+
       // Reverse geocode to get address
       const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-      
+
       if (reverseGeocode && reverseGeocode.length > 0) {
         const addr = reverseGeocode[0];
         const addressParts = [
@@ -5586,7 +5657,7 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
           addr.region,
           addr.country
         ].filter(Boolean);
-        
+
         setTempAddress(addressParts.join(', '));
       }
     } catch (error) {
@@ -5766,19 +5837,19 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
 
           {showAddressForm && (
             <View style={{ marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: appColors.textMuted }}>{t('addNewAddress') || 'Add new address'}</Text>
-                <TouchableOpacity 
-                  onPress={getCurrentLocation} 
+              <View style={{ flexDirection: 'column', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 10 }}>
+                <Text style={{ fontSize: 10, fontWeight: '600', color: appColors.textMuted }}>{t('addNewAddress') || 'Add new address'}</Text>
+                <TouchableOpacity
+                  onPress={getCurrentLocation}
                   disabled={gettingLocation}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: appColors.accent + '20' }}
                 >
                   {gettingLocation ? (
-                    <ActivityIndicator size={14} color={appColors.accent} />
+                    <ActivityIndicator size={10} color={appColors.accent} />
                   ) : (
                     <MapPin size={14} color={appColors.accent} />
                   )}
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: appColors.accent }}>{t('useLocation') || 'Use Location'}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: appColors.accent }}>{t('useLocation') || 'Use Location'}</Text>
                 </TouchableOpacity>
               </View>
               <TextInput
@@ -6651,14 +6722,12 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
         const catSnap = await getDocs(collection(db, 'categories'));
         setCategories(catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
-      // Fetch brands if not loaded (only active brands)
-      if (brands.length === 0) {
-        const brandsSnap = await getDocs(collection(db, 'brands'));
-        const allBrands: any[] = brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Filter to only show active brands
-        const activeBrands = allBrands.filter((b: any) => b.isActive !== false);
-        setBrands(activeBrands);
-      }
+      // Fetch brands for search functionality (always fetch to ensure brand search works)
+      const brandsSnap = await getDocs(collection(db, 'brands'));
+      const allBrands: any[] = brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Filter to only show active brands
+      const activeBrands = allBrands.filter((b: any) => b.isActive !== false);
+      setBrands(activeBrands);
     } catch (error) {
       console.error("Error fetching shop data:", error);
     } finally {
@@ -6667,7 +6736,29 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = getName(p.name).toLowerCase().includes(search.toLowerCase());
+    // Search by product name OR brand name
+    const searchLower = search.toLowerCase();
+
+    // Check if product name matches
+    const productNameMatch = getName(p.name).toLowerCase().includes(searchLower);
+
+    // Check if search matches any brand name - if so, include all products from that brand
+    let brandNameMatch = false;
+    if (searchLower && brands.length > 0) {
+      // Find all brands that match the search query
+      const matchingBrands = brands.filter((b: any) => {
+        const brandName = getName(b.name).toLowerCase();
+        return brandName.includes(searchLower);
+      });
+
+      // If any brand matches, check if this product belongs to any of those brands
+      if (matchingBrands.length > 0) {
+        const matchingBrandIds = matchingBrands.map((b: any) => b.id);
+        brandNameMatch = matchingBrandIds.includes(p.brandId);
+      }
+    }
+
+    const matchesSearch = productNameMatch || brandNameMatch;
     const matchesColor = !selectedColor || p.colors?.includes(selectedColor);
     const matchesSize = !selectedSize || p.sizes?.includes(selectedSize);
     return matchesSearch && matchesColor && matchesSize;
@@ -6924,6 +7015,7 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
                 setSortBy(null);
                 setSelectedColor(null);
                 setSelectedSize(null);
+                setSelectedBrand(null);
               }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.error }}>{t('clearAll')}</Text>
               </TouchableOpacity>
@@ -6956,6 +7048,33 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Brand Filter Section */}
+              {brands.length > 0 && (
+                <>
+                  <Text style={[styles.settingsLabel, { color: colors.textMuted }]}>{t('brands')}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 30 }}>
+                    {brands.map((b: any) => (
+                      <TouchableOpacity
+                        key={b.id}
+                        onPress={() => setSelectedBrand(selectedBrand === b.id ? null : b.id)}
+                        style={[
+                          styles.catChip,
+                          {
+                            backgroundColor: selectedBrand === b.id ? colors.foreground : (theme === 'dark' ? '#17171F' : '#F2F2F7'),
+                            borderColor: selectedBrand === b.id ? colors.foreground : colors.border
+                          }
+                        ]}
+                      >
+                        <Text style={[
+                          styles.catChipText,
+                          { color: selectedBrand === b.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted }
+                        ]}>{getName(b.name)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
 
               {/* Color Section */}
               {availableColors.length > 0 && (
@@ -7400,9 +7519,7 @@ function CartScreen({ cart, onRemove, onUpdateQuantity, onComplete, profileData,
                           width: 14,
                           height: 14,
                           borderRadius: 7,
-                          backgroundColor: (item.selectedColor && typeof item.selectedColor === 'string')
-                            ? (item.selectedColor.startsWith('#') ? item.selectedColor : item.selectedColor.toLowerCase())
-                            : 'transparent',
+                          backgroundColor: colorNameToHex(item.selectedColor),
                           borderWidth: 1.5,
                           borderColor: theme === 'dark' ? '#333' : '#FFF',
                           shadowColor: '#000',
@@ -10275,6 +10392,75 @@ const styles = StyleSheet.create({
   // statusText removed (duplicate)
   orderItemsPreview: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   orderItemThumb: { width: 50, height: 65, borderRadius: 10, backgroundColor: '#F2F2F7', borderWidth: 1, borderColor: '#EEE' },
+  // Product Details Styles for Orders
+  productDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  productDetailImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+  },
+  productDetailInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  productDetailName: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  productDetailMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  variantText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  variantDot: {
+    fontSize: 11,
+  },
+  colorSwatchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  colorSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 7, // Circular
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.15)',
+  },
+  sizeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sizeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  colorText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  moreItemsBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  moreItemsText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   orderFooter: { borderTopWidth: 1, borderTopColor: '#F2F2F7', paddingTop: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   trackOrderBtn: {
     marginTop: 15,

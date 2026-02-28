@@ -69,7 +69,7 @@ export const BarChart = ({ data, config = {}, style }: Props) => {
 
   if (!data.length) return null;
 
-  const maxValue = Math.max(...data.map((d) => d.value));
+  const maxValue = Math.max(...data.map((d) => d.value)) || 1;
   const innerChartWidth = chartWidth - padding * 2;
   const chartHeight = height - padding * 2;
   const barWidth = (innerChartWidth / data.length) * 0.8;
@@ -79,9 +79,9 @@ export const BarChart = ({ data, config = {}, style }: Props) => {
     <View style={[{ width: '100%', height }, style]} onLayout={handleLayout}>
       <Svg width={chartWidth} height={height}>
         {data.map((item, index) => {
-          const barHeight = (item.value / maxValue) * chartHeight;
-          const x = padding + index * (barWidth + barSpacing) + barSpacing / 2;
-          const y = height - padding - barHeight;
+          const barHeight = Math.max(0, (Number(item.value) / maxValue) * chartHeight) || 0;
+          const x = padding + index * (barWidth + barSpacing) + barSpacing / 2 || 0;
+          const y = height - padding - barHeight || 0;
 
           const barAnimatedProps = useAnimatedProps(() => ({
             height: animationProgress.value * barHeight,
@@ -94,7 +94,7 @@ export const BarChart = ({ data, config = {}, style }: Props) => {
                 x={x}
                 width={barWidth}
                 fill={item.color || primaryColor}
-                rx={4}
+                rx={12}
                 animatedProps={barAnimatedProps}
               />
 

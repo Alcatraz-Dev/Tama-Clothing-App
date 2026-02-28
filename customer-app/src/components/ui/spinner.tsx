@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   overlayContent: {
     padding: 60,
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
   },
   inlineLoader: {
     minHeight: 0,

@@ -688,14 +688,14 @@ export const Camera = forwardRef<CameraRef, CameraProps>(
                               : primaryColor,
                         },
                         (isCapturing || isTimerActive) &&
-                          styles.capturingButton,
+                        styles.capturingButton,
                       ]}
                       onPress={
                         mode === 'picture'
                           ? handleCapture
                           : isRecording
-                          ? handleStopRecording
-                          : handleCapture
+                            ? handleStopRecording
+                            : handleCapture
                       }
                       disabled={isCapturing || isTimerActive}
                       activeOpacity={0.8}
@@ -739,8 +739,7 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     width: screenWidth,
-    //@ts-ignore
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     overflow: 'hidden',
   },
   camera: {
@@ -780,8 +779,8 @@ const styles = StyleSheet.create({
     top: 76,
     left: 20,
     right: 20,
-      //@ts-ignore
-    borderRadius: BORDER_RADIUS,
+    //@ts-ignore
+    borderRadius: BORDER_RADIUS.default,
     padding: 16,
     zIndex: 2,
   },
@@ -967,8 +966,8 @@ const styles = StyleSheet.create({
   permissionContainer: {
     gap: 16,
     padding: 32,
-        //@ts-ignore
-    borderRadius: BORDER_RADIUS,
+    //@ts-ignore
+    borderRadius: BORDER_RADIUS.default,
     alignItems: 'center',
   },
   permissionIcon: {
@@ -976,8 +975,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-        //@ts-ignore
-    fontSize: FONT_SIZE,
+    fontSize: FONT_SIZE.default,
   },
   zoomControls: {
     position: 'absolute',

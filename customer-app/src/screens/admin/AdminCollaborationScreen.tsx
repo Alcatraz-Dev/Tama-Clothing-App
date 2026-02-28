@@ -17,13 +17,13 @@ import {
     SafeAreaView
 } from 'react-native';
 import { collection, query, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db } from '../api/firebase';
+import { db } from '../../api/firebase';
 import { ChevronLeft, Plus, Trash2, Edit, X, Save, CheckCircle, Search, Settings, ImageIcon, Camera, Globe, Instagram, Facebook, Twitter, Linkedin, Upload, Twitter as TwitterIcon, Music } from 'lucide-react-native';
-import { Theme } from '../theme';
-import { AdminHeader } from '../components/admin/AdminUI';
+import { Theme } from '../../theme';
+import { AdminHeader } from '../../components/admin/AdminUI';
 import * as ImagePicker from 'expo-image-picker';
 
-import { uploadToBunny } from '../utils/bunny';
+import { uploadToBunny } from '../../utils/bunny';
 
 interface Collaboration {
     id: string;

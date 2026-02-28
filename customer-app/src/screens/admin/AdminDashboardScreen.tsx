@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon, ChevronLeft } from 'lucide-react-native';
+import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon, ChevronLeft, ListTree, ShieldCheck } from 'lucide-react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
@@ -49,7 +49,7 @@ function StatCard({ label, value, icon: Icon, color }: StatCardProps) {
     );
 }
 
-export default function AdminDashboardScreen({ onBack, t, profileData, language }: any) {
+export default function AdminDashboardScreen({ onBack, onNavigate, t, profileData, language }: any) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -183,8 +183,49 @@ export default function AdminDashboardScreen({ onBack, t, profileData, language 
                             <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
                         </View>
 
+                        <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{t('quickActions') || 'ACTIONS RAPIDES'}</Text>
+                        <TouchableOpacity
+                            onPress={() => onNavigate && onNavigate('AdminKYC')}
+                            style={[
+                                sc.quickActionCard,
+                                {
+                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                }
+                            ]}
+                        >
+                            <View style={[sc.statIconBox, { backgroundColor: '#34C759' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                <ShieldCheck size={20} color="#34C759" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 15 }}>
+                                <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('identityVerification')}</Text>
+                                <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{isDark ? 'VÉRIFIER LES DEMANDES D\'IDENTITÉ' : 'Vérifier les demandes d\'identité'}</Text>
+                            </View>
+                            <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => onNavigate && onNavigate('AdminNotreSelection')}
+                            style={[
+                                sc.quickActionCard,
+                                {
+                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                }
+                            ]}
+                        >
+                            <View style={[sc.statIconBox, { backgroundColor: '#10B981' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                <ListTree size={20} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 15 }}>
+                                <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('ourSelection')}</Text>
+                                <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{isDark ? 'GÉRER LA SÉLECTION DES PRODUITS VEDETTES' : 'Gérer la sélection des produits vedettes'}</Text>
+                            </View>
+                            <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                        </TouchableOpacity>
+
                         {recentOrders.length > 0 && (
-                            <Text style={[sc.sectionTitle, { color: colors.foreground }]}>{t('recentOrders').toUpperCase()}</Text>
+                            <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 25 }]}>{t('recentOrders').toUpperCase()}</Text>
                         )}
 
                         {recentOrders.map(order => (
@@ -369,4 +410,28 @@ const sc = StyleSheet.create({
         fontWeight: '900',
         letterSpacing: 0.6,
     },
+    quickActionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 18,
+        borderRadius: 22,
+        borderWidth: 1,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    quickActionTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        letterSpacing: -0.2,
+    },
+    quickActionSub: {
+        fontSize: 10,
+        fontWeight: '600',
+        marginTop: 2,
+        letterSpacing: 0.1,
+    }
 });

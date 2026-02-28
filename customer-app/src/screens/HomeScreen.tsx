@@ -17,6 +17,8 @@ import {
     query,
     limit,
     where,
+    getDoc,
+    doc,
 } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -154,8 +156,25 @@ export default function HomeScreen({
             const brandsSnap = await getDocs(collection(db, 'brands'));
             setBrands(brandsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((b: any) => b.isActive !== false));
 
-            const prodSnap = await getDocs(query(collection(db, 'products'), limit(6)));
-            setFeatured(prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            // Fetch Our Selection products
+            try {
+                const selSnap = await getDoc(doc(db, 'settings', 'ourSelection'));
+                if (selSnap.exists() && selSnap.data().productIds?.length > 0) {
+                    const ids = selSnap.data().productIds.slice(0, 10);
+                    const selProdsSnap = await getDocs(query(collection(db, 'products'), where('__name__', 'in', ids)));
+                    const selProds = selProdsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Sort to maintain order of selection
+                    const sortedSel = ids.map((id: string) => selProds.find(p => p.id === id)).filter(Boolean);
+                    setFeatured(sortedSel);
+                } else {
+                    const prodSnap = await getDocs(query(collection(db, 'products'), limit(6)));
+                    setFeatured(prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                }
+            } catch (e) {
+                console.log("Error fetching our selection:", e);
+                const prodSnap = await getDocs(query(collection(db, 'products'), limit(6)));
+                setFeatured(prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }
 
             const bannerSnap = await getDocs(collection(db, 'banners'));
             setBanners(bannerSnap.docs
@@ -182,12 +201,11 @@ export default function HomeScreen({
                     });
 
                 if (activeFlashSales.length > 0) {
-                    const soonestFlashSale = activeFlashSales.reduce((prev: any, curr: any) => {
-                        const prevEnd = new Date(prev.endTime).getTime();
-                        const currEnd = new Date(curr.endTime).getTime();
-                        return currEnd < prevEnd ? curr : prev;
-                    });
-                    setFlashSale(soonestFlashSale);
+                    // Sort by end time descending (latest first)
+                    activeFlashSales.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+
+                    const latestFlashSale = activeFlashSales[0];
+                    setFlashSale(latestFlashSale);
 
                     let allProductIds: string[] = [];
                     activeFlashSales.forEach((fs: any) => {
@@ -479,7 +497,7 @@ export default function HomeScreen({
                             <View style={{ width: 15, height: 2, backgroundColor: accentColor, marginTop: 4 }} />
                         </View>
                         <TouchableOpacity onPress={() => onNavigate('Shop')}>
-                            <Text variant="body" style={{ color: foregroundColor , fontSize: 12 }}>{t('seeAll')}</Text>
+                            <Text variant="body" style={{ color: foregroundColor, fontSize: 12 }}>{t('seeAll')}</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -501,7 +519,7 @@ export default function HomeScreen({
 
                         {categories.length > 0 && brands.length > 0 && <View style={[styles.separator, { backgroundColor: borderSecondary }]} />}
                         {/* Brands */}
-                         <View>
+                        <View>
                             <Text variant="caption" style={{ color: mutedColor, marginBottom: 8, letterSpacing: 1, fontSize: 10 }}>{t('brands').toUpperCase()}</Text>
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 {brands.map((brand: any) => (
@@ -574,7 +592,7 @@ export default function HomeScreen({
                                         <Text variant="body" style={{ color: 'white', letterSpacing: 1 }}>{getName(ad.title, language).toUpperCase()}</Text>
                                         {(ad.link || ad.targetId) && (
                                             <TouchableOpacity style={styles.adBtn} onPress={() => onCampaignPress(ad)}>
-                                                <Text variant="caption"  style={{ color: 'white', letterSpacing: 1, fontSize: 12 }}>{t('discover')}</Text>
+                                                <Text variant="caption" style={{ color: 'white', letterSpacing: 1, fontSize: 12 }}>{t('discover')}</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>

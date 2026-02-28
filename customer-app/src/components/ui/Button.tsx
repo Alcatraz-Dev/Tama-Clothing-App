@@ -386,7 +386,7 @@ export const Button = forwardRef<View, ButtonProps>(
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
             >
               {icon && (
-                <Icon name={icon} color={contentColor} size={iconSize} />
+                <Icon name={icon} color={iconColor || contentColor} size={iconSize} />
               )}
               {children}
             </View>
@@ -410,7 +410,7 @@ export const Button = forwardRef<View, ButtonProps>(
           />
         ) : (typeof children === 'string' || label) ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {icon && <Icon name={icon} color={contentColor} size={iconSize} />}
+            {icon && <Icon name={icon} color={iconColor || contentColor} size={iconSize} />}
             <Text style={[{ color: labelColor || contentColor }, finalTextStyle, textStyle]}>
               {label || children}
             </Text>

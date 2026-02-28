@@ -124,13 +124,18 @@ export const MediaPicker = forwardRef<RNView, MediaPickerProps>(
 
     const requestPermissions = async () => {
       try {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        setHasPermission(status === 'granted');
+        // Request MediaLibrary permission for accessing device gallery
+        const { status: mediaLibraryStatus } = await MediaLibrary.requestPermissionsAsync();
+        setHasPermission(mediaLibraryStatus === 'granted');
 
-        if (status !== 'granted') {
-          onError?.(
-            'Media library permission is required to access photos and videos'
-          );
+        if (mediaLibraryStatus !== 'granted') {
+          // Also try to request ImagePicker permissions (needed for system picker)
+          const { status: imagePickerStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (imagePickerStatus !== 'granted') {
+            onError?.(
+              'Media library permission is required to access photos and videos'
+            );
+          }
         }
       } catch (error) {
         onError?.('Failed to request permissions');
@@ -164,7 +169,17 @@ export const MediaPicker = forwardRef<RNView, MediaPickerProps>(
     const pickFromGallery = async () => {
       if (!hasPermission) {
         await requestPermissions();
-        return;
+      }
+
+      // Request ImagePicker permissions specifically for the system picker
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          onError?.('Media library permission is required to access photos and videos');
+          return;
+        }
+      } catch (error) {
+        // Continue even if this fails, as the system picker might still work
       }
 
       if (gallery) {
@@ -177,10 +192,10 @@ export const MediaPicker = forwardRef<RNView, MediaPickerProps>(
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes:
             mediaType === 'image'
-              ? ImagePicker.MediaTypeOptions.Images
+              ? ['images']
               : mediaType === 'video'
-                ? ImagePicker.MediaTypeOptions.Videos
-                : ImagePicker.MediaTypeOptions.All,
+                ? ['videos']
+                : ['images', 'videos'],
           allowsMultipleSelection: multiple,
           quality: quality === 'high' ? 1 : quality === 'medium' ? 0.7 : 0.3,
           selectionLimit: multiple ? maxSelection : 1,

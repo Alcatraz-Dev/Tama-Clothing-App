@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     height: '100%',
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     overflow: 'hidden',
   },
   video: {

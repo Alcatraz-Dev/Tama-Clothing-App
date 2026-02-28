@@ -424,7 +424,7 @@ export function AudioRecorder({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     padding: 20,
     alignItems: 'center',
   },

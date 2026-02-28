@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   content: {
     position: 'absolute',
-    borderRadius: BORDER_RADIUS,
+    borderRadius: BORDER_RADIUS.default,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: {

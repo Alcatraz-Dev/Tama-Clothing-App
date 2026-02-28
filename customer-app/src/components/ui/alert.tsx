@@ -24,7 +24,7 @@ export function Alert({ children, variant = 'default', style }: AlertProps) {
       style={[
         {
           padding: BORDER_RADIUS,
-          borderRadius: BORDER_RADIUS,
+          borderRadius: BORDER_RADIUS.default,
           backgroundColor: backgroundColor,
           borderWidth: 1,
           borderColor:

@@ -152,8 +152,8 @@ export const LineChart = ({ data, config = {}, style }: Props) => {
 
   // Convert data to screen coordinates
   const points = data.map((point, index) => ({
-    x: leftPadding + (index / (data.length - 1)) * innerChartWidth,
-    y: padding + ((maxValue - point.y) / valueRange) * chartHeight,
+    x: (leftPadding + (data.length > 1 ? index / (data.length - 1) : 0) * innerChartWidth) || 0,
+    y: (padding + ((maxValue - (point.y || 0)) / valueRange) * chartHeight) || 0,
   }));
 
   const pathData = createPath(points);
@@ -208,20 +208,27 @@ export const LineChart = ({ data, config = {}, style }: Props) => {
         <Animated.View>
           <Svg width={chartWidth} height={height}>
             <Defs>
-              {gradient && (
-                <LinearGradient id='gradient' x1='0%' y1='0%' x2='0%' y2='100%'>
-                  <Stop
-                    offset='0%'
-                    stopColor={primaryColor}
-                    stopOpacity='0.3'
-                  />
-                  <Stop
-                    offset='100%'
-                    stopColor={primaryColor}
-                    stopOpacity='0.05'
-                  />
-                </LinearGradient>
-              )}
+              <LinearGradient id='gradient' x1='0%' y1='0%' x2='0%' y2='100%'>
+                <Stop
+                  offset='0%'
+                  stopColor={primaryColor}
+                  stopOpacity='0.4'
+                />
+                <Stop
+                  offset='50%'
+                  stopColor={primaryColor}
+                  stopOpacity='0.1'
+                />
+                <Stop
+                  offset='100%'
+                  stopColor={primaryColor}
+                  stopOpacity='0'
+                />
+              </LinearGradient>
+              <LinearGradient id='lineGradient' x1='0%' y1='0%' x2='100%' y2='0%'>
+                <Stop offset='0%' stopColor={primaryColor} />
+                <Stop offset='100%' stopColor={primaryColor} stopOpacity='0.8' />
+              </LinearGradient>
             </Defs>
 
             {/* Y-axis labels */}
@@ -287,8 +294,8 @@ export const LineChart = ({ data, config = {}, style }: Props) => {
             {/* Line path */}
             <AnimatedPath
               d={pathData}
-              stroke={primaryColor}
-              strokeWidth={2}
+              stroke='url(#lineGradient)'
+              strokeWidth={3}
               fill='none'
               strokeLinecap='round'
               strokeLinejoin='round'
