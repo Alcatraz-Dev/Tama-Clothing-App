@@ -181,6 +181,11 @@
               ]
             }
           ],
+          "liveActivities": [
+            {
+              "name": "OrderTrackingActivity"
+            }
+          ],
           "bundleIdentifier": "com.alcatrazdev.tamaclothing.ExpoWidgetsTarget",
           "groupIdentifier": "group.com.alcatrazdev.tamaclothing"
         }
