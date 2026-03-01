@@ -73,6 +73,7 @@ export interface CartWidgetData {
   totalAmount: number;
   currency: string;
   items: CartItemPreview[];
+  language?: string;
 }
 
 /** Cart item preview for widget */
@@ -89,6 +90,7 @@ export interface DealsWidgetData {
   activeDeals: Deal[];
   flashSaleEndTime?: number;
   flashSaleDiscount?: number;
+  language?: string;
 }
 
 /** Deal information */
@@ -113,6 +115,7 @@ export interface OrderTrackingWidgetData {
   currentLocation?: string;
   items: OrderItemPreview[];
   trackingSteps: TrackingStep[];
+  language?: string;
 }
 
 /** Order item preview */
@@ -136,6 +139,7 @@ export interface TrackingStep {
 /** Recommendations widget data */
 export interface RecommendationsWidgetData {
   products: ProductRecommendation[];
+  language?: string;
 }
 
 /** Product recommendation */
@@ -172,10 +176,10 @@ export interface WidgetTimelineEntry {
 }
 
 /** Union type for widget-specific data */
-export type WidgetSpecificData = 
-  | CartWidgetData 
-  | DealsWidgetData 
-  | OrderTrackingWidgetData 
+export type WidgetSpecificData =
+  | CartWidgetData
+  | DealsWidgetData
+  | OrderTrackingWidgetData
   | RecommendationsWidgetData;
 
 /** Widget action for deep linking */

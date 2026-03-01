@@ -145,26 +145,63 @@ class WidgetManager {
    */
   private async updateiOSWidget(widgetType: WidgetType): Promise<void> {
     try {
-      if (widgetType === WidgetType.CART) {
-        // Dynamically import to ensure widget is registered properly in JS
-        const CartWidget = (await import('./CartHomeWidget')).default;
+      const { isCartWidgetData, isDealsWidgetData, isOrderTrackingWidgetData, isRecommendationsWidgetData } = await import('./types');
 
-        // Let's get the latest data we just saved. We use a default size for data fetching.
-        // It fetches local cached data.
-        const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
-        if (cachedData && 'itemCount' in cachedData) {
-          const cartData = cachedData as import('./types').CartWidgetData;
+      switch (widgetType) {
+        case WidgetType.CART: {
+          const CartWidget = (await import('./CartHomeWidget')).default;
+          const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
 
-          CartWidget.updateSnapshot({
-            itemCount: cartData.itemCount,
-            totalAmount: cartData.totalAmount,
-            currency: cartData.currency,
-            items: cartData.items.map((item: any) => ({
-              name: item.name,
-              price: item.price,
-              imageUrl: item.imageUrl
-            }))
-          });
+          if (cachedData && isCartWidgetData(cachedData)) {
+            CartWidget.updateSnapshot({
+              itemCount: cachedData.itemCount,
+              totalAmount: cachedData.totalAmount,
+              currency: cachedData.currency,
+              items: cachedData.items.map((item: any) => ({
+                name: item.name,
+                price: item.price,
+                imageUrl: item.imageUrl
+              }))
+            });
+          }
+          break;
+        }
+
+        case WidgetType.DEALS: {
+          const DealsWidget = (await import('./DealsWidget')).default;
+          const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
+          if (cachedData && isDealsWidgetData(cachedData)) {
+            DealsWidget.updateSnapshot({
+              activeDeals: cachedData.activeDeals,
+              currency: 'USD'
+            });
+          }
+          break;
+        }
+
+        case WidgetType.ORDER_TRACKING: {
+          const OrderTrackingWidget = (await import('./OrderTrackingWidget')).default;
+          const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
+          if (cachedData && isOrderTrackingWidgetData(cachedData)) {
+            OrderTrackingWidget.updateSnapshot({
+              orderId: cachedData.orderId,
+              statusText: cachedData.statusText,
+              estimatedDelivery: cachedData.estimatedDelivery ? new Date(cachedData.estimatedDelivery).toLocaleDateString() : undefined
+            });
+          }
+          break;
+        }
+
+        case WidgetType.RECOMMENDATIONS: {
+          const RecommendationsWidget = (await import('./RecommendationsWidget')).default;
+          const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
+          if (cachedData && isRecommendationsWidgetData(cachedData)) {
+            RecommendationsWidget.updateSnapshot({
+              products: cachedData.products,
+              currency: 'USD'
+            });
+          }
+          break;
         }
       }
     } catch (error) {
@@ -173,26 +210,72 @@ class WidgetManager {
   }
 
   /**
-   * Android widget update via native bridge
+   * Android widget update via react-native-android-widget
    */
   private async updateAndroidWidget(widgetType: WidgetType): Promise<void> {
     try {
-      const { TamaWidgetsModule } = NativeModules;
+      const { requestWidgetUpdate } = await import('react-native-android-widget');
+      const { isCartWidgetData, isDealsWidgetData, isOrderTrackingWidgetData, isRecommendationsWidgetData } = await import('./types');
+      const React = await import('react');
 
-      if (TamaWidgetsModule) {
-        switch (widgetType) {
-          case WidgetType.CART:
-            await TamaWidgetsModule.updateCartWidget();
-            break;
-          case WidgetType.DEALS:
-            await TamaWidgetsModule.updateDealsWidget();
-            break;
-          case WidgetType.ORDER_TRACKING:
-            await TamaWidgetsModule.updateOrderTrackingWidget();
-            break;
-          case WidgetType.RECOMMENDATIONS:
-            await TamaWidgetsModule.updateRecommendationsWidget();
-            break;
+      switch (widgetType) {
+        case WidgetType.CART: {
+          const { CartWidget } = await import('./android/CartWidget');
+          const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
+          if (cachedData && isCartWidgetData(cachedData)) {
+            requestWidgetUpdate({
+              widgetName: 'CartWidget',
+              renderWidget: () => React.createElement(CartWidget, {
+                itemCountValue: cachedData.itemCount,
+                totalAmountValue: cachedData.totalAmount,
+                currencyCode: cachedData.currency
+              })
+            });
+          }
+          break;
+        }
+
+        case WidgetType.DEALS: {
+          const { DealsWidget } = await import('./android/DealsWidget');
+          const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
+          if (cachedData && isDealsWidgetData(cachedData)) {
+            requestWidgetUpdate({
+              widgetName: 'DealsWidget',
+              renderWidget: () => React.createElement(DealsWidget, {
+                dealsCount: cachedData.activeDeals?.length || 0
+              })
+            });
+          }
+          break;
+        }
+
+        case WidgetType.ORDER_TRACKING: {
+          const { OrderTrackingWidget } = await import('./android/OrderTrackingWidget');
+          const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
+          if (cachedData && isOrderTrackingWidgetData(cachedData)) {
+            requestWidgetUpdate({
+              widgetName: 'OrderTrackingWidget',
+              renderWidget: () => React.createElement(OrderTrackingWidget, {
+                orderIdString: cachedData.orderId,
+                statusString: cachedData.statusText
+              })
+            });
+          }
+          break;
+        }
+
+        case WidgetType.RECOMMENDATIONS: {
+          const { RecommendationsWidget } = await import('./android/RecommendationsWidget');
+          const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
+          if (cachedData && isRecommendationsWidgetData(cachedData)) {
+            requestWidgetUpdate({
+              widgetName: 'RecommendationsWidget',
+              renderWidget: () => React.createElement(RecommendationsWidget, {
+                recCount: cachedData.products?.length || 0
+              })
+            });
+          }
+          break;
         }
       }
     } catch (error) {

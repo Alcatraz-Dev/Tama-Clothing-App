@@ -767,6 +767,14 @@ export default function App() {
       });
     }
 
+    // Initialize Widget Manager
+    try {
+      const WidgetManager = require('./src/widgets/WidgetManager').default;
+      WidgetManager.getInstance().initialize().catch(console.error);
+    } catch (e) {
+      console.warn('Widget manager initialization failed:', e);
+    }
+
     return () => {
       notificationListener.current && notificationListener.current.remove();
       responseListener.current && responseListener.current.remove();
@@ -5156,7 +5164,7 @@ function OrdersScreen({ onBack, onTrack, t, language }: any) {
                     <Text style={[styles.orderId, { color: colors.foreground }]}>
                       {order.trackingId ? order.trackingId : (t('orderNumber') + order.id.slice(-6).toUpperCase())}
                     </Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => {
                         Clipboard.setString(order.trackingId || order.id);
                         Alert.alert(
@@ -5176,13 +5184,13 @@ function OrdersScreen({ onBack, onTrack, t, language }: any) {
                   <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>{t(statusMap[order.status] || order.status)}</Text>
                 </View>
               </View>
-              
+
               {/* Product Details - Show first product with name, size, color */}
               {order.items?.[0] && (
                 <View style={[styles.productDetailsRow, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F8F8FA' }]}>
-                  <Image 
-                    source={{ uri: order.items[0].mainImage }} 
-                    style={[styles.productDetailImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]} 
+                  <Image
+                    source={{ uri: order.items[0].mainImage }}
+                    style={[styles.productDetailImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}
                   />
                   <View style={styles.productDetailInfo}>
                     <Text style={[styles.productDetailName, { color: colors.foreground }]} numberOfLines={1}>
@@ -5200,10 +5208,10 @@ function OrdersScreen({ onBack, onTrack, t, language }: any) {
                       {order.items[0].selectedColor && (
                         <View style={styles.colorSwatchContainer}>
                           <Text style={[styles.variantText, { color: colors.textMuted }]}>
-                            {t('color')} : 
+                            {t('color')} :
                           </Text>
-                          <View 
-                            style={[styles.colorSwatch, { backgroundColor: colorNameToHex(order.items[0].selectedColor) }]} 
+                          <View
+                            style={[styles.colorSwatch, { backgroundColor: colorNameToHex(order.items[0].selectedColor) }]}
                           />
                         </View>
                       )}
@@ -5216,7 +5224,7 @@ function OrdersScreen({ onBack, onTrack, t, language }: any) {
                   )}
                 </View>
               )}
-              
+
               <View style={styles.orderFooter}>
                 <Text style={[styles.orderTotalLabel, { color: colors.textMuted }]}>{t('total')}</Text>
                 <Text style={[styles.orderTotalValue, { color: colors.foreground }]}>{order.total.toFixed(2)} TND</Text>
