@@ -6,7 +6,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/expo-icons/icon.png",
-    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/expo-icons/splash-icon.png",
       "resizeMode": "contain",
@@ -30,7 +29,6 @@
         "foregroundImage": "./assets/expo-icons/splash-icon.png",
         "backgroundColor": "#010100"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.alcatrazdev.tamaclothing",
       "permissions": [
@@ -122,7 +120,67 @@
         }
       ],
       "expo-video",
-      "expo-audio"
+      "expo-audio",
+      "expo-image",
+      "expo-router",
+      "expo-sharing",
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "CartWidget",
+              "displayName": "Cart",
+              "description": "View your shopping cart at a glance",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "systemLarge",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            },
+            {
+              "name": "DealsWidget",
+              "displayName": "Deals",
+              "description": "View today's deals",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "systemLarge",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            },
+            {
+              "name": "OrderTrackingWidget",
+              "displayName": "Order Tracking",
+              "description": "Track your latest order",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "systemLarge",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            },
+            {
+              "name": "RecommendationsWidget",
+              "displayName": "Recommendations",
+              "description": "Personalized recommendations",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "systemLarge",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            }
+          ],
+          "bundleIdentifier": "com.alcatrazdev.tamaclothing.ExpoWidgetsTarget",
+          "groupIdentifier": "group.com.alcatrazdev.tamaclothing"
+        }
+      ]
     ]
   }
 }
