@@ -26,7 +26,7 @@ import {
   Driver
 } from '../types/delivery';
 import { rtdb } from '../api/firebase';
-import { ref, set, onValue, off } from 'firebase/database';
+import { ref, set, onValue, off, push } from 'firebase/database';
 
 // Generate a unique verification code
 const generateVerificationCode = (): string => {
@@ -50,6 +50,8 @@ export const createDelivery = async (orderData: {
   pickupLongitude: number;
   itemsCount: number;
   totalAmount: number;
+  storeName?: string;
+  storeLogo?: string;
 }): Promise<string> => {
   const deliveryData = {
     ...orderData,
@@ -247,7 +249,8 @@ export const updateDeliveryStatus = async (
 export const updateDriverLocation = async (
   deliveryId: string,
   location: Coordinates,
-  driverId: string
+  driverId: string,
+  trackingId?: string
 ): Promise<void> => {
   // Update Firestore for persistence
   const docRef = doc(db, 'deliveries', deliveryId);
@@ -255,35 +258,52 @@ export const updateDriverLocation = async (
     driverLocation: {
       latitude: location.latitude,
       longitude: location.longitude,
+      heading: location.heading,
+      speed: location.speed,
       timestamp: serverTimestamp(),
     },
   });
 
   // Update RTDB for real-time tracking efficiency
-  if (driverId) {
-    const trackingRef = ref(rtdb, `tracking/${deliveryId}/location`);
-    await set(trackingRef, {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      timestamp: Date.now(),
-    });
+  const trackingPathId = trackingId || deliveryId;
+  const trackingRef = ref(rtdb, `tracking/${trackingPathId}/location`);
+  const timestamp = Date.now();
 
-    // Also update driver's global location
+  await set(trackingRef, {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    heading: location.heading,
+    speed: location.speed,
+    timestamp,
+  });
+
+  // Update path/trail in RTDB
+  const pathRef = ref(rtdb, `tracking/${trackingPathId}/path`);
+  // Push new location to path history
+  const newPathPointRef = push(pathRef);
+  await set(newPathPointRef, {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    timestamp,
+  });
+
+  // Also update driver's global location
+  if (driverId) {
     const driverRef = ref(rtdb, `drivers/${driverId}/location`);
     await set(driverRef, {
       latitude: location.latitude,
       longitude: location.longitude,
-      timestamp: Date.now(),
+      timestamp,
     });
   }
 };
 
 // Subscribe to driver location from RTDB
 export const subscribeToDriverLocation = (
-  deliveryId: string,
-  callback: (location: GeoPoint) => void
+  trackingId: string,
+  callback: (data: any) => void
 ) => {
-  const trackingRef = ref(rtdb, `tracking/${deliveryId}/location`);
+  const trackingRef = ref(rtdb, `tracking/${trackingId}`);
   const unsub = onValue(trackingRef, (snapshot) => {
     if (snapshot.exists()) {
       callback(snapshot.val());
@@ -308,7 +328,7 @@ export const rateDelivery = async (
 
 // Initialize driver profile
 export const initializeDriver = async (driverData: Partial<Driver> & { uid: string }): Promise<string> => {
-  const driversCollection = collection(db, 'Drivers');
+  const driversCollection = collection(db, 'drivers');
   const docRef = await addDoc(driversCollection, {
     ...driverData,
     status: 'offline',
@@ -332,7 +352,7 @@ export const updateDriverStatus = async (
   status: 'online' | 'offline' | 'busy',
   location?: GeoPoint
 ): Promise<void> => {
-  const driverDocRef = doc(db, 'Drivers', driverId);
+  const driverDocRef = doc(db, 'drivers', driverId);
   const updateData: any = { status, updatedAt: serverTimestamp() };
 
   if (location) {
@@ -372,6 +392,36 @@ export const cancelDelivery = async (deliveryId: string): Promise<void> => {
   });
 };
 
+// Auto-assign delivery to best available driver
+export const autoAssignDelivery = async (deliveryId: string): Promise<{ driver: any } | null> => {
+  // 1. Get online drivers
+  const q = query(
+    collection(db, 'drivers'),
+    where('status', '==', 'online')
+  );
+
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+
+  // 2. Simplest logic: pick the first one (in a real app, calculate distance)
+  const driverDoc = snapshot.docs[0];
+  const driverData = driverDoc.data();
+  const driver = { id: driverDoc.id, ...driverData };
+
+  // 3. Update delivery with assigned driver
+  const docRef = doc(db, 'deliveries', deliveryId);
+  await updateDoc(docRef, {
+    driverId: driver.id,
+    driverName: driverData.fullName || driverData.name || 'Driver',
+    driverPhone: driverData.phone || '',
+    status: 'accepted',
+    assignedAt: serverTimestamp(),
+    acceptedAt: serverTimestamp()
+  });
+
+  return { driver };
+};
+
 // Export a service object for backward compatibility
 export const deliveryService = {
   createDelivery,
@@ -394,6 +444,7 @@ export const deliveryService = {
   initializeDriver,
   updateDriverStatus,
   deleteDelivery,
+  autoAssignDelivery,
   startDelivery: async (driverId: string, deliveryId: string) => updateDeliveryStatus(deliveryId, 'in_transit'),
   subscribeToDriverDeliveries: getDriverDeliveries,
 };

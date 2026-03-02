@@ -29,20 +29,20 @@ export const useLocation = (options?: UseLocationOptions): UseLocationResult => 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState<Location.PermissionStatus | null>(null);
-  
+
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setPermissionStatus(status);
-      
+
       if (status !== 'granted') {
         setErrorMsg('Location permission denied');
         setIsLoading(false);
         return false;
       }
-      
+
       setErrorMsg(null);
       return true;
     } catch (error) {
@@ -58,14 +58,16 @@ export const useLocation = (options?: UseLocationOptions): UseLocationResult => 
       if (!hasPermission) return null;
 
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: enableHighAccuracy 
-          ? Location.Accuracy.High 
+        accuracy: enableHighAccuracy
+          ? Location.Accuracy.High
           : Location.Accuracy.Balanced,
       });
 
       const coords: Coordinates = {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
+        heading: loc.coords.heading || 0,
+        speed: loc.coords.speed || 0,
       };
 
       setLocation(coords);
@@ -117,6 +119,8 @@ export const useLocation = (options?: UseLocationOptions): UseLocationResult => 
         const coords: Coordinates = {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
+          heading: loc.coords.heading || 0,
+          speed: loc.coords.speed || 0,
         };
         setLocation(coords);
         onLocationUpdate?.(coords);
@@ -174,9 +178,11 @@ export const useDriverLocationUpdates = (
           const coords: Coordinates = {
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
+            heading: loc.coords.heading || 0,
+            speed: loc.coords.speed || 0,
           };
           setLocation(coords);
-          
+
           // Update Firestore (you would call your API here)
           // await updateDriverLocation(driverId, coords);
         }

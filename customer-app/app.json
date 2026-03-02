@@ -198,32 +198,80 @@
               "name": "CartWidget",
               "label": "Bey3a Cart",
               "description": "View your shopping cart",
-              "minWidth": "60dp",
-              "minHeight": "60dp",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "CartWidgetLarge",
+              "label": "Bey3a Cart (Large)",
+              "description": "Large view of your shopping cart",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
               "updatePeriodMillis": 1800000
             },
             {
               "name": "DealsWidget",
               "label": "Bey3a Deals",
               "description": "Today's hot deals",
-              "minWidth": "60dp",
-              "minHeight": "60dp",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "DealsWidgetLarge",
+              "label": "Bey3a Deals (Large)",
+              "description": "Today's hot deals expanded",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
               "updatePeriodMillis": 1800000
             },
             {
               "name": "OrderTrackingWidget",
               "label": "Bey3a Tracking",
               "description": "Track your order",
-              "minWidth": "60dp",
-              "minHeight": "60dp",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "OrderTrackingWidgetLarge",
+              "label": "Bey3a Tracking (Large)",
+              "description": "Detailed order tracking",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
               "updatePeriodMillis": 1800000
             },
             {
               "name": "RecommendationsWidget",
               "label": "Bey3a For You",
               "description": "Product recommendations",
-              "minWidth": "60dp",
-              "minHeight": "60dp",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "RecommendationsWidgetLarge",
+              "label": "Bey3a For You (Large)",
+              "description": "More recommendations",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
               "updatePeriodMillis": 1800000
             }
           ]

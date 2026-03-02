@@ -11,11 +11,16 @@ import {
 } from 'react-native';
 import MapView, { Marker, Circle, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, MapPin, Navigation, Package, Phone, Clock, Check, X } from 'lucide-react-native';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../api/firebase';
+import { ChevronLeft, MapPin, Navigation, Package, Phone, Clock, Check, X, Camera, QrCode } from 'lucide-react-native';
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { db, storage } from '../../api/firebase';
 import { useLocation } from '../../hooks/useLocation';
-import { DeliveryOrder, getDeliveryStatusColor, calculateDistance, isWithinRadius } from '../../types/delivery';
+import { DeliveryOrder, getDeliveryStatusColor, calculateDistance, isWithinRadius, Coordinates } from '../../types/delivery';
+import { deliveryService } from '../../services/deliveryService';
+import { updateShipmentStatus } from '../../utils/shipping';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import QRScanner from '../../components/QRScanner';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,7 +53,7 @@ export default function DriverDeliveryScreen({
 }: DriverDeliveryScreenProps) {
   const insets = useSafeAreaInsets();
   const isDark = theme === 'dark';
-  
+
   const {
     location: driverLocation,
     errorMsg,
@@ -62,6 +67,7 @@ export default function DriverDeliveryScreen({
   const [availableOrders, setAvailableOrders] = useState<DeliveryOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<DeliveryOrder | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [activeOrder, setActiveOrder] = useState<DeliveryOrder | null>(null);
 
   const colors = {
@@ -93,7 +99,7 @@ export default function DriverDeliveryScreen({
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
       })) as DeliveryOrder[];
-      
+
       // Filter orders within 15km of driver location
       if (driverLocation) {
         const filteredOrders = orders.filter(order =>
@@ -115,6 +121,10 @@ export default function DriverDeliveryScreen({
     return () => unsubscribe();
   }, [driverLocation]);
 
+  const [showScanner, setShowScanner] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [proofPhoto, setProofPhoto] = useState<string | null>(null);
+
   // Subscribe to driver's active order
   useEffect(() => {
     if (!user?.uid) return;
@@ -131,7 +141,7 @@ export default function DriverDeliveryScreen({
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
       })) as DeliveryOrder[];
-      
+
       if (orders.length > 0) {
         setActiveOrder(orders[0]);
       } else {
@@ -142,6 +152,39 @@ export default function DriverDeliveryScreen({
     return () => unsubscribe();
   }, [user?.uid]);
 
+  // SYNC DRIVER LOCATION TO FIRESTORE
+  const lastUpdatePos = useRef<Coordinates | null>(null);
+
+  useEffect(() => {
+    if (!activeOrder || !driverLocation || !user?.uid) return;
+
+    // Only update if order is in progress
+    if (['accepted', 'picked_up', 'in_transit'].includes(activeOrder.status)) {
+      const syncLocation = async () => {
+        try {
+          // Only sync if moved at least 5 meters or 10 seconds passed
+          const dist = lastUpdatePos.current ?
+            Math.sqrt(Math.pow(driverLocation.latitude - lastUpdatePos.current.latitude, 2) + Math.pow(driverLocation.longitude - lastUpdatePos.current.longitude, 2)) * 111000 : 100;
+
+          if (dist > 5) {
+            await deliveryService.updateDriverLocation(
+              activeOrder.id,
+              driverLocation,
+              user.uid,
+              activeOrder.trackingId
+            );
+            lastUpdatePos.current = driverLocation;
+          }
+        } catch (err) {
+          console.error('Error syncing location:', err);
+        }
+      };
+
+      const timeout = setTimeout(syncLocation, 3000); // Sync every 3 seconds
+      return () => clearTimeout(timeout);
+    }
+  }, [driverLocation, activeOrder?.id, activeOrder?.status, user?.uid]);
+
   // Start tracking when component mounts
   useEffect(() => {
     startTracking();
@@ -150,7 +193,7 @@ export default function DriverDeliveryScreen({
 
   const handleAcceptOrder = async (order: DeliveryOrder) => {
     if (!user?.uid) return;
-    
+
     setIsAccepting(true);
     try {
       await updateDoc(doc(db, 'deliveries', order.id), {
@@ -159,18 +202,38 @@ export default function DriverDeliveryScreen({
         driverName: profileData?.fullName || 'Driver',
         driverPhone: profileData?.phone || '',
         acceptedAt: serverTimestamp(),
+        driverLocation: driverLocation ? {
+          latitude: driverLocation.latitude,
+          longitude: driverLocation.longitude,
+          heading: driverLocation.heading,
+          speed: driverLocation.speed,
+          timestamp: new Date()
+        } : null
       });
-      
+
       Alert.alert(
         t('successTitle'),
-        tr('Order accepted!', 'Commande acceptée!', 'الطلب تم قبوله!')
+        tr('Order accepted! Please head to the store to pick up the package.', 'Commande acceptée! Veuillez vous rendre au magasin.', 'تم قبول الطلب! يرجى التوجه للمتجر لاستلام الطرد.')
       );
       setSelectedOrder(null);
     } catch (error) {
       console.error('Error accepting order:', error);
-      Alert.alert(t('error'), tr('Failed to accept order', 'Échec de acceptation', 'فشل في قبول الطلب'));
+      Alert.alert(t('error'), tr('Failed to accept order', 'Échec de l\'acceptation', 'فشل في قبول الطلب'));
     } finally {
       setIsAccepting(false);
+    }
+  };
+
+  const handleScanSuccess = async (data: string) => {
+    if (!activeOrder) return;
+
+    // Validate QR code (should contain order info)
+    if (data.includes(activeOrder.orderId) || data.includes(activeOrder.id)) {
+      setShowScanner(false);
+      await handleUpdateStatus('picked_up');
+      Alert.alert(t('successTitle'), tr('Package verified successfully!', 'Colis vérifié avec succès!', 'تم التحقق من الطرد بنجاح!'));
+    } else {
+      Alert.alert(t('error'), tr('Invalid QR Code for this order.', 'Code QR invalide pour cette commande.', 'كود QR غير صالح لهذا الطلب.'));
     }
   };
 
@@ -178,16 +241,37 @@ export default function DriverDeliveryScreen({
     if (!activeOrder) return;
 
     try {
-      const updateData: any = { status: newStatus };
-      
-      if (newStatus === 'picked_up') {
-        updateData.pickedUpAt = serverTimestamp();
-      } else if (newStatus === 'delivered') {
-        updateData.deliveredAt = serverTimestamp();
+      let finalProofUrl = null;
+
+      if (newStatus === 'delivered' && proofPhoto) {
+        setIsUpdating(true);
+        // Upload photo to storage
+        const response = await fetch(proofPhoto);
+        const blob = await response.blob();
+        const photoRef = ref(storage, `delivery_proofs/${activeOrder.trackingId || activeOrder.id}_${Date.now()}.jpg`);
+        await uploadBytes(photoRef, blob);
+        finalProofUrl = await getDownloadURL(photoRef);
       }
 
-      await updateDoc(doc(db, 'deliveries', activeOrder.id), updateData);
-      
+      await updateShipmentStatus(
+        activeOrder.shipmentId || activeOrder.id,
+        activeOrder.trackingId || activeOrder.id,
+        newStatus === 'picked_up' ? 'In Transit' : (newStatus === 'delivered' ? 'Delivered' : 'Out for Delivery'),
+        {
+          proofOfDeliveryUrl: finalProofUrl,
+          driverLocation: driverLocation ? {
+            latitude: driverLocation.latitude,
+            longitude: driverLocation.longitude,
+            heading: driverLocation.heading,
+            speed: driverLocation.speed,
+            timestamp: Date.now()
+          } : null
+        }
+      );
+
+      // Also ensure delivery doc is updated if shipmentId differs
+      // updateShipmentStatus already handles updating 'deliveries' collection based on trackingId
+
       Alert.alert(
         t('successTitle'),
         tr('Status updated!', 'Statut mis à jour!', 'الحالة تم تحديثها!')
@@ -374,10 +458,10 @@ export default function DriverDeliveryScreen({
             {activeOrder.status === 'accepted' && (
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: colors.accent }]}
-                onPress={() => handleUpdateStatus('picked_up')}
+                onPress={() => setShowScanner(true)}
               >
-                <Package size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>{tr('Picked Up', 'Retiré', 'تم الاستلام')}</Text>
+                <QrCode size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>{tr('Scan Package', 'Scanner le colis', 'مسح الطرد')}</Text>
               </TouchableOpacity>
             )}
             {activeOrder.status === 'picked_up' && (
@@ -392,10 +476,20 @@ export default function DriverDeliveryScreen({
             {activeOrder.status === 'in_transit' && (
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: colors.success }]}
-                onPress={() => handleUpdateStatus('delivered')}
+                onPress={async () => {
+                  const result = await ImagePicker.launchCameraAsync({
+                    allowsEditing: true,
+                    aspect: [4, 3],
+                    quality: 0.5,
+                  });
+                  if (!result.canceled) {
+                    setProofPhoto(result.assets[0].uri);
+                    setShowCompletionModal(true);
+                  }
+                }}
               >
-                <Check size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>{tr('Delivered', 'Livré', 'تم التوصيل')}</Text>
+                <Camera size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>{tr('Complete Delivery', 'Livrer', 'إكمال التوصيل')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -407,7 +501,7 @@ export default function DriverDeliveryScreen({
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           {tr('Available Orders', 'Commandes disponibles', 'الطلبات المتاحة')}
         </Text>
-        
+
         {availableOrders.length === 0 ? (
           <View style={styles.emptyState}>
             <Package size={48} color={colors.textMuted} />
@@ -463,89 +557,105 @@ export default function DriverDeliveryScreen({
       </ScrollView>
 
       {/* Order Detail Modal */}
-      {selectedOrder && (
-        <View style={[styles.modalOverlay]}>
-          <TouchableOpacity
-            style={styles.modalBackground}
-            onPress={() => setSelectedOrder(null)}
-          />
-          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                {tr('Order Details', 'Détails de commande', 'تفاصيل الطلب')}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedOrder(null)}>
-                <X size={24} color={colors.foreground} />
+      {
+        selectedOrder && (
+          <View style={[styles.modalOverlay]}>
+            <TouchableOpacity
+              style={styles.modalBackground}
+              onPress={() => setSelectedOrder(null)}
+            />
+            <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                  {tr('Order Details', 'Détails de commande', 'تفاصيل الطلب')}
+                </Text>
+                <TouchableOpacity onPress={() => setSelectedOrder(null)}>
+                  <X size={24} color={colors.foreground} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <View style={styles.modalInfo}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {tr('Customer', 'Client', 'العميل')}
+                  </Text>
+                  <Text style={[styles.modalValue, { color: colors.foreground }]}>
+                    {selectedOrder.customerName}
+                  </Text>
+                </View>
+
+                <View style={styles.modalInfo}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {tr('Address', 'Adresse', 'العنوان')}
+                  </Text>
+                  <Text style={[styles.modalValue, { color: colors.foreground }]}>
+                    {selectedOrder.deliveryAddress}
+                  </Text>
+                </View>
+
+                <View style={styles.modalInfo}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {tr('Items', 'Articles', 'المنتجات')}
+                  </Text>
+                  <Text style={[styles.modalValue, { color: colors.foreground }]}>
+                    {selectedOrder.itemsCount}
+                  </Text>
+                </View>
+
+                <View style={styles.modalInfo}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {tr('Total', 'Total', 'المجموع')}
+                  </Text>
+                  <Text style={[styles.modalValue, { color: colors.accent }]}>
+                    {selectedOrder.totalAmount.toFixed(2)} TND
+                  </Text>
+                </View>
+
+                <View style={styles.modalInfo}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {tr('Distance', 'Distance', 'المسافة')}
+                  </Text>
+                  <Text style={[styles.modalValue, { color: colors.foreground }]}>
+                    {getDistanceFromStore(selectedOrder)} km
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.acceptBtn, { backgroundColor: colors.accent }]}
+                onPress={() => handleAcceptOrder(selectedOrder)}
+                disabled={isAccepting}
+              >
+                {isAccepting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Check size={20} color="#FFFFFF" />
+                    <Text style={styles.acceptBtnText}>
+                      {tr('Accept Order', 'Accepter', 'قبول الطلب')}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.modalInfo}>
-                <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
-                  {tr('Customer', 'Client', 'العميل')}
-                </Text>
-                <Text style={[styles.modalValue, { color: colors.foreground }]}>
-                  {selectedOrder.customerName}
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
-                  {tr('Address', 'Adresse', 'العنوان')}
-                </Text>
-                <Text style={[styles.modalValue, { color: colors.foreground }]}>
-                  {selectedOrder.deliveryAddress}
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
-                  {tr('Items', 'Articles', 'المنتجات')}
-                </Text>
-                <Text style={[styles.modalValue, { color: colors.foreground }]}>
-                  {selectedOrder.itemsCount}
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
-                  {tr('Total', 'Total', 'المجموع')}
-                </Text>
-                <Text style={[styles.modalValue, { color: colors.accent }]}>
-                  {selectedOrder.totalAmount.toFixed(2)} TND
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
-                  {tr('Distance', 'Distance', 'المسافة')}
-                </Text>
-                <Text style={[styles.modalValue, { color: colors.foreground }]}>
-                  {getDistanceFromStore(selectedOrder)} km
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.acceptBtn, { backgroundColor: colors.accent }]}
-              onPress={() => handleAcceptOrder(selectedOrder)}
-              disabled={isAccepting}
-            >
-              {isAccepting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Check size={20} color="#FFFFFF" />
-                  <Text style={styles.acceptBtnText}>
-                    {tr('Accept Order', 'Accepter', 'قبول الطلب')}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
           </View>
-        </View>
-      )}
-    </SafeAreaView>
+        )
+      }
+
+      {/* QR Scanner Overlay */}
+      {
+        showScanner && (
+          <View style={StyleSheet.absoluteFill}>
+            <QRScanner
+              onScan={handleScanSuccess}
+              onClose={() => setShowScanner(false)}
+              isDark={isDark}
+              t={t}
+            />
+          </View>
+        )
+      }
+    </SafeAreaView >
   );
 }
 

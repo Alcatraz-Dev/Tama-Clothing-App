@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,43 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Linking,
+  Modal,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, MapPin, Navigation, Package, Phone, Clock, Check, Car } from 'lucide-react-native';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../api/firebase';
-import { useLocation } from '../../hooks/useLocation';
-import { DeliveryOrder, getDeliveryStatusColor, getDeliveryStatusLabel, calculateDistance } from '../../types/delivery';
+import {
+  ChevronLeft,
+  MapPin,
+  Navigation,
+  Package,
+  Phone,
+  Clock,
+  Check,
+  Car,
+  Info,
+  ShieldCheck,
+  ArrowRight,
+  ChevronRight,
+  Store,
+  QrCode,
+  X,
+} from 'lucide-react-native';
+import { useOrderTracking } from '../../hooks/useOrderTracking';
+import { getDeliveryStatusColor, getDeliveryStatusLabel } from '../../types/delivery';
+import { BlurView } from 'expo-blur';
+import QRCode from 'react-native-qrcode-svg';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  SlideInDown,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  useSharedValue
+} from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface OrderTrackingScreenProps {
   orderId: string;
@@ -27,6 +54,40 @@ interface OrderTrackingScreenProps {
   onNavigate?: (screen: string, params?: any) => void;
 }
 
+const PulseMarker = ({ color }: { color: string }) => {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.6);
+
+  useEffect(() => {
+    scale.value = withRepeat(withTiming(2, { duration: 1500 }), -1, false);
+    opacity.value = withRepeat(withTiming(0, { duration: 1500 }), -1, false);
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <View style={styles.markerWrapper}>
+      <Animated.View style={[styles.pulse, { backgroundColor: color }, animatedStyle]} />
+      <View style={[styles.mainMarker, { backgroundColor: color }]}>
+        <Car size={16} color="#FFF" />
+      </View>
+    </View>
+  );
+};
+
+const DriverMarker = ({ color, heading }: { color: string; heading?: number }) => {
+  return (
+    <View style={styles.markerWrapper}>
+      <View style={[styles.mainMarker, { backgroundColor: color, transform: [{ rotate: `${heading || 0}deg` }] }]}>
+        <Navigation size={18} color="#FFF" />
+      </View>
+    </View>
+  );
+};
+
 export default function OrderTrackingScreen({
   orderId,
   onBack,
@@ -36,565 +97,469 @@ export default function OrderTrackingScreen({
   language,
   onNavigate,
 }: OrderTrackingScreenProps) {
+  const [showQR, setShowQR] = useState(false);
   const insets = useSafeAreaInsets();
   const isDark = theme === 'dark';
   const mapRef = useRef<MapView>(null);
-  
-  const { location: userLocation } = useLocation({ enableHighAccuracy: false });
-  const [order, setOrder] = useState<DeliveryOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const isRtl = language === 'ar';
 
-  const colors = {
-    background: isDark ? '#000000' : '#FFFFFF',
-    foreground: isDark ? '#FFFFFF' : '#000000',
-    card: isDark ? '#1C1C1E' : '#F2F2F7',
-    border: isDark ? '#38383A' : '#C6C6C8',
-    accent: isDark ? '#0A84FF' : '#007AFF',
+  const { order, isLoading, eta } = useOrderTracking({ orderId, language });
+
+  const colors = useMemo(() => ({
+    background: isDark ? '#000000' : '#F8F9FA',
+    card: isDark ? '#1C1C1E' : '#FFFFFF',
+    text: isDark ? '#FFFFFF' : '#1A1A1A',
+    subtext: isDark ? '#8E8E93' : '#666666',
+    accent: '#0A84FF',
     success: '#34C759',
-    warning: '#FF9500',
-    error: '#FF3B30',
-    textMuted: isDark ? '#8E8E93' : '#8E8E93',
-  };
+    border: isDark ? '#2C2C2E' : '#E5E5EA',
+  }), [isDark]);
 
   const tr = (en: string, fr: string, ar: string) => {
     return language === 'ar' ? ar : (language === 'fr' ? fr : en);
   };
 
-  // Subscribe to order updates
-  useEffect(() => {
-    if (!orderId) return;
-
-    const unsubscribe = onSnapshot(doc(db, 'deliveries', orderId), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setOrder({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          acceptedAt: data.acceptedAt?.toDate(),
-          pickedUpAt: data.pickedUpAt?.toDate(),
-          deliveredAt: data.deliveredAt?.toDate(),
-        } as DeliveryOrder);
-      }
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [orderId]);
-
-  // Center map on driver location when it updates
   useEffect(() => {
     if (order?.driverLocation && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: order.driverLocation.latitude,
         longitude: order.driverLocation.longitude,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
-      }, 500);
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      }, 1000);
     }
-  }, [order?.driverLocation]);
-
-  const getDistanceToDriver = () => {
-    if (!order?.driverLocation || !userLocation) return null;
-    
-    const distance = calculateDistance(
-      userLocation.latitude,
-      userLocation.longitude,
-      order.driverLocation.latitude,
-      order.driverLocation.longitude
-    );
-    return distance.toFixed(1);
-  };
-
-  const getDistanceToDestination = () => {
-    if (!order) return null;
-    
-    const distance = calculateDistance(
-      order.driverLocation?.latitude || order.pickupLatitude,
-      order.driverLocation?.longitude || order.pickupLongitude,
-      order.deliveryLatitude,
-      order.deliveryLongitude
-    );
-    return distance.toFixed(1);
-  };
-
-  const getEstimatedTime = () => {
-    const distance = getDistanceToDestination();
-    if (!distance) return null;
-    
-    // Assume average speed of 30 km/h in city
-    const time = (parseFloat(distance) / 30) * 60;
-    return Math.ceil(time);
-  };
-
-  const getMapRegion = () => {
-    if (order?.driverLocation) {
-      return {
-        latitude: order.driverLocation.latitude,
-        longitude: order.driverLocation.longitude,
-        latitudeDelta: 0.03,
-        longitudeDelta: 0.03,
-      };
-    }
-    
-    if (userLocation) {
-      return {
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
-    }
-    
-    return {
-      latitude: order?.deliveryLatitude || 36.8065,
-      longitude: order?.deliveryLongitude || 10.1815,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
-    };
-  };
-
-  const getStatusSteps = () => {
-    const steps = [
-      { key: 'pending', label: tr('Order Placed', 'Commande passée', 'تم الطلب') },
-      { key: 'accepted', label: tr('Driver Assigned', 'Chauffeur assigné', 'تم تعيين السائق') },
-      { key: 'picked_up', label: tr('Picked Up', 'Retiré', 'تم الاستلام') },
-      { key: 'in_transit', label: tr('In Transit', 'En livraison', 'في الطريق') },
-      { key: 'delivered', label: tr('Delivered', 'Livré', 'تم التوصيل') },
-    ];
-
-    const currentIndex = steps.findIndex(s => s.key === order?.status);
-    
-    return steps.map((step, index) => ({
-      ...step,
-      isCompleted: index <= currentIndex,
-      isCurrent: index === currentIndex,
-    }));
-  };
+  }, [order?.driverLocation?.latitude]);
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[styles.loadingText, { color: colors.foreground }]}>
-            {tr('Loading order...', 'Chargement...', 'جاري التحميل...')}
-          </Text>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
     );
   }
 
   if (!order) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: colors.card }]}>
-            <ChevronLeft size={24} color={colors.foreground} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {tr('Track Order', 'Suivre commande', 'تتبع الطلب')}
-          </Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.textMuted }]}>
-            {tr('Order not found', 'Commande non trouvée', 'الطلب غير موجود')}
-          </Text>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>{tr('Order not found', 'Commande non trouvée', 'الطلب غير موجود')}</Text>
+        <TouchableOpacity onPress={onBack} style={styles.backBtnFloat}>
+          <ChevronLeft size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
     );
   }
 
-  const statusSteps = getStatusSteps();
+  const statusLabel = getDeliveryStatusLabel(order.status, language);
+  const statusColor = getDeliveryStatusColor(order.status);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: colors.card }]}>
-          <ChevronLeft size={24} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {tr('Track Order', 'Suivre commande', 'تتبع الطلب')}
-        </Text>
-        <View style={[styles.statusBadge, { backgroundColor: getDeliveryStatusColor(order.status) + '20' }]}>
-          <Text style={[styles.headerStatus, { color: getDeliveryStatusColor(order.status) }]}>
-            {getDeliveryStatusLabel(order.status, language).toUpperCase()}
-          </Text>
-        </View>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* MAP VIEW */}
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        provider={PROVIDER_GOOGLE}
+        initialRegion={{
+          latitude: order.driverLocation?.latitude || order.deliveryLatitude,
+          longitude: order.driverLocation?.longitude || order.deliveryLongitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        customMapStyle={isDark ? DARK_MAP_STYLE : []}
+      >
+        {/* User Destination */}
+        <Marker coordinate={{ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }}>
+          <View style={[styles.destMarker, { backgroundColor: colors.success }]}>
+            <MapPin size={20} color="#FFF" />
+          </View>
+        </Marker>
 
-      {/* Map */}
-      <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          provider={PROVIDER_GOOGLE}
-          initialRegion={getMapRegion()}
-          showsUserLocation
-          showsMyLocationButton
+        {/* Store / Pickup Location */}
+        {order.status === 'accepted' || order.status === 'pending' || order.status === 'picked_up' ? (
+          <Marker
+            coordinate={{ latitude: order.pickupLatitude, longitude: order.pickupLongitude }}
+            title={order.storeName || tr('Store', 'Magasin', 'المتجر')}
+            description={order.pickupAddress}
+          >
+            <View style={[styles.storeMarker, { backgroundColor: colors.accent }]}>
+              <Store size={20} color="#FFF" />
+            </View>
+          </Marker>
+        ) : null}
+
+        {/* Driver Real-time position */}
+        {order.driverLocation && (
+          <Marker
+            coordinate={{
+              latitude: order.driverLocation.latitude,
+              longitude: order.driverLocation.longitude
+            }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat={true}
+          >
+            <DriverMarker color={colors.accent} heading={order.driverLocation.heading} />
+          </Marker>
+        )}
+
+        {/* Path highlight - From Driver to next destination */}
+        {order.driverLocation && (
+          <Polyline
+            coordinates={
+              order.status === 'accepted'
+                ? [
+                  { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
+                  { latitude: order.pickupLatitude, longitude: order.pickupLongitude }
+                ]
+                : [
+                  { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
+                  { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+                ]
+            }
+            strokeColor={colors.accent}
+            strokeWidth={4}
+            lineDashPattern={[5, 10]}
+          />
+        )}
+      </MapView>
+
+      {/* TOP CONTROLS */}
+      <View style={[styles.topOverlay, { top: insets.top + 10 }]}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={[styles.glassBtn, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)' }]}
         >
-          {/* Delivery destination marker */}
-          <Marker
-            coordinate={{
-              latitude: order.deliveryLatitude,
-              longitude: order.deliveryLongitude,
-            }}
-            title={tr('Delivery Address', 'Adresse de livraison', 'عنوان التوصيل')}
-          >
-            <View style={[styles.destinationMarker, { backgroundColor: colors.success }]}>
-              <MapPin size={16} color="#FFFFFF" />
-            </View>
-          </Marker>
+          <ChevronLeft size={24} color={colors.text} />
+        </TouchableOpacity>
 
-          {/* Pickup location marker */}
-          <Marker
-            coordinate={{
-              latitude: order.pickupLatitude,
-              longitude: order.pickupLongitude,
-            }}
-            title={tr('Pickup Location', 'Point de retrait', 'نقطة الاستلام')}
-          >
-            <View style={[styles.pickupMarker, { backgroundColor: colors.warning }]}>
-              <Package size={14} color="#FFFFFF" />
-            </View>
-          </Marker>
-
-          {/* Driver marker (when assigned) */}
-          {order.driverLocation && (
-            <Marker
-              coordinate={{
-                latitude: order.driverLocation.latitude,
-                longitude: order.driverLocation.longitude,
-              }}
-              title={order.driverName || tr('Driver', 'Chauffeur', 'السائق')}
-            >
-              <View style={[styles.driverMarker, { backgroundColor: colors.accent }]}>
-                <Car size={14} color="#FFFFFF" />
-              </View>
-            </Marker>
-          )}
-
-          {/* Route polyline */}
-          {order.status !== 'pending' && order.status !== 'delivered' && (
-            <Polyline
-              coordinates={[
-                {
-                  latitude: order.driverLocation?.latitude || order.pickupLatitude,
-                  longitude: order.driverLocation?.longitude || order.pickupLongitude,
-                },
-                {
-                  latitude: order.deliveryLatitude,
-                  longitude: order.deliveryLongitude,
-                },
-              ]}
-              strokeColor={colors.accent}
-              strokeWidth={4}
-              lineDashPattern={[1]}
-            />
-          )}
-        </MapView>
-
-        {/* ETA overlay */}
-        {order.status === 'in_transit' && (
-          <View style={[styles.etaOverlay, { backgroundColor: colors.card }]}>
-            <Clock size={16} color={colors.accent} />
-            <Text style={[styles.etaText, { color: colors.foreground }]}>
-              {getEstimatedTime()} {tr('min', 'min', 'دقيقة')}
-            </Text>
-            <Text style={[styles.etaDistance, { color: colors.textMuted }]}>
-              {getDistanceToDestination()} km
-            </Text>
-          </View>
-        )}
+        <Animated.View entering={FadeIn.delay(300)} style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.statusBadgeText}>{statusLabel}</Text>
+        </Animated.View>
       </View>
 
-      {/* Order Info */}
-      <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-        {/* Driver Info (when assigned) */}
+      {/* BOTTOM INFO PANEL */}
+      <Animated.View entering={SlideInDown} style={[styles.bottomPanel, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+        {/* Drag Indicator */}
+        <View style={styles.dragHandle} />
+
+        {/* Top Section: Status & ETA */}
+        <View style={styles.panelHeader}>
+          <View>
+            <Text style={[styles.etaLabel, { color: colors.subtext }]}>{tr('Arriving in', 'Arrivée dans', 'يصل خلال')}</Text>
+            <Text style={[styles.etaTime, { color: colors.text }]}>{eta} {tr('min', 'min', 'دق')}</Text>
+          </View>
+          <View style={[styles.orderIconBox, { backgroundColor: colors.accent + '20' }]}>
+            <Clock size={28} color={colors.accent} />
+          </View>
+        </View>
+
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressTrack, { backgroundColor: colors.border }]} />
+          <Animated.View
+            entering={FadeInDown.delay(500)}
+            style={[
+              styles.progressFill,
+              {
+                backgroundColor: colors.accent,
+                width: order.status === 'delivered' ? '100%' : (order.status === 'in_transit' ? '70%' : '30%')
+              }
+            ]}
+          />
+        </View>
+
+        {/* Driver Section */}
         {order.driverId && (
-          <View style={styles.driverInfo}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverInitial}>
-                {(order.driverName || 'D').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.driverDetails}>
-              <Text style={[styles.driverName, { color: colors.foreground }]}>
-                {order.driverName || tr('Driver', 'Chauffeur', 'السائق')}
-              </Text>
-              {order.driverPhone && (
-                <TouchableOpacity style={styles.callBtn}>
-                  <Phone size={14} color={colors.accent} />
-                  <Text style={[styles.callBtnText, { color: colors.accent }]}>
-                    {tr('Call', 'Appeler', 'اتصال')}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {getDistanceToDriver() && (
-              <View style={styles.driverDistance}>
-                <Navigation size={12} color={colors.textMuted} />
-                <Text style={[styles.driverDistanceText, { color: colors.textMuted }]}>
-                  {getDistanceToDriver()} km
-                </Text>
+          <View style={styles.driverSection}>
+            <View style={styles.driverProfile}>
+              <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
+                <Text style={styles.avatarText}>{order.driverName?.charAt(0) || 'D'}</Text>
               </View>
-            )}
+              <View style={styles.driverMeta}>
+                <Text style={[styles.driverNameText, { color: colors.text }]}>{order.driverName}</Text>
+                <View style={styles.ratingRow}>
+                  <Car size={14} color={colors.subtext} />
+                  <Text style={[styles.carInfo, { color: colors.subtext }]}>Tama Verified Partner</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.actionCircleRow}>
+              <TouchableOpacity
+                onPress={() => order.driverPhone && Linking.openURL(`tel:${order.driverPhone}`)}
+                style={[styles.circleBtn, { backgroundColor: colors.border }]}
+              >
+                <Phone size={20} color={colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowQR(true)}
+                style={[styles.circleBtn, { backgroundColor: colors.border }]}
+              >
+                <QrCode size={20} color={colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.circleBtn, { backgroundColor: colors.border }]}>
+                <ShieldCheck size={20} color={colors.success} />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* Delivery Address */}
-        <View style={styles.addressRow}>
-          <MapPin size={18} color={colors.success} />
-          <View style={styles.addressContent}>
-            <Text style={[styles.addressLabel, { color: colors.textMuted }]}>
-              {tr('Delivery Address', 'Adresse de livraison', 'عنوان التوصيل')}
-            </Text>
-            <Text style={[styles.addressText, { color: colors.foreground }]}>
-              {order.deliveryAddress}
-            </Text>
+        {/* Address Info */}
+        <View style={[styles.addressBox, { borderTopWidth: 1, borderTopColor: colors.border }]}>
+          <View style={styles.addressRow}>
+            <MapPin size={20} color={colors.success} />
+            <View style={styles.addressTextWrapper}>
+              <Text style={[styles.addressItemLabel, { color: colors.subtext }]}>{tr('Delivery Address', 'Adresse de livraison', 'عنوان التوصيل')}</Text>
+              <Text style={[styles.addressValue, { color: colors.text }]} numberOfLines={1}>{order.deliveryAddress}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Status Timeline */}
-        <View style={styles.timeline}>
-          {statusSteps.map((step, index) => (
-            <View key={step.key} style={styles.timelineStep}>
-              <View
-                style={[
-                  styles.timelineDot,
-                  {
-                    backgroundColor: step.isCompleted ? colors.success : colors.border,
-                    borderColor: step.isCurrent ? colors.success : 'transparent',
-                  },
-                ]}
+        {/* Order Details Preview */}
+        <TouchableOpacity style={[styles.detailsPreview, { backgroundColor: colors.border + '50' }]}>
+          <View style={styles.detailsRow}>
+            <Package size={18} color={colors.text} />
+            <Text style={[styles.detailsText, { color: colors.text }]}>{order.itemsCount} {tr('items', 'articles', 'منتجات')}</Text>
+            <View style={{ flex: 1 }} />
+            <Text style={[styles.totalAmount, { color: colors.accent }]}>{order.totalAmount} TND</Text>
+            <ChevronRight size={18} color={colors.subtext} />
+          </View>
+        </TouchableOpacity>
+
+        {/* QR Code Modal */}
+        <Modal
+          visible={showQR}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowQR(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <Animated.View entering={FadeInDown} style={[styles.qrModal, { backgroundColor: colors.card }]}>
+              <TouchableOpacity
+                onPress={() => setShowQR(false)}
+                style={styles.closeModalBtn}
               >
-                {step.isCompleted && <Check size={10} color="#FFFFFF" />}
-              </View>
-              {index < statusSteps.length - 1 && (
-                <View
-                  style={[
-                    styles.timelineLine,
-                    { backgroundColor: step.isCompleted ? colors.success : colors.border },
-                  ]}
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+
+              <Text style={[styles.qrTitle, { color: colors.text }]}>{tr('Verification Code', 'Code de vérification', 'رمز التحقق')}</Text>
+              <Text style={[styles.qrSubtitle, { color: colors.subtext }]}>{tr('Show this to the driver', 'Montrez ceci au livreur', 'اعرض هذا للسائق')}</Text>
+
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={JSON.stringify({
+                    id: order.id,
+                    orderId: order.orderId,
+                    type: 'delivery_confirmation'
+                  })}
+                  size={200}
+                  backgroundColor={colors.card}
+                  color={colors.text}
                 />
-              )}
-              <Text
-                style={[
-                  styles.timelineLabel,
-                  {
-                    color: step.isCompleted ? colors.foreground : colors.textMuted,
-                    fontWeight: step.isCurrent ? '700' : '400',
-                  },
-                ]}
-              >
-                {step.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </SafeAreaView>
+              </View>
+
+              <View style={[styles.orderRefBox, { backgroundColor: colors.border + '30' }]}>
+                <Text style={[styles.orderRefText, { color: colors.subtext }]}>#{order.orderId.toUpperCase()}</Text>
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
+      </Animated.View>
+    </View>
   );
 }
 
+const DARK_MAP_STYLE = [
+  { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
+  { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "color": "#757575" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] }
+];
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  headerStatus: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  mapContainer: {
-    height: 280,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  destinationMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  pickupMarker: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  driverMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  etaOverlay: {
+  container: { flex: 1 },
+  map: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  topOverlay: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
   },
-  etaText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  etaDistance: {
-    fontSize: 12,
-  },
-  infoCard: {
-    flex: 1,
-    margin: 16,
-    padding: 16,
-    borderRadius: 16,
-  },
-  driverInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128, 128, 128, 0.2)',
-    marginBottom: 16,
-  },
-  driverAvatar: {
+  glassBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#0A84FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  statusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  statusBadgeText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+  markerWrapper: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  pulse: { position: 'absolute', width: 20, height: 20, borderRadius: 10 },
+  mainMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
-  driverInitial: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  driverDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  driverName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  callBtn: {
-    flexDirection: 'row',
+  destMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#FFF',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
-  callBtnText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  driverDistance: {
-    flexDirection: 'row',
+  storeMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#FFF',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
-  driverDistanceText: {
-    fontSize: 12,
+  bottomPanel: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#CCC',
+    borderRadius: 3,
+    alignSelf: 'center',
     marginBottom: 20,
+    opacity: 0.5,
   },
-  addressContent: {
-    flex: 1,
-  },
-  addressLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  addressText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  timeline: {
+  panelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  timelineStep: {
     alignItems: 'center',
-    width: 60,
+    marginBottom: 20,
   },
-  timelineDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  etaLabel: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  etaTime: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  orderIconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
+  progressContainer: { height: 6, width: '100%', marginBottom: 24, position: 'relative' },
+  progressTrack: { height: '100%', width: '100%', borderRadius: 3, opacity: 0.2 },
+  progressFill: { height: '100%', borderRadius: 3, position: 'absolute', left: 0 },
+  driverSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 24,
+  },
+  driverProfile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  driverMeta: { gap: 2 },
+  driverNameText: { fontSize: 18, fontWeight: '800' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  carInfo: { fontSize: 12 },
+  actionCircleRow: { flexDirection: 'row', gap: 12 },
+  circleBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  addressBox: { paddingTop: 20, marginBottom: 20 },
+  addressRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  addressTextWrapper: { flex: 1 },
+  addressItemLabel: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
+  addressValue: { fontSize: 16, fontWeight: 'bold' },
+  detailsPreview: { padding: 14, borderRadius: 16 },
+  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  detailsText: { fontWeight: '700' },
+  totalAmount: { fontWeight: '900', marginRight: 10 },
+  backBtnFloat: { marginTop: 20, padding: 10 },
+  modalOverlay: {
+    flex: 1,
     justifyContent: 'center',
-    borderWidth: 2,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  timelineLine: {
-    width: 2,
-    height: 20,
-    marginVertical: 2,
+  qrModal: {
+    width: '85%',
+    padding: 30,
+    borderRadius: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  timelineLabel: {
-    fontSize: 9,
+  closeModalBtn: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    padding: 5,
+  },
+  qrTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 8,
     textAlign: 'center',
-    marginTop: 4,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
+  qrSubtitle: {
+    fontSize: 14,
+    marginBottom: 30,
+    textAlign: 'center',
   },
-  loadingText: {
-    fontSize: 16,
+  qrContainer: {
+    padding: 20,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    marginBottom: 20,
   },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  orderRefBox: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  errorText: {
-    fontSize: 16,
+  orderRefText: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
   },
 });

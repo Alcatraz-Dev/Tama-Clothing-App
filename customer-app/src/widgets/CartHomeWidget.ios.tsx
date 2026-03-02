@@ -25,7 +25,7 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
                     </VStack>
                 </HStack>
                 <Spacer />
-                <Text modifiers={[titleFont]}>Cart</Text>
+                <Text modifiers={[titleFont]}>Panier</Text>
                 <Text modifiers={[priceFont]}>{formattedTotal}</Text>
             </VStack>
         );
@@ -38,13 +38,13 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
             <HStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }), padding({ horizontal: 16, vertical: 12 })]}>
                 <VStack modifiers={[frame({ maxWidth: 120, alignment: 'leading' })]}>
                     <Text modifiers={[font({ size: 36 }), padding({ bottom: 4 })]}>🛒</Text>
-                    <Text modifiers={[titleFont]}>Cart</Text>
+                    <Text modifiers={[titleFont]}>Panier</Text>
                 </VStack>
 
                 <Spacer />
 
                 <VStack modifiers={[frame({ alignment: 'trailing' })]}>
-                    <Text modifiers={[font({ weight: 'semibold', size: 14 }), secondaryStyle]}>{itemCount} items</Text>
+                    <Text modifiers={[font({ weight: 'semibold', size: 14 }), secondaryStyle]}>{itemCount} articles</Text>
                     <Text modifiers={[font({ weight: 'bold', size: 24 }), padding({ top: 2 })]}>
                         {formattedTotal}
                     </Text>
@@ -60,8 +60,8 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
             <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }), padding({ all: 20 })]}>
                 <HStack modifiers={[padding({ bottom: 16 }), frame({ maxWidth: 9999 })]}>
                     <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                        <Text modifiers={[font({ weight: 'black', size: 24 })]}>Shopping Cart</Text>
-                        <Text modifiers={[font({ size: 13 }), secondaryStyle]}>{itemCount} packages ready</Text>
+                        <Text modifiers={[font({ weight: 'black', size: 24 })]}>Panier d'achat</Text>
+                        <Text modifiers={[font({ size: 13 }), secondaryStyle]}>{itemCount} colis prêts</Text>
                     </VStack>
                     <Spacer />
                     <Text modifiers={[font({ size: 32 })]}>🛒</Text>
@@ -71,7 +71,7 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
                     {items.length === 0 ? (
                         <VStack modifiers={[frame({ maxWidth: 9999, minHeight: 150, alignment: 'center' })]}>
                             <Text modifiers={[font({ size: 50 }), padding({ bottom: 12 })]}>🛍️</Text>
-                            <Text modifiers={[font({ size: 16, weight: 'medium' }), secondaryStyle]}>Your cart is waiting</Text>
+                            <Text modifiers={[font({ size: 16, weight: 'medium' }), secondaryStyle]}>Votre panier vous attend</Text>
                         </VStack>
                     ) : (
                         <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
@@ -106,7 +106,7 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
     if (family === 'accessoryInline') {
         return (
             <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                🛒 {itemCount} items ({currency}{totalAmount.toFixed(0)})
+                🛒 {itemCount} articles ({currency}{totalAmount.toFixed(0)})
             </Text>
         );
     }
@@ -116,7 +116,7 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
             <HStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' })]}>
                 <Text modifiers={[font({ size: 20 })]}>🛒</Text>
                 <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 14 })]}>{itemCount} items</Text>
+                    <Text modifiers={[font({ weight: 'bold', size: 14 })]}>{itemCount} articles</Text>
                     <Text modifiers={[font({ size: 12 }), secondaryStyle]}>{currency}{totalAmount.toFixed(0)}</Text>
                 </VStack>
             </HStack>

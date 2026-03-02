@@ -20,6 +20,7 @@
     "@zegocloud/zego-uikit-rn": "^2.19.1",
     "@zegocloud/zego-uikit-signaling-plugin-rn": "^1.3.8",
     "bna-ui": "^2.0.4",
+    "buffer": "^6.0.3",
     "expo": "^55",
     "expo-audio": "~55.0.8",
     "expo-blur": "~55.0.8",

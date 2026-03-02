@@ -32,9 +32,9 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
                 <Text modifiers={[font({ size: 28 })]}>✨</Text>
                 <Spacer />
                 <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 18 })]}>For You</Text>
+                    <Text modifiers={[font({ weight: 'bold', size: 18 })]}>Pour Vous</Text>
                     <Text modifiers={[font({ weight: 'bold', size: 22 }), purpleStyle]}>
-                        {count > 0 ? `${count} Items` : 'Discover'}
+                        {count > 0 ? `${count} Articles` : 'Découvrir'}
                     </Text>
                 </VStack>
             </VStack>
@@ -46,7 +46,7 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
         const firstProduct = products.length > 0 ? products[0] : null;
         return (
             <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                ✨ {firstProduct ? `Pick: ${firstProduct.name}` : 'Check for Picks'}
+                ✨ {firstProduct ? `Choix: ${firstProduct.name}` : 'Voir les choix'}
             </Text>
         );
     }
@@ -64,8 +64,8 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
         <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }), padding({ all: 16 })]}>
             <HStack modifiers={[padding({ bottom: 12 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
                 <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 20 })]}>Picks For You</Text>
-                    <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Based on your style</Text>
+                    <Text modifiers={[font({ weight: 'bold', size: 20 })]}>Choisis Pour Vous</Text>
+                    <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Selon votre style</Text>
                 </VStack>
                 <Spacer />
                 <Text modifiers={[font({ size: 32 })]}>✨</Text>
@@ -73,7 +73,7 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
 
             <HStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
                 {products.length === 0 ? (
-                    <Text modifiers={[font({ size: 14 }), secondaryStyle]}>New arrivals coming soon</Text>
+                    <Text modifiers={[font({ size: 14 }), secondaryStyle]}>Nouveautés bientôt</Text>
                 ) : (
                     products.slice(0, family === 'systemLarge' ? 4 : 2).map((item: any, i: number) => (
                         <VStack key={i} modifiers={[padding({ leading: i === 0 ? 0 : 12 }), frame({ alignment: 'leading' })]}>

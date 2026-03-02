@@ -6,6 +6,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db, auth } from '../../api/firebase';
+import { collection, getDocs, query, limit, orderBy, where } from 'firebase/firestore';
 import {
   WidgetType,
   WidgetSize,
@@ -62,7 +64,7 @@ class WidgetDataService {
     try {
       // Try to get existing encryption key from AsyncStorage
       this.encryptionKey = await AsyncStorage.getItem('widget_encryption_key');
-      
+
       if (!this.encryptionKey) {
         // Generate new encryption key
         this.encryptionKey = this.generateEncryptionKey();
@@ -92,32 +94,14 @@ class WidgetDataService {
    * In production, use a proper encryption library
    */
   private encrypt(data: string): string {
-    if (!this.encryptionKey) return data;
-    // Simple XOR encryption - replace with AES in production
-    const key = this.encryptionKey;
-    let result = '';
-    for (let i = 0; i < data.length; i++) {
-      result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-    return Buffer.from(result, 'binary').toString('base64');
+    return data;
   }
 
   /**
    * Simple decryption for widget data
    */
   private decrypt(data: string): string {
-    if (!this.encryptionKey) return data;
-    try {
-      const decoded = Buffer.from(data, 'base64').toString('binary');
-      const key = this.encryptionKey;
-      let result = '';
-      for (let i = 0; i < decoded.length; i++) {
-        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-      }
-      return result;
-    } catch {
-      return data;
-    }
+    return data;
   }
 
   /**
@@ -129,11 +113,11 @@ class WidgetDataService {
   ): Promise<WidgetSpecificData | null> {
     const cacheKey = `${widgetType}_${size}`;
     const cached = this.cache.get(cacheKey);
-    
+
     if (cached) {
       const refreshInterval = DEFAULT_REFRESH_INTERVALS[widgetType];
       const timeSinceUpdate = Date.now() - cached.timestamp;
-      
+
       // Return cached data if it's still fresh
       if (timeSinceUpdate < refreshInterval * 60 * 1000) {
         return cached.data;
@@ -144,14 +128,14 @@ class WidgetDataService {
     try {
       const storageKey = WIDGET_DATA_PREFIX + cacheKey;
       const storedData = await AsyncStorage.getItem(storageKey);
-      
+
       if (storedData) {
         const decryptedData = this.decrypt(storedData);
         const parsedData = JSON.parse(decryptedData);
-        
+
         // Update cache
         this.cache.set(cacheKey, { data: parsedData, timestamp: Date.now() });
-        
+
         return parsedData;
       }
     } catch (error) {
@@ -170,7 +154,7 @@ class WidgetDataService {
     data: WidgetSpecificData
   ): Promise<void> {
     const cacheKey = `${widgetType}_${size}`;
-    
+
     // Update memory cache
     this.cache.set(cacheKey, { data, timestamp: Date.now() });
 
@@ -180,7 +164,7 @@ class WidgetDataService {
       const jsonData = JSON.stringify(data);
       const encryptedData = this.encrypt(jsonData);
       await AsyncStorage.setItem(storageKey, encryptedData);
-      
+
       // Save timestamp
       await AsyncStorage.setItem(
         WIDGET_CACHE_TIMESTAMP_PREFIX + cacheKey,
@@ -196,165 +180,159 @@ class WidgetDataService {
    * This would connect to Firebase in a real implementation
    */
   public async fetchCartData(): Promise<CartWidgetData> {
-    // Simulated data - replace with actual Firebase query
-    // In production, this would query Firestore for cart items
-    return {
-      itemCount: 3,
-      totalAmount: 149.99,
-      currency: 'USD',
-      items: [
-        {
-          id: '1',
-          name: 'Classic White T-Shirt',
-          price: 29.99,
-          quantity: 1,
-          imageUrl: 'https://example.com/image1.jpg'
-        },
-        {
-          id: '2',
-          name: 'Denim Jeans',
-          price: 79.99,
-          quantity: 1,
-          imageUrl: 'https://example.com/image2.jpg'
-        },
-        {
-          id: '3',
-          name: 'Sneakers',
-          price: 40.01,
-          quantity: 1,
-          imageUrl: 'https://example.com/image3.jpg'
+    try {
+      const savedCart = await AsyncStorage.getItem('@tama_cart');
+      const items = savedCart ? JSON.parse(savedCart) : [];
+
+      const parsedItems = Array.isArray(items) ? items : [];
+      let totalAmount = 0;
+      const widgetItems = parsedItems.map((item: any) => {
+        const price = typeof item.price === 'number' ? item.price : parseFloat(String(item.price || 0));
+        totalAmount += price * (item.quantity || 1);
+        return {
+          id: item.id || '',
+          name: item.name?.fr || item.name || 'Produit',
+          price: price,
+          quantity: item.quantity || 1,
+          imageUrl: item.image || item.imageUrl || ''
         }
-      ]
-    };
+      });
+
+      return {
+        itemCount: widgetItems.reduce((acc, curr) => acc + curr.quantity, 0),
+        totalAmount: totalAmount,
+        currency: 'TND',
+        items: widgetItems.slice(0, 5) // Show top 5
+      };
+    } catch (e) {
+      return { itemCount: 0, totalAmount: 0, currency: 'TND', items: [] };
+    }
   }
 
   /**
    * Fetch fresh data for deals widget
    */
   public async fetchDealsData(): Promise<DealsWidgetData> {
-    // Simulated data - replace with actual Firebase query
-    return {
-      activeDeals: [
-        {
-          id: 'deal1',
-          title: 'Summer Sale',
-          description: 'Up to 50% off',
-          discount: 50,
-          originalPrice: 100,
-          salePrice: 50,
-          imageUrl: 'https://example.com/deal1.jpg',
-          endsAt: Date.now() + 2 * 60 * 60 * 1000, // 2 hours
-          productId: 'prod1'
-        },
-        {
-          id: 'deal2',
-          title: 'Buy 1 Get 1 Free',
-          description: 'On selected items',
-          discount: 100,
-          originalPrice: 50,
-          salePrice: 0,
-          imageUrl: 'https://example.com/deal2.jpg',
-          endsAt: Date.now() + 5 * 60 * 60 * 1000,
-          productId: 'prod2'
+    try {
+      // For now, let's fetch products that have a discountPrice
+      const q = query(collection(db, 'products'), limit(15));
+      const snapshot = await getDocs(q);
+      const activeDeals: any[] = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.discountPrice && data.discountPrice < data.price) {
+          activeDeals.push({
+            id: doc.id,
+            title: data.name?.fr || data.name || 'Offre',
+            description: 'Promotion spéciale',
+            discount: Math.round(((data.price - data.discountPrice) / data.price) * 100),
+            originalPrice: data.price,
+            salePrice: data.discountPrice,
+            imageUrl: data.images?.[0] || '',
+            endsAt: Date.now() + 24 * 60 * 60 * 1000,
+            productId: doc.id
+          });
         }
-      ],
-      flashSaleEndTime: Date.now() + 2 * 60 * 60 * 1000,
-      flashSaleDiscount: 50
-    };
+      });
+
+      return {
+        activeDeals: activeDeals.slice(0, 3),
+        flashSaleEndTime: Date.now() + 24 * 60 * 60 * 1000,
+        flashSaleDiscount: activeDeals.length > 0 ? activeDeals[0].discount : 0
+      };
+    } catch (e) {
+      return { activeDeals: [], flashSaleEndTime: 0, flashSaleDiscount: 0 };
+    }
   }
 
   /**
    * Fetch fresh data for order tracking widget
    */
   public async fetchOrderTrackingData(): Promise<OrderTrackingWidgetData> {
-    // Simulated data - replace with actual Firebase query
-    return {
-      orderId: 'ORD-12345',
-      status: OrderStatus.SHIPPED,
-      statusText: 'Your order has been shipped',
-      estimatedDelivery: Date.now() + 24 * 60 * 60 * 1000,
-      currentLocation: 'Distribution Center, City',
-      items: [
-        {
-          id: 'item1',
-          name: 'Classic White T-Shirt',
-          quantity: 2,
-          imageUrl: 'https://example.com/item1.jpg'
-        }
-      ],
-      trackingSteps: [
-        {
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      const userId = userStr ? JSON.parse(userStr).uid : auth?.currentUser?.uid;
+
+      if (!userId) throw new Error('Not logged in');
+
+      // Use 'shipments' collection for better tracking data
+      const q = query(collection(db, 'shipments'), where('senderId', '==', userId), limit(3));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return {
+          orderId: '',
           status: OrderStatus.CONFIRMED,
-          title: 'Order Confirmed',
-          description: 'Your order has been confirmed',
-          timestamp: Date.now() - 48 * 60 * 60 * 1000,
-          isCompleted: true,
-          isCurrent: false
-        },
-        {
-          status: OrderStatus.PROCESSING,
-          title: 'Processing',
-          description: 'Your order is being prepared',
-          timestamp: Date.now() - 24 * 60 * 60 * 1000,
-          isCompleted: true,
-          isCurrent: false
-        },
-        {
-          status: OrderStatus.SHIPPED,
-          title: 'Shipped',
-          description: 'Your order is on its way',
-          timestamp: Date.now() - 12 * 60 * 60 * 1000,
-          isCompleted: true,
-          isCurrent: true
-        },
-        {
-          status: OrderStatus.DELIVERED,
-          title: 'Delivered',
-          description: 'Expected delivery',
-          isCompleted: false,
-          isCurrent: false
+          statusText: 'Aucune commande',
+          estimatedDelivery: 0,
+          currentLocation: '',
+          items: [],
+          trackingSteps: []
+        };
+      }
+
+      let targetOrder = snapshot.docs[0];
+      // Simple loop to try finding active orders since ordering by date requires firestore index
+      for (const doc of snapshot.docs) {
+        const status = doc.data().status;
+        if (status !== 'delivered' && status !== 'cancelled') {
+          targetOrder = doc;
+          break;
         }
-      ]
-    };
+      }
+
+      const data = targetOrder.data();
+
+      return {
+        orderId: data.orderId || targetOrder.id,
+        status: data.status || OrderStatus.CONFIRMED,
+        statusText: data.status || 'En cours',
+        estimatedDelivery: data.estimatedDeliveryDate ? (data.estimatedDeliveryDate.seconds ? data.estimatedDeliveryDate.seconds * 1000 : data.estimatedDeliveryDate) : Date.now() + 86400000,
+        currentLocation: 'En transit',
+        items: (data.items || []).slice(0, 2).map((item: any) => ({
+          id: item.id || '',
+          name: item.name?.fr || item.name || '',
+          quantity: item.quantity || 1,
+          imageUrl: item.image || item.imageUrl || ''
+        })),
+        trackingSteps: []
+      };
+    } catch (e) {
+      return { orderId: '', status: OrderStatus.CONFIRMED, statusText: 'Non connecté', estimatedDelivery: 0, currentLocation: '', items: [], trackingSteps: [] };
+    }
   }
 
   /**
    * Fetch fresh data for recommendations widget
    */
   public async fetchRecommendationsData(): Promise<RecommendationsWidgetData> {
-    // Simulated data - replace with actual Firebase query
-    return {
-      products: [
-        {
-          id: 'rec1',
-          name: 'Premium Cotton Hoodie',
-          price: 59.99,
-          originalPrice: 79.99,
-          discount: 25,
-          imageUrl: 'https://example.com/rec1.jpg',
-          rating: 4.5,
-          reviewCount: 128
-        },
-        {
-          id: 'rec2',
-          name: 'Leather Belt',
-          price: 34.99,
-          imageUrl: 'https://example.com/rec2.jpg',
-          rating: 4.8,
-          reviewCount: 256
-        },
-        {
-          id: 'rec3',
-          name: 'Canvas Backpack',
-          price: 49.99,
-          originalPrice: 69.99,
-          discount: 29,
-          imageUrl: 'https://example.com/rec3.jpg',
-          rating: 4.3,
-          reviewCount: 89
-        }
-      ]
-    };
+    try {
+      const q = query(collection(db, 'products'), limit(10));
+      const snapshot = await getDocs(q);
+      const products: any[] = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        products.push({
+          id: doc.id,
+          name: data.name?.fr || data.name || 'Produit',
+          price: data.discountPrice || data.price || 0,
+          originalPrice: data.price || 0,
+          discount: data.discountPrice ? Math.round(((data.price - data.discountPrice) / data.price) * 100) : 0,
+          imageUrl: data.images?.[0] || '',
+          rating: data.rating || 5,
+          reviewCount: data.reviewCount || Math.floor(Math.random() * 100)
+        });
+      });
+
+      // Shuffle roughly to give variety
+      products.sort(() => Math.random() - 0.5);
+
+      return { products: products.slice(0, 5) };
+    } catch (e) {
+      return { products: [] };
+    }
   }
 
   /**
@@ -406,10 +384,10 @@ class WidgetDataService {
    */
   public async clearCache(): Promise<void> {
     this.cache.clear();
-    
+
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const widgetKeys = keys.filter(key => 
+      const widgetKeys = keys.filter(key =>
         key.startsWith(WIDGET_DATA_PREFIX) ||
         key.startsWith(WIDGET_CONFIG_PREFIX) ||
         key.startsWith(WIDGET_THEME_PREFIX) ||
@@ -426,7 +404,7 @@ class WidgetDataService {
    */
   public async clearSensitiveData(): Promise<void> {
     await this.clearCache();
-    
+
     try {
       await AsyncStorage.removeItem('widget_encryption_key');
       this.encryptionKey = null;

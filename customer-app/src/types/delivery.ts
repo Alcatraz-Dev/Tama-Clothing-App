@@ -1,5 +1,5 @@
 // Delivery order status types
-export type DeliveryStatus = 
+export type DeliveryStatus =
   | 'pending'           // Order created, waiting for driver
   | 'accepted'          // Driver accepted the order
   | 'picked_up'         // Driver picked up the order
@@ -11,20 +11,24 @@ export type DeliveryStatus =
 export interface DeliveryOrder {
   id: string;
   orderId: string;           // Reference to original order
+  trackingId?: string;       // User-facing tracking ID
+  shipmentId?: string;       // Reference to shipments collection doc ID
   customerId: string;
   customerName: string;
   customerPhone?: string;
-  
+
   // Delivery address
   deliveryAddress: string;
   deliveryLatitude: number;
   deliveryLongitude: number;
-  
+
   // Pickup location (store location)
   pickupAddress: string;
   pickupLatitude: number;
   pickupLongitude: number;
-  
+  storeName?: string;
+  storeLogo?: string;
+
   // Driver info (when assigned)
   driverId?: string;
   driverName?: string;
@@ -32,23 +36,25 @@ export interface DeliveryOrder {
   driverLocation?: {
     latitude: number;
     longitude: number;
+    heading?: number;
+    speed?: number;
     timestamp: Date;
   };
-  
+
   // Order status
   status: DeliveryStatus;
-  
+
   // Timestamps
   createdAt: Date;
   acceptedAt?: Date;
   pickedUpAt?: Date;
   deliveredAt?: Date;
   cancelledAt?: Date;
-  
+
   // Order items summary
   itemsCount: number;
   totalAmount: number;
-  
+
   // Route info
   estimatedDistance?: number;  // in kilometers
   estimatedDuration?: number;  // in minutes
@@ -68,6 +74,8 @@ export interface DriverLocation {
 export interface Coordinates {
   latitude: number;
   longitude: number;
+  heading?: number;
+  speed?: number;
 }
 
 // Map region
@@ -173,7 +181,7 @@ export interface DriverPerformance {
 }
 
 // Notification types
-export type NotificationType = 
+export type NotificationType =
   | 'delivery_assigned'
   | 'driver_picked_up'
   | 'driver_in_transit'
@@ -236,7 +244,7 @@ export const getDeliveryStatusLabel = (status: DeliveryStatus, language: string 
       cancelled: 'ملغى',
     },
   };
-  
+
   return labels[language]?.[status] || labels.en[status];
 };
 

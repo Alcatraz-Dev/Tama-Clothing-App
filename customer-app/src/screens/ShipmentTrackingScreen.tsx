@@ -80,6 +80,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [demoMode, setDemoMode] = useState(false); // Demo mode for testing tracking
+    const [pathHistory, setPathHistory] = useState<any[]>([]);
 
     // Demo path - simulates driver route for testing (remove when real tracking is ready)
     const demoPath = useMemo(() => {
@@ -106,7 +107,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
 
         // First try to find by trackingId
         const q = query(
-            collection(db, 'Shipments'),
+            collection(db, 'shipments'),
             where('trackingId', '==', trackingId)
         );
 
@@ -115,48 +116,57 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                 const data: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
                 setShipment(data);
                 // Setup location listener with the delivery location from the shipment data
-                setupLocationListener(data.id, data.deliveryLocation);
+                setupLocationListener(data.trackingId || data.id, data.deliveryLocation);
             } else {
                 // If not found by trackingId, try by orderId
                 const q2 = query(
-                    collection(db, 'Shipments'),
+                    collection(db, 'shipments'),
                     where('orderId', '==', trackingId)
                 );
                 onSnapshot(q2, (snap2) => {
                     if (!snap2.empty) {
                         const data: any = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
                         setShipment(data);
-                        setupLocationListener(data.id, data.deliveryLocation);
+                        setupLocationListener(data.trackingId || data.id, data.deliveryLocation);
                     }
                     setLoading(false);
                 });
             }
         });
 
-        function setupLocationListener(shipmentId: string, deliveryLoc: any) {
+        function setupLocationListener(trackingIdKey: string, deliveryLoc: any) {
             // Clean up previous listener
             if (unsubscribeLocation) {
                 unsubscribeLocation();
                 unsubscribeLocation = null;
             }
 
-            const rtdbPath = `tracking/${shipmentId}/location`;
+            const rtdbPath = `tracking/${trackingIdKey}`;
             const rtdbRef = ref(rtdb, rtdbPath);
 
             unsubscribeLocation = onValue(rtdbRef, (snapshot) => {
                 if (snapshot.exists()) {
-                    const loc = snapshot.val();
-                    setDriverLocation(loc);
+                    const data = snapshot.val();
+                    const loc = data.location;
+                    if (loc) {
+                        setDriverLocation(loc);
 
-                    // Calculate ETA if we have delivery location
-                    if (deliveryLoc && loc.latitude && loc.longitude) {
-                        const etaVal = calculateETA(
-                            loc.latitude,
-                            loc.longitude,
-                            deliveryLoc.latitude,
-                            deliveryLoc.longitude
-                        );
-                        setEta(etaVal);
+                        // Calculate ETA if we have delivery location
+                        if (deliveryLoc && loc.latitude && loc.longitude) {
+                            const etaVal = calculateETA(
+                                loc.latitude,
+                                loc.longitude,
+                                deliveryLoc.latitude,
+                                deliveryLoc.longitude,
+                                loc.speed
+                            );
+                            setEta(etaVal);
+                        }
+                    }
+
+                    // Handle path/history if available
+                    if (data.path && Array.isArray(data.path)) {
+                        setPathHistory(data.path);
                     }
                 }
                 setLoading(false);
@@ -175,7 +185,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
             // First try driverId
             if (shipment?.driverId) {
                 try {
-                    const driverDoc = await getDoc(doc(db, 'Drivers', shipment.driverId));
+                    const driverDoc = await getDoc(doc(db, 'drivers', shipment.driverId));
                     if (driverDoc.exists()) {
                         setDriverProfile({ id: driverDoc.id, ...driverDoc.data() });
                         return;
@@ -184,7 +194,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     console.log('Error fetching driver profile by ID:', error);
                 }
             }
-            
+
             // Try driver object inside shipment
             if (shipment?.driver && typeof shipment.driver === 'object') {
                 setDriverProfile(shipment.driver);
@@ -281,7 +291,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         // Only run demo if in delivery phase and no real driver location
         const isInDelivery = deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery';
         const hasDriverAssigned = shipment?.driverId || shipment?.driverName || shipment?.driver;
-        
+
         if (isInDelivery && hasDriverAssigned && !driverLocation && demoPath.length > 0 && !demoMode) {
             // Auto-enable demo mode for testing
             setDemoMode(true);
@@ -297,7 +307,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
             if (pathIndex < demoPath.length) {
                 const newLoc = demoPath[pathIndex];
                 setDriverLocation(newLoc);
-                
+
                 // Calculate ETA for demo
                 if (shipment?.deliveryLocation && newLoc.latitude && newLoc.longitude) {
                     const demoEta = calculateETA(
@@ -308,7 +318,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     );
                     setEta(demoEta);
                 }
-                
+
                 pathIndex++;
             } else {
                 // Reset to start for continuous demo
@@ -345,7 +355,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
         if (!shipment || submittingRating) return;
         setSubmittingRating(true);
         try {
-            await updateDoc(doc(db, 'Shipments', shipment.id), { rating: val });
+            await updateDoc(doc(db, 'shipments', shipment.id), { rating: val });
             setRating(val);
         } finally {
             setSubmittingRating(false);
@@ -455,7 +465,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             </Marker>
                         ) : (
                             // Default marker when no delivery location
-                            <Marker 
+                            <Marker
                                 coordinate={{ latitude: 35.8256, longitude: 10.6369 }}
                                 title={translate('delivery_address')}
                                 description={shipment.deliveryAddress || translate('address_placeholder')}
@@ -483,9 +493,9 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         {/* Driver Location Marker - shown when driver is assigned */}
                         {hasDriver && driverLocation && (
                             <Marker coordinate={driverLocation}>
-                                <Animatable.View 
-                                    animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'} 
-                                    iterationCount="infinite" 
+                                <Animatable.View
+                                    animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'}
+                                    iterationCount="infinite"
                                     style={styles.driverMarker}
                                 >
                                     <View style={[styles.markerInner, { backgroundColor: colors.accent }]}>
@@ -496,32 +506,42 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         )}
 
                         {/* Route: From pickup to delivery when in transit */}
-                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && 
-                         shipment.deliveryLocation && (
-                            <>
-                                {/* Show route from driver to delivery */}
-                                {driverLocation && (
-                                    <Polyline
-                                        coordinates={[driverLocation, shipment.deliveryLocation]}
-                                        strokeColor={colors.accent}
-                                        strokeWidth={4}
-                                        lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [8, 4]}
-                                    />
-                                )}
-                                {/* Show route from pickup to delivery when driver is at pickup */}
-                                {(shipment.pickupLocation || shipment.senderLocation) && !driverLocation && (
-                                    <Polyline
-                                        coordinates={[
-                                            shipment.pickupLocation || shipment.senderLocation,
-                                            shipment.deliveryLocation
-                                        ]}
-                                        strokeColor="#F59E0B"
-                                        strokeWidth={3}
-                                        lineDashPattern={[6, 3]}
-                                    />
-                                )}
-                            </>
-                        )}
+                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') &&
+                            shipment.deliveryLocation && (
+                                <>
+                                    {/* Show full traveled path if available */}
+                                    {pathHistory.length > 1 && (
+                                        <Polyline
+                                            coordinates={pathHistory}
+                                            strokeColor={colors.accent + '80'}
+                                            strokeWidth={3}
+                                            lineDashPattern={[4, 2]}
+                                        />
+                                    )}
+
+                                    {/* Show route from driver to delivery */}
+                                    {driverLocation && (
+                                        <Polyline
+                                            coordinates={[driverLocation, shipment.deliveryLocation]}
+                                            strokeColor={colors.accent}
+                                            strokeWidth={4}
+                                            lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [8, 4]}
+                                        />
+                                    )}
+                                    {/* Show route from pickup to delivery when driver is at pickup */}
+                                    {(shipment.pickupLocation || shipment.senderLocation) && !driverLocation && (
+                                        <Polyline
+                                            coordinates={[
+                                                shipment.pickupLocation || shipment.senderLocation,
+                                                shipment.deliveryLocation
+                                            ]}
+                                            strokeColor="#F59E0B"
+                                            strokeWidth={3}
+                                            lineDashPattern={[6, 3]}
+                                        />
+                                    )}
+                                </>
+                            )}
 
                         {/* Route: From driver to delivery when out for delivery */}
                         {deliveryPhase === 'out_for_delivery' && driverLocation && shipment.deliveryLocation && (
@@ -636,7 +656,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                     </View>
                                 </View>
                             </View>
-                            
+
                             {/* Pickup & Delivery Time */}
                             <View style={styles.timeRow}>
                                 {(shipment.pickupTime || shipment.estimatedPickupTime) && (
@@ -644,8 +664,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                         <Clock size={14} color={colors.accent} />
                                         <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('pickup_time')}</Text>
                                         <Text style={[styles.timeValue, { color: colors.foreground }]}>
-                                            {shipment.pickupTime ? new Date(shipment.pickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 
-                                             shipment.estimatedPickupTime ? new Date(shipment.estimatedPickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                            {shipment.pickupTime ? new Date(shipment.pickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) :
+                                                shipment.estimatedPickupTime ? new Date(shipment.estimatedPickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}
                                         </Text>
                                     </View>
                                 )}
@@ -659,7 +679,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                     </View>
                                 )}
                             </View>
-                            
+
                             <View style={styles.driverActions}>
                                 <TouchableOpacity onPress={handleCall} style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
                                     <Phone size={20} color={colors.accent} />
@@ -683,15 +703,15 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                             </Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
                                 {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).map((item: any, index: number) => (
-                                    <TouchableOpacity 
-                                        key={index} 
+                                    <TouchableOpacity
+                                        key={index}
                                         style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.border }]}
                                         onPress={() => setSelectedItem(item)}
                                         activeOpacity={0.7}
                                     >
                                         {(item.image || item.mainImage || item.productImage || item.thumbnail) ? (
-                                            <Image 
-                                                source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }} 
+                                            <Image
+                                                source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }}
                                                 style={styles.itemImage}
                                                 resizeMode="cover"
                                             />
@@ -737,8 +757,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 {shipment.deliveryAddress || translate('address_placeholder')}
                             </Text>
                         </View>
-                        <TouchableOpacity 
-                            style={[styles.mapButton, { backgroundColor: colors.accent + '15' }]} 
+                        <TouchableOpacity
+                            style={[styles.mapButton, { backgroundColor: colors.accent + '15' }]}
                             onPress={() => {
                                 if (shipment?.deliveryLocation?.latitude && shipment?.deliveryLocation?.longitude) {
                                     try {
@@ -761,7 +781,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     </View>
 
                     {/* Timeline Expansion */}
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.expandTimeline}
                         onPress={() => setShowHistoryModal(true)}
                     >
@@ -971,8 +991,8 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                 <>
                                     {/* Item Image */}
                                     {(selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail) ? (
-                                        <Image 
-                                            source={{ uri: selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail }} 
+                                        <Image
+                                            source={{ uri: selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail }}
                                             style={styles.itemDetailImage}
                                             resizeMode="contain"
                                         />
@@ -1076,7 +1096,7 @@ const styles = StyleSheet.create({
     },
     headerTitleContainer: {
         alignItems: 'center',
-        marginTop:45
+        marginTop: 45
     },
     headerSub: {
         fontSize: 10,
@@ -1094,7 +1114,7 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop:20
+        marginTop: 20
     },
     scrollContent: {
         paddingTop: 0,
@@ -1355,7 +1375,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     // Detail Column Styles
-      detailCol: {
+    detailCol: {
         flexDirection: 'column',
         alignItems: 'center',
         gap: 15,

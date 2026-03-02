@@ -31,7 +31,7 @@ const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
         const firstDeal = activeDeals.length > 0 ? activeDeals[0] : null;
         return (
             <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                🔥 {firstDeal ? firstDeal.title : 'No Deals'}
+                🔥 {firstDeal ? firstDeal.title : 'Aucune offre'}
             </Text>
         );
     }
@@ -43,7 +43,7 @@ const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
                 <Text modifiers={[font({ size: 20 })]}>🔥</Text>
                 <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
                     <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                        {firstDeal ? firstDeal.title : 'No Deals'}
+                        {firstDeal ? firstDeal.title : 'Aucune offre'}
                     </Text>
                     {firstDeal && (
                         <Text modifiers={[font({ size: 12 }), secondaryStyle]}>
@@ -71,9 +71,9 @@ const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
                 <Text modifiers={[font({ size: 28 })]}>🔥</Text>
                 <Spacer />
                 <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 18 })]}>Deals</Text>
+                    <Text modifiers={[font({ weight: 'bold', size: 18 })]}>Offres</Text>
                     <Text modifiers={[font({ weight: 'bold', size: 22 }), redColor]}>
-                        {count > 0 ? `${count} Active` : 'None'}
+                        {count > 0 ? `${count} Actives` : 'Aucune'}
                     </Text>
                 </VStack>
             </VStack>
@@ -87,8 +87,8 @@ const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
         <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }), padding({ all: 16 })]}>
             <HStack modifiers={[padding({ bottom: 12 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
                 <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 20 })]}>Daily Deals</Text>
-                    <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Exclusive offers for you</Text>
+                    <Text modifiers={[font({ weight: 'bold', size: 20 })]}>Offres du Jour</Text>
+                    <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Offres exclusives pour vous</Text>
                 </VStack>
                 <Spacer />
                 <Text modifiers={[font({ size: 28 })]}>🔥</Text>
@@ -97,7 +97,7 @@ const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
             <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
                 {activeDeals.length === 0 ? (
                     <VStack modifiers={[frame({ maxWidth: 9999, minHeight: 80, alignment: 'center' })]}>
-                        <Text modifiers={[font({ size: 14 }), secondaryStyle]}>Check back later for deals</Text>
+                        <Text modifiers={[font({ size: 14 }), secondaryStyle]}>Revenez plus tard pour les offres</Text>
                     </VStack>
                 ) : (
                     activeDeals.slice(0, showCount).map((deal: any, i: number) => (

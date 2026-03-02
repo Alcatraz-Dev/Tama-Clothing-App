@@ -25,7 +25,7 @@ export const WIDGET_CONFIG = {
     MEDIUM: 'medium',
     LARGE: 'large'
   },
-  
+
   // Supported widget types
   TYPES: {
     CART: 'cart',
@@ -33,7 +33,7 @@ export const WIDGET_CONFIG = {
     ORDER_TRACKING: 'order_tracking',
     RECOMMENDATIONS: 'recommendations'
   },
-  
+
   // Refresh intervals in minutes
   REFRESH_INTERVALS: {
     CART: 15,
@@ -41,7 +41,7 @@ export const WIDGET_CONFIG = {
     ORDER_TRACKING: 60,
     RECOMMENDATIONS: 60
   },
-  
+
   // Platform support
   PLATFORMS: {
     IOS: 'ios',
@@ -52,3 +52,4 @@ export const WIDGET_CONFIG = {
 // Re-export manager and service
 export { default as WidgetManager } from './WidgetManager';
 export { default as WidgetDataService } from './services/WidgetDataService';
+export { default as OrderTrackingActivity } from './OrderTrackingActivity';

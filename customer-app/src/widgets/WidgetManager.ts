@@ -47,6 +47,10 @@ class WidgetManager {
       await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
       this.isInitialized = true;
       console.log('WidgetManager initialized successfully');
+
+      this.refreshAllWidgets().catch(e => {
+        console.error('Failed to immediately refresh widgets', e)
+      });
     } catch (error) {
       console.error('Failed to initialize WidgetManager:', error);
     }
@@ -149,6 +153,7 @@ class WidgetManager {
 
       switch (widgetType) {
         case WidgetType.CART: {
+          // @ts-ignore
           const CartWidget = (await import('./CartHomeWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
 
@@ -168,6 +173,7 @@ class WidgetManager {
         }
 
         case WidgetType.DEALS: {
+          // @ts-ignore
           const DealsWidget = (await import('./DealsWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
           if (cachedData && isDealsWidgetData(cachedData)) {
@@ -180,6 +186,7 @@ class WidgetManager {
         }
 
         case WidgetType.ORDER_TRACKING: {
+          // @ts-ignore
           const OrderTrackingWidget = (await import('./OrderTrackingWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
           if (cachedData && isOrderTrackingWidgetData(cachedData)) {
@@ -193,6 +200,7 @@ class WidgetManager {
         }
 
         case WidgetType.RECOMMENDATIONS: {
+          // @ts-ignore
           const RecommendationsWidget = (await import('./RecommendationsWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
           if (cachedData && isRecommendationsWidgetData(cachedData)) {
@@ -221,14 +229,29 @@ class WidgetManager {
       switch (widgetType) {
         case WidgetType.CART: {
           const { CartWidget } = await import('./android/CartWidget');
-          const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
-          if (cachedData && isCartWidgetData(cachedData)) {
+          // Update Medium
+          const medData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
+          if (medData && isCartWidgetData(medData)) {
             requestWidgetUpdate({
               widgetName: 'CartWidget',
               renderWidget: () => React.createElement(CartWidget, {
-                itemCountValue: cachedData.itemCount,
-                totalAmountValue: cachedData.totalAmount,
-                currencyCode: cachedData.currency
+                itemCountValue: medData.itemCount,
+                totalAmountValue: medData.totalAmount,
+                currencyCode: medData.currency,
+                size: WidgetSize.MEDIUM
+              })
+            });
+          }
+          // Update Large
+          const largeData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.LARGE) || medData;
+          if (largeData && isCartWidgetData(largeData)) {
+            requestWidgetUpdate({
+              widgetName: 'CartWidgetLarge',
+              renderWidget: () => React.createElement(CartWidget, {
+                itemCountValue: largeData.itemCount,
+                totalAmountValue: largeData.totalAmount,
+                currencyCode: largeData.currency,
+                size: WidgetSize.LARGE
               })
             });
           }
@@ -237,12 +260,23 @@ class WidgetManager {
 
         case WidgetType.DEALS: {
           const { DealsWidget } = await import('./android/DealsWidget');
-          const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
-          if (cachedData && isDealsWidgetData(cachedData)) {
+          const medData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
+          if (medData && isDealsWidgetData(medData)) {
             requestWidgetUpdate({
               widgetName: 'DealsWidget',
               renderWidget: () => React.createElement(DealsWidget, {
-                dealsCount: cachedData.activeDeals?.length || 0
+                dealsCount: medData.activeDeals?.length || 0,
+                size: WidgetSize.MEDIUM
+              })
+            });
+          }
+          const largeData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.LARGE) || medData;
+          if (largeData && isDealsWidgetData(largeData)) {
+            requestWidgetUpdate({
+              widgetName: 'DealsWidgetLarge',
+              renderWidget: () => React.createElement(DealsWidget, {
+                dealsCount: largeData.activeDeals?.length || 0,
+                size: WidgetSize.LARGE
               })
             });
           }
@@ -251,13 +285,25 @@ class WidgetManager {
 
         case WidgetType.ORDER_TRACKING: {
           const { OrderTrackingWidget } = await import('./android/OrderTrackingWidget');
-          const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
-          if (cachedData && isOrderTrackingWidgetData(cachedData)) {
+          const medData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
+          if (medData && isOrderTrackingWidgetData(medData)) {
             requestWidgetUpdate({
               widgetName: 'OrderTrackingWidget',
               renderWidget: () => React.createElement(OrderTrackingWidget, {
-                orderIdString: cachedData.orderId,
-                statusString: cachedData.statusText
+                orderIdString: medData.orderId,
+                statusString: medData.statusText,
+                size: WidgetSize.MEDIUM
+              })
+            });
+          }
+          const largeData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.LARGE) || medData;
+          if (largeData && isOrderTrackingWidgetData(largeData)) {
+            requestWidgetUpdate({
+              widgetName: 'OrderTrackingWidgetLarge',
+              renderWidget: () => React.createElement(OrderTrackingWidget, {
+                orderIdString: largeData.orderId,
+                statusString: largeData.statusText,
+                size: WidgetSize.LARGE
               })
             });
           }
@@ -266,12 +312,23 @@ class WidgetManager {
 
         case WidgetType.RECOMMENDATIONS: {
           const { RecommendationsWidget } = await import('./android/RecommendationsWidget');
-          const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
-          if (cachedData && isRecommendationsWidgetData(cachedData)) {
+          const medData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
+          if (medData && isRecommendationsWidgetData(medData)) {
             requestWidgetUpdate({
               widgetName: 'RecommendationsWidget',
               renderWidget: () => React.createElement(RecommendationsWidget, {
-                recCount: cachedData.products?.length || 0
+                recCount: medData.products?.length || 0,
+                size: WidgetSize.MEDIUM
+              })
+            });
+          }
+          const largeData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.LARGE) || medData;
+          if (largeData && isRecommendationsWidgetData(largeData)) {
+            requestWidgetUpdate({
+              widgetName: 'RecommendationsWidgetLarge',
+              renderWidget: () => React.createElement(RecommendationsWidget, {
+                recCount: largeData.products?.length || 0,
+                size: WidgetSize.LARGE
               })
             });
           }

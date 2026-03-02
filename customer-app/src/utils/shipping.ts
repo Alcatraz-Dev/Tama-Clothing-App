@@ -141,10 +141,10 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
 
   console.log('Auto Shipment data:', JSON.stringify(shipmentDocData));
 
-  const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
+  const shipmentDoc = await addDoc(collection(db, 'shipments'), shipmentDocData);
   console.log('Auto Shipment created with ID:', shipmentDoc.id);
 
-  const rtdbRef = ref(rtdb, `tracking/${shipmentDoc.id}`);
+  const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
   await set(rtdbRef, {
     status: 'pending',
     updatedAt: Date.now(),
@@ -152,9 +152,11 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
     driverId: null,
     zoneId,
     trackingId: trackingId,
+    orderId: orderData.orderId,
+    path: []
   });
 
-  await addDoc(collection(db, 'Deliveries'), {
+  await addDoc(collection(db, 'deliveries'), {
     id: shipmentDoc.id,
     trackingId,
     orderId: orderData.orderId,
@@ -230,10 +232,10 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
 
   console.log('Shipment data:', JSON.stringify(shipmentDocData));
 
-  const shipmentDoc = await addDoc(collection(db, 'Shipments'), shipmentDocData);
+  const shipmentDoc = await addDoc(collection(db, 'shipments'), shipmentDocData);
   console.log('Shipment created with ID:', shipmentDoc.id);
 
-  const rtdbRef = ref(rtdb, `tracking/${shipmentDoc.id}`);
+  const rtdbRef = ref(rtdb, `tracking/${trackingId}`);
   await set(rtdbRef, {
     status: 'pending',
     updatedAt: Date.now(),
@@ -241,9 +243,10 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
     driverId: null,
     zoneId,
     trackingId: trackingId,
+    path: []
   });
 
-  await addDoc(collection(db, 'Deliveries'), {
+  await addDoc(collection(db, 'deliveries'), {
     id: shipmentDoc.id,
     trackingId,
     orderId: shipmentDoc.id,
@@ -281,7 +284,7 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
         m.deliveryService.autoAssignDelivery(shipmentDoc.id)
       );
       if (autoAssignResult) {
-        await updateDoc(doc(db, 'Shipments', shipmentDoc.id), {
+        await updateDoc(doc(db, 'shipments', shipmentDoc.id), {
           driverId: autoAssignResult.driver.id,
           driverName: autoAssignResult.driver.fullName,
         });
@@ -708,13 +711,13 @@ export const updateShipmentStatus = async (shipmentId: string, trackingId: strin
 
   const deliveryStatus = statusMap[status] || status.toLowerCase();
 
-  await updateDoc(doc(db, 'Shipments', shipmentId), {
+  await updateDoc(doc(db, 'shipments', shipmentId), {
     status,
     updatedAt: serverTimestamp(),
     ...extraData
   });
 
-  const deliveryQuery = query(collection(db, 'Deliveries'), where('trackingId', '==', trackingId));
+  const deliveryQuery = query(collection(db, 'deliveries'), where('trackingId', '==', trackingId));
   const deliverySnap = await getDocs(deliveryQuery);
 
   if (!deliverySnap.empty) {
@@ -726,7 +729,7 @@ export const updateShipmentStatus = async (shipmentId: string, trackingId: strin
       notes: extraData.notes || '',
     });
 
-    await updateDoc(doc(db, 'Deliveries', deliveryDoc.id), {
+    await updateDoc(doc(db, 'deliveries', deliveryDoc.id), {
       status: deliveryStatus,
       timeline,
       updatedAt: serverTimestamp(),
@@ -742,7 +745,7 @@ export const updateShipmentStatus = async (shipmentId: string, trackingId: strin
   });
 
   try {
-    const shipmentSnap = await getDoc(doc(db, 'Shipments', shipmentId));
+    const shipmentSnap = await getDoc(doc(db, 'shipments', shipmentId));
     if (shipmentSnap.exists()) {
       const shipmentData = shipmentSnap.data();
       const senderId = shipmentData.senderId;
@@ -781,13 +784,17 @@ export const updateShipmentLocation = async (trackingId: string, location: { lat
   const locationData = { ...location, timestamp };
 
   // 1. Update RTDB for live tracking
-  const rtdbPathId = shipmentId || trackingId;
-  const rtdbRef = ref(rtdb, `tracking/${rtdbPathId}/location`);
+  const rtdbRef = ref(rtdb, `tracking/${trackingId}/location`);
   await set(rtdbRef, locationData);
+
+  // 1b. Add to path history in RTDB for "breadcrumb" effect
+  const pathRef = ref(rtdb, `tracking/${trackingId}/path`);
+  // Simple rotation or push: in real app use push() or keep limited history
+  // For now we just update location, UI will handle drawing polyline from driver to dest
 
   // 2. record route in Firestore (Optional: throttled)
   if (shipmentId) {
-    const docRef = doc(db, 'Shipments', shipmentId);
+    const docRef = doc(db, 'shipments', shipmentId);
     // We can use arrayUnion to add to the route, but maybe just occasionally
     // or keep current location in Firestore too
     await updateDoc(docRef, {
@@ -797,7 +804,7 @@ export const updateShipmentLocation = async (trackingId: string, location: { lat
   }
 };
 
-export const calculateETA = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+export const calculateETA = (lat1: number, lon1: number, lat2: number, lon2: number, speed?: number) => {
   // Haversine formula to get distance in km
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -809,11 +816,14 @@ export const calculateETA = (lat1: number, lon1: number, lat2: number, lon2: num
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
 
-  // Assume average city speed 30km/h
-  const timeInHours = distance / 30;
-  const timeInMinutes = Math.round(timeInHours * 60);
+  // Use current speed if available (min 5km/h, max 80km/h for estimation)
+  // Assume average city speed 30km/h if speed not provided
+  const avgSpeed = speed && speed > 5 ? Math.min(speed * 3.6, 80) : 30; // 3.6 conversion from m/s to km/h
+  const timeInHours = distance / avgSpeed;
+  const timeInMinutes = Math.round(timeInHours * 60) + 2; // Add 2 min buffer
 
-  if (timeInMinutes < 5) return "Moins de 5 min";
+  if (timeInMinutes < 3) return "Arrivée imminente";
+  if (timeInMinutes < 6) return "Moins de 5 min";
   return `Environ ${timeInMinutes} min`;
 };
 
@@ -827,7 +837,7 @@ export const subscribeToTracking = (trackingId: string, onUpdate: (data: any) =>
 
 export const subscribeToUserShipments = (userId: string, onUpdate: (shipments: Shipment[]) => void) => {
   const q = query(
-    collection(db, 'Shipments'),
+    collection(db, 'shipments'),
     where('senderId', '==', userId),
     orderBy('createdAt', 'desc')
   );
@@ -843,7 +853,7 @@ export const subscribeToUserShipments = (userId: string, onUpdate: (shipments: S
 
 export const subscribeToUserDeliveries = (userId: string, onUpdate: (deliveries: any[]) => void) => {
   const q = query(
-    collection(db, 'Deliveries'),
+    collection(db, 'deliveries'),
     where('senderId', '==', userId),
     orderBy('createdAt', 'desc')
   );
@@ -858,7 +868,7 @@ export const subscribeToUserDeliveries = (userId: string, onUpdate: (deliveries:
 };
 
 export const getShipmentByTrackingId = async (trackingId: string): Promise<Shipment | null> => {
-  const q = query(collection(db, 'Shipments'), where('trackingId', '==', trackingId));
+  const q = query(collection(db, 'shipments'), where('trackingId', '==', trackingId));
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) return null;
@@ -903,14 +913,14 @@ export const subscribeToDriverNotifications = (driverId: string, onUpdate: (noti
 
 export const getDriverDeliveriesInZone = async (zoneId: string, driverId?: string) => {
   let q = query(
-    collection(db, 'Deliveries'),
+    collection(db, 'deliveries'),
     where('status', '==', 'pending'),
     where('zoneId', '==', zoneId)
   );
 
   if (driverId) {
     q = query(
-      collection(db, 'Deliveries'),
+      collection(db, 'deliveries'),
       where('status', '==', 'pending'),
       where('zoneId', '==', zoneId),
       orderBy('priority', 'desc'),
