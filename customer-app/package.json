@@ -23,6 +23,7 @@
     "bna-ui": "^2.0.4",
     "buffer": "^6.0.3",
     "expo": "^55",
+    "expo-asset": "~55.0.8",
     "expo-audio": "~55.0.8",
     "expo-blur": "~55.0.8",
     "expo-build-properties": "~55.0.9",
@@ -37,6 +38,7 @@
     "expo-image": "~55.0.5",
     "expo-image-picker": "~55.0.10",
     "expo-linear-gradient": "~55.0.8",
+    "expo-linking": "~55.0.7",
     "expo-local-authentication": "~55.0.8",
     "expo-location": "~55.1.2",
     "expo-media-library": "~55.0.9",
@@ -74,6 +76,21 @@
     "expo-module-scripts": "^55.0.2",
     "patch-package": "^8.0.1",
     "typescript": "^5.9.3"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@zegocloud/zego-uikit-prebuilt-live-streaming-rn",
+          "@zegocloud/zego-uikit-rn",
+          "zego-express-engine-reactnative",
+          "zego-zim-react-native",
+          "zego-zpns-react-native",
+          "expo-widgets",
+          "react-native-orientation-locker"
+        ]
+      }
+    }
   },
   "private": true
 }

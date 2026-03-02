@@ -4,175 +4,163 @@ import { createWidget, WidgetBase } from 'expo-widgets';
 
 export type OrderTrackingWidgetProps = {
     orderId?: string;
-    statusProgress?: number;
     statusText?: string;
     estimatedDelivery?: string;
-    lang?: 'en' | 'fr' | 'ar';
+    isDark?: boolean;
 };
-
-// Map-like visual simulation
-const MapSimulation = (props: { height: number }) => {
-    'widget';
-    const { height } = props;
-    return (
-        <VStack modifiers={[
-            frame({ maxWidth: 9999, height: height }),
-            cornerRadius(10),
-            background('#1c1c1e')
-        ]}>
-            <ZStack modifiers={[frame({ maxWidth: 9999, height: height })]}>
-                <VStack modifiers={[frame({ width: 2, height: height }), background('#2c2c2e'), offset({ x: -40 })]}><Spacer /></VStack>
-                <VStack modifiers={[frame({ width: 2, height: height }), background('#2c2c2e'), offset({ x: 20 })]}><Spacer /></VStack>
-                <HStack modifiers={[frame({ width: 9999, height: 2 }), background('#2c2c2e'), offset({ y: 10 })]}><Spacer /></HStack>
-
-                <VStack modifiers={[frame({ width: 24, height: 24 }), cornerRadius(12), background('#32D74B'), offset({ x: 40, y: height / 4 }), frame({ alignment: 'center' })]}>
-                    <Text modifiers={[font({ size: 12 })]}>🏠</Text>
-                </VStack>
-
-                <VStack modifiers={[frame({ width: 24, height: 24 }), cornerRadius(12), background('#FF9F0A'), offset({ x: -20, y: -height / 4 }), frame({ alignment: 'center' })]}>
-                    <Text modifiers={[font({ size: 12 })]}>🛵</Text>
-                </VStack>
-            </ZStack>
-        </VStack>
-    );
-};
-
 
 const OrderTrackingWidgetComponent = (props: WidgetBase<OrderTrackingWidgetProps>) => {
     'widget';
     const {
         family,
         orderId = 'AMA-38290',
-        statusProgress = 0.65,
-        statusText = 'En Transit',
-        estimatedDelivery = '24 Jan, 14:00',
+        statusText = 'En préparation',
+        estimatedDelivery = 'Demain',
+        isDark = true
     } = props;
 
-    const alignment = 'leading';
+    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
+    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
+    const primaryTextColor = isDark ? '#ffffff' : '#000000';
+    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
+
     const secondaryStyle = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
-    const blueColor = foregroundStyle({ type: 'color', color: '#0A84FF' });
+    const blueStyle = foregroundStyle({ type: 'color', color: '#0A84FF' });
+
+    // ── Small Widget ─────────────────────────────────────────────────────────────
+    if (family === 'systemSmall') {
+        return (
+            <VStack modifiers={[
+                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }),
+                padding({ all: 0 }),
+                background(bgColor)
+            ]}>
+                <VStack modifiers={[
+                    frame({ maxWidth: 9999, height: 75, alignment: 'center' }),
+                    background(cardBgColor)
+                ]}>
+                    <Image systemName="truck.box.fill" modifiers={[font({ size: 36 }), blueStyle]} />
+                </VStack>
+
+                <VStack modifiers={[padding({ horizontal: 10, vertical: 8 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                    <Text modifiers={[font({ weight: 'bold', size: 12 }), secondaryStyle]}>SUIVI</Text>
+                    <Text modifiers={[font({ weight: 'black', size: 14 }), foregroundStyle(primaryTextColor), padding({ top: 1 })]}>{orderId}</Text>
+                    <Text modifiers={[font({ size: 11 }), blueStyle, padding({ top: 1 })]}>{statusText}</Text>
+                </VStack>
+            </VStack>
+        );
+    }
 
     // ── Accessories (Lock Screen / Notch) ─────────────────────────────────────────
     if (family === 'accessoryInline') {
         return (
             <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                📦 {statusText} (#{orderId})
+                📦 {orderId}: {statusText}
             </Text>
-        );
-    }
-
-    if (family === 'accessoryRectangular') {
-        return (
-            <HStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: alignment })]}>
-                <Text modifiers={[font({ size: 20 })]}>📦</Text>
-                <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: alignment })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 14 })]}>#{orderId}</Text>
-                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>{statusText}</Text>
-                </VStack>
-            </HStack>
         );
     }
 
     if (family === 'accessoryCircular') {
         return (
             <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'center' })]}>
-                <Text modifiers={[font({ size: 24 })]}>📦</Text>
+                <Image systemName="box.truck.fill" modifiers={[font({ size: 22 }), blueStyle]} />
             </VStack>
         );
     }
 
-    // ── Small Widget ─────────────────────────────────────────────────────────────
-    if (family === 'systemSmall') {
-        return (
-            <VStack modifiers={[
-                frame({ maxWidth: 9999, maxHeight: 9999, alignment: alignment }),
-                padding({ all: 14 }),
-                background('#1C1C1E') // Dark background for consistency
-            ]}>
-                <Text modifiers={[font({ size: 24 })]}>📦</Text>
-                <Spacer />
-                <VStack modifiers={[frame({ alignment: alignment })]}>
-                    <Text modifiers={[font({ weight: 'medium', size: 12 }), secondaryStyle]}>#{orderId}</Text>
-                    <Text modifiers={[font({ weight: 'black', size: 18 }), blueColor]}>{statusText}</Text>
-                    <Text modifiers={[font({ size: 10 }), secondaryStyle, padding({ top: 2 })]}>{estimatedDelivery}</Text>
-                </VStack>
-            </VStack>
-        );
-    }
+    // ── Medium & Large Widget ────────────────────────────────────────────────────
+    const isLarge = family === 'systemLarge';
+    const headerPadding = isLarge ? 16 : 12;
 
-    // ── Medium Widget ────────────────────────────────────────────────────────────
-    if (family === 'systemMedium') {
-        return (
-            <VStack modifiers={[
-                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
-                padding({ all: 14 }),
-                background('#1C1C1E') // Dark background
-            ]}>
-                <HStack modifiers={[padding({ bottom: 6 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                    <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                        <Text modifiers={[font({ weight: 'bold', size: 15 }), foregroundStyle('#FFFFFF')]}>Suivi Commande</Text>
-                        <Text modifiers={[font({ size: 11 }), secondaryStyle]}>#{orderId}</Text>
-                    </VStack>
-                    <Spacer />
-                    <Text modifiers={[font({ size: 20 })]}>🛵</Text>
-                </HStack>
-
-                <VStack modifiers={[padding({ bottom: 8 }), frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'black', size: 20 }), blueColor]}>{statusText}</Text>
-                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>Livraison: {estimatedDelivery}</Text>
-                </VStack>
-
-                <MapSimulation height={80} />
-            </VStack>
-        );
-    }
-
-    // ── Large Widget ─────────────────────────────────────────────────────────────
     return (
         <VStack modifiers={[
             frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
-            padding({ all: 16 }),
-            background('#1C1C1E') // Dark background
+            padding({ all: 0 }),
+            background(bgColor)
         ]}>
-            <HStack modifiers={[padding({ bottom: 10 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 18 }), foregroundStyle('#FFFFFF')]}>Statut de la Commande</Text>
-                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>#{orderId}</Text>
-                </VStack>
-                <Spacer />
-                <Text modifiers={[font({ size: 28 }), blueColor]}>🛵</Text>
-            </HStack>
-
-            <VStack modifiers={[padding({ bottom: 12 }), frame({ alignment: 'leading' })]}>
-                <Text modifiers={[font({ weight: 'black', size: 24 }), blueColor]}>{statusText}</Text>
-                <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Prévu: {estimatedDelivery}</Text>
+            <VStack modifiers={[
+                frame({ maxWidth: 9999 }),
+                padding({ horizontal: headerPadding, vertical: isLarge ? 12 : 8 }),
+                background(cardBgColor)
+            ]}>
+                <HStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                    <VStack modifiers={[frame({ alignment: 'leading' })]}>
+                        <Text modifiers={[font({ weight: 'black', size: isLarge ? 20 : 16 }), foregroundStyle(primaryTextColor)]}>Suivi Commande</Text>
+                        <Text modifiers={[font({ size: 11 }), secondaryStyle]}>ID: {orderId}</Text>
+                    </VStack>
+                    <Spacer />
+                    <Image systemName="box.truck.fill" modifiers={[font({ size: isLarge ? 24 : 18 }), blueStyle]} />
+                </HStack>
             </VStack>
 
-            <MapSimulation height={110} />
+            <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ all: headerPadding })]}>
+                <HStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ bottom: isLarge ? 16 : 12 })]}>
+                    <VStack modifiers={[
+                        frame({ width: isLarge ? 48 : 40, height: isLarge ? 48 : 40, alignment: 'center' }),
+                        cornerRadius(10),
+                        background(isDark ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.1)')
+                    ]}>
+                        <Image systemName="shippingbox.fill" modifiers={[font({ size: isLarge ? 24 : 18 }), blueStyle]} />
+                    </VStack>
+                    <VStack modifiers={[padding({ leading: isLarge ? 12 : 10 }), frame({ alignment: 'leading' })]}>
+                        <Text modifiers={[font({ weight: 'bold', size: isLarge ? 16 : 14 }), foregroundStyle(primaryTextColor)]}>{statusText}</Text>
+                        <Text modifiers={[font({ size: isLarge ? 13 : 11 }), secondaryStyle]}>Livraison prévue: {estimatedDelivery}</Text>
+                    </VStack>
+                </HStack>
 
-            {family === 'systemLarge' && (
-                <VStack modifiers={[padding({ top: 18 }), frame({ alignment: 'leading' })]}>
-                    <HStack modifiers={[frame({ alignment: 'leading' })]}>
-                        <VStack modifiers={[frame({ width: 8, height: 8 }), cornerRadius(4), background('#32D74B')]}><Spacer /></VStack>
+                {isLarge && (
+                    <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ top: 8 })]}>
+                        <Text modifiers={[font({ weight: 'bold', size: 14 }), foregroundStyle(primaryTextColor), padding({ bottom: 12 })]}>Étapes de livraison</Text>
+                        {[
+                            { t: 'Commande confirmée', d: 'Hier, 14:30', c: true },
+                            { t: 'En préparation', d: 'Aujourd\'hui, 09:15', c: true },
+                            { t: 'En transit', d: 'À venir', c: false },
+                            { t: 'Livré', d: 'À venir', c: false }
+                        ].map((step, i) => (
+                            <HStack key={i} modifiers={[padding({ bottom: 12 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                                <VStack modifiers={[
+                                    frame({ width: 20, height: 20, alignment: 'center' }),
+                                    cornerRadius(10),
+                                    background(step.c ? '#34C759' : '#C7C7CC')
+                                ]}>
+                                    <Image systemName={step.c ? "checkmark" : "circle"} modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle('#FFFFFF')]} />
+                                </VStack>
+                                <VStack modifiers={[padding({ leading: 10 }), frame({ alignment: 'leading' })]}>
+                                    <Text modifiers={[font({ weight: step.c ? 'semibold' : 'regular', size: 13 }), foregroundStyle(step.c ? primaryTextColor : secondaryTextColor)]}>{step.t}</Text>
+                                    <Text modifiers={[font({ size: 11 }), secondaryStyle]}>{step.d}</Text>
+                                </VStack>
+                            </HStack>
+                        ))}
+                    </VStack>
+                )}
 
-                        <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
-                            <Text modifiers={[font({ weight: 'bold', size: 13 }), foregroundStyle('#FFFFFF')]}>En cours de livraison</Text>
-                            <Text modifiers={[font({ size: 11 }), secondaryStyle]}>Le livreur est proche de votre adresse</Text>
+                {!isLarge && (
+                    <VStack modifiers={[
+                        frame({ maxWidth: 9999, height: 4, alignment: 'leading' }),
+                        cornerRadius(2),
+                        background(isDark ? '#3a3a3c' : '#e5e5ea'),
+                        padding({ top: 4 })
+                    ]}>
+                        <VStack modifiers={[
+                            frame({ width: 120, height: 4 }), // Simulated progress
+                            cornerRadius(2),
+                            background('#34C759')
+                        ]}>
+                            <Spacer />
                         </VStack>
-                    </HStack>
-                </VStack>
-            )}
+                    </VStack>
+                )}
+            </VStack>
         </VStack>
     );
 };
-
 
 const OrderTrackingWidget = createWidget('OrderTrackingWidget', OrderTrackingWidgetComponent);
 export default OrderTrackingWidget;
 
 OrderTrackingWidget.updateSnapshot({
-    orderId: 'BC-20192',
-    statusProgress: 0.65,
-    statusText: 'In Transit',
-    estimatedDelivery: 'Thursday, 3:00 PM'
+    orderId: 'AMA-38290',
+    statusText: 'En préparation',
+    estimatedDelivery: 'Demain',
+    isDark: true
 });

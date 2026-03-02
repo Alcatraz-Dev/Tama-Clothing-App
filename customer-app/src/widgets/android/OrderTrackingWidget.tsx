@@ -5,10 +5,17 @@ export const OrderTrackingWidget = ({
     orderIdString = '',
     statusString = '',
     estimatedDelivery = '',
-    size = 'MEDIUM'
+    size = 'MEDIUM',
+    isDark = true
 }: any) => {
     const isLarge = size === 'LARGE';
     const isSmall = size === 'SMALL';
+
+    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
+    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
+    const primaryTextColor = isDark ? '#ffffff' : '#000000';
+    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
+    const accentColor = '#34C759';
 
     if (isSmall) {
         return (
@@ -16,7 +23,7 @@ export const OrderTrackingWidget = ({
                 style={{
                     width: 'match_parent',
                     height: 'match_parent',
-                    backgroundColor: '#1C1C1E',
+                    backgroundColor: bgColor,
                     padding: 8,
                     borderRadius: 24,
                     justifyContent: 'center',
@@ -25,7 +32,7 @@ export const OrderTrackingWidget = ({
             >
                 <FlexWidget
                     style={{
-                        backgroundColor: '#2C2C2E',
+                        backgroundColor: cardBgColor,
                         borderRadius: 12,
                         width: 44,
                         height: 44,
@@ -41,7 +48,7 @@ export const OrderTrackingWidget = ({
                 </FlexWidget>
                 <TextWidget
                     text={statusString ? (statusString.length > 8 ? statusString.slice(0, 8) + '..' : statusString) : '...'}
-                    style={{ color: '#34C759', fontSize: 13, fontWeight: 'bold' }}
+                    style={{ color: accentColor, fontSize: 13, fontWeight: 'bold' }}
                 />
             </FlexWidget>
         );
@@ -52,7 +59,7 @@ export const OrderTrackingWidget = ({
             style={{
                 width: 'match_parent',
                 height: 'match_parent',
-                backgroundColor: '#1C1C1E',
+                backgroundColor: bgColor,
                 padding: 10,
                 borderRadius: 28,
             }}
@@ -68,7 +75,7 @@ export const OrderTrackingWidget = ({
             >
                 <FlexWidget
                     style={{
-                        backgroundColor: '#2C2C2E',
+                        backgroundColor: cardBgColor,
                         borderRadius: 12,
                         width: 40,
                         height: 40,
@@ -84,7 +91,7 @@ export const OrderTrackingWidget = ({
 
                 <FlexWidget
                     style={{
-                        backgroundColor: '#34C759',
+                        backgroundColor: accentColor,
                         borderRadius: 14,
                         paddingHorizontal: 10,
                         paddingVertical: 4,
@@ -101,11 +108,11 @@ export const OrderTrackingWidget = ({
                 <FlexWidget style={{ marginVertical: 8 }}>
                     <TextWidget
                         text="Dernière étape franchie"
-                        style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
+                        style={{ color: primaryTextColor, fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
                     />
                     <TextWidget
                         text="Votre colis est en cours de traitement par notre équipe logistique."
-                        style={{ color: '#8E8E93', fontSize: 12 }}
+                        style={{ color: secondaryTextColor, fontSize: 12 }}
                     />
                 </FlexWidget>
             )}
@@ -113,7 +120,7 @@ export const OrderTrackingWidget = ({
             <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 2 }}>
                 <TextWidget
                     text={orderIdString ? `#${orderIdString.toUpperCase().slice(0, 8)}` : 'Suivi de Commande'}
-                    style={{ color: '#8E8E93', fontSize: 11, fontWeight: '600', marginBottom: 1 }}
+                    style={{ color: secondaryTextColor, fontSize: 11, fontWeight: '600', marginBottom: 1 }}
                 />
                 <TextWidget
                     text={statusString || 'Réception...'}
@@ -122,7 +129,7 @@ export const OrderTrackingWidget = ({
                 {(isLarge || estimatedDelivery) && (
                     <TextWidget
                         text={estimatedDelivery ? `Date prévue: ${estimatedDelivery}` : 'Traitement en cours'}
-                        style={{ color: '#ffffff', fontSize: 12, marginTop: 4, fontWeight: '500' }}
+                        style={{ color: primaryTextColor, fontSize: 12, marginTop: 4, fontWeight: '500' }}
                     />
                 )}
             </FlexWidget>

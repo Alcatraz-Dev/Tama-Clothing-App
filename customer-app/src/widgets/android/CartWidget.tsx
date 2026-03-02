@@ -5,10 +5,17 @@ export const CartWidget = ({
     itemCountValue = 0,
     totalAmountValue = 0,
     currencyCode = 'TND',
-    size = 'MEDIUM'
+    size = 'MEDIUM',
+    isDark = true
 }: any) => {
     const isLarge = size === 'LARGE';
     const isSmall = size === 'SMALL';
+
+    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
+    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
+    const primaryTextColor = isDark ? '#ffffff' : '#000000';
+    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
+    const accentColor = '#0A84FF';
 
     if (isSmall) {
         return (
@@ -16,7 +23,7 @@ export const CartWidget = ({
                 style={{
                     width: 'match_parent',
                     height: 'match_parent',
-                    backgroundColor: '#1C1C1E',
+                    backgroundColor: bgColor,
                     padding: 8,
                     borderRadius: 24,
                     justifyContent: 'center',
@@ -25,7 +32,7 @@ export const CartWidget = ({
             >
                 <FlexWidget
                     style={{
-                        backgroundColor: '#2C2C2E',
+                        backgroundColor: cardBgColor,
                         borderRadius: 12,
                         width: 44,
                         height: 44,
@@ -41,7 +48,7 @@ export const CartWidget = ({
                 </FlexWidget>
                 <TextWidget
                     text={`${itemCountValue}`}
-                    style={{ color: '#0A84FF', fontSize: 16, fontWeight: 'bold' }}
+                    style={{ color: accentColor, fontSize: 16, fontWeight: 'bold' }}
                 />
             </FlexWidget>
         );
@@ -52,7 +59,7 @@ export const CartWidget = ({
             style={{
                 width: 'match_parent',
                 height: 'match_parent',
-                backgroundColor: '#1C1C1E',
+                backgroundColor: bgColor,
                 padding: 10,
                 borderRadius: 28,
             }}
@@ -68,7 +75,7 @@ export const CartWidget = ({
             >
                 <FlexWidget
                     style={{
-                        backgroundColor: '#2C2C2E',
+                        backgroundColor: cardBgColor,
                         borderRadius: 12,
                         width: 40,
                         height: 40,
@@ -84,7 +91,7 @@ export const CartWidget = ({
 
                 <FlexWidget
                     style={{
-                        backgroundColor: '#0A84FF',
+                        backgroundColor: accentColor,
                         borderRadius: 14,
                         paddingHorizontal: 10,
                         paddingVertical: 4,
@@ -101,11 +108,11 @@ export const CartWidget = ({
                 <FlexWidget style={{ marginVertical: 8 }}>
                     <TextWidget
                         text="Résumé de votre commande"
-                        style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
+                        style={{ color: primaryTextColor, fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
                     />
                     <TextWidget
                         text="Consultez votre panier pour plus de détails."
-                        style={{ color: '#8E8E93', fontSize: 12 }}
+                        style={{ color: secondaryTextColor, fontSize: 12 }}
                     />
                 </FlexWidget>
             )}
@@ -113,16 +120,16 @@ export const CartWidget = ({
             <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 2 }}>
                 <TextWidget
                     text="Total Panier"
-                    style={{ color: '#8E8E93', fontSize: 11, fontWeight: '600', marginBottom: 1 }}
+                    style={{ color: secondaryTextColor, fontSize: 11, fontWeight: '600', marginBottom: 1 }}
                 />
                 <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TextWidget
                         text={totalAmountValue > 0 ? `${totalAmountValue.toFixed(2)}` : '0.00'}
-                        style={{ color: '#ffffff', fontSize: isLarge ? 32 : 24, fontWeight: 'bold' }}
+                        style={{ color: primaryTextColor, fontSize: isLarge ? 32 : 24, fontWeight: 'bold' }}
                     />
                     <TextWidget
                         text={` ${currencyCode}`}
-                        style={{ color: '#0A84FF', fontSize: isLarge ? 18 : 14, fontWeight: 'bold', marginLeft: 4 }}
+                        style={{ color: accentColor, fontSize: isLarge ? 18 : 14, fontWeight: 'bold', marginLeft: 4 }}
                     />
                 </FlexWidget>
             </FlexWidget>

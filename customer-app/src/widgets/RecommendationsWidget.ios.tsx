@@ -13,14 +13,21 @@ export type ProductRecommendation = {
 export type RecommendationsWidgetProps = {
     products?: ProductRecommendation[];
     userId?: string;
+    isDark?: boolean;
 };
 
 const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetProps>) => {
     'widget';
     const {
         family,
-        products = []
+        products = [],
+        isDark = true
     } = props;
+
+    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
+    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
+    const primaryTextColor = isDark ? '#ffffff' : '#000000';
+    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
 
     const secondaryStyle = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
     const purpleStyle = foregroundStyle({ type: 'color', color: '#AF52DE' });
@@ -40,22 +47,24 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
             <VStack modifiers={[
                 frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }),
                 padding({ all: 0 }),
-                background('#1c1c1e')
+                background(bgColor)
             ]}>
                 <VStack modifiers={[
-                    frame({ maxWidth: 9999, height: 80, alignment: 'center' }),
-                    background('#2c2c2e')
+                    frame({ maxWidth: 9999, height: 75, alignment: 'center' }),
+                    background(cardBgColor)
                 ]}>
                     <Image systemName="sparkles" modifiers={[font({ size: 36 }), purpleGradient]} />
                 </VStack>
 
-                <VStack modifiers={[padding({ horizontal: 12, vertical: 8 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 14 }), secondaryStyle]}>Pour Vous</Text>
-                    <Text modifiers={[font({ weight: 'black', size: 16 }), purpleStyle, padding({ top: 2 })]}>
+                <VStack modifiers={[padding({ horizontal: 10, vertical: 8 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                    <Text modifiers={[font({ weight: 'bold', size: 12 }), secondaryStyle]}>POUR VOUS</Text>
+                    <Text modifiers={[font({ weight: 'black', size: 14 }), purpleStyle, padding({ top: 1 })]}>
                         {count > 0 ? `${count} Articles` : 'Découvrir'}
                     </Text>
                     {firstProduct && (
-                        <Text modifiers={[font({ size: 11 }), secondaryStyle, padding({ top: 2 })]}>{firstProduct.name}</Text>
+                        <Text modifiers={[font({ size: 10 }), secondaryStyle, padding({ top: 1 })]}>
+                            {firstProduct.name.length > 15 ? firstProduct.name.slice(0, 15) + '…' : firstProduct.name}
+                        </Text>
                     )}
                 </VStack>
             </VStack>
@@ -92,16 +101,16 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
         <VStack modifiers={[
             frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
             padding({ all: 0 }),
-            background('#1c1c1e')
+            background(bgColor)
         ]}>
             <VStack modifiers={[
                 frame({ maxWidth: 9999 }),
-                padding({ horizontal: headerPadding, top: headerPadding, bottom: isLarge ? 12 : 8 }),
-                background('#2c2c2e')
+                padding({ horizontal: headerPadding, vertical: isLarge ? 12 : 8 }),
+                background(cardBgColor)
             ]}>
                 <HStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
                     <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                        <Text modifiers={[font({ weight: 'black', size: isLarge ? 18 : 16 }), foregroundStyle('#FFFFFF')]}>Choisis Pour Vous</Text>
+                        <Text modifiers={[font({ weight: 'black', size: isLarge ? 18 : 16 }), foregroundStyle(primaryTextColor)]}>Choisis Pour Vous</Text>
                         <Text modifiers={[font({ size: 11 }), secondaryStyle]}>Selon votre style</Text>
                     </VStack>
                     <Spacer />
@@ -124,13 +133,13 @@ const RecommendationsWidgetComponent = (props: WidgetBase<RecommendationsWidgetP
                             <VStack modifiers={[
                                 frame({ width: itemWidth, height: imageHeight, alignment: 'center' }),
                                 cornerRadius(12),
-                                background('#2c2c2e'),
-                                shadow({ radius: 4, y: 2, color: 'rgba(0,0,0,0.4)' })
+                                background(cardBgColor),
+                                shadow({ radius: 4, y: 2, color: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.1)' })
                             ]}>
                                 <Image systemName="handbag.fill" modifiers={[font({ size: isLarge ? 32 : 26 }), secondaryStyle]} />
                             </VStack>
                             <VStack modifiers={[padding({ top: 8 }), frame({ alignment: 'leading' })]}>
-                                <Text modifiers={[font({ weight: 'bold', size: isLarge ? 13 : 11 }), foregroundStyle('#FFFFFF')]}>
+                                <Text modifiers={[font({ weight: 'bold', size: isLarge ? 13 : 11 }), foregroundStyle(primaryTextColor)]}>
                                     {item.name.length > (isLarge ? 20 : 15) ? item.name.slice(0, isLarge ? 20 : 15) + '…' : item.name}
                                 </Text>
                                 <Text modifiers={[font({ weight: 'black', size: isLarge ? 14 : 12 }), purpleStyle, padding({ top: 1 })]}>

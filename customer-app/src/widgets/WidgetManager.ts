@@ -5,9 +5,19 @@
  * across both iOS and Android platforms.
  */
 
-import { Platform, NativeModules } from 'react-native';
+import { Platform, Appearance } from 'react-native';
 import { WidgetType, WidgetSize, WidgetSpecificData, DEFAULT_REFRESH_INTERVALS } from './types';
 import WidgetDataService from './services/WidgetDataService';
+
+// Import iOS Widgets (Android versions export null)
+// @ts-ignore
+import CartWidget from './CartHomeWidget';
+// @ts-ignore
+import DealsWidget from './DealsWidget';
+// @ts-ignore
+import OrderTrackingWidget from './OrderTrackingWidget';
+// @ts-ignore
+import RecommendationsWidget from './RecommendationsWidget';
 
 // ============================================
 // WIDGET MANAGER
@@ -150,18 +160,17 @@ class WidgetManager {
   private async updateiOSWidget(widgetType: WidgetType): Promise<void> {
     try {
       const { isCartWidgetData, isDealsWidgetData, isOrderTrackingWidgetData, isRecommendationsWidgetData } = await import('./types');
+      const isDark = Appearance.getColorScheme() === 'dark';
 
       switch (widgetType) {
         case WidgetType.CART: {
-          // @ts-ignore
-          const CartWidget = (await import('./CartHomeWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
-
-          if (cachedData && isCartWidgetData(cachedData)) {
+          if (cachedData && isCartWidgetData(cachedData) && CartWidget) {
             CartWidget.updateSnapshot({
               itemCount: cachedData.itemCount,
               totalAmount: cachedData.totalAmount,
               currency: cachedData.currency,
+              isDark,
               items: cachedData.items.map((item: any) => ({
                 name: item.name,
                 price: item.price,
@@ -173,42 +182,37 @@ class WidgetManager {
         }
 
         case WidgetType.DEALS: {
-          // @ts-ignore
-          const DealsWidget = (await import('./DealsWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
-          if (cachedData && isDealsWidgetData(cachedData)) {
+          if (cachedData && isDealsWidgetData(cachedData) && DealsWidget) {
             DealsWidget.updateSnapshot({
               activeDeals: cachedData.activeDeals,
-              currency: 'TND'
-
+              currency: 'TND',
+              isDark
             });
           }
           break;
         }
 
         case WidgetType.ORDER_TRACKING: {
-          // @ts-ignore
-          const OrderTrackingWidget = (await import('./OrderTrackingWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
-          if (cachedData && isOrderTrackingWidgetData(cachedData)) {
+          if (cachedData && isOrderTrackingWidgetData(cachedData) && OrderTrackingWidget) {
             OrderTrackingWidget.updateSnapshot({
               orderId: cachedData.orderId,
               statusText: cachedData.statusText,
-              estimatedDelivery: cachedData.estimatedDelivery ? new Date(cachedData.estimatedDelivery).toLocaleDateString() : undefined
+              estimatedDelivery: cachedData.estimatedDelivery ? new Date(cachedData.estimatedDelivery).toLocaleDateString() : undefined,
+              isDark
             });
           }
           break;
         }
 
         case WidgetType.RECOMMENDATIONS: {
-          // @ts-ignore
-          const RecommendationsWidget = (await import('./RecommendationsWidget')).default;
           const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
-          if (cachedData && isRecommendationsWidgetData(cachedData)) {
+          if (cachedData && isRecommendationsWidgetData(cachedData) && RecommendationsWidget) {
             RecommendationsWidget.updateSnapshot({
               products: cachedData.products,
-              currency: 'TND'
-
+              currency: 'TND',
+              isDark
             });
           }
           break;
@@ -227,6 +231,7 @@ class WidgetManager {
       const { requestWidgetUpdate } = await import('react-native-android-widget');
       const { isCartWidgetData, isDealsWidgetData, isOrderTrackingWidgetData, isRecommendationsWidgetData } = await import('./types');
       const React = await import('react');
+      const isDark = Appearance.getColorScheme() === 'dark';
 
       switch (widgetType) {
         case WidgetType.CART: {
@@ -240,7 +245,8 @@ class WidgetManager {
                 itemCountValue: medData.itemCount,
                 totalAmountValue: medData.totalAmount,
                 currencyCode: medData.currency,
-                size: WidgetSize.MEDIUM
+                size: WidgetSize.MEDIUM,
+                isDark
               })
             });
           }
@@ -253,7 +259,8 @@ class WidgetManager {
                 itemCountValue: largeData.itemCount,
                 totalAmountValue: largeData.totalAmount,
                 currencyCode: largeData.currency,
-                size: WidgetSize.LARGE
+                size: WidgetSize.LARGE,
+                isDark
               })
             });
           }
@@ -266,7 +273,8 @@ class WidgetManager {
                 itemCountValue: smallData.itemCount,
                 totalAmountValue: smallData.totalAmount,
                 currencyCode: smallData.currency,
-                size: WidgetSize.SMALL
+                size: WidgetSize.SMALL,
+                isDark
               })
             });
           }
@@ -281,7 +289,8 @@ class WidgetManager {
               widgetName: 'DealsWidget',
               renderWidget: () => React.createElement(DealsWidget, {
                 activeDeals: medData.activeDeals || [],
-                size: WidgetSize.MEDIUM
+                size: WidgetSize.MEDIUM,
+                isDark
               })
             });
           }
@@ -291,7 +300,8 @@ class WidgetManager {
               widgetName: 'DealsWidgetLarge',
               renderWidget: () => React.createElement(DealsWidget, {
                 activeDeals: largeData.activeDeals || [],
-                size: WidgetSize.LARGE
+                size: WidgetSize.LARGE,
+                isDark
               })
             });
           }
@@ -301,7 +311,8 @@ class WidgetManager {
               widgetName: 'DealsWidgetSmall',
               renderWidget: () => React.createElement(DealsWidget, {
                 activeDeals: smallData.activeDeals || [],
-                size: WidgetSize.SMALL
+                size: WidgetSize.SMALL,
+                isDark
               })
             });
           }
@@ -317,7 +328,8 @@ class WidgetManager {
               renderWidget: () => React.createElement(OrderTrackingWidget, {
                 orderIdString: medData.orderId,
                 statusString: medData.statusText,
-                size: WidgetSize.MEDIUM
+                size: WidgetSize.MEDIUM,
+                isDark
               })
             });
           }
@@ -328,7 +340,8 @@ class WidgetManager {
               renderWidget: () => React.createElement(OrderTrackingWidget, {
                 orderIdString: largeData.orderId,
                 statusString: largeData.statusText,
-                size: WidgetSize.LARGE
+                size: WidgetSize.LARGE,
+                isDark
               })
             });
           }
@@ -339,7 +352,8 @@ class WidgetManager {
               renderWidget: () => React.createElement(OrderTrackingWidget, {
                 orderIdString: smallData.orderId,
                 statusString: smallData.statusText,
-                size: WidgetSize.SMALL
+                size: WidgetSize.SMALL,
+                isDark
               })
             });
           }
@@ -354,7 +368,8 @@ class WidgetManager {
               widgetName: 'RecommendationsWidget',
               renderWidget: () => React.createElement(RecommendationsWidget, {
                 products: medData.products || [],
-                size: WidgetSize.MEDIUM
+                size: WidgetSize.MEDIUM,
+                isDark
               })
             });
           }
@@ -364,7 +379,8 @@ class WidgetManager {
               widgetName: 'RecommendationsWidgetLarge',
               renderWidget: () => React.createElement(RecommendationsWidget, {
                 products: largeData.products || [],
-                size: WidgetSize.LARGE
+                size: WidgetSize.LARGE,
+                isDark
               })
             });
           }
@@ -374,7 +390,8 @@ class WidgetManager {
               widgetName: 'RecommendationsWidgetSmall',
               renderWidget: () => React.createElement(RecommendationsWidget, {
                 products: smallData.products || [],
-                size: WidgetSize.SMALL
+                size: WidgetSize.SMALL,
+                isDark
               })
             });
           }

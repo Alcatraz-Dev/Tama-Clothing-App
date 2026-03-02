@@ -17,6 +17,7 @@ import { db } from '../../api/firebase';
 import { ChevronLeft, CheckCircle2, XCircle, Search, User, CreditCard, Calendar, Clock, ShieldCheck } from 'lucide-react-native';
 import { Theme } from '../../theme';
 import { AdminHeader } from '../../components/admin/AdminUI';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ interface AdminKYCScreenProps {
 export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminKYCScreenProps) {
     const isDark = theme === 'dark';
     const colors = isDark ? Theme.dark.colors : Theme.light.colors;
+    const insets = useSafeAreaInsets();
 
     const [requests, setRequests] = useState<any[]>([]);
     const [history, setHistory] = useState<any[]>([]);
@@ -387,7 +389,7 @@ export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminK
             <AdminHeader title={t('identityVerification')} onBack={onBack} />
 
             {/* Tab Selector */}
-            <View style={{ paddingHorizontal: 20, paddingBottom: 15 }}>
+            <View style={{ paddingHorizontal: 20, paddingBottom: 15, paddingTop: insets.top + 80 }}>
                 <View style={[styles.tabContainer, { backgroundColor: isDark ? '#1A1A1A' : '#F0F0F0', borderColor: colors.border }]}>
                     <TouchableOpacity
                         style={[styles.tab, activeTab === 'pending' && { backgroundColor: isDark ? '#333' : '#FFF' }]}
