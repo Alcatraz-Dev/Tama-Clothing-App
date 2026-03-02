@@ -1482,12 +1482,10 @@ export default function AudienceLiveScreen(props: Props) {
                     },
                     topMenuBarConfig: {
                         buttons: [
-                            ZegoMenuBarButtonName.minimizingButton,
                             ZegoMenuBarButtonName.leaveButton
                         ],
                         buttonBuilders: {
                             leaveBuilder: CustomBuilder.leaveBuilder,
-                            minimizingBuilder: CustomBuilder.minimizingBuilder,
                             memberBuilder: CustomBuilder.memberBuilder,
                             hostAvatarBuilder: (host: any) => {
                                 return (

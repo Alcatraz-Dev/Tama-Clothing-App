@@ -498,11 +498,29 @@ export default function HostLiveScreen(props: Props) {
     useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
     useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
 
+    // ✅ Safe Zego command helper: silently ignores 1009015 (room not connected)
+    const safeZegoCommand = (payload: object, targets: string[] = []) => {
+        if (!ZegoUIKit || !isLiveStarted) return;
+        try {
+            const result = ZegoUIKit.sendInRoomCommand(JSON.stringify(payload), targets, () => { });
+            if (result && typeof result.catch === 'function') {
+                result.catch((err: any) => {
+                    // 1009015 = room not connected yet, safe to ignore
+                    if (err !== '1009015' && err !== 1009015) {
+                        console.log('Zego command error:', err);
+                    }
+                });
+            }
+        } catch (e) {
+            // Silently ignore synchronous errors too
+        }
+    };
+
     // Periodically broadcast state to keep audience in sync (Zego backup)
     useEffect(() => {
         if (!ZegoUIKit || !isLiveStarted) return;
         const interval = setInterval(() => {
-            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+            safeZegoCommand({
                 type: 'PK_SCORE_SYNC',
                 hostScore: hostScoreRef.current,
                 guestScore: guestScoreRef.current,
@@ -511,10 +529,10 @@ export default function HostLiveScreen(props: Props) {
                 hostName: userName,
                 opponentName: opponentName,
                 isInPK: isInPKRef.current
-            }), [], () => { });
+            });
         }, 3000);
         return () => clearInterval(interval);
-    }, [userId, userName, opponentName]);
+    }, [userId, userName, opponentName, isLiveStarted]);
 
     // ✅ Persist PK State to Firestore for Audience Sync (WITHOUT scores - those use atomic increments)
     useEffect(() => {
@@ -574,7 +592,7 @@ export default function HostLiveScreen(props: Props) {
     useEffect(() => {
         if (isInPK && ZegoUIKit && isLiveStarted) {
             console.log('⚡ Force Syncing PK State Start');
-            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+            safeZegoCommand({
                 type: 'PK_SCORE_SYNC',
                 hostScore: hostScoreRef.current,
                 guestScore: guestScoreRef.current,
@@ -583,9 +601,9 @@ export default function HostLiveScreen(props: Props) {
                 hostName: userName,
                 opponentName: opponentName,
                 isInPK: true
-            }), [], () => { });
+            });
         }
-    }, [isInPK]);
+    }, [isInPK, isLiveStarted]);
 
     // PK Timer Countdown
     useEffect(() => {
@@ -665,13 +683,11 @@ export default function HostLiveScreen(props: Props) {
             );
 
             // Broadcast for immediate feedback (optional, Firestore sync will handle it)
-            if (ZegoUIKit && isLiveStarted) {
-                ZegoUIKit.sendInRoomCommand(JSON.stringify({
-                    type: 'PK_VOTE',
-                    points: pointsToAdd,
-                    hostId: userId
-                }), [], () => { });
-            }
+            safeZegoCommand({
+                type: 'PK_VOTE',
+                points: pointsToAdd,
+                hostId: userId
+            });
         }
     };
 
@@ -680,7 +696,7 @@ export default function HostLiveScreen(props: Props) {
         if (!isInPK || !ZegoUIKit || !isLiveStarted) return;
 
         const syncInterval = setInterval(() => {
-            ZegoUIKit.sendInRoomCommand(JSON.stringify({
+            safeZegoCommand({
                 type: 'PK_SCORE_SYNC',
                 hostScore: hostScoreRef.current,
                 guestScore: guestScoreRef.current,
@@ -689,11 +705,11 @@ export default function HostLiveScreen(props: Props) {
                 hostName: userName,
                 opponentName: opponentName,
                 isInPK: true
-            }), [], () => { });
+            });
         }, 3000);
 
         return () => clearInterval(syncInterval);
-    }, [isInPK, userName, opponentName]);
+    }, [isInPK, userName, opponentName, isLiveStarted]);
 
     const openGiftModal = () => {
         if (ZegoUIKit) {
@@ -713,11 +729,24 @@ export default function HostLiveScreen(props: Props) {
             return;
         }
 
+        // Parse discount: supports '30%' (percentage) or '10TND' / '10' (fixed amount)
+        const rawDiscount = discountAmount.trim();
+        const isPercentage = rawDiscount.includes('%');
+        const numericValue = parseInt(rawDiscount.replace(/[^0-9]/g, ''));
+
+        if (isNaN(numericValue) || numericValue <= 0) {
+            Alert.alert(t('error') || 'Error', t('invalidCoupon') || 'Enter a valid discount like 30% or 10TND');
+            return;
+        }
+
+        const discountLabel = isPercentage ? `${numericValue}%` : `${numericValue}TND`;
         const expirySecs = parseInt(couponExpiry) * 60;
         const couponData = {
             type: 'coupon_drop',
             code: couponCode.toUpperCase(),
-            discount: discountAmount,
+            discount: discountLabel,
+            discountNumeric: numericValue,
+            discountType: isPercentage ? 'percentage' : 'fixed',
             expiryMinutes: parseInt(couponExpiry),
             endTime: Date.now() + (expirySecs * 1000),
             hostName: userName,
@@ -727,21 +756,19 @@ export default function HostLiveScreen(props: Props) {
             // 1. Update Firestore session doc
             await LiveSessionService.activateCoupon(channelId, {
                 code: couponData.code,
-                discount: parseInt(couponData.discount.replace(/[^0-9]/g, '')),
-                type: couponData.discount.includes('%') ? 'percentage' : 'fixed',
+                discount: numericValue,
+                type: isPercentage ? 'percentage' : 'fixed',
                 endTime: couponData.endTime,
                 expiryMinutes: couponData.expiryMinutes
             });
 
             // 2. Send signaling command
-            if (ZegoUIKit && isLiveStarted) {
-                ZegoUIKit.sendInRoomCommand(JSON.stringify(couponData), [], () => { });
-            }
+            safeZegoCommand(couponData);
 
             setActiveCoupon(couponData);
             setCouponTimeRemaining(expirySecs);
             setShowCouponModal(false);
-            Alert.alert(t('success') || 'Success', t('couponDropped') || 'Coupon dropped!');
+            Alert.alert(t('success') || 'Success', `${t('couponDropped') || 'Coupon dropped!'} (${discountLabel})`);
 
         } catch (error) {
             console.error('Error dropping coupon:', error);
@@ -1146,7 +1173,17 @@ export default function HostLiveScreen(props: Props) {
         // 2. PK Invitation Handler
         ZegoUIKit.getSignalingPlugin().onInvitationReceived(callbackID, ({ callID, inviter, data }: any) => {
             try {
-                const pkData = JSON.parse(data);
+                let pkData = null;
+                try {
+                    pkData = data ? JSON.parse(data) : null;
+                } catch (e) {
+                    // Not JSON or another type of invitation, ignore
+                    return;
+                }
+
+                // If it's a co-host request or something else, let Zego or other handlers deal with it
+                if (!pkData || pkData.type !== 'PK_REQUEST') return;
+
                 const duration = pkData.duration || 180;
                 Alert.alert(
                     t('pkBattleRequest') || "PK Battle Request",
@@ -1934,12 +1971,10 @@ export default function HostLiveScreen(props: Props) {
                     },
                     topMenuBarConfig: {
                         buttons: [
-                            ZegoMenuBarButtonName.minimizingButton,
                             ZegoMenuBarButtonName.leaveButton
                         ],
                         buttonBuilders: {
                             leaveBuilder: CustomBuilder.leaveBuilder,
-                            minimizingBuilder: CustomBuilder.minimizingBuilder,
                             memberBuilder: CustomBuilder.memberBuilder,
                             hostAvatarBuilder: (host: any) => {
                                 return (
@@ -1967,7 +2002,6 @@ export default function HostLiveScreen(props: Props) {
                             ZegoMenuBarButtonName.toggleMicrophoneButton || 'toggleMicrophone',
                             ZegoMenuBarButtonName.switchCameraButton || 'switchCamera',
                             ZegoMenuBarButtonName.chatButton || 'chat',
-                            ZegoMenuBarButtonName.pkBattleButton || 'pkBattle',
                             ZegoMenuBarButtonName.coHostControlButton || 'cohost',
                         ],
                         buttonBuilders: {
@@ -2590,20 +2624,46 @@ export default function HostLiveScreen(props: Props) {
                         {/* PK Toggle Button */}
                         <TouchableOpacity
                             onPress={() => setShowPKInviteModal(true)}
+                            activeOpacity={0.8}
                             style={{
-                                width: 37,
-                                height: 37,
                                 borderRadius: 20,
-                                backgroundColor: isInPK ? '#3B82F6' : 'rgba(0,0,0,0.6)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: 1,
-                                borderColor: isInPK ? '#fff' : 'rgba(255,255,255,0.2)',
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                elevation: isInPK ? 8 : 0,
+                                shadowColor: isInPK ? '#FFA500' : 'transparent',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: isInPK ? 0.3 : 0,
+                                shadowRadius: 8,
                             }}
                         >
-                            {!isInPK && <BlurView intensity={20} style={StyleSheet.absoluteFill} />}
-                            <Swords size={16} color="#fff" />
+                            {isInPK ? (
+                                <LinearGradient
+                                    colors={['#FFD700', '#FFA500']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={{
+                                        width: 37,
+                                        height: 37,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Swords size={20} color="#fff" />
+                                </LinearGradient>
+                            ) : (
+                                <View style={{
+                                    width: 37,
+                                    height: 37,
+                                    borderRadius: 20,
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.2)',
+                                }}>
+                                    <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                                    <Swords size={16} color="#fff" />
+                                </View>
+                            )}
                         </TouchableOpacity>
 
                         {/* Gift Button for Host */}
@@ -2828,7 +2888,7 @@ export default function HostLiveScreen(props: Props) {
                                         {liveSessions.filter(s => s.channelId !== channelId).map((session) => (
                                             <TouchableOpacity
                                                 key={session.channelId}
-                                                activeOpacity={0.7}
+                                                activeOpacity={0.9}
                                                 style={{
                                                     flexDirection: 'row',
                                                     alignItems: 'center',
@@ -2882,18 +2942,27 @@ export default function HostLiveScreen(props: Props) {
                                                     </View>
                                                 </View>
 
-                                                <View style={{
-                                                    backgroundColor: '#3B82F6',
-                                                    paddingHorizontal: 12,
-                                                    paddingVertical: 8,
-                                                    borderRadius: 10,
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    gap: 6
-                                                }}>
-                                                    <Swords size={14} color="#fff" />
-                                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{(t('challenge') || 'CHALLENGE').toUpperCase()}</Text>
-                                                </View>
+                                                <LinearGradient
+                                                    colors={['#FFD700', '#FFA500']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 0 }}
+                                                    style={{
+                                                        paddingHorizontal: 16,
+                                                        paddingVertical: 10,
+                                                        borderRadius: 12,
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        elevation: 3,
+                                                        shadowColor: '#FFA500',
+                                                        shadowOffset: { width: 0, height: 2 },
+                                                        shadowOpacity: 0.3,
+                                                        shadowRadius: 4,
+                                                    }}
+                                                >
+                                                    <Swords size={16} color="#FFF" />
+                                                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 }}>{(t('challenge') || 'CHALLENGE').toUpperCase()}</Text>
+                                                </LinearGradient>
                                             </TouchableOpacity>
                                         ))}
                                     </ScrollView>
