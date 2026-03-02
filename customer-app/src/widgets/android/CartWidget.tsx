@@ -4,7 +4,7 @@ import { FlexWidget, TextWidget } from 'react-native-android-widget';
 export const CartWidget = ({
     itemCountValue = 0,
     totalAmountValue = 0,
-    currencyCode = 'USD',
+    currencyCode = 'TND',
     size = 'MEDIUM'
 }: any) => {
     const isLarge = size === 'LARGE';
@@ -53,7 +53,7 @@ export const CartWidget = ({
                 width: 'match_parent',
                 height: 'match_parent',
                 backgroundColor: '#1C1C1E',
-                padding: 12,
+                padding: 10,
                 borderRadius: 28,
             }}
         >
@@ -63,7 +63,7 @@ export const CartWidget = ({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     width: 'match_parent',
-                    marginBottom: isLarge ? 4 : 8
+                    marginBottom: isLarge ? 2 : 6
                 }}
             >
                 <FlexWidget
@@ -110,10 +110,10 @@ export const CartWidget = ({
                 </FlexWidget>
             )}
 
-            <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 4 }}>
+            <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 2 }}>
                 <TextWidget
                     text="Total Panier"
-                    style={{ color: '#8E8E93', fontSize: 13, fontWeight: '600', marginBottom: 2 }}
+                    style={{ color: '#8E8E93', fontSize: 11, fontWeight: '600', marginBottom: 1 }}
                 />
                 <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TextWidget

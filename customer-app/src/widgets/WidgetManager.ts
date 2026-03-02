@@ -179,7 +179,8 @@ class WidgetManager {
           if (cachedData && isDealsWidgetData(cachedData)) {
             DealsWidget.updateSnapshot({
               activeDeals: cachedData.activeDeals,
-              currency: 'USD'
+              currency: 'TND'
+
             });
           }
           break;
@@ -206,7 +207,8 @@ class WidgetManager {
           if (cachedData && isRecommendationsWidgetData(cachedData)) {
             RecommendationsWidget.updateSnapshot({
               products: cachedData.products,
-              currency: 'USD'
+              currency: 'TND'
+
             });
           }
           break;
@@ -278,7 +280,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'DealsWidget',
               renderWidget: () => React.createElement(DealsWidget, {
-                dealsCount: medData.activeDeals?.length || 0,
+                activeDeals: medData.activeDeals || [],
                 size: WidgetSize.MEDIUM
               })
             });
@@ -288,7 +290,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'DealsWidgetLarge',
               renderWidget: () => React.createElement(DealsWidget, {
-                dealsCount: largeData.activeDeals?.length || 0,
+                activeDeals: largeData.activeDeals || [],
                 size: WidgetSize.LARGE
               })
             });
@@ -298,7 +300,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'DealsWidgetSmall',
               renderWidget: () => React.createElement(DealsWidget, {
-                dealsCount: smallData.activeDeals?.length || 0,
+                activeDeals: smallData.activeDeals || [],
                 size: WidgetSize.SMALL
               })
             });
@@ -351,7 +353,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'RecommendationsWidget',
               renderWidget: () => React.createElement(RecommendationsWidget, {
-                recCount: medData.products?.length || 0,
+                products: medData.products || [],
                 size: WidgetSize.MEDIUM
               })
             });
@@ -361,7 +363,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'RecommendationsWidgetLarge',
               renderWidget: () => React.createElement(RecommendationsWidget, {
-                recCount: largeData.products?.length || 0,
+                products: largeData.products || [],
                 size: WidgetSize.LARGE
               })
             });
@@ -371,7 +373,7 @@ class WidgetManager {
             requestWidgetUpdate({
               widgetName: 'RecommendationsWidgetSmall',
               renderWidget: () => React.createElement(RecommendationsWidget, {
-                recCount: smallData.products?.length || 0,
+                products: smallData.products || [],
                 size: WidgetSize.SMALL
               })
             });

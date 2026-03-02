@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon, ChevronLeft, ListTree, ShieldCheck } from 'lucide-react-native';
-import { collection, getDocs } from 'firebase/firestore';
+import { ShoppingCart, Package, Users as UsersIcon, Image as ImageIcon, ChevronLeft, ListTree, ShieldCheck, Gift } from 'lucide-react-native';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { BlurView, AdminHeader } from '../../components/admin/AdminUI';
@@ -95,6 +95,15 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
 
             if (isBrandOwner && myBrandId) {
                 productsCount = productsSnap.docs.filter(d => d.data().brandId === myBrandId).length;
+            }
+
+            // Fetch prize stats to include in "sold" portfolio
+            const prizeStatsSnap = await getDoc(doc(db, 'scratch_stats', 'prizes'));
+            if (prizeStatsSnap.exists()) {
+                const prizeData = prizeStatsSnap.data();
+                if (!isBrandOwner) { // Only add to global admin view, usually
+                    totalSales += (prizeData.totalAwarded || 0);
+                }
             }
 
             setStats({ sales: totalSales, orders: orderCount, customers: customerCount, products: productsCount });
@@ -183,46 +192,70 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
                             <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
                         </View>
 
-                        <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{t('quickActions') || 'ACTIONS RAPIDES'}</Text>
-                        <TouchableOpacity
-                            onPress={() => onNavigate && onNavigate('AdminKYC')}
-                            style={[
-                                sc.quickActionCard,
-                                {
-                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                }
-                            ]}
-                        >
-                            <View style={[sc.statIconBox, { backgroundColor: '#34C759' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
-                                <ShieldCheck size={20} color="#34C759" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('identityVerification')}</Text>
-                                <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{isDark ? 'VÉRIFIER LES DEMANDES D\'IDENTITÉ' : 'Vérifier les demandes d\'identité'}</Text>
-                            </View>
-                            <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
-                        </TouchableOpacity>
+                        {profileData?.role === 'admin' && (
+                            <>
+                                <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{t('quickActions').toUpperCase()}</Text>
+                                <TouchableOpacity
+                                    onPress={() => onNavigate && onNavigate('AdminKYC')}
+                                    style={[
+                                        sc.quickActionCard,
+                                        {
+                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                        }
+                                    ]}
+                                >
+                                    <View style={[sc.statIconBox, { backgroundColor: '#34C759' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                        <ShieldCheck size={20} color="#34C759" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('identityVerification')}</Text>
+                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('verifyIdentityDesc').toUpperCase()}</Text>
+                                    </View>
+                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                </TouchableOpacity>
 
-                        <TouchableOpacity
-                            onPress={() => onNavigate && onNavigate('AdminNotreSelection')}
-                            style={[
-                                sc.quickActionCard,
-                                {
-                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                }
-                            ]}
-                        >
-                            <View style={[sc.statIconBox, { backgroundColor: '#10B981' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
-                                <ListTree size={20} color="#10B981" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('ourSelection')}</Text>
-                                <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{isDark ? 'GÉRER LA SÉLECTION DES PRODUITS VEDETTES' : 'Gérer la sélection des produits vedettes'}</Text>
-                            </View>
-                            <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
-                        </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => onNavigate && onNavigate('AdminNotreSelection')}
+                                    style={[
+                                        sc.quickActionCard,
+                                        {
+                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                        }
+                                    ]}
+                                >
+                                    <View style={[sc.statIconBox, { backgroundColor: '#10B981' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                        <ListTree size={20} color="#10B981" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('ourSelection')}</Text>
+                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('ourSelectionDesc').toUpperCase()}</Text>
+                                    </View>
+                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={() => onNavigate && onNavigate('AdminGifts')}
+                                    style={[
+                                        sc.quickActionCard,
+                                        {
+                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                        }
+                                    ]}
+                                >
+                                    <View style={[sc.statIconBox, { backgroundColor: '#FFD700' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                        <Gift size={20} color="#FFD700" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('manageGifts')}</Text>
+                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('manageGiftsDesc').toUpperCase()}</Text>
+                                    </View>
+                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                </TouchableOpacity>
+                            </>
+                        )}
 
                         {recentOrders.length > 0 && (
                             <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 25 }]}>{t('recentOrders').toUpperCase()}</Text>

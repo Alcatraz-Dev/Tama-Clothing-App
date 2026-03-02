@@ -35,8 +35,8 @@ export default function FidelityCard({ points, isCompleted, index, isDark, t }: 
     };
 
     const themeColor = isDark ? '#FFF' : '#000';
-    const bgColor = isDark ? '#111' : '#FFF';
-    const borderColor = isDark ? '#333' : '#E5E5E5';
+    const bgColor = isDark ? '#1A1A1A' : '#FFF';
+    const borderColor = isDark ? '#444' : '#E5E5E5';
 
     const handleFlip = () => {
         flipAnim.value = withSpring(isFlipped ? 0 : 180, { damping: 12, stiffness: 90 });
@@ -68,10 +68,18 @@ export default function FidelityCard({ points, isCompleted, index, isDark, t }: 
         for (let i = 0; i < 10; i++) {
             const isActive = i < points;
             circles.push(
-                <View key={i} style={[styles.circle, { borderColor: isActive ? '#00FF9D' : borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }]}>
+                <View key={i} style={[styles.circle, {
+                    borderColor: isActive ? '#00FF9D' : (isDark ? '#555' : borderColor),
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.02)',
+                    borderStyle: isActive ? 'solid' : 'dashed',
+                }]}>
                     <Image
                         source={APP_ICON}
-                        style={[styles.logoInside, { opacity: isActive ? 1 : 0.1 }, isActive ? {} : { tintColor: isDark ? '#FFF' : '#000' }]}
+                        style={[
+                            styles.logoInside,
+                            { opacity: isActive ? 1 : 0.25 },
+                            isActive ? {} : { tintColor: isDark ? '#888' : '#AAA' }
+                        ]}
                     />
                 </View>
             );

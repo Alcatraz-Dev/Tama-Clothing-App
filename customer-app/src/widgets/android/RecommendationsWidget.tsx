@@ -1,11 +1,13 @@
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, TextWidget, ImageWidget } from 'react-native-android-widget';
 
-export const RecommendationsWidget = ({ recCount = 0, size = 'MEDIUM' }: any) => {
+export const RecommendationsWidget = ({ products = [], size = 'MEDIUM' }: any) => {
     const isLarge = size === 'LARGE';
     const isSmall = size === 'SMALL';
+    const currency = 'TND';
 
     if (isSmall) {
+        const count = products.length;
         return (
             <FlexWidget
                 style={{
@@ -35,12 +37,14 @@ export const RecommendationsWidget = ({ recCount = 0, size = 'MEDIUM' }: any) =>
                     />
                 </FlexWidget>
                 <TextWidget
-                    text={`${recCount}`}
+                    text={`${count}`}
                     style={{ color: '#AF52DE', fontSize: 16, fontWeight: 'bold' }}
                 />
             </FlexWidget>
         );
     }
+
+    const showCount = isLarge ? 3 : 2;
 
     return (
         <FlexWidget
@@ -48,7 +52,7 @@ export const RecommendationsWidget = ({ recCount = 0, size = 'MEDIUM' }: any) =>
                 width: 'match_parent',
                 height: 'match_parent',
                 backgroundColor: '#1C1C1E',
-                padding: 12,
+                padding: 10,
                 borderRadius: 28,
             }}
         >
@@ -58,63 +62,106 @@ export const RecommendationsWidget = ({ recCount = 0, size = 'MEDIUM' }: any) =>
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     width: 'match_parent',
-                    marginBottom: isLarge ? 4 : 8
+                    marginBottom: 8
                 }}
             >
                 <FlexWidget
                     style={{
                         backgroundColor: '#2C2C2E',
-                        borderRadius: 12,
-                        width: 40,
-                        height: 40,
+                        borderRadius: 8,
+                        width: 28,
+                        height: 28,
                         justifyContent: 'center',
                         alignItems: 'center'
                     }}
                 >
                     <TextWidget
                         text="✨"
-                        style={{ fontSize: 20 }}
+                        style={{ fontSize: 13 }}
                     />
                 </FlexWidget>
 
                 <FlexWidget
                     style={{
                         backgroundColor: '#AF52DE',
-                        borderRadius: 14,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
+                        borderRadius: 8,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
                     }}
                 >
                     <TextWidget
-                        text="NEW"
-                        style={{ color: '#ffffff', fontSize: 10, fontWeight: '900' }}
+                        text="FOR YOU"
+                        style={{ color: '#ffffff', fontSize: 8, fontWeight: '900' }}
                     />
                 </FlexWidget>
             </FlexWidget>
 
-            {isLarge && (
-                <FlexWidget style={{ marginVertical: 8 }}>
+            {products.length === 0 ? (
+                <FlexWidget style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <TextWidget
-                        text="Recommandations"
-                        style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
+                        text="Aucune recommendation"
+                        style={{ color: '#8E8E93', fontSize: 13 }}
                     />
-                    <TextWidget
-                        text="Basé sur vos goûts et vos recherches récentes."
-                        style={{ color: '#8E8E93', fontSize: 12 }}
-                    />
+                </FlexWidget>
+            ) : (
+                <FlexWidget style={{ flex: 1 }}>
+                    {products.slice(0, showCount).map((item: any, index: number) => (
+                        <FlexWidget
+                            key={index}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                marginBottom: 7,
+                                width: 'match_parent'
+                            }}
+                        >
+                            <FlexWidget
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 6,
+                                    backgroundColor: '#2C2C2E',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                {item.imageUrl ? (
+                                    <ImageWidget
+                                        image={item.imageUrl}
+                                        style={{ width: 36, height: 36 }}
+                                        imageWidth={36}
+                                        imageHeight={36}
+                                    />
+                                ) : (
+                                    <TextWidget text="👕" style={{ fontSize: 16 }} />
+                                )}
+                            </FlexWidget>
+
+                            <FlexWidget style={{ marginLeft: 8, flex: 1 }}>
+                                <TextWidget
+                                    text={item.name}
+                                    style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}
+                                    maxLines={1}
+                                />
+                                <TextWidget
+                                    text={`${item.price.toFixed(0)} ${currency}`}
+                                    style={{ color: '#AF52DE', fontSize: 11, fontWeight: 'bold' }}
+                                />
+                            </FlexWidget>
+                        </FlexWidget>
+                    ))}
                 </FlexWidget>
             )}
 
-            <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 4 }}>
-                <TextWidget
-                    text="Pour Vous"
-                    style={{ color: '#8E8E93', fontSize: 13, fontWeight: '600', marginBottom: 2 }}
-                />
-                <TextWidget
-                    text={recCount > 0 ? `${recCount} Articles` : 'Découvrir maintenant'}
-                    style={{ color: '#AF52DE', fontSize: isLarge ? 28 : 22, fontWeight: 'bold' }}
-                />
-            </FlexWidget>
+            {!isLarge && (
+                <FlexWidget style={{ marginTop: 0 }}>
+                    <TextWidget
+                        text="Basé sur votre style"
+                        style={{ color: '#8E8E93', fontSize: 9 }}
+                    />
+                </FlexWidget>
+            )}
         </FlexWidget>
     );
 };

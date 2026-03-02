@@ -11,36 +11,32 @@ export type OrderTrackingWidgetProps = {
 };
 
 // Map-like visual simulation
-const MapSimulation = () => {
+const MapSimulation = (props: { height: number }) => {
     'widget';
-    // Use SwiftUI components to draw a map-like UI
+    const { height } = props;
     return (
-        <ZStack modifiers={[
-            frame({ maxWidth: 9999, height: 140 }),
-            cornerRadius(16),
-            background('#1c1c1e') // Dark map style
+        <VStack modifiers={[
+            frame({ maxWidth: 9999, height: height }),
+            cornerRadius(10),
+            background('#1c1c1e')
         ]}>
-            {/* Simulation of road/map paths */}
-            <VStack modifiers={[frame({ width: 3, height: 9999 }), background('#2c2c2e'), offset({ x: -40 })]}>{null}</VStack>
-            <VStack modifiers={[frame({ width: 3, height: 9999 }), background('#2c2c2e'), offset({ x: 20 })]}>{null}</VStack>
-            <HStack modifiers={[frame({ width: 9999, height: 3 }), background('#2c2c2e'), offset({ y: 10 })]}>{null}</HStack>
+            <ZStack modifiers={[frame({ maxWidth: 9999, height: height })]}>
+                <VStack modifiers={[frame({ width: 2, height: height }), background('#2c2c2e'), offset({ x: -40 })]}><Spacer /></VStack>
+                <VStack modifiers={[frame({ width: 2, height: height }), background('#2c2c2e'), offset({ x: 20 })]}><Spacer /></VStack>
+                <HStack modifiers={[frame({ width: 9999, height: 2 }), background('#2c2c2e'), offset({ y: 10 })]}><Spacer /></HStack>
 
-            {/* Path Path */}
-            <VStack modifiers={[frame({ width: 4, height: 60 }), background('#0A84FF'), offset({ x: -40, y: 20 }), cornerRadius(2)]}>{null}</VStack>
-            <HStack modifiers={[frame({ width: 60, height: 4 }), background('#0A84FF'), offset({ x: -10, y: 50 }), cornerRadius(2)]}>{null}</HStack>
+                <VStack modifiers={[frame({ width: 24, height: 24 }), cornerRadius(12), background('#32D74B'), offset({ x: 40, y: height / 4 }), frame({ alignment: 'center' })]}>
+                    <Text modifiers={[font({ size: 12 })]}>🏠</Text>
+                </VStack>
 
-            {/* Pins/Points */}
-            <VStack modifiers={[frame({ width: 28, height: 28 }), cornerRadius(14), background('#32D74B'), offset({ x: 20, y: 50 }), frame({ alignment: 'center' })]}>
-                <Text modifiers={[font({ size: 14 })]}>🏠</Text>
-            </VStack>
-
-            <VStack modifiers={[frame({ width: 28, height: 28 }), cornerRadius(14), background('#FF9F0A'), offset({ x: -40, y: -10 }), frame({ alignment: 'center' })]}>
-                <Text modifiers={[font({ size: 14 })]}>🛵</Text>
-            </VStack>
-            {null}
-        </ZStack>
+                <VStack modifiers={[frame({ width: 24, height: 24 }), cornerRadius(12), background('#FF9F0A'), offset({ x: -20, y: -height / 4 }), frame({ alignment: 'center' })]}>
+                    <Text modifiers={[font({ size: 12 })]}>🛵</Text>
+                </VStack>
+            </ZStack>
+        </VStack>
     );
 };
+
 
 const OrderTrackingWidgetComponent = (props: WidgetBase<OrderTrackingWidgetProps>) => {
     'widget';
@@ -53,8 +49,6 @@ const OrderTrackingWidgetComponent = (props: WidgetBase<OrderTrackingWidgetProps
     } = props;
 
     const alignment = 'leading';
-    const topAlignment = 'topLeading';
-
     const secondaryStyle = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
     const blueColor = foregroundStyle({ type: 'color', color: '#0A84FF' });
 
@@ -90,45 +84,80 @@ const OrderTrackingWidgetComponent = (props: WidgetBase<OrderTrackingWidgetProps
     // ── Small Widget ─────────────────────────────────────────────────────────────
     if (family === 'systemSmall') {
         return (
-            <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: alignment }), padding({ all: 16 })]}>
-                <Text modifiers={[font({ size: 28 })]}>📦</Text>
+            <VStack modifiers={[
+                frame({ maxWidth: 9999, maxHeight: 9999, alignment: alignment }),
+                padding({ all: 14 }),
+                background('#1C1C1E') // Dark background for consistency
+            ]}>
+                <Text modifiers={[font({ size: 24 })]}>📦</Text>
                 <Spacer />
                 <VStack modifiers={[frame({ alignment: alignment })]}>
-                    <Text modifiers={[font({ weight: 'medium', size: 13 }), secondaryStyle]}>#{orderId}</Text>
-                    <Text modifiers={[font({ weight: 'bold', size: 20 }), blueColor]}>{statusText}</Text>
-                    <Text modifiers={[font({ size: 11 }), secondaryStyle, padding({ top: 4 })]}>{estimatedDelivery}</Text>
+                    <Text modifiers={[font({ weight: 'medium', size: 12 }), secondaryStyle]}>#{orderId}</Text>
+                    <Text modifiers={[font({ weight: 'black', size: 18 }), blueColor]}>{statusText}</Text>
+                    <Text modifiers={[font({ size: 10 }), secondaryStyle, padding({ top: 2 })]}>{estimatedDelivery}</Text>
                 </VStack>
             </VStack>
         );
     }
 
-    // ── Medium & Large Widget ────────────────────────────────────────────────────
+    // ── Medium Widget ────────────────────────────────────────────────────────────
+    if (family === 'systemMedium') {
+        return (
+            <VStack modifiers={[
+                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
+                padding({ all: 14 }),
+                background('#1C1C1E') // Dark background
+            ]}>
+                <HStack modifiers={[padding({ bottom: 6 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                    <VStack modifiers={[frame({ alignment: 'leading' })]}>
+                        <Text modifiers={[font({ weight: 'bold', size: 15 }), foregroundStyle('#FFFFFF')]}>Suivi Commande</Text>
+                        <Text modifiers={[font({ size: 11 }), secondaryStyle]}>#{orderId}</Text>
+                    </VStack>
+                    <Spacer />
+                    <Text modifiers={[font({ size: 20 })]}>🛵</Text>
+                </HStack>
+
+                <VStack modifiers={[padding({ bottom: 8 }), frame({ alignment: 'leading' })]}>
+                    <Text modifiers={[font({ weight: 'black', size: 20 }), blueColor]}>{statusText}</Text>
+                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>Livraison: {estimatedDelivery}</Text>
+                </VStack>
+
+                <MapSimulation height={80} />
+            </VStack>
+        );
+    }
+
+    // ── Large Widget ─────────────────────────────────────────────────────────────
     return (
-        <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: topAlignment }), padding({ all: 16 })]}>
-            <HStack modifiers={[padding({ bottom: 12 }), frame({ maxWidth: 9999, alignment: alignment })]}>
-                <VStack modifiers={[frame({ alignment: alignment })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 20 })]}>Statut Commande</Text>
-                    <Text modifiers={[font({ size: 13 }), secondaryStyle]}>#{orderId}</Text>
+        <VStack modifiers={[
+            frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
+            padding({ all: 16 }),
+            background('#1C1C1E') // Dark background
+        ]}>
+            <HStack modifiers={[padding({ bottom: 10 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
+                <VStack modifiers={[frame({ alignment: 'leading' })]}>
+                    <Text modifiers={[font({ weight: 'bold', size: 18 }), foregroundStyle('#FFFFFF')]}>Statut de la Commande</Text>
+                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>#{orderId}</Text>
                 </VStack>
                 <Spacer />
-                <Text modifiers={[font({ size: 32 }), blueColor]}>🛵</Text>
+                <Text modifiers={[font({ size: 28 }), blueColor]}>🛵</Text>
             </HStack>
 
-            <VStack modifiers={[padding({ bottom: 16 }), frame({ alignment: alignment })]}>
-                <Text modifiers={[font({ weight: 'black', size: 26 }), blueColor]}>{statusText}</Text>
-                <Text modifiers={[font({ size: 14 }), secondaryStyle]}>Prévu: {estimatedDelivery}</Text>
+            <VStack modifiers={[padding({ bottom: 12 }), frame({ alignment: 'leading' })]}>
+                <Text modifiers={[font({ weight: 'black', size: 24 }), blueColor]}>{statusText}</Text>
+                <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Prévu: {estimatedDelivery}</Text>
             </VStack>
 
-            {/* Map Simulation */}
-            <MapSimulation />
+            <MapSimulation height={110} />
 
             {family === 'systemLarge' && (
-                <VStack modifiers={[padding({ top: 24, bottom: 0, leading: 0, trailing: 0 }), frame({ alignment: alignment })]}>
-                    <HStack modifiers={[frame({ alignment: alignment })]}>
-                        <VStack modifiers={[frame({ width: 12, height: 12 }), cornerRadius(6), background('#0A84FF')]}>{null}</VStack>
-                        <VStack modifiers={[padding({ leading: 12 }), frame({ alignment: alignment })]}>
-                            <Text modifiers={[font({ weight: 'bold', size: 15 })]}>En Transit</Text>
-                            <Text modifiers={[font({ size: 13 }), secondaryStyle]}>Le colis est en route</Text>
+                <VStack modifiers={[padding({ top: 18 }), frame({ alignment: 'leading' })]}>
+                    <HStack modifiers={[frame({ alignment: 'leading' })]}>
+                        <VStack modifiers={[frame({ width: 8, height: 8 }), cornerRadius(4), background('#32D74B')]}><Spacer /></VStack>
+
+                        <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
+                            <Text modifiers={[font({ weight: 'bold', size: 13 }), foregroundStyle('#FFFFFF')]}>En cours de livraison</Text>
+                            <Text modifiers={[font({ size: 11 }), secondaryStyle]}>Le livreur est proche de votre adresse</Text>
                         </VStack>
                     </HStack>
                 </VStack>
@@ -136,6 +165,7 @@ const OrderTrackingWidgetComponent = (props: WidgetBase<OrderTrackingWidgetProps
         </VStack>
     );
 };
+
 
 const OrderTrackingWidget = createWidget('OrderTrackingWidget', OrderTrackingWidgetComponent);
 export default OrderTrackingWidget;

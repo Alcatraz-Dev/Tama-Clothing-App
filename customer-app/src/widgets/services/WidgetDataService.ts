@@ -239,8 +239,10 @@ class WidgetDataService {
       return {
         activeDeals: activeDeals.slice(0, 3),
         flashSaleEndTime: Date.now() + 24 * 60 * 60 * 1000,
-        flashSaleDiscount: activeDeals.length > 0 ? activeDeals[0].discount : 0
+        flashSaleDiscount: activeDeals.length > 0 ? activeDeals[0].discount : 0,
+        currency: 'TND'
       };
+
     } catch (e) {
       return { activeDeals: [], flashSaleEndTime: 0, flashSaleDiscount: 0 };
     }
@@ -252,54 +254,76 @@ class WidgetDataService {
   public async fetchOrderTrackingData(): Promise<OrderTrackingWidgetData> {
     try {
       const userStr = await AsyncStorage.getItem('user');
-      const userId = userStr ? JSON.parse(userStr).uid : auth?.currentUser?.uid;
+      const userData = userStr ? JSON.parse(userStr) : null;
+      const userId = userData?.uid || auth?.currentUser?.uid;
+      const userPhone = userData?.phoneNumber;
 
-      if (!userId) throw new Error('Not logged in');
-
-      // Use 'shipments' collection for better tracking data
-      const q = query(collection(db, 'shipments'), where('senderId', '==', userId), limit(3));
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
+      if (!userId) {
         return {
-          orderId: '',
-          status: OrderStatus.CONFIRMED,
-          statusText: 'Aucune commande',
-          estimatedDelivery: 0,
-          currentLocation: '',
+          orderId: 'DEMO-123',
+          status: OrderStatus.SHIPPED,
+          statusText: 'En route',
+          estimatedDelivery: Date.now() + 3600000 * 2,
+          currentLocation: 'Tunis, TN',
           items: [],
           trackingSteps: []
         };
       }
 
-      let targetOrder = snapshot.docs[0];
-      // Simple loop to try finding active orders since ordering by date requires firestore index
-      for (const doc of snapshot.docs) {
-        const status = doc.data().status;
-        if (status !== 'delivered' && status !== 'cancelled') {
-          targetOrder = doc;
-          break;
-        }
+      // Try to find shipments where user is sender
+      const qSender = query(collection(db, 'shipments'), where('senderId', '==', userId), limit(5));
+      const snapSender = await getDocs(qSender);
+
+      let targetOrder = !snapSender.empty ? snapSender.docs[0] : null;
+
+      // If nothing found as sender, try finding as receiver (by phone if available)
+      if (!targetOrder && userPhone) {
+        const qReceiver = query(collection(db, 'shipments'), where('receiverPhone', '==', userPhone), limit(5));
+        const snapReceiver = await getDocs(qReceiver);
+        if (!snapReceiver.empty) targetOrder = snapReceiver.docs[0];
+      }
+
+      if (!targetOrder) {
+        return {
+          orderId: 'TAMA-REC',
+          status: OrderStatus.CONFIRMED,
+          statusText: 'Prêt pour envoi',
+          estimatedDelivery: Date.now() + 86400000,
+          currentLocation: 'Entrepôt Tama',
+          items: [],
+          trackingSteps: []
+        };
       }
 
       const data = targetOrder.data();
+      const status = data.status || 'pending';
+      const statusMap: Record<string, string> = {
+        'pending': 'En attente',
+        'created': 'Confirmée',
+        'picked_up': 'Récupérée',
+        'in_transit': 'En transit',
+        'out_for_delivery': 'Livraison en cours',
+        'delivered': 'Livrée',
+        'cancelled': 'Annulée'
+      };
 
       return {
-        orderId: data.orderId || targetOrder.id,
+        orderId: data.trackingId || targetOrder.id.slice(0, 8).toUpperCase(),
         status: data.status || OrderStatus.CONFIRMED,
-        statusText: data.status || 'En cours',
+        statusText: statusMap[status.toLowerCase()] || status,
         estimatedDelivery: data.estimatedDeliveryDate ? (data.estimatedDeliveryDate.seconds ? data.estimatedDeliveryDate.seconds * 1000 : data.estimatedDeliveryDate) : Date.now() + 86400000,
-        currentLocation: 'En transit',
+        currentLocation: status === 'delivered' ? 'Livré' : 'En transit',
         items: (data.items || []).slice(0, 2).map((item: any) => ({
-          id: item.id || '',
-          name: item.name?.fr || item.name || '',
+          id: typeof item === 'string' ? item : (item.id || ''),
+          name: typeof item === 'string' ? item : (item.name?.fr || item.name || ''),
           quantity: item.quantity || 1,
           imageUrl: item.image || item.imageUrl || ''
         })),
         trackingSteps: []
       };
     } catch (e) {
-      return { orderId: '', status: OrderStatus.CONFIRMED, statusText: 'Non connecté', estimatedDelivery: 0, currentLocation: '', items: [], trackingSteps: [] };
+      console.error('Error fetching order tracking data:', e);
+      return { orderId: 'ERROR', status: OrderStatus.CONFIRMED, statusText: 'Erreur chargement', estimatedDelivery: 0, currentLocation: '', items: [], trackingSteps: [] };
     }
   }
 
@@ -329,7 +353,8 @@ class WidgetDataService {
       // Shuffle roughly to give variety
       products.sort(() => Math.random() - 0.5);
 
-      return { products: products.slice(0, 5) };
+      return { products: products.slice(0, 5), currency: 'TND' };
+
     } catch (e) {
       return { products: [] };
     }

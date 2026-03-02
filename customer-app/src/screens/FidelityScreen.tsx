@@ -1,24 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
 import { AppText as Text } from '../components/common/AppText';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { ChevronLeft } from 'lucide-react-native';
 import FidelityCard from '../components/FidelityCard';
+import { Gift, Sparkles } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
 interface FidelityScreenProps {
     onBack: () => void;
+    onNavigate: (screen: string) => void;
     user: any;
     t: any;
     theme: string;
 }
 
-export default function FidelityScreen({ onBack, user, t, theme }: FidelityScreenProps) {
+export default function FidelityScreen({ onBack, onNavigate, user, t, theme }: FidelityScreenProps) {
     const isDark = theme === 'dark';
     const [loading, setLoading] = useState(true);
     const [ordersCount, setOrdersCount] = useState(0);
+    const [activeCardIndex, setActiveCardIndex] = useState(0);
 
     const tr = (key: string, fallback: string) => {
         const res = t(key);
@@ -91,7 +95,10 @@ export default function FidelityScreen({ onBack, user, t, theme }: FidelityScree
                     <ActivityIndicator size="large" color="#00FF9D" />
                 </View>
             ) : (
-                <View style={{ flex: 1, justifyContent: 'center', paddingVertical: 20 }}>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ flexGrow: 1, paddingVertical: 20, paddingBottom: 110 }}
+                >
                     <View style={styles.statsHeader}>
                         <Text style={[styles.totalOrdersLabel, { color: isDark ? '#AAA' : '#666' }]}>
                             {tr('totalCompletedOrders', 'Total Completed Orders')}
@@ -100,17 +107,28 @@ export default function FidelityScreen({ onBack, user, t, theme }: FidelityScree
                             {ordersCount}
                         </Text>
                     </View>
-                    <View style={{ height: 260, justifyContent: 'center' }}>
+                    <View style={{ paddingVertical: 20 }}>
                         <FlatList
                             data={cards}
                             keyExtractor={item => item.id}
                             horizontal
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
-                            showsVerticalScrollIndicator={false}
                             contentContainerStyle={styles.listContent}
+                            onScroll={(e) => {
+                                const offset = e.nativeEvent.contentOffset.x;
+                                const index = Math.round(offset / width);
+                                setActiveCardIndex(index);
+                            }}
+                            scrollEventThrottle={16}
                             renderItem={({ item }) => (
-                                <View style={{ width: width, alignItems: 'center', opacity: item.status === 'locked' ? 0.3 : 1, justifyContent: 'center' }}>
+                                <View style={{
+                                    width: width,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: item.status === 'locked' ? 0.6 : 1,
+                                    paddingVertical: 10, // Space for shadows
+                                }}>
                                     <FidelityCard
                                         points={item.points}
                                         isCompleted={item.isCompleted}
@@ -118,16 +136,61 @@ export default function FidelityScreen({ onBack, user, t, theme }: FidelityScree
                                         isDark={isDark}
                                         t={t}
                                     />
+                                    {item.status === 'locked' && (
+                                        <View style={styles.lockOverlay}>
+                                            <Text style={styles.lockText}>{tr('locked', 'LOCKED')} #{item.index}</Text>
+                                        </View>
+                                    )}
                                 </View>
                             )}
                         />
+
+                        {/* Pagination Dots */}
+                        <View style={styles.paginationContainer}>
+                            {cards.map((_, i) => (
+                                <View
+                                    key={i}
+                                    style={[
+                                        styles.dot,
+                                        {
+                                            backgroundColor: i === activeCardIndex ? '#00FF9D' : (isDark ? '#333' : '#CCC'),
+                                            width: i === activeCardIndex ? 20 : 8
+                                        }
+                                    ]}
+                                />
+                            ))}
+                        </View>
                     </View>
                     <Text style={{ textAlign: 'center', paddingHorizontal: 35, color: isDark ? '#888' : '#666', marginTop: 10, fontSize: 13, lineHeight: 22, fontWeight: '500' }}>
                         {tr('fidelityGuide', 'Swipe left and right to view your loyalty cards. Complete 10 orders to fill a card and unlock exclusive rewards like discounts and free delivery!')}
                     </Text>
-                </View>
-            )
-            }
+
+                    {/* Scratch & Win CTA */}
+                    <TouchableOpacity
+                        style={styles.scratchCTA}
+                        activeOpacity={0.9}
+                        onPress={() => onNavigate('ScratchAndWin')}
+                    >
+                        <LinearGradient
+                            colors={['#FFD700', '#FFA500']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.scratchGradient}
+                        >
+                            <View style={styles.scratchInner}>
+                                <View style={styles.scratchIconContainer}>
+                                    <Sparkles color="#FFF" size={24} />
+                                </View>
+                                <View style={styles.scratchTextContainer}>
+                                    <Text style={styles.scratchTitle}>{tr('scratchAndWin', 'SCRATCH & WIN')}</Text>
+                                    <Text style={styles.scratchSubtitle}>{tr('tryYourLuckDaily', 'Try your luck every 24 hours!')}</Text>
+                                </View>
+                                <Gift color="#FFF" size={24} />
+                            </View>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </ScrollView>
+            )}
         </View >
     );
 }
@@ -183,6 +246,73 @@ const styles = StyleSheet.create({
     },
     totalOrdersCount: {
         fontSize: 40,
+        fontWeight: '900',
+    },
+    scratchCTA: {
+        marginTop: 30,
+        marginHorizontal: 20,
+        borderRadius: 20,
+        overflow: 'hidden',
+        elevation: 5,
+        shadowColor: '#FFA500',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    scratchGradient: {
+        padding: 16,
+    },
+    scratchInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    scratchIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    scratchTextContainer: {
+        flex: 1,
+    },
+    scratchTitle: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    scratchSubtitle: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    paginationContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 10,
+        gap: 6,
+    },
+    dot: {
+        height: 8,
+        borderRadius: 4,
+    },
+    lockOverlay: {
+        position: 'absolute',
+        bottom: 5,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    lockText: {
+        color: '#FFF',
+        fontSize: 10,
         fontWeight: '900',
     }
 });

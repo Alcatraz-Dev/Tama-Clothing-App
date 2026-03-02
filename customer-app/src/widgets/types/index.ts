@@ -90,6 +90,7 @@ export interface DealsWidgetData {
   activeDeals: Deal[];
   flashSaleEndTime?: number;
   flashSaleDiscount?: number;
+  currency?: string;
   language?: string;
 }
 
@@ -139,6 +140,7 @@ export interface TrackingStep {
 /** Recommendations widget data */
 export interface RecommendationsWidgetData {
   products: ProductRecommendation[];
+  currency?: string;
   language?: string;
 }
 

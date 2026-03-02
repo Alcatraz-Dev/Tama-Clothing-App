@@ -1,11 +1,13 @@
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, TextWidget, ImageWidget } from 'react-native-android-widget';
 
-export const DealsWidget = ({ dealsCount = 0, size = 'MEDIUM' }: any) => {
+export const DealsWidget = ({ activeDeals = [], size = 'MEDIUM' }: any) => {
     const isLarge = size === 'LARGE';
     const isSmall = size === 'SMALL';
+    const currency = 'TND';
 
     if (isSmall) {
+        const count = activeDeals.length;
         return (
             <FlexWidget
                 style={{
@@ -35,12 +37,14 @@ export const DealsWidget = ({ dealsCount = 0, size = 'MEDIUM' }: any) => {
                     />
                 </FlexWidget>
                 <TextWidget
-                    text={`${dealsCount}`}
+                    text={`${count}`}
                     style={{ color: '#FF453A', fontSize: 16, fontWeight: 'bold' }}
                 />
             </FlexWidget>
         );
     }
+
+    const showCount = isLarge ? 3 : 2;
 
     return (
         <FlexWidget
@@ -48,7 +52,7 @@ export const DealsWidget = ({ dealsCount = 0, size = 'MEDIUM' }: any) => {
                 width: 'match_parent',
                 height: 'match_parent',
                 backgroundColor: '#1C1C1E',
-                padding: 12,
+                padding: 10,
                 borderRadius: 28,
             }}
         >
@@ -58,63 +62,112 @@ export const DealsWidget = ({ dealsCount = 0, size = 'MEDIUM' }: any) => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     width: 'match_parent',
-                    marginBottom: isLarge ? 4 : 8
+                    marginBottom: 8
                 }}
             >
                 <FlexWidget
                     style={{
                         backgroundColor: '#2C2C2E',
-                        borderRadius: 12,
-                        width: 40,
-                        height: 40,
+                        borderRadius: 8,
+                        width: 28,
+                        height: 28,
                         justifyContent: 'center',
                         alignItems: 'center'
                     }}
                 >
                     <TextWidget
                         text="🔥"
-                        style={{ fontSize: 20 }}
+                        style={{ fontSize: 13 }}
                     />
                 </FlexWidget>
 
                 <FlexWidget
                     style={{
                         backgroundColor: '#FF3B30',
-                        borderRadius: 14,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
+                        borderRadius: 8,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
                     }}
                 >
                     <TextWidget
-                        text="HOT"
-                        style={{ color: '#ffffff', fontSize: 10, fontWeight: '900' }}
+                        text="DEALS"
+                        style={{ color: '#ffffff', fontSize: 8, fontWeight: '900' }}
                     />
                 </FlexWidget>
             </FlexWidget>
 
-            {isLarge && (
-                <FlexWidget style={{ marginVertical: 8 }}>
+            {activeDeals.length === 0 ? (
+                <FlexWidget style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <TextWidget
-                        text="Flash Sales & Discounts"
-                        style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}
+                        text="Aucune offre active"
+                        style={{ color: '#8E8E93', fontSize: 13 }}
                     />
-                    <TextWidget
-                        text="Économisez plus sur vos marques préférées aujourd'hui."
-                        style={{ color: '#8E8E93', fontSize: 12 }}
-                    />
+                </FlexWidget>
+            ) : (
+                <FlexWidget style={{ flex: 1 }}>
+                    {activeDeals.slice(0, showCount).map((deal: any, index: number) => (
+                        <FlexWidget
+                            key={index}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                marginBottom: 7,
+                                width: 'match_parent'
+                            }}
+                        >
+                            <FlexWidget
+                                style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 6,
+                                    backgroundColor: '#2C2C2E',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                {deal.imageUrl ? (
+                                    <ImageWidget
+                                        image={deal.imageUrl}
+                                        style={{ width: 34, height: 34 }}
+                                        imageWidth={34}
+                                        imageHeight={34}
+                                    />
+                                ) : (
+                                    <TextWidget text="📦" style={{ fontSize: 15 }} />
+                                )}
+                            </FlexWidget>
+
+                            <FlexWidget style={{ marginLeft: 8, flex: 1 }}>
+                                <TextWidget
+                                    text={deal.title}
+                                    style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}
+                                    maxLines={1}
+                                />
+                                <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <TextWidget
+                                        text={`${deal.salePrice.toFixed(0)} ${currency}`}
+                                        style={{ color: '#FF453A', fontSize: 11, fontWeight: 'bold' }}
+                                    />
+                                    <TextWidget
+                                        text={`${deal.originalPrice.toFixed(0)} ${currency}`}
+                                        style={{ color: '#8E8E93', fontSize: 9, marginLeft: 5 }}
+                                    />
+                                </FlexWidget>
+                            </FlexWidget>
+                        </FlexWidget>
+                    ))}
                 </FlexWidget>
             )}
 
-            <FlexWidget style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 4 }}>
-                <TextWidget
-                    text="Offres du Jour"
-                    style={{ color: '#8E8E93', fontSize: 13, fontWeight: '600', marginBottom: 2 }}
-                />
-                <TextWidget
-                    text={dealsCount > 0 ? `${dealsCount} Offres Actives` : 'Vérifier maintenant'}
-                    style={{ color: '#FF453A', fontSize: isLarge ? 28 : 22, fontWeight: 'bold' }}
-                />
-            </FlexWidget>
+            {!isLarge && activeDeals.length > 0 && (
+                <FlexWidget style={{ marginTop: 0 }}>
+                    <TextWidget
+                        text={`${activeDeals.length} offres dispos`}
+                        style={{ color: '#8E8E93', fontSize: 9 }}
+                    />
+                </FlexWidget>
+            )}
         </FlexWidget>
     );
 };

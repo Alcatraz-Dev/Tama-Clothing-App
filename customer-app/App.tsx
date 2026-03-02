@@ -32,6 +32,7 @@ import AdminSupportListScreen from './src/screens/admin/AdminSupportListScreen';
 import AdminSupportChatScreen from './src/screens/admin/AdminSupportChatScreen';
 import AdminMenuScreen from './src/screens/admin/AdminMenuScreen';
 import AdminNotreSelectionScreen from './src/screens/admin/AdminNotreSelectionScreen';
+import AdminGiftsScreen from './src/screens/admin/AdminGiftsScreen';
 import { Shipment, generateShippingStickerHTML } from './src/utils/shipping';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -170,6 +171,7 @@ import CameraScreen from './src/screens/Camera';
 import FidelityScreen from './src/screens/FidelityScreen';
 import DriverDeliveryScreen from './src/screens/delivery/DriverDeliveryScreen';
 import OrderTrackingScreen from './src/screens/delivery/OrderTrackingScreen';
+import ScratchAndWinScreen from './src/screens/ScratchAndWinScreen';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
@@ -1561,7 +1563,8 @@ export default function App() {
           setActiveTab(screen);
         }
       }} />;
-      case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} user={user} t={t} theme={theme} />;
+      case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} onNavigate={(screen) => setActiveTab(screen)} user={user} t={t} theme={theme} />;
+      case 'ScratchAndWin': return <ScratchAndWinScreen onBack={() => setActiveTab('Fidelity')} user={user} t={t} theme={theme} />;
       case 'DriverDelivery': return <DriverDeliveryScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} theme={theme} t={t} language={language} />;
       case 'OrderTracking': return <OrderTrackingScreen orderId={activeTabParams?.orderId || ''} onBack={() => setActiveTab('Orders')} user={user} theme={theme} t={t} language={language} />;
       case 'Friends': return <FriendsScreen
@@ -1740,6 +1743,7 @@ export default function App() {
         onStartLive={handleStartLive}
         tr={tr}
       />;
+      case 'AdminGifts': return <AdminGiftsScreen onBack={() => setActiveTab('AdminDashboard')} t={t} theme={theme} />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
       case 'Detail':
