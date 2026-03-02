@@ -384,7 +384,7 @@ export default function HomeScreen({
                                 </View>
 
                                 <View style={{ flex: 1, justifyContent: 'center' }}>
-                                    <Text variant="body" style={{ letterSpacing: -0.5, marginBottom: 2 }} numberOfLines={1}>
+                                    <Text variant="body" style={{ letterSpacing: -0.5, marginBottom: 4, fontSize: 13, fontWeight: '800' }} numberOfLines={1}>
                                         {((bestCollab ? getName(bestCollab.name, language) : (bestLiveSession.hostName || 'BROADCASTER'))).toUpperCase()}
                                     </Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -392,15 +392,15 @@ export default function HomeScreen({
                                             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: errorColor }} />
                                             <Animatable.View animation="pulse" iterationCount="infinite" style={[styles.liveStatusDot, { backgroundColor: errorColor + '4D' }]} />
                                         </View>
-                                        <Text variant="caption" style={{ color: mutedColor, fontWeight: '800', opacity: 0.8 }}>
-                                            {Math.max(0, bestLiveSession.viewCount)} {t('viewers')} • {t('joinNow')}
+                                        <Text variant="caption" style={{ color: mutedColor, fontWeight: '800', opacity: 0.8 }} numberOfLines={1}>
+                                            {Math.max(0, bestLiveSession.viewCount)} {t('viewers')}
                                         </Text>
                                     </View>
                                 </View>
 
                                 <Animatable.View animation="pulse" iterationCount="infinite" style={{ marginLeft: 10 }}>
                                     <View style={[styles.joinBtn, { backgroundColor: errorColor }]}>
-                                        <Text variant="caption" style={{ color: '#FFF', letterSpacing: 1.5 }}>{t('join').toUpperCase()}</Text>
+                                        <Text variant="caption" style={{ color: '#FFF', letterSpacing: 0.5, fontWeight: '700' }}>{t('join').toUpperCase()}</Text>
                                     </View>
                                 </Animatable.View>
                             </LinearGradient>
@@ -442,7 +442,7 @@ export default function HomeScreen({
                                             <Text style={styles.liveNowBadgeText}>{t('enDirect') || 'EN DIRECT'}</Text>
                                         </Animatable.View>
                                     </View>
-                                    <Text variant="caption" numberOfLines={1} style={{ marginTop: 8, width: 70, textAlign: 'center' }}>
+                                    <Text variant="caption" numberOfLines={1} style={{ marginTop: 8, width: 72, textAlign: 'center', fontSize: 10, fontWeight: '800' }}>
                                         {getName(c.name, language).toUpperCase()}
                                     </Text>
                                 </TouchableOpacity>

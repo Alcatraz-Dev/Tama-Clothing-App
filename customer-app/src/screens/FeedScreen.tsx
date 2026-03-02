@@ -199,7 +199,7 @@ export default function FeedScreen(props: FeedScreenProps) {
 
     const feedItemsCombined = useMemo(() => {
         let combined = (onlyReels || feedTab === 'reels') ? [...reels] : [...lives, ...works, ...reels];
-        
+
         // Sort by viral score when viral tab is selected (most reactions + comments)
         if (feedTab === 'viral') {
             combined = combined.filter(item => item.score > 0).sort((a, b) => b.score - a.score);
@@ -429,7 +429,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             // Filter out stories older than 24 hours and auto-delete them
             const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
             const validReels: any[] = [];
-            
+
             for (const reel of reelDocs) {
                 const storyAge = reel.createdAt?.toDate ? reel.createdAt.toDate().getTime() : 0;
                 if (storyAge < twentyFourHoursAgo) {
@@ -759,7 +759,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             });
         }
     };
-  const  renderStoryItem = (item: FeedItem , isActive: boolean) => {
+    const renderStoryItem = (item: FeedItem, isActive: boolean) => {
         const reel = item.data;
         return (
             <View >
@@ -893,7 +893,7 @@ export default function FeedScreen(props: FeedScreenProps) {
     };
 
     const renderStatsPills = (work: any) => (
-        
+
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 8, zIndex: 20 }}>
             {/* Comment Count Pill */}
             {((work.commentsCount || 0) > 0) && (
@@ -1196,66 +1196,66 @@ export default function FeedScreen(props: FeedScreenProps) {
                 }}>
                     {/* Only show action buttons for non-reel content */}
                     {!isReel && (
-                    <>
-                    {/* Comment */}
-                    <View style={{ alignItems: 'center' }}>
-                        <Button
-                            onPress={() => onCommentPress?.(work, work.userId)}
-                            size="icon"
-                            variant="glass"
-                            icon={MessageSquare}
-                            style={{ width: 44, height: 44, borderRadius: 22 }}
-                        />
-                        <Text style={{ color: 'white', fontSize: 11, fontWeight: '800', marginTop: 2 }}>
-                            {work.commentsCount || 0}
-                        </Text>
-                        <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
-                            {tr('Commentaire', 'تعليق', 'Comment')}
-                        </Text>
-                    </View>
+                        <>
+                            {/* Comment */}
+                            <View style={{ alignItems: 'center' }}>
+                                <Button
+                                    onPress={() => onCommentPress?.(work, work.userId)}
+                                    size="icon"
+                                    variant="glass"
+                                    icon={MessageSquare}
+                                    style={{ width: 44, height: 44, borderRadius: 22 }}
+                                />
+                                <Text style={{ color: 'white', fontSize: 11, fontWeight: '800', marginTop: 2 }}>
+                                    {work.commentsCount || 0}
+                                </Text>
+                                <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
+                                    {tr('Commentaire', 'تعليق', 'Comment')}
+                                </Text>
+                            </View>
 
-                    {/* Repost */}
-                    <View style={{ alignItems: 'center' }}>
-                        <Button
-                            onPress={() => handleRepost(work)}
-                            size="icon"
-                            variant="glass"
-                            icon={Repeat}
-                            style={{ width: 44, height: 44, borderRadius: 22 }}
-                        />
-                        <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
-                            {tr('Republier', 'عاود أنشر', 'Repost')}
-                        </Text>
-                    </View>
+                            {/* Repost */}
+                            <View style={{ alignItems: 'center' }}>
+                                <Button
+                                    onPress={() => handleRepost(work)}
+                                    size="icon"
+                                    variant="glass"
+                                    icon={Repeat}
+                                    style={{ width: 44, height: 44, borderRadius: 22 }}
+                                />
+                                <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
+                                    {tr('Republier', 'عاود أنشر', 'Repost')}
+                                </Text>
+                            </View>
 
-                    {/* Download/Save */}
-                    <View style={{ alignItems: 'center' }}>
-                        <Button
-                            onPress={() => handleDownload(work)}
-                            size="icon"
-                            variant="glass"
-                            icon={DownloadCloud}
-                            style={{ width: 44, height: 44, borderRadius: 22 }}
-                        />
-                        <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
-                            {tr('Enregistrer', 'خبّي', 'Save')}
-                        </Text>
-                    </View>
+                            {/* Download/Save */}
+                            <View style={{ alignItems: 'center' }}>
+                                <Button
+                                    onPress={() => handleDownload(work)}
+                                    size="icon"
+                                    variant="glass"
+                                    icon={DownloadCloud}
+                                    style={{ width: 44, height: 44, borderRadius: 22 }}
+                                />
+                                <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
+                                    {tr('Enregistrer', 'خبّي', 'Save')}
+                                </Text>
+                            </View>
 
-                    {/* Share */}
-                    <View style={{ alignItems: 'center' }}>
-                        <Button
-                            onPress={() => handleShare(work)}
-                            size="icon"
-                            variant="glass"
-                            icon={Send}
-                            style={{ width: 44, height: 44, borderRadius: 22 }}
-                        />
-                        <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
-                            {tr('Partager', 'أبعث', 'Share')}
-                        </Text>
-                    </View>
-                    </>
+                            {/* Share */}
+                            <View style={{ alignItems: 'center' }}>
+                                <Button
+                                    onPress={() => handleShare(work)}
+                                    size="icon"
+                                    variant="glass"
+                                    icon={Send}
+                                    style={{ width: 44, height: 44, borderRadius: 22 }}
+                                />
+                                <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '800', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }}>
+                                    {tr('Partager', 'أبعث', 'Share')}
+                                </Text>
+                            </View>
+                        </>
                     )}
                 </View>
 
@@ -1345,81 +1345,81 @@ export default function FeedScreen(props: FeedScreenProps) {
 
                 {/* Bottom Reaction Bar (Traveaux Style) */}
                 {!isReel && (
-                <View style={{
-                    position: 'absolute',
-                    bottom: 96,
-                    marginTop: 40,
-                    left: 12,
-                    right: 12,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 30,
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                    borderWidth: 1.5,
-                    borderColor: 'rgba(255,255,255,0.2)',
-                    zIndex: 20,
-                }}>
-                    {[
-                        { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('AMOUR', 'يهبل', 'LOVE') },
-                        { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('FEU', 'نار', 'FIRE') },
-                        { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('DRÔLE', 'يضحك', 'HAHA') },
-                        { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('BOF', 'خايب', 'BAD') },
-                        { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('MOCHE', 'ماسط', 'UGLY') },
-                        { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('TOP', 'طيارة', 'COOL') }
-                    ].map((btn) => {
-                        const isSelected = work.userReactions?.[user?.uid] === btn.type;
-                        const count = work.reactions?.[btn.type] || 0;
-                        const hasActivity = count > 0;
-                        const showColor = isSelected || hasActivity;
+                    <View style={{
+                        position: 'absolute',
+                        bottom: 96,
+                        marginTop: 40,
+                        left: 12,
+                        right: 12,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 30,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        zIndex: 20,
+                    }}>
+                        {[
+                            { type: 'love', Icon: Heart, color: '#FF4D67', label: tr('AMOUR', 'يهبل', 'LOVE') },
+                            { type: 'fire', Icon: Flame, color: '#FF8A00', label: tr('FEU', 'نار', 'FIRE') },
+                            { type: 'haha', Icon: Laugh, color: '#FFD600', label: tr('DRÔLE', 'يضحك', 'HAHA') },
+                            { type: 'bad', Icon: ThumbsDown, color: '#94A3B8', label: tr('BOF', 'خايب', 'BAD') },
+                            { type: 'ugly', Icon: Ghost, color: '#818CF8', label: tr('MOCHE', 'ماسط', 'UGLY') },
+                            { type: 'interesting', Icon: Sparkles, color: '#A855F7', label: tr('TOP', 'طيارة', 'COOL') }
+                        ].map((btn) => {
+                            const isSelected = work.userReactions?.[user?.uid] === btn.type;
+                            const count = work.reactions?.[btn.type] || 0;
+                            const hasActivity = count > 0;
+                            const showColor = isSelected || hasActivity;
 
-                        return (
-                            <TouchableOpacity
-                                key={btn.type}
-                                onPress={() => handleReaction(work, btn.type)}
-                                activeOpacity={0.7}
-                                style={{ alignItems: 'center', flex: 1 }}
-                            >
-                                <View style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 16,
-                                    backgroundColor: isSelected ? (btn.color + '30') : 'rgba(255,255,255,0.1)',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderWidth: isSelected ? 1.5 : 0,
-                                    borderColor: btn.color,
-                                    marginBottom: 4
-                                }}>
-                                    <btn.Icon
-                                        size={18}
-                                        color={showColor ? btn.color : 'rgba(255,255,255,0.6)'}
-                                        fill="transparent"
-                                        strokeWidth={isSelected ? 2.5 : 1.5}
-                                    />
-                                </View>
-                                <Text style={{
-                                    color: showColor ? btn.color : 'rgba(255,255,255,0.6)',
-                                    fontSize: 8,
-                                    fontWeight: '900',
-                                    letterSpacing: 0.5,
-                                    marginBottom: 2
-                                }}>
-                                    {btn.label}
-                                </Text>
-                                <Text style={{
-                                    color: '#FFF',
-                                    fontSize: 10,
-                                    fontWeight: '900',
-                                    opacity: hasActivity ? 1 : 0.5
-                                }}>
-                                    {count}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                            return (
+                                <TouchableOpacity
+                                    key={btn.type}
+                                    onPress={() => handleReaction(work, btn.type)}
+                                    activeOpacity={0.7}
+                                    style={{ alignItems: 'center', flex: 1 }}
+                                >
+                                    <View style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 16,
+                                        backgroundColor: isSelected ? (btn.color + '30') : 'rgba(255,255,255,0.1)',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderWidth: isSelected ? 1.5 : 0,
+                                        borderColor: btn.color,
+                                        marginBottom: 4
+                                    }}>
+                                        <btn.Icon
+                                            size={18}
+                                            color={showColor ? btn.color : 'rgba(255,255,255,0.6)'}
+                                            fill="transparent"
+                                            strokeWidth={isSelected ? 2.5 : 1.5}
+                                        />
+                                    </View>
+                                    <Text style={{
+                                        color: showColor ? btn.color : 'rgba(255,255,255,0.6)',
+                                        fontSize: 8,
+                                        fontWeight: '900',
+                                        letterSpacing: 0.5,
+                                        marginBottom: 2
+                                    }}>
+                                        {btn.label}
+                                    </Text>
+                                    <Text style={{
+                                        color: '#FFF',
+                                        fontSize: 10,
+                                        fontWeight: '900',
+                                        opacity: hasActivity ? 1 : 0.5
+                                    }}>
+                                        {count}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
                 )}
             </View>
         );
@@ -1484,7 +1484,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                 {/* Top Row */}
                 <View style={styles.header}>
                     {!isAdActive && (
-                        <TouchableOpacity onPress={()=>onNavigate("Camera")} >
+                        <TouchableOpacity onPress={() => onNavigate("Camera")} >
                             <Camera size={20} color="#FFF" />
                         </TouchableOpacity>
                     )}
@@ -1605,6 +1605,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
+        marginTop: -10,
     },
     headerTitle: {
         fontSize: 28,
