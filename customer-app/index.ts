@@ -29,8 +29,9 @@ registerWidgetTaskHandler(async (props) => {
 
         switch (widgetName) {
             case 'CartWidget':
-            case 'CartWidgetLarge': {
-                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : WidgetSize.MEDIUM;
+            case 'CartWidgetLarge':
+            case 'CartWidgetSmall': {
+                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : (widgetName.endsWith('Small') ? WidgetSize.SMALL : WidgetSize.MEDIUM);
                 const data: any = await manager['dataService'].getWidgetData(WidgetType.CART, size)
                     || await manager['dataService'].getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
                 renderWidget(React.createElement(CartWidget, {
@@ -42,8 +43,9 @@ registerWidgetTaskHandler(async (props) => {
                 break;
             }
             case 'DealsWidget':
-            case 'DealsWidgetLarge': {
-                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : WidgetSize.MEDIUM;
+            case 'DealsWidgetLarge':
+            case 'DealsWidgetSmall': {
+                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : (widgetName.endsWith('Small') ? WidgetSize.SMALL : WidgetSize.MEDIUM);
                 const data: any = await manager['dataService'].getWidgetData(WidgetType.DEALS, size)
                     || await manager['dataService'].getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
                 renderWidget(React.createElement(DealsWidget, {
@@ -53,8 +55,9 @@ registerWidgetTaskHandler(async (props) => {
                 break;
             }
             case 'OrderTrackingWidget':
-            case 'OrderTrackingWidgetLarge': {
-                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : WidgetSize.MEDIUM;
+            case 'OrderTrackingWidgetLarge':
+            case 'OrderTrackingWidgetSmall': {
+                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : (widgetName.endsWith('Small') ? WidgetSize.SMALL : WidgetSize.MEDIUM);
                 const data: any = await manager['dataService'].getWidgetData(WidgetType.ORDER_TRACKING, size)
                     || await manager['dataService'].getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
                 renderWidget(React.createElement(OrderTrackingWidget, {
@@ -65,8 +68,9 @@ registerWidgetTaskHandler(async (props) => {
                 break;
             }
             case 'RecommendationsWidget':
-            case 'RecommendationsWidgetLarge': {
-                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : WidgetSize.MEDIUM;
+            case 'RecommendationsWidgetLarge':
+            case 'RecommendationsWidgetSmall': {
+                const size = widgetName.endsWith('Large') ? WidgetSize.LARGE : (widgetName.endsWith('Small') ? WidgetSize.SMALL : WidgetSize.MEDIUM);
                 const data: any = await manager['dataService'].getWidgetData(WidgetType.RECOMMENDATIONS, size)
                     || await manager['dataService'].getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
                 renderWidget(React.createElement(RecommendationsWidget, {

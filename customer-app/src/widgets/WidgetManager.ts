@@ -255,6 +255,19 @@ class WidgetManager {
               })
             });
           }
+          // Update Small
+          const smallData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.SMALL) || medData;
+          if (smallData && isCartWidgetData(smallData)) {
+            requestWidgetUpdate({
+              widgetName: 'CartWidgetSmall',
+              renderWidget: () => React.createElement(CartWidget, {
+                itemCountValue: smallData.itemCount,
+                totalAmountValue: smallData.totalAmount,
+                currencyCode: smallData.currency,
+                size: WidgetSize.SMALL
+              })
+            });
+          }
           break;
         }
 
@@ -277,6 +290,16 @@ class WidgetManager {
               renderWidget: () => React.createElement(DealsWidget, {
                 dealsCount: largeData.activeDeals?.length || 0,
                 size: WidgetSize.LARGE
+              })
+            });
+          }
+          const smallData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.SMALL) || medData;
+          if (smallData && isDealsWidgetData(smallData)) {
+            requestWidgetUpdate({
+              widgetName: 'DealsWidgetSmall',
+              renderWidget: () => React.createElement(DealsWidget, {
+                dealsCount: smallData.activeDeals?.length || 0,
+                size: WidgetSize.SMALL
               })
             });
           }
@@ -307,6 +330,17 @@ class WidgetManager {
               })
             });
           }
+          const smallData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.SMALL) || medData;
+          if (smallData && isOrderTrackingWidgetData(smallData)) {
+            requestWidgetUpdate({
+              widgetName: 'OrderTrackingWidgetSmall',
+              renderWidget: () => React.createElement(OrderTrackingWidget, {
+                orderIdString: smallData.orderId,
+                statusString: smallData.statusText,
+                size: WidgetSize.SMALL
+              })
+            });
+          }
           break;
         }
 
@@ -329,6 +363,16 @@ class WidgetManager {
               renderWidget: () => React.createElement(RecommendationsWidget, {
                 recCount: largeData.products?.length || 0,
                 size: WidgetSize.LARGE
+              })
+            });
+          }
+          const smallData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.SMALL) || medData;
+          if (smallData && isRecommendationsWidgetData(smallData)) {
+            requestWidgetUpdate({
+              widgetName: 'RecommendationsWidgetSmall',
+              renderWidget: () => React.createElement(RecommendationsWidget, {
+                recCount: smallData.products?.length || 0,
+                size: WidgetSize.SMALL
               })
             });
           }

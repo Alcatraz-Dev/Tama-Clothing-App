@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import WidgetManager from '../widgets/WidgetManager';
+import { WidgetType, WidgetSize } from '../widgets/types';
 
 export interface CartItem {
     id: string;
@@ -54,6 +56,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const saveCart = async () => {
             try {
                 await AsyncStorage.setItem('@tama_cart', JSON.stringify(cart));
+                // Update widgets with real data
+                WidgetManager.getInstance().refreshWidget(WidgetType.CART, WidgetSize.MEDIUM).catch(console.error);
+                WidgetManager.getInstance().refreshWidget(WidgetType.CART, WidgetSize.LARGE).catch(console.error);
+                WidgetManager.getInstance().refreshWidget(WidgetType.CART, WidgetSize.SMALL).catch(console.error);
             } catch (e) {
                 console.error('Failed to save cart', e);
             }

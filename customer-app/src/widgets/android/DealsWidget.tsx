@@ -3,6 +3,45 @@ import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
 export const DealsWidget = ({ dealsCount = 0, size = 'MEDIUM' }: any) => {
     const isLarge = size === 'LARGE';
+    const isSmall = size === 'SMALL';
+
+    if (isSmall) {
+        return (
+            <FlexWidget
+                style={{
+                    width: 'match_parent',
+                    height: 'match_parent',
+                    backgroundColor: '#1C1C1E',
+                    padding: 8,
+                    borderRadius: 24,
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                }}
+            >
+                <FlexWidget
+                    style={{
+                        backgroundColor: '#2C2C2E',
+                        borderRadius: 12,
+                        width: 44,
+                        height: 44,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginBottom: 4
+                    }}
+                >
+                    <TextWidget
+                        text="🔥"
+                        style={{ fontSize: 22 }}
+                    />
+                </FlexWidget>
+                <TextWidget
+                    text={`${dealsCount}`}
+                    style={{ color: '#FF453A', fontSize: 16, fontWeight: 'bold' }}
+                />
+            </FlexWidget>
+        );
+    }
+
     return (
         <FlexWidget
             style={{
