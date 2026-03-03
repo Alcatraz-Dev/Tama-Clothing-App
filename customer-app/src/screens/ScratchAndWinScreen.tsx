@@ -88,6 +88,8 @@ const PRIZES = [
     { id: 3, foilBg: ['#1A6030', '#229950', '#30CC70', '#229950', '#1A6030'], accent: '#408A60' },
     { id: 4, foilBg: ['#0D3A7A', '#1558C0', '#3A93F5', '#1558C0', '#0D3A7A'], accent: '#60B4FF' },
     { id: 5, foilBg: ['#7010E0', '#9030F0', '#AA40FF', '#9030F0', '#7010E0'], accent: '#CC80FF' },
+    { id: 6, foilBg: ['#C01040', '#E03060', '#FF5080', '#E03060', '#C01040'], accent: '#FF6090' },
+    { id: 7, foilBg: ['#10A0A0', '#20C0C0', '#40E0E0', '#20C0C0', '#10A0A0'], accent: '#50F0F0' },
 ];
 
 // const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Hours
@@ -321,8 +323,8 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
     const tr = (k: string, fb: string = k) => { const r = t(k); return r === k ? fb : r; };
 
     useEffect(() => {
-        // Initialize deck with randomness
-        const shuffled = [...PRIZES].sort(() => Math.random() - 0.5);
+        // Initialize deck with randomness and depth
+        const shuffled = [...PRIZES, ...PRIZES, ...PRIZES].sort(() => Math.random() - 0.5);
         setDeckCards(shuffled);
         checkLastScratch();
         fetchAvailableGifts();
@@ -429,9 +431,32 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
     const [selectedGift, setSelectedGift] = useState<ScratchGift | null>(null);
 
     const handleChosen = useCallback(() => {
-        const fallback: ScratchGift = { id: 'default', amount: 5, type: 'amount', active: true };
-        const gifts = availableGifts.length > 0 ? availableGifts : [fallback];
-        const picked = gifts[Math.floor(Math.random() * gifts.length)];
+        if (availableGifts.length === 0) {
+            const fallback: ScratchGift = { id: 'default', amount: 5, type: 'amount', active: true };
+            setSelectedGift(fallback);
+            setRandomAmount('5.00');
+            setMode('scratch');
+            hintOpacity.value = 1;
+            return;
+        }
+
+        // 🎲 Grouping by type to prevent one type (like 'amount') from dominating the lottery
+        // just because it has more entries in the database.
+        const groups: Record<string, ScratchGift[]> = {};
+        availableGifts.forEach(g => {
+            if (!groups[g.type]) groups[g.type] = [];
+            groups[g.type].push(g);
+        });
+
+        const types = Object.keys(groups);
+
+        // 1. Pick a random type first (ensures variety)
+        const pickedType = types[Math.floor(Math.random() * types.length)];
+        const possibleGifts = groups[pickedType];
+
+        // 2. Pick a random gift within that type
+        const picked = possibleGifts[Math.floor(Math.random() * possibleGifts.length)];
+
         setSelectedGift(picked);
         setRandomAmount(picked.amount.toFixed(2));
         setMode('scratch');
