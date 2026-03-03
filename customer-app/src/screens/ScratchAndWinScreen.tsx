@@ -92,8 +92,9 @@ const PRIZES = [
     { id: 7, foilBg: ['#10A0A0', '#20C0C0', '#40E0E0', '#20C0C0', '#10A0A0'], accent: '#50F0F0' },
 ];
 
-// const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Hours
-const COOLDOWN_MS = 1 * 60 * 1000; // 1 Minutes
+const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Hours
+// For testing
+// const COOLDOWN_MS = 1 * 60 * 1000; // 1 Minutes
 
 type Mode = 'deck' | 'scratch' | 'revealed';
 type Pt = { x: number; y: number };
@@ -233,8 +234,10 @@ const DeckCard = React.memo(({
     // Only the top card (depth=0) has gesture
     const isTop = depth === 0;
 
-    const SCALE_MIN = 1 - (totalCards - 1 - depth) * 0.06;
-    const Y_OFFSET = (totalCards - 1 - depth) * 14;
+    // Use a fixed max stack depth for visual calculations to prevent "tiny card" glitch
+    const visualDepth = Math.min(depth, 3);
+    const SCALE_MIN = 1 - visualDepth * 0.06;
+    const Y_OFFSET = visualDepth * 14;
 
     // Cards below scale up / rise as top card is dragged away
     const animStyle = useAnimatedStyle(() => {
@@ -280,7 +283,11 @@ const DeckCard = React.memo(({
                 <Text style={[s.stackCardLabel, { color: 'rgba(255,255,255,0.4)' }]}>
                     {t('luckQuest', 'QUÊTE DE CHANCE')}
                 </Text>
-                <Text style={[s.stackAmountBig, { color: prize.accent, fontSize: 22, marginTop: 8, textShadowColor: prize.accent + '40', textShadowRadius: 10 }]}>
+                <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={[s.stackAmountBig, { color: prize.accent, marginTop: 8, textShadowColor: prize.accent + '40', textShadowRadius: 10 }]}
+                >
                     {t('mysteryPrize', 'PRIX MYSTÈRE')}
                 </Text>
 
@@ -309,16 +316,20 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
     const [canScratch, setCanScratch] = useState(true);
     const [timeLeft, setTimeLeft] = useState('');
     const [availableGifts, setAvailableGifts] = useState<ScratchGift[]>([]);
+    const [history, setHistory] = useState<any[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [mode, setMode] = useState<Mode>('deck');
     const [cardIndex, setCardIndex] = useState(0);
     const [deckCards, setDeckCards] = useState<any[]>([]);
     const [randomAmount, setRandomAmount] = useState('5.00');
-
+    const [currentPrize, setCurrentPrize] = useState<any>(PRIZES[0]);
+    const [selectedGift, setSelectedGift] = useState<ScratchGift | null>(null);
 
     const topX = useSharedValue(0);
     const topY = useSharedValue(0);
     const hintOpacity = useSharedValue(1);
-
+    const isSaving = useRef(false);
 
     const tr = (k: string, fb: string = k) => { const r = t(k); return r === k ? fb : r; };
 
@@ -326,8 +337,10 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
         // Initialize deck with randomness and depth
         const shuffled = [...PRIZES, ...PRIZES, ...PRIZES].sort(() => Math.random() - 0.5);
         setDeckCards(shuffled);
+        setCurrentPrize(shuffled[0]);
         checkLastScratch();
         fetchAvailableGifts();
+        fetchHistory();
     }, [user]);
 
     useEffect(() => {
@@ -354,7 +367,6 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
         }
     };
 
-
     const checkLastScratch = async () => {
         if (!user) return;
         try {
@@ -368,6 +380,21 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
             }
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
+    };
+
+    const fetchHistory = async () => {
+        if (!user) return;
+        try {
+            const q = query(
+                collection(db, 'users', user.uid, 'prizes'),
+                where('category', '==', 'scratch_win')
+            );
+            const snap = await getDocs(q);
+            const data = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setHistory(data);
+        } catch (e) { console.log('History err:', e); }
     };
 
     const fetchAvailableGifts = async () => {
@@ -388,7 +415,6 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
             if (data.length > 0) {
                 setAvailableGifts(data);
             } else {
-                // Fallback
                 setAvailableGifts([{ id: 'default', amount: 5, type: 'amount', active: true }]);
             }
         } catch (error) {
@@ -397,8 +423,6 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
         }
     };
 
-
-    // Swipe top card away → show next in deck
     const swipeAway = useCallback((dir: 1 | -1) => {
         topX.value = withSpring(dir * SW * 1.6, { damping: 14, stiffness: 80 }, () => {
             runOnJS(advanceDeck)();
@@ -407,7 +431,8 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
 
     const advanceDeck = useCallback(() => {
         setDeckCards(prev => {
-            const next = [...prev.slice(1), prev[0]]; // rotate
+            const next = [...prev.slice(1), prev[0]];
+            setCurrentPrize(next[0]);
             return next;
         });
         topX.value = 0;
@@ -428,20 +453,13 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
             }
         });
 
-    const [selectedGift, setSelectedGift] = useState<ScratchGift | null>(null);
+    const handleChosen = (p: any) => {
+        if (isProcessing || !canScratch) return;
+        setIsProcessing(true);
+        isSaving.current = false; // Reset saving flag for the new card
+        hintOpacity.value = 1;
 
-    const handleChosen = useCallback(() => {
-        if (availableGifts.length === 0) {
-            const fallback: ScratchGift = { id: 'default', amount: 5, type: 'amount', active: true };
-            setSelectedGift(fallback);
-            setRandomAmount('5.00');
-            setMode('scratch');
-            hintOpacity.value = 1;
-            return;
-        }
-
-        // 🎲 Grouping by type to prevent one type (like 'amount') from dominating the lottery
-        // just because it has more entries in the database.
+        // Grouping for fairness
         const groups: Record<string, ScratchGift[]> = {};
         availableGifts.forEach(g => {
             if (!groups[g.type]) groups[g.type] = [];
@@ -449,48 +467,53 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
         });
 
         const types = Object.keys(groups);
+        let chosen: ScratchGift;
 
-        // 1. Pick a random type first (ensures variety)
-        const pickedType = types[Math.floor(Math.random() * types.length)];
-        const possibleGifts = groups[pickedType];
+        if (types.length > 0) {
+            const pickedType = types[Math.floor(Math.random() * types.length)];
+            const possibleGifts = groups[pickedType];
+            chosen = possibleGifts[Math.floor(Math.random() * possibleGifts.length)];
+        } else {
+            chosen = { id: 'default-' + Date.now(), amount: 5, type: 'amount', active: true };
+        }
 
-        // 2. Pick a random gift within that type
-        const picked = possibleGifts[Math.floor(Math.random() * possibleGifts.length)];
+        setSelectedGift(chosen);
+        if (chosen.type === 'amount' || chosen.type === 'cashback') {
+            setRandomAmount(chosen.amount.toFixed(2));
+        }
 
-        setSelectedGift(picked);
-        setRandomAmount(picked.amount.toFixed(2));
         setMode('scratch');
-        hintOpacity.value = 1;
-    }, [availableGifts]);
+        setCurrentPrize(p);
 
+        // Reset processing after delay
+        setTimeout(() => setIsProcessing(false), 800);
+    };
 
     const handleScratch = useCallback((pct: number) => {
-        if (pct >= 0.52 && mode === 'scratch') {
+        if (pct >= 0.52 && mode === 'scratch' && !isSaving.current) {
+            isSaving.current = true;
             setMode('revealed');
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             saveScratch();
         }
-    }, [mode, selectedGift]);
+    }, [mode, selectedGift, user]);
 
     const saveScratch = async () => {
         if (!user || !selectedGift) return;
         try {
             const userRef = doc(db, 'users', user.uid);
-
-            // Logic based on gift type
-            const updates: any = {
-                lastScratch: serverTimestamp(),
-            };
+            const updates: any = { lastScratch: serverTimestamp() };
 
             if (selectedGift.type === 'amount') {
                 updates.loyaltyPoints = increment(selectedGift.amount);
             }
 
-            // Update user record
             await updateDoc(userRef, updates);
 
-            // Record prize history
-            await setDoc(doc(db, 'users', user.uid, 'prizes', String(Date.now())), {
+            // Record history with FULL ID and timestamp
+            const prizeId = `sw_${Date.now()}`;
+            await setDoc(doc(db, 'users', user.uid, 'prizes', prizeId), {
+                id: prizeId,
                 amount: selectedGift.amount,
                 type: selectedGift.type,
                 code: selectedGift.code || null,
@@ -499,7 +522,7 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                 category: 'scratch_win'
             });
 
-            // GLOBAL TRACKING for Admin Portfolio/Sales
+            // Stats
             const statsRef = doc(db, 'scratch_stats', 'prizes');
             await setDoc(statsRef, {
                 totalAwarded: increment((selectedGift.type === 'amount' || selectedGift.type === 'cashback') ? selectedGift.amount : 0),
@@ -507,11 +530,9 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                 lastUpdate: serverTimestamp()
             }, { merge: true });
 
-        } catch (e) { console.error(e); }
+            fetchHistory();
+        } catch (e) { console.error('Save error:', e); }
     };
-
-
-    const currentPrize = deckCards[0];
 
     if (loading) return (
         <View style={{ flex: 1, backgroundColor: '#060608', justifyContent: 'center', alignItems: 'center' }}>
@@ -528,17 +549,19 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                         <ChevronLeft color={tc} size={26} />
                     </TouchableOpacity>
                     <Text style={[s.hTitle, { color: tc }]}>{tr('scratchAndWin', 'GRATTEZ ET GAGNEZ')}</Text>
-                    <View style={s.hBtn} />
+                    <TouchableOpacity onPress={() => setShowHistory(true)} style={s.hBtn}>
+                        <Trophy size={20} color={tc} />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={s.body}>
-                    {/* Title */}
+                    {/* Title Block */}
                     <Animated.View entering={FadeIn.duration(400)} style={s.titleBlock}>
                         <Text style={[s.title, { color: tc }]}>{tr('tryYourLuck', 'TENTEZ VOTRE CHANCE')}</Text>
                         <Text style={[s.subtitle, { color: isDark ? '#555' : '#999' }]}>
                             {mode === 'deck'
-                                ? tr('scratchBelow', 'Glissez pour choisir votre carte')
-                                : tr('scratchBelow', 'Grattez pour révéler votre prix')}
+                                ? tr('swipeToChoose', 'Glissez pour choisir votre carte')
+                                : tr('scratchBelowReward', 'Grattez pour révéler votre prix')}
                         </Text>
                     </Animated.View>
 
@@ -570,20 +593,18 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                             {mode === 'deck' && (
                                 <GestureDetector gesture={deckGesture}>
                                     <View style={s.deckWrap}>
-                                        {/* Render from bottom to top */}
-                                        {[...deckCards].reverse().map((prize, revIdx) => {
-                                            const depth = deckCards.length - 1 - revIdx;
+                                        {deckCards.slice(0, 4).reverse().map((prize, revIdx) => {
+                                            const depth = (Math.min(deckCards.length, 4) - 1) - revIdx;
                                             return (
                                                 <DeckCard
-                                                    key={revIdx}
+                                                    key={`${prize.id}-${revIdx}`}
                                                     prize={prize}
                                                     depth={depth}
                                                     totalCards={deckCards.length}
                                                     topX={topX}
-                                                    onChosen={handleChosen}
+                                                    onChosen={() => handleChosen(prize)}
                                                     t={tr}
                                                 />
-
                                             );
                                         })}
                                     </View>
@@ -593,32 +614,32 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                             {/* ── SCRATCH MODE ── */}
                             {(mode === 'scratch' || mode === 'revealed') && (
                                 <Animated.View entering={ZoomIn.springify().damping(16)} style={s.scratchWrap}>
-                                    {/* Prize layer */}
                                     <View style={s.scratchCard}>
                                         <LinearGradient colors={['#0A0A0F', '#141420'] as any} style={StyleSheet.absoluteFill} />
-
-                                        {/* Prize content — visible through scratched holes */}
                                         <View style={s.prizeContent}>
                                             <View style={[s.prizeRing, { borderColor: currentPrize.accent + '70' }]}>
                                                 <Sparkles size={30} color={currentPrize.accent} />
                                             </View>
                                             <Text style={s.youWon}>{tr('youWon')}</Text>
-                                            <Text style={[s.prizeAmt, { color: currentPrize.accent }]}>
+                                            <Text
+                                                numberOfLines={1}
+                                                adjustsFontSizeToFit
+                                                style={[s.prizeAmt, { color: currentPrize.accent }]}
+                                            >
                                                 {selectedGift?.type === 'free_delivery'
-                                                    ? tr('giftTypeFreeDelivery')
+                                                    ? tr('giftTypeFreeDelivery', 'Livraison Gratuite')
                                                     : selectedGift?.type === 'coupon'
                                                         ? `${selectedGift.code}`
                                                         : `${randomAmount} TND`
                                                 }
                                             </Text>
                                             {selectedGift?.type === 'coupon' && (
-                                                <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700', marginTop: 4 }}>
+                                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '800', marginTop: 6, letterSpacing: 1 }}>
                                                     {selectedGift.amount}% OFF
                                                 </Text>
                                             )}
                                         </View>
 
-                                        {/* Skia foil + scratch canvas */}
                                         {mode === 'scratch' && (
                                             <SkiaScratchSurface
                                                 foilColors={currentPrize.foilBg}
@@ -629,21 +650,14 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                                             />
                                         )}
 
-
-                                        {/* SCRATCH HERE hint */}
                                         {mode === 'scratch' && (
-                                            <Animated.View
-                                                style={[s.hintWrap, { opacity: hintOpacity }]}
-                                                pointerEvents="none"
-                                            >
-                                                <Text style={s.hintTxt}>{tr('scratchHere')}</Text>
+                                            <Animated.View style={[s.hintWrap, { opacity: hintOpacity }]} pointerEvents="none">
+                                                <Text style={s.hintTxt}>{tr('scratchHere', 'GRATTEZ ICI')}</Text>
                                                 <View style={s.hintLine} />
                                             </Animated.View>
                                         )}
-
                                     </View>
 
-                                    {/* Claim button */}
                                     {mode === 'revealed' && (
                                         <Animated.View entering={ZoomIn.springify().damping(14)} style={{ width: CARD_W, marginTop: 24 }}>
                                             <TouchableOpacity
@@ -658,13 +672,8 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                                                     } else {
                                                         msg = `${tr('prizeClaimed')} ${randomAmount} TND`;
                                                     }
-
-                                                    Alert.alert(
-                                                        tr('congratulations'),
-                                                        msg
-                                                    );
+                                                    Alert.alert(tr('congratulations'), msg);
                                                     onBack();
-
                                                 }}
                                                 activeOpacity={0.85}
                                             >
@@ -674,7 +683,7 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                                                     style={s.claimBtn}
                                                 >
                                                     <Sparkles color="#000" size={18} />
-                                                    <Text style={s.claimTxt}>{tr('claim')}</Text>
+                                                    <Text style={s.claimTxt}>{tr('claim', 'RÉCUPÉRER')}</Text>
                                                     <Sparkles color="#000" size={18} />
                                                 </LinearGradient>
                                             </TouchableOpacity>
@@ -685,6 +694,62 @@ export default function ScratchAndWinScreen({ onBack, user, t, theme }: Props) {
                         </View>
                     )}
                 </View>
+
+                {/* 📜 WINS HISTORY MODAL */}
+                {showHistory && (
+                    <Animated.View entering={FadeIn} style={s.modalOverlay}>
+                        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowHistory(false)} />
+                        <Animated.View entering={SlideInDown} style={s.modalContent}>
+                            <View style={s.modalHeader}>
+                                <Trophy size={24} color="#FFD700" />
+                                <Text style={s.modalTitle}>{tr('history', 'HISTORIQUE')}</Text>
+                                <TouchableOpacity onPress={() => setShowHistory(false)} style={s.closeBtn}>
+                                    <Text style={{ color: '#666', fontWeight: 'bold' }}>✕</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <Animated.FlatList
+                                data={history}
+                                keyExtractor={(item) => item.id}
+                                contentContainerStyle={{ paddingBottom: 40 }}
+                                renderItem={({ item }) => (
+                                    <View style={s.historyItem}>
+                                        <View style={s.historyLeft}>
+                                            <View style={s.historyIcon}>
+                                                <Gift size={16} color="#FFD700" />
+                                            </View>
+                                            <View>
+                                                <Text style={s.historyType}>
+                                                    {item.type === 'amount' ? tr('cashReward', 'Récompense Cash') :
+                                                        item.type === 'coupon' ? tr('coupon', 'Coupon') :
+                                                            item.type === 'cashback' ? tr('cashback', 'Cashback') :
+                                                                item.type === 'free_delivery' ? tr('freeDelivery', 'Livraison Gratuite') :
+                                                                    tr('reward', 'Récompense')}
+                                                </Text>
+                                                <Text style={s.historyDate}>
+                                                    {item.createdAt?.toDate ?
+                                                        item.createdAt.toDate().toLocaleDateString('fr-FR') + ' ' +
+                                                        item.createdAt.toDate().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                                                        : ''}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <Text style={s.historyAmount}>
+                                            {(item.type === 'amount' || item.type === 'cashback') ? `+${item.amount} TND` :
+                                                item.type === 'coupon' ? item.code :
+                                                    'FREE'}
+                                        </Text>
+                                    </View>
+                                )}
+                                ListEmptyComponent={() => (
+                                    <View style={{ padding: 40, alignItems: 'center' }}>
+                                        <Text style={{ color: '#555', textAlign: 'center' }}>{tr('noWinsYet', "Aucun gain pour l'instant")}</Text>
+                                    </View>
+                                )}
+                            />
+                        </Animated.View>
+                    </Animated.View>
+                )}
             </View>
         </GestureHandlerRootView>
     );
@@ -742,8 +807,8 @@ const s = StyleSheet.create({
         paddingBottom: 20,
     },
     stackCardLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 2.5 },
-    stackCardAmount: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.5)', marginTop: 6 },
-    stackAmountBig: { fontSize: 36, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+    stackCardAmount: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.5)', marginTop: 6 },
+    stackAmountBig: { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
     chooseBtn: {
         position: 'absolute',
         bottom: 14,
@@ -783,7 +848,7 @@ const s = StyleSheet.create({
         color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800',
         letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4,
     },
-    prizeAmt: { fontSize: 44, fontWeight: '900', letterSpacing: 1 },
+    prizeAmt: { fontSize: 32, fontWeight: '900', letterSpacing: 0.5, textAlign: 'center', width: '90%' },
     hintWrap: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
@@ -821,4 +886,81 @@ const s = StyleSheet.create({
         paddingHorizontal: 26, paddingVertical: 13, borderRadius: 14, borderWidth: 1,
     },
     goBackTxt: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
+
+    // ── History Modal ──
+    modalOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        zIndex: 10000,
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#0A0A0F',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        height: '80%',
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 24,
+        gap: 12,
+    },
+    modalTitle: {
+        color: '#FFF',
+        fontSize: 20,
+        fontWeight: '900',
+        letterSpacing: 1,
+        flex: 1,
+    },
+    closeBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    historyItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+    },
+    historyLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
+    historyIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,215,0,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,215,0,0.15)',
+    },
+    historyType: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    historyDate: {
+        color: '#666',
+        fontSize: 12,
+        marginTop: 2,
+    },
+    historyAmount: {
+        color: '#FFD700',
+        fontSize: 16,
+        fontWeight: '900',
+    },
 });
