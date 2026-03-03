@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins } from 'lucide-react-native';
+import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins, MessageSquareOff } from 'lucide-react-native';
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
@@ -69,6 +69,38 @@ type Props = {
     profileData?: any;
 };
 
+const MemberAvatar = ({ userId, userName, defaultAvatar }: { userId: string, userName: string, defaultAvatar?: string }) => {
+    const [avatar, setAvatar] = useState(defaultAvatar || CustomBuilder.getUserAvatar(userId));
+
+    useEffect(() => {
+        if (!avatar && userId) {
+            getDoc(doc(db, 'users', userId)).then(snap => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const url = data.avatarUrl || data.avatar;
+                    const name = data.fullName || data.userName || data.name || data.displayName;
+                    if (url) {
+                        CustomBuilder.registerAvatar(userId, url);
+                        setAvatar(url);
+                    }
+                    if (name) {
+                        CustomBuilder.registerUserName(userId, name);
+                    }
+                }
+            }).catch(e => console.log('Error fetching member avatar:', e));
+        }
+    }, [userId]);
+
+    return (
+        <Image
+            style={{ width: '100%', height: '100%', borderRadius: 1000 }}
+            source={{
+                uri: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || 'U')}&background=random`
+            }}
+        />
+    );
+};
+
 export default function AudienceLiveScreen(props: Props) {
     const t = props.t || ((key: string) => key);
     const { channelId, userId, userName, userAvatar, onClose, language, profileData } = props;
@@ -103,6 +135,8 @@ export default function AudienceLiveScreen(props: Props) {
     const [activeCoupon, setActiveCoupon] = useState<any>(null);
     const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
     const couponTimerRef = useRef<any>(null);
+    const [isChatMuted, setIsChatMuted] = useState(false); // Global - host muted all
+    const [isMyCommentsMuted, setIsMyCommentsMuted] = useState(false); // Per-user - host muted me specifically
     const videoTimerRef = useRef<any>(null);
     const [likeCount, setLikeCount] = useState(0);
     const [totalLikes, setTotalLikes] = useState(0);
@@ -1491,7 +1525,11 @@ export default function AudienceLiveScreen(props: Props) {
                                 return (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, paddingRight: 8, paddingVertical: 2, paddingLeft: 2 }}>
                                         <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#fff' }}>
-                                            <Image source={{ uri: CustomBuilder.getUserAvatar(host.userID) }} style={{ width: '100%', height: '100%' }} />
+                                            <MemberAvatar
+                                                userId={host.userID}
+                                                userName={host.userName}
+                                                defaultAvatar={CustomBuilder.getUserAvatar(host.userID)}
+                                            />
                                         </View>
                                         <View style={{ marginLeft: 6, marginRight: 8 }}>
                                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} numberOfLines={1}>{host.userName}</Text>
@@ -1559,9 +1597,16 @@ export default function AudienceLiveScreen(props: Props) {
                                 setActiveCoupon(data);
                                 const remaining = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
                                 setCouponTimeRemaining(remaining);
+                            } else if (data.type === 'chat_mute') {
+                                // Host muted ALL viewers globally
+                                setIsChatMuted(data.muted === true);
+                            } else if (data.type === 'user_chat_mute') {
+                                // Host muted a specific user — only apply if it targets ME
+                                if (data.targetUserId === userId) {
+                                    setIsMyCommentsMuted(data.muted === true);
+                                }
                             } else if (data.type === 'PK_SCORE_SYNC') {
                                 // 🛡️ ONLY accept score sync from the actual host of this stream
-                                // This prevents swapped scores/names from reaching the wrong audience
                                 const senderID = messageData.fromUser?.userID || messageData.senderUserID;
                                 if (senderID !== streamHostId) return;
 
@@ -1610,6 +1655,36 @@ export default function AudienceLiveScreen(props: Props) {
                     },
                     onGiftButtonClick: () => {
                         setShowGifts(true);
+                    },
+                    memberListConfig: {
+                        showCameraState: false,
+                        showMicrophoneState: false,
+                        avatarBuilder: (userInfo: any) => {
+                            const showMe = userInfo.isSelf ? 'You' : '';
+                            const roleName = userInfo.role === ZegoLiveStreamingRole.host ? 'Host' : (userInfo.role === ZegoLiveStreamingRole.coHost ? 'Co-host' : '');
+                            let roleDesc = ''
+                            if (!showMe) {
+                                roleDesc = `${roleName ? ('(' + roleName + ')') : ''}`;
+                            } else {
+                                roleDesc = `(${showMe + (roleName ? (',' + roleName) : '')})`;
+                            }
+
+                            return (
+                                <View style={styles.memberItemLeft}>
+                                    <View style={styles.memberAvatar}>
+                                        <MemberAvatar
+                                            userId={userInfo?.userID}
+                                            userName={userInfo?.userName}
+                                            defaultAvatar={CustomBuilder.getUserAvatar(userInfo?.userID)}
+                                        />
+                                    </View>
+                                    <View style={[styles.memberName]}>
+                                        <Text numberOfLines={1} style={{ fontSize: 16, color: '#FFFFFF' }}>{userInfo.userName}{roleDesc}</Text>
+                                    </View>
+                                </View>
+                            );
+                        }
+
                     },
                     onWindowMinimized: () => {
                         onClose();
@@ -2383,6 +2458,96 @@ export default function AudienceLiveScreen(props: Props) {
             </Modal>
 
 
+            {/* Chat Muted Indicator */}
+            {isChatMuted && (
+                <Animatable.View
+                    animation="fadeInUp"
+                    duration={300}
+                    style={{
+                        position: 'absolute',
+                        bottom: 80,
+                        left: 16,
+                        right: 16,
+                        zIndex: 9999,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        backgroundColor: 'rgba(239,68,68,0.85)',
+                        borderRadius: 20,
+                        paddingVertical: 8,
+                        paddingHorizontal: 16,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)',
+                    }}
+                >
+                    <MessageSquareOff size={14} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                        {t ? t('commentsMuted') || 'Comments muted by host' : 'Comments muted by host'}
+                    </Text>
+                </Animatable.View>
+            )}
+
+            {/* Per-user Comment Mute Indicator (Only visible to the muted viewer) */}
+            {isMyCommentsMuted && (
+                <Animatable.View
+                    animation="fadeInUp"
+                    duration={300}
+                    style={{
+                        position: 'absolute',
+                        bottom: 80,
+                        left: 16,
+                        right: 16,
+                        zIndex: 9999,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        backgroundColor: 'rgba(239,68,68,0.9)',
+                        borderRadius: 22,
+                        paddingVertical: 10,
+                        paddingHorizontal: 18,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,100,100,0.4)',
+                    }}
+                >
+                    <MessageSquareOff size={15} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800' }}>
+                        {t ? t('yourCommentsMuted') || 'Your comments are muted by the host' : 'Your comments are muted by the host'}
+                    </Text>
+                </Animatable.View>
+            )}
+
+            {/* Global Comment Mute Indicator (All viewers see this) */}
+            {isChatMuted && !isMyCommentsMuted && (
+                <Animatable.View
+                    animation="fadeInUp"
+                    duration={300}
+                    style={{
+                        position: 'absolute',
+                        bottom: 80,
+                        left: 16,
+                        right: 16,
+                        zIndex: 9998,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        backgroundColor: 'rgba(100,100,100,0.85)',
+                        borderRadius: 22,
+                        paddingVertical: 10,
+                        paddingHorizontal: 18,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.1)',
+                    }}
+                >
+                    <MessageSquareOff size={15} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                        {t ? t('commentsMuted') || 'Comments muted by host' : 'Comments muted by host'}
+                    </Text>
+                </Animatable.View>
+            )}
+
             {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
             {recentGift && !recentGift.isBig && (
                 <View style={{
@@ -2765,5 +2930,24 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#000',
         zIndex: 0,
+    },
+    memberAvatar: {
+        width: 36,
+        height: 36,
+        backgroundColor: '#5c5c5c',
+        borderRadius: 1000,
+        marginRight: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    memberItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    memberName: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });

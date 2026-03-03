@@ -79,7 +79,64 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
         zIndex: 0,
     },
+    memberAvatar: {
+        width: 36,
+        height: 36,
+        backgroundColor: '#5c5c5c',
+        borderRadius: 1000,
+        marginRight: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    memberItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    memberName: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });
+
+const MemberAvatar = ({ userId, userName, defaultAvatar }: { userId: string, userName: string, defaultAvatar?: string }) => {
+    const [avatar, setAvatar] = useState(defaultAvatar || CustomBuilder.getUserAvatar(userId));
+
+    useEffect(() => {
+        // Resolution logic: if userName is valid, register it
+        const looksLikeUserId = (s: string) => !s || (s.length > 20 && /^[a-zA-Z0-9]+$/.test(s));
+        if (userName && !looksLikeUserId(userName)) {
+            CustomBuilder.registerUserName(userId, userName);
+        }
+
+        if (!avatar && userId) {
+            getDoc(doc(db, 'users', userId)).then(snap => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const url = data.avatarUrl || data.avatar;
+                    const name = data.fullName || data.userName || data.name || data.displayName;
+                    if (url) {
+                        CustomBuilder.registerAvatar(userId, url);
+                        setAvatar(url);
+                    }
+                    if (name) {
+                        CustomBuilder.registerUserName(userId, name);
+                    }
+                }
+            }).catch(e => console.log('Error fetching member avatar:', e));
+        }
+    }, [userId]);
+
+    return (
+        <Image
+            style={{ width: '100%', height: '100%', borderRadius: 1000 }}
+            source={{
+                uri: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || 'U')}&background=random`
+            }}
+        />
+    );
+};
 
 export default function HostLiveScreen(props: Props) {
     const t = typeof props.t === 'function' ? props.t : (key: string) => key;
@@ -94,6 +151,16 @@ export default function HostLiveScreen(props: Props) {
     const mediaViewRef = useRef<any>(null);
     const mediaPlayerRef = useRef<any>(null);
     const [blockedApplying, setBlockedApplying] = useState<string[]>([]);
+    const [mutedUsers, setMutedUsers] = useState<string[]>([]); // Per-user comment mute
+    // Custom member action sheet state (replaces native Zego popup)
+    const [memberActionSheet, setMemberActionSheet] = useState<{
+        visible: boolean;
+        userId: string;
+        userName: string;
+        isCoHost: boolean;
+        isBlocked: boolean;
+        isMuted: boolean;
+    } | null>(null);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
     // Gift Queue System
     const [giftQueue, setGiftQueue] = React.useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean }[]>([]);
@@ -119,6 +186,7 @@ export default function HostLiveScreen(props: Props) {
     const opponentChannelIdRef = useRef<string | null>(null);
     const [pkBattleId, setPkBattleId] = useState<string | null>(null);
     const [showPKInviteModal, setShowPKInviteModal] = useState(false);
+    const roomUserMap = useRef(new Map<string, any>());
     const [targetHostId, setTargetHostId] = useState('');
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(false);
@@ -1980,7 +2048,11 @@ export default function HostLiveScreen(props: Props) {
                                 return (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, paddingRight: 8, paddingVertical: 2, paddingLeft: 2 }}>
                                         <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#fff' }}>
-                                            <Image source={{ uri: CustomBuilder.getUserAvatar(host.userID) }} style={{ width: '100%', height: '100%' }} />
+                                            <MemberAvatar
+                                                userId={host.userID}
+                                                userName={host.userName}
+                                                defaultAvatar={CustomBuilder.getUserAvatar(host.userID)}
+                                            />
                                         </View>
                                         <View style={{ marginLeft: 6, marginRight: 8 }}>
                                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} numberOfLines={1}>{host.userName}</Text>
@@ -2002,7 +2074,8 @@ export default function HostLiveScreen(props: Props) {
                             ZegoMenuBarButtonName.toggleMicrophoneButton || 'toggleMicrophone',
                             ZegoMenuBarButtonName.switchCameraButton || 'switchCamera',
                             ZegoMenuBarButtonName.chatButton || 'chat',
-                            ZegoMenuBarButtonName.coHostControlButton || 'cohost',
+                            // Note: coHostControlButton removed to prevent native Zego invite/remove UI
+                            // Co-host management is handled via the memberList (3-dots menu) instead
                         ],
                         buttonBuilders: {
                             toggleCameraBuilder: CustomBuilder.toggleCameraBuilder,
@@ -2028,125 +2101,94 @@ export default function HostLiveScreen(props: Props) {
                     memberListConfig: {
                         showCameraState: false,
                         showMicrophoneState: false,
-                        onMemberMoreButtonPressed: (item: any) => {
-                            console.log('🔘 3-Dots Menu Clicked (Default List) for:', item);
-                            if (item.userID === userId) return;
-
-                            const isCoHost = item.role === 1;
-                            const isBlocked = blockedApplying.includes(item.userID);
-
-                            // Helper function to check if a string looks like a user ID
-                            const looksLikeUserId = (str: string) => {
-                                if (!str) return true;
-                                // User IDs are typically long alphanumeric strings (20+ chars)
-                                return str.length > 20 && /^[a-zA-Z0-9]+$/.test(str);
-                            };
-
-                            // FORCE Name Resolution: Try multiple sources for the display name
-                            // 1. Check CustomBuilder cache (most reliable)
-                            let targetName = CustomBuilder.getUserName(item.userID);
-                            console.log('📝 CustomBuilder name:', targetName);
-
-                            // 2. If not cached or looks like ID, try item properties
-                            if (!targetName || looksLikeUserId(targetName)) {
-                                targetName = item.userName || item.nickName || '';
-                                console.log('📝 Item name:', targetName);
+                        avatarBuilder: (userInfo: any) => {
+                            // Register user info in our map for later use in onMemberMoreButtonPressed
+                            if (userInfo?.userID) {
+                                roomUserMap.current.set(userInfo.userID, userInfo);
                             }
 
-                            // 3. If still showing user ID or empty, try ZegoUIKit
-                            if (!targetName || looksLikeUserId(targetName)) {
-                                if (ZegoUIKit) {
-                                    try {
-                                        const realUser = ZegoUIKit.getUser(item.userID);
-                                        console.log('📝 ZegoUIKit user:', realUser);
-                                        if (realUser) {
-                                            const name = realUser.userName || realUser.nickName || '';
-                                            if (name && !looksLikeUserId(name)) {
-                                                targetName = name;
-                                                // Cache it for future use
-                                                CustomBuilder.registerUserName(item.userID, name);
-                                            }
-                                        }
-                                    } catch (e) {
-                                        console.log('Error fetching user info:', e);
-                                    }
-                                }
-                            }
-
-                            // 4. Final fallback to a generic name (never show user IDs)
-                            if (!targetName || looksLikeUserId(targetName)) {
-                                targetName = 'User';
-                            }
-
-                            console.log('✅ Final targetName:', targetName);
-
-                            // Define Actions
-                            const actionOptions = [
-                                t('cancel') || 'Cancel',
-                                `🚫 ${t('removeUser') || 'Remove'} ${targetName}`,
-                                isCoHost ? `📵 ${t('stopCoHosting') || 'Stop Co-hosting'}` : `🤝 ${t('inviteToCoHost') || 'Invite to Co-host'}`,
-                                isCoHost ? `🔇 ${t('mute') || 'Mute'} ${targetName}` : null,
-                                isBlocked ? `✅ ${t('unblock') || 'Unblock'} Apply` : `⛓️ ${t('block') || 'Block'} Apply`
-                            ].filter(Boolean) as string[];
-
-                            const handleAction = (selectedText: string) => {
-                                if (!selectedText || selectedText === t('cancel')) return;
-
-                                if (selectedText.includes(t('removeUser'))) {
-                                    Alert.alert(t('confirmRemove') || 'Confirm Disconnect', (t('areYouSureRemoveFromRoom') || `Are you sure you want to remove ${targetName} from the room?`).replace('${targetName}', targetName), [
-                                        { text: t('cancel') || 'Cancel', style: 'cancel' },
-                                        {
-                                            text: t('remove') || 'Remove', style: 'destructive', onPress: () => {
-                                                const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
-                                                if (ZegoRN) ZegoRN.removeUserFromRoom([item.userID]);
-                                            }
-                                        }
-                                    ]);
-                                } else if (selectedText.includes(t('inviteToCoHost'))) {
-                                    if (ZegoUIKit) {
-                                        ZegoUIKit.getSignalingPlugin().sendInvitation([item.userID], 60, 2, JSON.stringify({ "inviter_name": userName, "type": 2 }))
-                                            .then(() => Alert.alert(t('success') || "Success", `${t('invitationSentTo') || 'Invitation sent to'} ${targetName}`))
-                                            .catch(() => Alert.alert("Info", t('sendingInvitation') || `Sending invitation...`));
-                                    }
-                                } else if (selectedText.includes(t('stopCoHosting'))) {
-                                    if (ZegoUIKit && isLiveStarted) {
-                                        ZegoUIKit.sendInRoomCommand(JSON.stringify({ type: 'stop_cohosting', target: item.userID }), [item.userID], () => { });
-                                        Alert.alert(t('success') || "Success", `${t('stoppedCoHostingFor') || 'Stopped co-hosting for'} ${targetName}`);
-                                    }
-                                } else if (selectedText.includes('Mute')) {
-                                    const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
-                                    if (ZegoRN) ZegoRN.turnMicrophoneOn(item.userID, false);
-                                } else if (selectedText.includes('Block Apply') || selectedText.includes('Unblock Apply')) {
-                                    setBlockedApplying(prev => isBlocked ? prev.filter(id => id !== item.userID) : [...prev, item.userID]);
-                                    Alert.alert('Updated', isBlocked ? `Unblocked ${targetName}` : `Blocked ${targetName} from applying`);
-                                }
-                            };
-
-                            if (Platform.OS === 'ios') {
-                                ActionSheetIOS.showActionSheetWithOptions(
-                                    {
-                                        options: actionOptions,
-                                        cancelButtonIndex: 0,
-                                        destructiveButtonIndex: 1,
-                                        title: `Manage ${targetName}`,
-                                        message: 'Select an action for this user'
-                                    },
-                                    (buttonIndex) => handleAction(actionOptions[buttonIndex])
-                                );
+                            const showMe = userInfo.isSelf ? 'You' : '';
+                            const roleName = userInfo.role === ZegoLiveStreamingRole.host ? 'Host' : (userInfo.role === ZegoLiveStreamingRole.coHost ? 'Co-host' : '');
+                            let roleDesc = ''
+                            if (!showMe) {
+                                roleDesc = `${roleName ? ('(' + roleName + ')') : ''}`;
                             } else {
-                                Alert.alert(
-                                    `Manage ${targetName}`,
-                                    'Select an action',
-                                    [
-                                        ...actionOptions.slice(1).map(opt => ({
-                                            text: opt,
-                                            style: (opt.includes('Remove') ? 'destructive' : 'default') as 'destructive' | 'default',
-                                            onPress: () => handleAction(opt)
-                                        })),
-                                        { text: 'Cancel', style: 'cancel', onPress: () => { } }
-                                    ]
-                                );
+                                roleDesc = `(${showMe + (roleName ? (',' + roleName) : '')})`;
                             }
+
+                            return (
+                                <View style={styles.memberItemLeft}>
+                                    <View style={styles.memberAvatar}>
+                                        <MemberAvatar
+                                            userId={userInfo?.userID}
+                                            userName={userInfo?.userName}
+                                            defaultAvatar={CustomBuilder.getUserAvatar(userInfo?.userID)}
+                                        />
+                                    </View>
+                                    <View style={[styles.memberName]}>
+                                        <Text numberOfLines={1} style={{ fontSize: 16, color: '#FFFFFF' }}>{userInfo.userName}{roleDesc}</Text>
+                                    </View>
+                                </View>
+                            );
+                        },
+                        onMemberMoreButtonPressed: async (item: any) => {
+                            if (!item || !item.userID || item.userID === userId) return;
+
+                            const looksLikeUserId = (s: string) =>
+                                !s || (s.length > 20 && /^[a-zA-Z0-9_-]+$/.test(s));
+
+                            // Start with the best name we have in the item itself
+                            let targetName = item.userName || item.nickName;
+
+                            // 1. Try resolving from our roomUserMap (most reliable cached data)
+                            const roomUserInfo = roomUserMap.current.get(item.userID);
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                targetName = roomUserInfo?.userName || roomUserInfo?.nickName;
+                            }
+
+                            // 2. Try ZegoUIKit directly
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                try {
+                                    const u = ZegoUIKit?.getUser(item.userID);
+                                    if (u?.userName && !looksLikeUserId(u.userName)) targetName = u.userName;
+                                    else if (u?.nickName && !looksLikeUserId(u.nickName)) targetName = u.nickName;
+                                } catch (_) { }
+                            }
+
+                            // 3. Try global cache
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                targetName = CustomBuilder.getUserName(item.userID);
+                            }
+
+                            // 4. Force Firestore fetch if still no real name
+                            if (!targetName || looksLikeUserId(targetName)) {
+                                try {
+                                    const snap = await getDoc(doc(db, 'users', item.userID));
+                                    if (snap.exists()) {
+                                        const data = snap.data();
+                                        const foundName = data.fullName || data.userName || data.name || data.displayName;
+                                        if (foundName && !looksLikeUserId(foundName)) {
+                                            targetName = foundName;
+                                            CustomBuilder.registerUserName(item.userID, foundName);
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.log('Error resolving name in menu:', e);
+                                }
+                            }
+
+                            // 5. Final fallback
+                            if (!targetName || looksLikeUserId(targetName)) targetName = 'User';
+
+                            // Open custom bottom sheet
+                            setMemberActionSheet({
+                                visible: true,
+                                userId: item.userID,
+                                userName: targetName,
+                                isCoHost: (roomUserInfo?.role === 1 || item.role === 1),
+                                isBlocked: blockedApplying.includes(item.userID),
+                                isMuted: mutedUsers.includes(item.userID),
+                            });
                         },
                     },
                     onWindowMinimized: () => {
@@ -2724,7 +2766,7 @@ export default function HostLiveScreen(props: Props) {
                         </TouchableOpacity> */}
 
 
-                        {/* Share Button as requested */}
+                        {/* Share Button */}
                         <TouchableOpacity
                             onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
                             style={{
@@ -2911,7 +2953,7 @@ export default function HostLiveScreen(props: Props) {
                                                             duration: pkDuration,
                                                             endTime: endTime
                                                         });
-                                                        ZegoUIKit.getSignalingPlugin().sendInvitation([targetId], 60, 10, invitationData)
+                                                        ZegoUIKit.getSignalingPlugin().sendInvitation(userName, [targetId], 60, 10, invitationData)
                                                             .then(() => {
                                                                 setShowPKInviteModal(false);
                                                                 Alert.alert(t('success') || "Request Sent", `${t('challenge')} ${session.hostName}...`);
@@ -3539,108 +3581,111 @@ export default function HostLiveScreen(props: Props) {
                         animation="fadeInUp"
                         duration={500}
                         style={{
-                            width: '100%',
-                            maxWidth: 420,
-                            backgroundColor: 'rgba(26, 26, 36, 0.85)',
-                            borderRadius: 35,
-                            padding: 30,
+                            width: '90%',
+                            maxWidth: 400,
+                            backgroundColor: 'rgba(18, 18, 24, 0.95)',
+                            borderRadius: 32,
+                            padding: 32,
                             alignItems: 'center',
-                            borderWidth: 1.5,
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
                             shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 20 },
-                            shadowOpacity: 0.6,
-                            shadowRadius: 30,
-                            elevation: 20
+                            shadowOffset: { width: 0, height: 25 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 35,
+                            elevation: 24
                         }}
                     >
                         {/* Status Icon */}
                         <View style={{
-                            width: 90,
-                            height: 90,
-                            borderRadius: 45,
-                            backgroundColor: 'rgba(255, 0, 85, 0.08)',
+                            width: 80,
+                            height: 80,
+                            borderRadius: 40,
+                            backgroundColor: 'rgba(255, 0, 85, 0.05)',
                             justifyContent: 'center',
                             alignItems: 'center',
-                            marginBottom: 24,
+                            marginBottom: 20,
                             borderWidth: 1,
-                            borderColor: 'rgba(255, 0, 85, 0.2)'
+                            borderColor: 'rgba(255, 0, 85, 0.15)'
                         }}>
                             <LinearGradient
-                                colors={['#FF0055', '#FF4D80']}
+                                colors={['#FF0055', '#FF3377']}
                                 style={{
-                                    width: 60,
-                                    height: 60,
-                                    borderRadius: 30,
+                                    width: 54,
+                                    height: 54,
+                                    borderRadius: 27,
                                     justifyContent: 'center',
                                     alignItems: 'center',
                                     shadowColor: '#FF0055',
-                                    shadowOffset: { width: 0, height: 4 },
-                                    shadowOpacity: 0.5,
-                                    shadowRadius: 8,
+                                    shadowOffset: { width: 0, height: 8 },
+                                    shadowOpacity: 0.4,
+                                    shadowRadius: 12,
                                 }}
                             >
-                                <Radio size={32} color="#fff" />
+                                <Radio size={26} color="#ffffff" strokeWidth={2.5} />
                             </LinearGradient>
                         </View>
 
                         <Text style={{
-                            color: '#fff',
-                            fontSize: 28,
-                            fontWeight: '900',
+                            color: '#ffffff',
+                            fontSize: 26,
+                            fontWeight: '800',
                             textAlign: 'center',
-                            marginBottom: 12,
+                            marginBottom: 10,
                             letterSpacing: -0.5
                         }}>
                             {t('liveSetup')}
                         </Text>
 
                         <Text style={{
-                            color: 'rgba(255,255,255,0.7)',
-                            fontSize: 16,
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: 15,
                             textAlign: 'center',
-                            marginBottom: 35,
-                            lineHeight: 24,
-                            paddingHorizontal: 10
+                            marginBottom: 30,
+                            lineHeight: 22,
+                            paddingHorizontal: 15
                         }}>
                             {t('addPromoVideoDesc')}
                         </Text>
 
                         {promoUrl ? (
                             <Animatable.View
-                                animation="bounceIn"
-                                style={{ width: '100%', alignItems: 'center', marginBottom: 35 }}
+                                animation="zoomIn"
+                                duration={400}
+                                style={{ width: '100%', alignItems: 'center', marginBottom: 32 }}
                             >
-                                <LinearGradient
-                                    colors={['rgba(0, 255, 127, 0.15)', 'rgba(0, 255, 127, 0.05)']}
+                                <View
                                     style={{
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        paddingHorizontal: 20,
-                                        paddingVertical: 12,
-                                        borderRadius: 20,
-                                        marginBottom: 15,
+                                        backgroundColor: 'rgba(0, 255, 127, 0.08)',
+                                        paddingHorizontal: 18,
+                                        paddingVertical: 10,
+                                        borderRadius: 100,
+                                        marginBottom: 16,
                                         borderWidth: 1,
-                                        borderColor: 'rgba(0, 255, 127, 0.3)'
+                                        borderColor: 'rgba(0, 255, 127, 0.2)'
                                     }}
                                 >
-                                    <Sparkles size={20} color="#00FF7F" style={{ marginRight: 10 }} />
-                                    <Text style={{ color: '#00FF7F', fontWeight: '800', fontSize: 16 }}>
+                                    <Sparkles size={16} color="#00FF7F" style={{ marginRight: 8 }} />
+                                    <Text style={{ color: '#00FF7F', fontWeight: '700', fontSize: 14 }}>
                                         {t('videoReady')}
                                     </Text>
-                                </LinearGradient>
+                                </View>
                                 <TouchableOpacity
                                     onPress={pickPromoVideo}
                                     activeOpacity={0.7}
                                     style={{
                                         paddingVertical: 8,
-                                        paddingHorizontal: 16,
-                                        backgroundColor: 'rgba(255,255,255,0.05)',
-                                        borderRadius: 12
+                                        paddingHorizontal: 20,
+                                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                                        borderRadius: 100,
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255, 255, 255, 0.08)'
                                     }}
                                 >
-                                    <Text style={{ color: '#3B82F6', fontWeight: '800', fontSize: 14 }}>
-                                        {t('changeVideo').toUpperCase()}
+                                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontWeight: '600', fontSize: 13 }}>
+                                        {t('changeVideo')}
                                     </Text>
                                 </TouchableOpacity>
                             </Animatable.View>
@@ -3651,36 +3696,36 @@ export default function HostLiveScreen(props: Props) {
                                 activeOpacity={0.8}
                                 style={{
                                     width: '100%',
-                                    height: 120,
-                                    borderRadius: 24,
-                                    borderWidth: 2,
-                                    borderColor: 'rgba(255, 0, 85, 0.4)',
+                                    height: 110,
+                                    borderRadius: 20,
+                                    borderWidth: 1.5,
+                                    borderColor: 'rgba(255, 255, 255, 0.12)',
                                     borderStyle: 'dashed',
                                     justifyContent: 'center',
                                     alignItems: 'center',
-                                    marginBottom: 35,
-                                    backgroundColor: 'rgba(255, 0, 85, 0.03)'
+                                    marginBottom: 32,
+                                    backgroundColor: 'rgba(0, 0, 0, 0.2)'
                                 }}
                             >
                                 {isUploadingPromo ? (
                                     <View style={{ alignItems: 'center' }}>
-                                        <ActivityIndicator color="#FF0055" size="large" />
-                                        <Text style={{ color: '#FF0055', marginTop: 12, fontWeight: '700' }}>UPLOADING...</Text>
+                                        <ActivityIndicator color="#FF0055" size="small" />
+                                        <Text style={{ color: 'rgba(255, 255, 255, 0.6)', marginTop: 10, fontWeight: '600', fontSize: 13, letterSpacing: 1 }}>UPLOADING...</Text>
                                     </View>
                                 ) : (
                                     <View style={{ alignItems: 'center' }}>
                                         <View style={{
-                                            width: 48,
-                                            height: 48,
-                                            borderRadius: 24,
-                                            backgroundColor: 'rgba(255, 0, 85, 0.1)',
+                                            width: 44,
+                                            height: 44,
+                                            borderRadius: 22,
+                                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
                                             justifyContent: 'center',
                                             alignItems: 'center',
-                                            marginBottom: 12
+                                            marginBottom: 10
                                         }}>
-                                            <PlusCircle size={28} color="#FF0055" />
+                                            <PlusCircle size={22} color="rgba(255, 255, 255, 0.7)" />
                                         </View>
-                                        <Text style={{ color: '#FF0055', fontWeight: '900', fontSize: 18 }}>
+                                        <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontWeight: '700', fontSize: 15 }}>
                                             {t('selectVideo')}
                                         </Text>
                                     </View>
@@ -3688,31 +3733,31 @@ export default function HostLiveScreen(props: Props) {
                             </TouchableOpacity>
                         )}
 
-                        <View style={{ width: '100%', gap: 15 }}>
+                        <View style={{ width: '100%', gap: 12 }}>
                             <TouchableOpacity
                                 onPress={() => startFirestoreSession()}
                                 disabled={isUploadingPromo}
                                 activeOpacity={0.9}
                             >
                                 <LinearGradient
-                                    colors={isUploadingPromo ? ['#444', '#333'] : ['#FF0055', '#FF4D80']}
+                                    colors={isUploadingPromo ? ['#333', '#222'] : ['#FF0055', '#FF2A6D']}
                                     start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
                                     style={{
                                         width: '100%',
-                                        height: 64,
-                                        borderRadius: 20,
+                                        height: 56,
+                                        borderRadius: 16,
                                         justifyContent: 'center',
                                         alignItems: 'center',
                                         shadowColor: '#FF0055',
-                                        shadowOffset: { width: 0, height: 8 },
-                                        shadowOpacity: 0.35,
-                                        shadowRadius: 12,
-                                        elevation: 8
+                                        shadowOffset: { width: 0, height: 6 },
+                                        shadowOpacity: 0.3,
+                                        shadowRadius: 10,
+                                        elevation: 6
                                     }}
                                 >
-                                    <Text style={{ color: '#fff', fontSize: 19, fontWeight: '900', letterSpacing: 0.5 }}>
-                                        {t('startLiveNow').toUpperCase()}
+                                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 }}>
+                                        {t('startLiveNow')}
                                     </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
@@ -3723,16 +3768,19 @@ export default function HostLiveScreen(props: Props) {
                                     activeOpacity={0.7}
                                     style={{
                                         width: '100%',
-                                        height: 50,
+                                        height: 48,
                                         justifyContent: 'center',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: 16,
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255, 255, 255, 0.05)'
                                     }}
                                 >
                                     <Text style={{
-                                        color: 'rgba(255,255,255,0.4)',
-                                        fontWeight: '800',
+                                        color: 'rgba(255, 255, 255, 0.6)',
+                                        fontWeight: '600',
                                         fontSize: 15,
-                                        textDecorationLine: 'underline'
                                     }}>
                                         {t('skipForNow')}
                                     </Text>
@@ -3742,6 +3790,300 @@ export default function HostLiveScreen(props: Props) {
                     </Animatable.View>
                 </BlurView>
             </Modal>
+            {/* ───── Custom Member Action Sheet ───── */}
+            <Modal
+                visible={!!memberActionSheet?.visible}
+                transparent
+                animationType="none"
+                onRequestClose={() => setMemberActionSheet(null)}
+            >
+                {/* Dimmed backdrop */}
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' }}
+                    activeOpacity={1}
+                    onPress={() => setMemberActionSheet(null)}
+                />
+                {memberActionSheet && (
+                    <Animatable.View
+                        animation="slideInUp"
+                        duration={320}
+                        easing="ease-out-expo"
+                        style={{
+                            position: 'absolute',
+                            bottom: 0, left: 0, right: 0,
+                            backgroundColor: 'rgba(20, 20, 30, 0.98)',
+                            borderTopLeftRadius: 30,
+                            borderTopRightRadius: 30,
+                            paddingBottom: 40,
+                            borderTopWidth: 1,
+                            borderColor: 'rgba(255,0,85,0.2)',
+                            shadowColor: '#FF0055',
+                            shadowOffset: { width: 0, height: -8 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 20,
+                            elevation: 30,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Pink top glow line */}
+                        <LinearGradient
+                            colors={['#FF0055', '#FF4D80', 'transparent']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={{ height: 2, width: '100%' }}
+                        />
+
+                        {/* Handle bar */}
+                        <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 6 }}>
+                            <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+                        </View>
+
+                        {/* User header */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 22,
+                            paddingVertical: 18,
+                            gap: 14,
+                        }}>
+                            {/* Avatar with pink glow ring */}
+                            <View style={{
+                                width: 54, height: 54, borderRadius: 27,
+                                shadowColor: '#FF0055',
+                                shadowOffset: { width: 0, height: 0 },
+                                shadowOpacity: 0.8,
+                                shadowRadius: 10,
+                            }}>
+                                <LinearGradient
+                                    colors={['#FF0055', '#FF4D80']}
+                                    style={{
+                                        width: 54, height: 54, borderRadius: 27,
+                                        alignItems: 'center', justifyContent: 'center',
+                                    }}
+                                >
+                                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 22 }}>
+                                        {memberActionSheet.userName.charAt(0).toUpperCase()}
+                                    </Text>
+                                </LinearGradient>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18, letterSpacing: -0.3 }}>
+                                    {memberActionSheet.userName}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                                    <View style={{
+                                        paddingHorizontal: 10, paddingVertical: 3,
+                                        backgroundColor: memberActionSheet.isCoHost ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.07)',
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: memberActionSheet.isCoHost ? 'rgba(245,158,11,0.3)' : 'rgba(255,255,255,0.1)',
+                                    }}>
+                                        <Text style={{
+                                            color: memberActionSheet.isCoHost ? '#F59E0B' : 'rgba(255,255,255,0.5)',
+                                            fontSize: 11, fontWeight: '800'
+                                        }}>
+                                            {memberActionSheet.isCoHost ? '⭐ CO-HOST' : '👤 VIEWER'}
+                                        </Text>
+                                    </View>
+                                    {memberActionSheet.isMuted && (
+                                        <View style={{
+                                            paddingHorizontal: 10, paddingVertical: 3,
+                                            backgroundColor: 'rgba(239,68,68,0.15)',
+                                            borderRadius: 10,
+                                            borderWidth: 1,
+                                            borderColor: 'rgba(239,68,68,0.3)',
+                                        }}>
+                                            <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '800' }}>🔇 MUTED</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Divider */}
+                        <View style={{ marginHorizontal: 22, height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 8 }} />
+
+                        {/* Action rows */}
+                        {[
+                            {
+                                bg: memberActionSheet.isCoHost ? 'rgba(245,158,11,0.15)' : 'rgba(99,179,237,0.12)',
+                                iconBg: memberActionSheet.isCoHost ? '#F59E0B' : '#3B82F6',
+                                icon: memberActionSheet.isCoHost ? '📵' : '🤝',
+                                label: memberActionSheet.isCoHost
+                                    ? (t('stopCoHosting') || `Stop Co-hosting ${memberActionSheet.userName}`)
+                                    : `${t('inviteToCoHost') || 'Invite'} ${memberActionSheet.userName} ${t('toCoHost') || 'to co-host'}`,
+                                sublabel: memberActionSheet.isCoHost ? 'Remove co-host status' : `Invite ${memberActionSheet.userName} to present alongside you`,
+                                onPress: () => {
+                                    setMemberActionSheet(null);
+                                    if (memberActionSheet.isCoHost) {
+                                        safeZegoCommand({ type: 'stop_cohosting', target: memberActionSheet.userId });
+                                    } else {
+                                        ZegoUIKit?.getSignalingPlugin()?.sendInvitation(
+                                            userName, [memberActionSheet.userId], 60, 2,
+                                            JSON.stringify({ inviter_name: userName, type: 2 })
+                                        ).catch(() => { });
+                                        Alert.alert(t('success') || 'Success', `${t('invitationSentTo') || 'Invitation sent to'} ${memberActionSheet.userName}`);
+                                    }
+                                }
+                            },
+                            {
+                                bg: memberActionSheet.isMuted ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.12)',
+                                iconBg: memberActionSheet.isMuted ? '#4ADE80' : '#EF4444',
+                                icon: memberActionSheet.isMuted ? '💬' : '🔇',
+                                label: memberActionSheet.isMuted
+                                    ? (t('unmuteComments') || 'Unmute Comments')
+                                    : (t('muteComments') || 'Mute Comments'),
+                                sublabel: memberActionSheet.isMuted ? 'Allow this viewer to comment' : 'Block this viewer from commenting',
+                                onPress: () => {
+                                    const nowMuted = !memberActionSheet.isMuted;
+                                    setMutedUsers(prev =>
+                                        nowMuted
+                                            ? [...prev, memberActionSheet.userId]
+                                            : prev.filter(id => id !== memberActionSheet.userId)
+                                    );
+                                    safeZegoCommand({
+                                        type: 'user_chat_mute',
+                                        targetUserId: memberActionSheet.userId,
+                                        muted: nowMuted,
+                                        hostId: userId
+                                    });
+                                    setMemberActionSheet(null);
+                                }
+                            },
+                            {
+                                bg: 'rgba(192,132,252,0.12)',
+                                iconBg: '#A855F7',
+                                icon: '🎤',
+                                label: t('muteMicrophone') || 'Mute Microphone',
+                                sublabel: 'Disable their audio in the live',
+                                onPress: () => {
+                                    try {
+                                        const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
+                                        if (ZegoRN) ZegoRN.turnMicrophoneOn(memberActionSheet.userId, false);
+                                    } catch (_) { }
+                                    setMemberActionSheet(null);
+                                }
+                            },
+                            {
+                                bg: 'rgba(248,113,113,0.1)',
+                                iconBg: '#EF4444',
+                                icon: '🚫',
+                                label: `${t('removeUser') || 'Remove'} ${memberActionSheet.userName} ${t('fromRoom') || 'from the room'}`,
+                                sublabel: `Permanently remove ${memberActionSheet.userName} from this live`,
+                                isDestructive: true,
+                                onPress: () => {
+                                    setMemberActionSheet(null);
+                                    Alert.alert(
+                                        t('confirmRemove') || 'Remove User',
+                                        `Remove ${memberActionSheet.userName} from the live?`,
+                                        [
+                                            { text: t('cancel') || 'Cancel', style: 'cancel' },
+                                            {
+                                                text: t('remove') || 'Remove',
+                                                style: 'destructive',
+                                                onPress: () => {
+                                                    try {
+                                                        const ZegoRN = require('@zegocloud/zego-uikit-rn').default;
+                                                        if (ZegoRN) ZegoRN.removeUserFromRoom([memberActionSheet.userId]);
+                                                    } catch (_) { }
+                                                }
+                                            }
+                                        ]
+                                    );
+                                }
+                            },
+                            {
+                                bg: memberActionSheet.isBlocked ? 'rgba(74,222,128,0.12)' : 'rgba(251,146,60,0.1)',
+                                iconBg: memberActionSheet.isBlocked ? '#4ADE80' : '#F97316',
+                                icon: memberActionSheet.isBlocked ? '✅' : '⛓️',
+                                label: memberActionSheet.isBlocked
+                                    ? (t('unblock') || 'Unblock from co-host apply')
+                                    : (t('block') || 'Block from co-host apply'),
+                                sublabel: memberActionSheet.isBlocked ? 'Allow them to request co-host again' : 'Prevent them from requesting co-host',
+                                onPress: () => {
+                                    const uid = memberActionSheet.userId;
+                                    const wasBlocked = memberActionSheet.isBlocked;
+                                    setBlockedApplying(prev => wasBlocked ? prev.filter(id => id !== uid) : [...prev, uid]);
+                                    setMemberActionSheet(null);
+                                }
+                            },
+                        ].map((action, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={action.onPress}
+                                activeOpacity={0.75}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    marginHorizontal: 16,
+                                    marginVertical: 4,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 13,
+                                    backgroundColor: action.bg,
+                                    borderRadius: 18,
+                                    gap: 14,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.05)',
+                                }}
+                            >
+                                {/* Icon chip */}
+                                <View style={{
+                                    width: 42, height: 42, borderRadius: 14,
+                                    backgroundColor: `${action.iconBg}22`,
+                                    alignItems: 'center', justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: `${action.iconBg}44`,
+                                }}>
+                                    <Text style={{ fontSize: 20 }}>{action.icon}</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{
+                                        color: action.isDestructive ? '#F87171' : '#fff',
+                                        fontSize: 15,
+                                        fontWeight: '800',
+                                        letterSpacing: -0.2,
+                                    }}>
+                                        {action.label}
+                                    </Text>
+                                    {action.sublabel && (
+                                        <Text style={{
+                                            color: 'rgba(255,255,255,0.38)',
+                                            fontSize: 12,
+                                            fontWeight: '500',
+                                            marginTop: 2,
+                                        }}>
+                                            {action.sublabel}
+                                        </Text>
+                                    )}
+                                </View>
+                                <View style={{ opacity: 0.3 }}>
+                                    <Text style={{ color: '#fff', fontSize: 16 }}>›</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+
+                        {/* Cancel row */}
+                        <View style={{ marginHorizontal: 16, marginTop: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => setMemberActionSheet(null)}
+                                activeOpacity={0.7}
+                                style={{
+                                    alignItems: 'center',
+                                    paddingVertical: 14,
+                                    backgroundColor: 'rgba(255,255,255,0.04)',
+                                    borderRadius: 18,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.06)',
+                                }}
+                            >
+                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontWeight: '700', fontSize: 15 }}>
+                                    {t('cancel') || 'Cancel'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Animatable.View>
+                )}
+            </Modal>
+
         </View >
     );
 }

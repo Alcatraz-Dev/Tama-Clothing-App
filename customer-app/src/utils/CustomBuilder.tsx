@@ -25,32 +25,32 @@ export class CustomBuilder {
 
     static toggleCameraBuilder = (isOn: boolean) => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <Camera size={16} color={isOn ? '#fff' : '#888'} />
+            <View style={{ width: 44, height: 44, backgroundColor: 'rgba(26,26,36,0.7)', alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                <Camera size={18} color={isOn ? '#fff' : 'rgba(255,255,255,0.4)'} />
             </View>
         );
     };
 
     static toggleMicrophoneBuilder = (isOn: boolean) => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                {isOn ? <Mic size={16} color="#fff" /> : <MicOff size={16} color="#888" />}
+            <View style={{ width: 44, height: 44, backgroundColor: 'rgba(26,26,36,0.7)', alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                {isOn ? <Mic size={18} color="#fff" /> : <MicOff size={18} color="rgba(255,255,255,0.4)" />}
             </View>
         );
     };
 
     static switchCameraBuilder = (isFront: boolean) => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <RefreshCw size={16} color="#fff" />
+            <View style={{ width: 44, height: 44, backgroundColor: 'rgba(26,26,36,0.7)', alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                <RefreshCw size={18} color="#fff" />
             </View>
         );
     };
 
     static switchAudioOutputBuilder = (deviceType: number) => {
         return (
-            <View style={{ width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', borderRadius: 25 }}>
-                <Text style={{ color: '#fff', fontSize: 10 }}>🔊</Text>
+            <View style={{ width: 44, height: 44, backgroundColor: 'rgba(26,26,36,0.7)', alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                <Text style={{ color: '#fff', fontSize: 14 }}>{deviceType === 0 ? '🔊' : '🎧'}</Text>
             </View>
         );
     };
@@ -88,20 +88,28 @@ export class CustomBuilder {
     static memberBuilder = (memberCount: number, requestCoHostCount: number) => {
         return (
             <View style={{
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                backgroundColor: 'rgba(0,0,0,0.4)',
-                borderRadius: 15,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: 'rgba(26,26,36,0.7)',
+                borderRadius: 20,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 5,
+                gap: 6,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)'
+                borderColor: 'rgba(255,255,255,0.15)'
             }}>
-                <Users size={12} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{Math.max(0, memberCount)}</Text>
+                <Users size={14} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{Math.max(0, memberCount)}</Text>
                 {requestCoHostCount > 0 && (
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginLeft: 2 }} />
+                    <View style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: '#EF4444',
+                        marginLeft: 4,
+                        borderWidth: 1.5,
+                        borderColor: '#1a1a24'
+                    }} />
                 )}
             </View>
         );
@@ -191,16 +199,16 @@ export class CustomBuilder {
     static pkBattleBuilder = () => {
         return (
             <View style={{
-                width: 40,
-                height: 40,
-                backgroundColor: 'rgba(0,0,0,0.4)', // Standard dark background
+                width: 44,
+                height: 44,
+                backgroundColor: 'rgba(26,26,36,0.7)',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 20,
+                borderRadius: 22,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.2)'
+                borderColor: 'rgba(255,255,255,0.15)'
             }}>
-                <Swords size={18} color="#fff" />
+                <Swords size={20} color="#fff" />
             </View>
         );
     };

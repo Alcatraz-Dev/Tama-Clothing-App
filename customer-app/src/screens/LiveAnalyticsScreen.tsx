@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
     chartTitleText: { fontSize: 17, fontWeight: '800', marginBottom: 0 },
     infoBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
     peakRow: { alignItems: 'center', marginTop: -10, marginBottom: 10 },
-    peakText: { fontSize: 12, opacity: 0.6 },
+    peakText: { fontSize: 12, opacity: 0.6, marginTop: 20 },
     metricsRibbon: {
         marginHorizontal: 16,
         borderRadius: 20,
