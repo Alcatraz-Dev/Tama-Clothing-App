@@ -15,10 +15,10 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
     } = props || {};
 
     const BEY3A_ACCENT = '#8A2BE2';
-    const bgColor = isDark ? '#1c1c1e' : '#f5f5f7';
-    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
-    const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
-    const secondaryColor = isDark ? '#8E8E93' : '#636366';
+    const bgColor = { dynamic: { light: '#f2f2f7', dark: '#1c1c1e' } } as any;
+    const cardBgColor = { dynamic: { light: '#ffffff', dark: '#2c2c2e' } } as any;
+    const primaryColor = { dynamic: { light: '#1c1c1e', dark: '#ffffff' } } as any;
+    const secondaryColor = { dynamic: { light: '#636366', dark: '#8E8E93' } } as any;
     const secondaryStyle = foregroundStyle(secondaryColor);
     const accentStyle = foregroundStyle(BEY3A_ACCENT);
 

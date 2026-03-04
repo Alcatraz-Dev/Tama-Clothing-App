@@ -13,9 +13,9 @@ const DealsWidgetView = (props: WidgetBase<any>) => {
     } = props || {};
 
     const BEY3A_PURPLE = '#8A2BE2';
-    const bgColor = isDark ? '#1C1C1E' : '#FFFFFF';
-    const cardBgColor = isDark ? '#2C2C2E' : '#F2F2F7';
-    const primaryColor = isDark ? '#FFFFFF' : '#1C1C1E';
+    const bgColor = { dynamic: { light: '#f2f2f7', dark: '#1c1c1e' } } as any;
+    const cardBgColor = { dynamic: { light: '#ffffff', dark: '#2c2c2e' } } as any;
+    const primaryColor = { dynamic: { light: '#1c1c1e', dark: '#ffffff' } } as any;
     const secondaryColor = '#8E8E93';
 
     // ── Small ─────────────────────────────────────────────────────────────────
