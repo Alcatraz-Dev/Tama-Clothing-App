@@ -56,7 +56,7 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
                         </Text>
                     </VStack>
                     <Spacer />
-                    <VStack modifiers={[frame({ width: 36, height: 36, alignment: 'center' }), cornerRadius(8), background(`${activeColor}33`)]}>
+                    <VStack modifiers={[frame({ width: 36, height: 36, alignment: 'center' }), background(`${activeColor}33`), cornerRadius(25)]}>
                         <Image systemName={activeIcon} modifiers={[font({ size: 20 }), foregroundStyle(activeColor)]} />
                     </VStack>
                 </HStack>
@@ -75,7 +75,7 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
 
         // ── Compact View ───────────────────────────────────────────────────
         compactLeading: (
-            <HStack modifiers={[padding({ leading: 8 })]}>
+            <HStack modifiers={[padding({ leading: 8 }), frame({ width: 36, height: 36, alignment: 'center' }), background(`${activeColor}33`), cornerRadius(25)]}>
                 <Image systemName={activeIcon} modifiers={[font({ size: 14 }), foregroundStyle(activeColor)]} />
             </HStack>
         ),
@@ -131,11 +131,13 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
                         </Text>
                     </VStack>
                     <Spacer />
-                    {isDelivered ? (
-                        <Image systemName={"checkmark.circle.fill" as any} modifiers={[font({ size: 24 }), foregroundStyle('#34C759')]} />
-                    ) : (
-                        <Image systemName={"box.truck.fill" as any} modifiers={[font({ size: 24 }), foregroundStyle(activeColor)]} />
-                    )}
+                    <VStack modifiers={[frame({ width: 32, height: 32, alignment: 'trailing' }), padding({ trailing: 2 })]}>
+                        {isDelivered ? (
+                            <Image systemName={"checkmark.circle.fill" as any} modifiers={[font({ size: 20 }), foregroundStyle('#34C759')]} />
+                        ) : (
+                            <Image systemName={"box.truck.fill" as any} modifiers={[font({ size: 20 }), foregroundStyle(activeColor)]} />
+                        )}
+                    </VStack>
                 </HStack>
             </VStack>
         ),
