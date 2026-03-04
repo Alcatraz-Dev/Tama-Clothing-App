@@ -112,6 +112,7 @@ export interface OrderTrackingWidgetData {
   orderId: string;
   status: OrderStatus;
   statusText: string;
+  progress?: number; // 0 to 1
   estimatedDelivery?: number;
   currentLocation?: string;
   items: OrderItemPreview[];
@@ -274,16 +275,16 @@ export const ANDROID_WIDGET_DIMENSIONS: Record<WidgetSize, { minWidth: number; m
 
 /** Widget kind identifiers for platform-specific implementations */
 export const WIDGET_KINDS: Record<WidgetType, string> = {
-  [WidgetType.CART]: 'TamaCartWidget',
-  [WidgetType.DEALS]: 'TamaDealsWidget',
-  [WidgetType.ORDER_TRACKING]: 'TamaOrderTrackingWidget',
-  [WidgetType.RECOMMENDATIONS]: 'TamaRecommendationsWidget'
+  [WidgetType.CART]: 'CartWidget',
+  [WidgetType.DEALS]: 'DealsWidget',
+  [WidgetType.ORDER_TRACKING]: 'OrderTrackingWidget',
+  [WidgetType.RECOMMENDATIONS]: 'RecommendationsWidget'
 };
 
 /** Deep link URLs for widget actions */
 export const WIDGET_DEEP_LINKS: Record<WidgetType, string> = {
-  [WidgetType.CART]: 'tama-clothing://cart',
-  [WidgetType.DEALS]: 'tama-clothing://deals',
-  [WidgetType.ORDER_TRACKING]: 'tama-clothing://orders',
-  [WidgetType.RECOMMENDATIONS]: 'tama-clothing://recommendations'
+  [WidgetType.CART]: 'bey3a-app://cart',
+  [WidgetType.DEALS]: 'bey3a-app://deals',
+  [WidgetType.ORDER_TRACKING]: 'bey3a-app://orders',
+  [WidgetType.RECOMMENDATIONS]: 'bey3a-app://recommendations'
 };

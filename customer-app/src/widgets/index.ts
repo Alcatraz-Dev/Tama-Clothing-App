@@ -1,11 +1,11 @@
 /**
- * TamaClothing Widgets
+ * Bey3a Widgets
  * 
- * A comprehensive widget system for the TamaClothing (Bey3a) mobile app
+ * A comprehensive widget system for the Bey3a mobile app
  * supporting both iOS WidgetKit and Android.
  * 
  * @version 1.0.0
- * @author TamaClothing Development Team
+ * @author Bey3a Development Team
  */
 
 // Re-export types

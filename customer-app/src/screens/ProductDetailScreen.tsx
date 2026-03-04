@@ -89,7 +89,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 <View style={styles.infoSection}>
                     <View style={styles.titleRow}>
                         <Text variant="caption" style={{ color: textMutedColor, letterSpacing: 2 }}>
-                            TAMA PREMIUM
+                            BEY3A PREMIUM
                         </Text>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text variant="title" style={{ color: primaryColor }}>
@@ -104,11 +104,11 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                     </View>
 
                     <Text variant="heading" style={styles.productName}>
-                        {product.name?.fr || product.name || "Produit Tama"}
+                        {product.name?.fr || product.name || "Produit Bey3a"}
                     </Text>
 
                     <Text variant="body" style={[styles.description, { color: textMutedColor }]}>
-                        {product.description || "Un vêtement d'exception conçu avec soin dans les ateliers Tama. Qualité premium et coupe intemporelle."}
+                        {product.description || "Un vêtement d'exception conçu avec soin dans les ateliers Bey3a. Qualité premium et coupe intemporelle."}
                     </Text>
 
                     {/* Size Selector */}

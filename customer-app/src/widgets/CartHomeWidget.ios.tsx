@@ -1,180 +1,195 @@
-import { VStack, HStack, Text, Spacer } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow } from '@expo/ui/swift-ui/modifiers';
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { VStack, HStack, Text, Spacer, Image, ZStack } from '@expo/ui/swift-ui';
+import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow, opacity } from '@expo/ui/swift-ui/modifiers';
+import { createWidget } from 'expo-widgets';
+import type { WidgetBase } from 'expo-widgets';
+
+const BEY3A_ACCENT = '#8A2BE2';
+const RemoteImage = Image as any;
 
 const CartHomeWidget = (props: WidgetBase<any>) => {
     'widget';
-    const { family, itemCount = 0, totalAmount = 0, currency = 'TND', items = [], isDark = true } = props;
+    const {
+        family,
+        itemCount = 0,
+        totalAmount = 0,
+        currency = 'TND',
+        items = [],
+        isDark = true
+    } = props || {};
 
-    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
+    const bgColor = isDark ? '#1c1c1e' : '#f5f5f7';
     const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
-    const primaryTextColor = isDark ? '#ffffff' : '#000000';
-    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
+    const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
+    const secondaryColor = isDark ? '#8E8E93' : '#636366';
+    const secondaryStyle = foregroundStyle(secondaryColor);
+    const accentStyle = foregroundStyle(BEY3A_ACCENT);
 
-    const titleFont = font({ weight: 'bold', size: 16 });
-    const priceFont = font({ weight: 'black', size: 22 });
-    const secondaryStyle = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
-
-    // ── Small Widget ─────────────────────────────────────────────────────────────
+    // ── Small ─────────────────────────────────────────────────────────────────
     if (family === 'systemSmall') {
-        const formattedTotal = `${totalAmount.toFixed(0)} ${currency}`;
-
-        return (
-            <VStack modifiers={[
-                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }),
-                padding({ all: 12 }),
-                background(bgColor)
-            ]}>
-                <HStack modifiers={[frame({ maxWidth: 9999 })]}>
-                    <Text modifiers={[font({ size: 28 })]}>🛒</Text>
-                    <Spacer />
-                    <VStack modifiers={[padding({ horizontal: 6, vertical: 2 }), cornerRadius(10), background('#0A84FF')]}>
-                        <Text modifiers={[font({ weight: 'bold', size: 12 }), foregroundStyle('#FFFFFF')]}>{itemCount}</Text>
-                    </VStack>
-                </HStack>
-                <Spacer />
-                <Text modifiers={[titleFont, foregroundStyle(primaryTextColor)]}>Panier</Text>
-                <Text modifiers={[priceFont, foregroundStyle(primaryTextColor)]}>{formattedTotal}</Text>
-            </VStack>
-        );
-    }
-
-    // ── Medium Widget ────────────────────────────────────────────────────────────
-    if (family === 'systemMedium') {
-        const formattedTotal = `${totalAmount.toFixed(0)} ${currency}`;
-
-        return (
-            <HStack modifiers={[
-                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }),
-                padding({ horizontal: 16, vertical: 12 }),
-                background(bgColor)
-            ]}>
-                <VStack modifiers={[frame({ maxWidth: 100, alignment: 'leading' })]}>
-                    <Text modifiers={[font({ size: 36 }), padding({ bottom: 4 })]}>🛒</Text>
-                    <Text modifiers={[font({ weight: 'bold', size: 16 }), foregroundStyle(primaryTextColor)]}>Panier</Text>
-                </VStack>
-
-                <Spacer />
-
-                <VStack modifiers={[frame({ alignment: 'trailing' })]}>
-                    <Text modifiers={[font({ weight: 'semibold', size: 14 }), secondaryStyle]}>{itemCount} articles</Text>
-                    <Text modifiers={[font({ weight: 'black', size: 24 }), foregroundStyle(primaryTextColor), padding({ top: 1 })]}>
-                        {formattedTotal}
-                    </Text>
-                </VStack>
-            </HStack>
-        );
-    }
-
-    // ── Large Widget ─────────────────────────────────────────────────────────────
-    if (family === 'systemLarge' || family === 'systemExtraLarge') {
-        const formattedTotal = `${totalAmount.toFixed(0)} ${currency}`;
-
+        const firstItem = items.length > 0 ? items[0] : null;
         return (
             <VStack modifiers={[
                 frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
-                padding({ all: 0 }),
+                background(bgColor)
+            ]}>
+                {firstItem?.imageUrl ? (
+                    <RemoteImage
+                        source={{ uri: firstItem.imageUrl }}
+                        modifiers={[
+                            frame({ maxWidth: 9999, height: 80 }),
+                            cornerRadius(0)
+                        ]}
+                    />
+                ) : (
+                    <VStack modifiers={[
+                        frame({ maxWidth: 9999, height: 80, alignment: 'center' }),
+                        background(cardBgColor)
+                    ]}>
+                        <Image systemName="cart.fill" modifiers={[font({ size: 32 }), foregroundStyle(BEY3A_ACCENT)]} />
+                    </VStack>
+                )}
+
+                <VStack modifiers={[
+                    padding({ horizontal: 10, vertical: 8 }),
+                    frame({ maxWidth: 9999, alignment: 'leading' })
+                ]}>
+                    <HStack modifiers={[frame({ maxWidth: 9999 })]}>
+                        <Text modifiers={[font({ size: 11, weight: 'black' }), secondaryStyle]}>PANIER</Text>
+                        <Spacer />
+                        <VStack modifiers={[
+                            padding({ horizontal: 6, vertical: 2 }),
+                            cornerRadius(8),
+                            background(BEY3A_ACCENT)
+                        ]}>
+                            <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle('#ffffff')]}>
+                                {itemCount}
+                            </Text>
+                        </VStack>
+                    </HStack>
+                    <Text modifiers={[font({ size: 16, weight: 'black' }), accentStyle, padding({ top: 2 })]}>
+                        {totalAmount.toFixed(0)} {currency}
+                    </Text>
+                </VStack>
+            </VStack>
+        );
+    }
+
+    // ── Medium ────────────────────────────────────────────────────────────────
+    if (family === 'systemMedium') {
+        const showItems = items.slice(0, 3);
+        return (
+            <VStack modifiers={[
+                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
                 background(bgColor)
             ]}>
                 <HStack modifiers={[
-                    padding({ horizontal: 16, vertical: 14 }),
+                    padding({ horizontal: 14, vertical: 10 }),
                     frame({ maxWidth: 9999 }),
                     background(cardBgColor)
                 ]}>
-                    <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                        <Text modifiers={[font({ weight: 'black', size: 20 }), foregroundStyle(primaryTextColor)]}>Panier d'achat</Text>
-                        <Text modifiers={[font({ size: 12 }), secondaryStyle]}>{itemCount} articles prêts</Text>
-                    </VStack>
+                    <HStack>
+                        <Image systemName="cart.fill.badge.plus" modifiers={[font({ size: 18 }), foregroundStyle(BEY3A_ACCENT)]} />
+                        <VStack alignment="leading" modifiers={[padding({ leading: 8 })]}>
+                            <Text modifiers={[font({ size: 14, weight: 'black' }), foregroundStyle(primaryColor)]}>
+                                Mon Panier
+                            </Text>
+                            <Text modifiers={[font({ size: 11 }), secondaryStyle]}>
+                                {itemCount} article{itemCount !== 1 ? 's' : ''}
+                            </Text>
+                        </VStack>
+                    </HStack>
                     <Spacer />
-                    <Text modifiers={[font({ size: 28 })]}>🛒</Text>
+                    <VStack alignment="trailing">
+                        <Text modifiers={[font({ size: 10 }), secondaryStyle]}>TOTAL</Text>
+                        <Text modifiers={[font({ size: 18, weight: 'black' }), accentStyle]}>
+                            {totalAmount.toFixed(0)} {currency}
+                        </Text>
+                    </VStack>
                 </HStack>
 
-                <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ all: 16 })]}>
-                    {items.length === 0 ? (
-                        <VStack modifiers={[frame({ maxWidth: 9999, minHeight: 120, alignment: 'center' })]}>
-                            <Text modifiers={[font({ size: 40 }), padding({ bottom: 10 })]}>🛍️</Text>
-                            <Text modifiers={[font({ size: 14, weight: 'medium' }), secondaryStyle]}>Votre panier vous attend</Text>
+                <HStack modifiers={[
+                    padding({ horizontal: 12, vertical: 10 }),
+                    frame({ maxWidth: 9999, alignment: 'leading' })
+                ]}>
+                    {showItems.length === 0 ? (
+                        <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'center' })]}>
+                            <Text modifiers={[font({ size: 12 }), secondaryStyle]}>
+                                Votre panier est vide
+                            </Text>
                         </VStack>
                     ) : (
-                        <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                            <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ bottom: 8 })]}>
-                                {items.slice(0, 4).map((item: any, i: number) => (
-                                    <HStack key={i} modifiers={[padding({ vertical: 6 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                                        <VStack modifiers={[
-                                            frame({ width: 34, height: 34, alignment: 'center' }),
-                                            cornerRadius(8),
-                                            background(cardBgColor),
-                                            shadow({ radius: 2, y: 1, color: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)' })
-                                        ]}>
-                                            <Text modifiers={[font({ size: 18 })]}>📦</Text>
-                                        </VStack>
-                                        <VStack modifiers={[padding({ leading: 10 }), frame({ alignment: 'leading' })]}>
-                                            <Text modifiers={[font({ weight: 'semibold', size: 14 }), foregroundStyle(primaryTextColor)]}>
-                                                {item.name.length > 25 ? item.name.slice(0, 25) + '…' : item.name}
-                                            </Text>
-                                            <Text modifiers={[font({ size: 12 }), secondaryStyle]}>{item.price.toFixed(0)} {currency}</Text>
-                                        </VStack>
-                                    </HStack>
-                                ))}
-                            </VStack>
-                            <Spacer />
-                            <VStack modifiers={[padding({ top: 12 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                                <Text modifiers={[font({ size: 12 }), secondaryStyle]}>TOTAL</Text>
-                                <Text modifiers={[font({ weight: 'black', size: 28 }), foregroundStyle(primaryTextColor)]}>{formattedTotal}</Text>
-                            </VStack>
-                        </VStack>
+                        showItems.map((item: any, i: number) => (
+                            <HStack key={i} modifiers={[padding({ trailing: 10 })]}>
+                                {item.imageUrl ? (
+                                    <RemoteImage
+                                        source={{ uri: item.imageUrl }}
+                                        modifiers={[
+                                            frame({ width: 52, height: 52 }),
+                                            cornerRadius(10),
+                                            shadow({ radius: 4, y: 2, color: 'rgba(0,0,0,0.15)' })
+                                        ]}
+                                    />
+                                ) : (
+                                    <VStack modifiers={[
+                                        frame({ width: 52, height: 52, alignment: 'center' }),
+                                        cornerRadius(10),
+                                        background(cardBgColor)
+                                    ]}>
+                                        <Image systemName="bag.fill" modifiers={[font({ size: 22 }), foregroundStyle(BEY3A_ACCENT)]} />
+                                    </VStack>
+                                )}
+                            </HStack>
+                        ))
                     )}
-                </VStack>
+                </HStack>
             </VStack>
         );
     }
 
-    // ── Accessories (Lock Screen / Notch) ─────────────────────────────────────────
-    if (family === 'accessoryInline') {
-        return (
-            <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                🛒 {itemCount} articles ({totalAmount.toFixed(0)} {currency})
-            </Text>
-        );
-    }
-
-    if (family === 'accessoryRectangular') {
-        return (
-            <HStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' })]}>
-                <Text modifiers={[font({ size: 20 })]}>🛒</Text>
-                <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 14 })]}>{itemCount} articles</Text>
-                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>{totalAmount.toFixed(0)} {currency}</Text>
-                </VStack>
-            </HStack>
-        );
-    }
-
-    if (family === 'accessoryCircular') {
-        return (
-            <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'center' })]}>
-                <Text modifiers={[font({ size: 24 })]}>🛒</Text>
-            </VStack>
-        );
-    }
-
+    // ── Large Default ─────────────────────────────────────────────────────────
     return (
-        <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'center' })]}>
-            <Text modifiers={[font({ weight: 'bold', size: 16 })]}>🛒{itemCount}</Text>
+        <VStack modifiers={[
+            frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
+            background(bgColor)
+        ]}>
+            <HStack modifiers={[
+                padding({ horizontal: 16, vertical: 14 }),
+                frame({ maxWidth: 9999 }),
+                background(cardBgColor)
+            ]}>
+                <VStack alignment="leading">
+                    <Text modifiers={[font({ size: 18, weight: 'black' }), foregroundStyle(primaryColor)]}>
+                        Panier d'achat
+                    </Text>
+                    <Text modifiers={[font({ size: 12 }), secondaryStyle]}>
+                        {itemCount} article{itemCount !== 1 ? 's' : ''} · BEY3A
+                    </Text>
+                </VStack>
+                <Spacer />
+                <Image systemName="cart.fill" modifiers={[font({ size: 26 }), foregroundStyle(BEY3A_ACCENT)]} />
+            </HStack>
+
+            <VStack modifiers={[
+                padding({ horizontal: 14, vertical: 10 }),
+                frame({ maxWidth: 9999, alignment: 'leading' })
+            ]}>
+                {items.slice(0, 4).map((item: any, i: number) => (
+                    <HStack key={i} modifiers={[padding({ vertical: 6 })]}>
+                        {item.imageUrl && (
+                            <RemoteImage
+                                source={{ uri: item.imageUrl }}
+                                modifiers={[frame({ width: 40, height: 40 }), cornerRadius(8)]}
+                            />
+                        )}
+                        <VStack alignment="leading" modifiers={[padding({ leading: 10 })]}>
+                            <Text modifiers={[font({ size: 14, weight: 'semibold' }), foregroundStyle(primaryColor)]}>{item.name}</Text>
+                            <Text modifiers={[font({ size: 12, weight: 'bold' }), accentStyle]}>{item.price} {currency}</Text>
+                        </VStack>
+                    </HStack>
+                ))}
+            </VStack>
         </VStack>
     );
 };
 
-const CartWidget = createWidget('CartWidget', CartHomeWidget);
-export default CartWidget;
-
-CartWidget.updateSnapshot({
-    itemCount: 3,
-    totalAmount: 149.99,
-    currency: 'TND',
-    items: [
-        { name: 'Classic White T-Shirt', price: 29.99 },
-        { name: 'Denim Jeans', price: 79.99 },
-        { name: 'Sneakers', price: 40.01 }
-    ]
-});
+export default createWidget('CartWidget', CartHomeWidget);

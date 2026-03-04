@@ -150,7 +150,7 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
 
                                     <View style={[styles.qrWrapper, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}>
                                         <QRCode
-                                            value={`tama-clothing://user/${userProfile.id}`}
+                                            value={`bey3a-app://user/${userProfile.id}`}
                                             size={BADGE_WIDTH * 0.4}
                                             backgroundColor="transparent"
                                             color={isDark ? '#FFF' : '#000'}
@@ -236,7 +236,7 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                 <View style={styles.detailsSection}>
                                     <View style={{ maxHeight: 100 }}>
                                         <Text style={[styles.description, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]} numberOfLines={4}>
-                                            {tr('Membre de la communauté TAMA. Passionné par la mode et l\'élégance.', 'عضو في مجتمع تاما. شغوف بالأزياء والأناقة.', 'TAMA community member. Passionate about fashion and elegance.')}
+                                            {tr('Membre de la communauté Bey3a. Passionné par la mode et l\'élégance.', 'عضو في مجتمع بيعة. شغوف بالأزياء والأناقة.', 'Bey3a community member. Passionate about fashion and elegance.')}
                                         </Text>
                                     </View>
 
@@ -303,8 +303,8 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                     onPress={async () => {
                         try {
                             await Share.share({
-                                message: `Check out my profile on TAMA: ${userProfile.fullName}\n\ntama-clothing://user/${userProfile.id}`,
-                                url: `tama-clothing://user/${userProfile.id}`
+                                message: `Check out my profile on BEY3A: ${userProfile.fullName}\n\nbey3a-app://user/${userProfile.id}`,
+                                url: `bey3a-app://user/${userProfile.id}`
                             });
                         } catch (error) {
                             console.error('Error sharing:', error);

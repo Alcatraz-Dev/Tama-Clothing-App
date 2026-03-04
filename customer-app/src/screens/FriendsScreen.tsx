@@ -361,7 +361,7 @@ export default function FriendsScreen({ onBack, user, profileData, theme, t, lan
                         {item.fullName || item.senderName || item.receiverName}
                     </Text>
                     <Text style={[styles.userStatus, { color: colors.textMuted }]} numberOfLines={1}>
-                        {type === 'friend' ? tr('En ligne', 'En ligne', 'متصل') : (item.bio || tr('Membre Tama', 'Membre Tama', 'عضو تاما'))}
+                        {type === 'friend' ? tr('En ligne', 'En ligne', 'متصل') : (item.bio || tr('Membre Bey3a', 'Membre Bey3a', 'عضو بيعة'))}
                     </Text>
                 </View>
             </TouchableOpacity>
@@ -369,7 +369,7 @@ export default function FriendsScreen({ onBack, user, profileData, theme, t, lan
             <View style={styles.userActions}>
                 {type === 'friend' && (
                     <>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => onNavigate?.('DirectMessage', { targetUser: item })}
                             style={[styles.actionBtnIcon, { backgroundColor: colors.info + '20' }]}
                         >

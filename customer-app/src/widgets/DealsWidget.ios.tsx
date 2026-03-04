@@ -1,225 +1,101 @@
-import { VStack, HStack, Text, Spacer, ZStack, Image } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow, offset, strikethrough } from '@expo/ui/swift-ui/modifiers';
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { VStack, HStack, Text, Spacer, Image, ZStack } from '@expo/ui/swift-ui';
+import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow } from '@expo/ui/swift-ui/modifiers';
+import { createWidget } from 'expo-widgets';
+import type { WidgetBase } from 'expo-widgets';
 
-export type Deal = {
-    title: string;
-    description: string;
-    salePrice: number;
-    originalPrice: number;
-    id: string;
-    imageUrl?: string;
-};
+const BEY3A_PURPLE = '#8A2BE2';
+const RemoteImage = Image as any;
 
-export type DealsWidgetProps = {
-    activeDeals?: Deal[];
-    currency?: string;
-    isDark?: boolean;
-};
-
-const DealsWidgetComponent = (props: WidgetBase<DealsWidgetProps>) => {
+const DealsWidgetView = (props: WidgetBase<any>) => {
     'widget';
     const {
         family,
         activeDeals = [],
         currency = 'TND',
         isDark = true
-    } = props;
+    } = props || {};
 
     const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
     const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
-    const primaryTextColor = isDark ? '#ffffff' : '#000000';
-    const secondaryTextColor = isDark ? '#8e8e93' : '#3c3c43';
+    const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
+    const secondaryColor = isDark ? '#8E8E93' : '#636366';
+    const secondaryStyle = foregroundStyle(secondaryColor);
+    const accentStyle = foregroundStyle(BEY3A_PURPLE);
 
-    const secondaryStyle = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
-    const accentStyle = foregroundStyle({ type: 'color', color: '#ff3b30' });
-    const orangeGradient = foregroundStyle({
-        type: 'linearGradient',
-        colors: ['#FF9F0A', '#FF453A'],
-        startPoint: { x: 0, y: 0 },
-        endPoint: { x: 1, y: 1 }
-    });
-
-    // ── Accessories (Lock Screen / Notch) ─────────────────────────────────────────
-    if (family === 'accessoryInline') {
-        const firstDeal = activeDeals.length > 0 ? activeDeals[0] : null;
-        return (
-            <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                🏷️ {firstDeal ? firstDeal.title : 'Aucune offre'}
-            </Text>
-        );
-    }
-
-    if (family === 'accessoryRectangular') {
-        const firstDeal = activeDeals.length > 0 ? activeDeals[0] : null;
-        return (
-            <HStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' })]}>
-                <Image systemName="tag.fill" modifiers={[font({ size: 18 }), orangeGradient]} />
-                <VStack modifiers={[padding({ leading: 8 }), frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 14 })]}>
-                        {firstDeal ? firstDeal.title : 'Offres'}
-                    </Text>
-                    {firstDeal && (
-                        <Text modifiers={[font({ size: 12 }), secondaryStyle]}>
-                            {firstDeal.salePrice.toFixed(0)} {currency}
-                        </Text>
-                    )}
-                </VStack>
-            </HStack>
-        );
-    }
-
-    if (family === 'accessoryCircular') {
-        return (
-            <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'center' })]}>
-                <Text modifiers={[font({ size: 22 })]}>🔥</Text>
-            </VStack>
-        );
-    }
-
-    // ── Small Widget ─────────────────────────────────────────────────────────────
+    // ── Small ─────────────────────────────────────────────────────────────────
     if (family === 'systemSmall') {
-        const firstDeal = activeDeals.length > 0 ? activeDeals[0] : null;
-        const discount = firstDeal ? ((1 - firstDeal.salePrice / firstDeal.originalPrice) * 100).toFixed(0) : '0';
-
+        const deal = activeDeals[0];
         return (
             <VStack modifiers={[
-                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'leading' }),
-                padding({ all: 0 }),
+                frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
                 background(bgColor)
             ]}>
-                <VStack modifiers={[
-                    frame({ maxWidth: 9999, height: 75, alignment: 'center' }),
-                    background(cardBgColor)
-                ]}>
-                    <Text modifiers={[font({ size: 36 })]}>🔥</Text>
-                </VStack>
+                <ZStack modifiers={[frame({ maxWidth: 9999, height: 90 })]}>
+                    {deal?.imageUrl && (
+                        <RemoteImage source={{ uri: deal.imageUrl }} modifiers={[frame({ maxWidth: 9999, height: 90 }), cornerRadius(0)]} />
+                    )}
+                    <VStack modifiers={[frame({ maxWidth: 9999, height: 90, alignment: 'topTrailing' })]}>
+                        <VStack modifiers={[
+                            padding({ horizontal: 6, vertical: 4 }),
+                            background('#FF3B30'),
+                            cornerRadius(8)
+                        ]}>
+                            <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle('#ffffff')]}>-{deal?.discount || 20}%</Text>
+                        </VStack>
+                    </VStack>
+                </ZStack>
 
                 <VStack modifiers={[padding({ horizontal: 10, vertical: 8 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'bold', size: 12 }), secondaryStyle]}>PROMOS</Text>
-                    {firstDeal ? (
-                        <>
-                            <Text modifiers={[font({ weight: 'black', size: 14 }), foregroundStyle(primaryTextColor), padding({ top: 1 })]}>
-                                {firstDeal.title.length > 15 ? firstDeal.title.slice(0, 15) + '…' : firstDeal.title}
-                            </Text>
-                            <Text modifiers={[font({ weight: 'bold', size: 13 }), accentStyle]}>
-                                -{discount}%
-                            </Text>
-                        </>
-                    ) : (
-                        <Text modifiers={[font({ size: 11 }), secondaryStyle]}>Aucune offre</Text>
-                    )}
+                    <Text modifiers={[font({ size: 10, weight: 'black' }), secondaryStyle]}>FLASH SALE</Text>
+                    <Text modifiers={[font({ size: 13, weight: 'bold' }), foregroundStyle(primaryColor), padding({ top: 1 })]}>
+                        {deal?.title || 'Offre Spéciale'}
+                    </Text>
                 </VStack>
             </VStack>
         );
     }
 
-    // ── Medium & Large Widget ────────────────────────────────────────────────────
-    const isLarge = family === 'systemLarge';
-    const showCount = isLarge ? 5 : 2;
-    const headerPadding = isLarge ? 16 : 12;
-
+    // ── Medium/Large ──────────────────────────────────────────────────────────
     return (
         <VStack modifiers={[
             frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
-            padding({ all: 0 }),
             background(bgColor)
         ]}>
-            {/* Header */}
             <HStack modifiers={[
+                padding({ horizontal: 14, vertical: 10 }),
                 frame({ maxWidth: 9999 }),
-                padding({ horizontal: headerPadding, vertical: isLarge ? 12 : 8 }),
                 background(cardBgColor)
             ]}>
-                <VStack modifiers={[frame({ alignment: 'leading' })]}>
-                    <Text modifiers={[font({ weight: 'black', size: isLarge ? 20 : 16 }), foregroundStyle(primaryTextColor)]}>Offres Flash</Text>
-                    <Text modifiers={[font({ size: 11 }), secondaryStyle]}>Fin de saison</Text>
-                </VStack>
+                <Image systemName="bolt.fill" modifiers={[font({ size: 18 }), foregroundStyle("#FFCC00")]} />
+                <Text modifiers={[font({ size: 14, weight: 'black' }), foregroundStyle(primaryColor), padding({ leading: 6 })]}>
+                    Offres Flash Bey3a
+                </Text>
                 <Spacer />
-                <VStack modifiers={[
-                    padding({ horizontal: 8, vertical: 4 }),
-                    cornerRadius(8),
-                    background('#ff3b30')
-                ]}>
-                    <Text modifiers={[font({ weight: 'black', size: 10 }), foregroundStyle('#ffffff')]}>LIVE</Text>
-                </VStack>
+                <Text modifiers={[font({ size: 11, weight: 'bold' }), accentStyle]}>VOIR TOUT</Text>
             </HStack>
 
-            {/* Content */}
-            <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' }), padding({ all: headerPadding })]}>
-                {activeDeals.length === 0 ? (
-                    <VStack modifiers={[frame({ maxWidth: 9999, minHeight: 80, alignment: 'center' })]}>
-                        <Text modifiers={[font({ size: 30 }), padding({ bottom: 8 })]}>🛍️</Text>
-                        <Text modifiers={[font({ size: 14 }), secondaryStyle]}>Revenez plus tard</Text>
+            <HStack modifiers={[padding({ horizontal: 10, vertical: 10 }), frame({ maxWidth: 9999 })]}>
+                {activeDeals.slice(0, 3).map((deal: any, i: number) => (
+                    <VStack key={i} modifiers={[padding({ horizontal: 4 }), frame({ width: family === 'systemMedium' ? 100 : 140 })]}>
+                        <ZStack>
+                            {deal.imageUrl && (
+                                <RemoteImage source={{ uri: deal.imageUrl }} modifiers={[frame({ maxWidth: 9999, height: 80 }), cornerRadius(10), shadow({ radius: 2 })]} />
+                            )}
+                            <VStack modifiers={[frame({ maxWidth: 9999, height: 80, alignment: 'bottomLeading' })]}>
+                                <VStack modifiers={[padding({ horizontal: 4, vertical: 2 }), background('#FF3B30'), cornerRadius(6)]}>
+                                    <Text modifiers={[font({ size: 8, weight: 'heavy' }), foregroundStyle('#ffffff')]}>-{deal.discount}%</Text>
+                                </VStack>
+                            </VStack>
+                        </ZStack>
+                        <Text modifiers={[font({ size: 11, weight: 'bold' }), foregroundStyle(primaryColor), padding({ top: 4 })]}>
+                            {deal.title?.slice(0, 15)}
+                        </Text>
+                        <Text modifiers={[font({ size: 10, weight: 'bold' }), accentStyle]}>{deal.salePrice} {currency}</Text>
                     </VStack>
-                ) : (
-                    <VStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                        {activeDeals.slice(0, showCount).map((deal: any, i: number) => {
-                            const discount = ((1 - deal.salePrice / deal.originalPrice) * 100).toFixed(0);
-                            return (
-                                <HStack key={i} modifiers={[
-                                    padding({ bottom: (i === activeDeals.slice(0, showCount).length - 1) ? 0 : isLarge ? 12 : 8 }),
-                                    frame({ maxWidth: 9999, alignment: 'leading' })
-                                ]}>
-                                    <VStack modifiers={[
-                                        frame({ width: isLarge ? 40 : 34, height: isLarge ? 40 : 34, alignment: 'center' }),
-                                        cornerRadius(8),
-                                        background(cardBgColor),
-                                        shadow({ radius: 2, y: 1, color: 'rgba(0,0,0,0.1)' })
-                                    ]}>
-                                        <Text modifiers={[font({ size: isLarge ? 20 : 16 })]}>📦</Text>
-                                    </VStack>
-                                    <VStack modifiers={[padding({ leading: (isLarge ? 12 : 8) }), frame({ alignment: 'leading' })]}>
-                                        <Text modifiers={[font({ weight: 'bold', size: isLarge ? 14 : 12 }), foregroundStyle(primaryTextColor)]}>
-                                            {deal.title.length > (isLarge ? 25 : 20) ? deal.title.slice(0, isLarge ? 25 : 20) + '…' : deal.title}
-                                        </Text>
-                                        <HStack>
-                                            <Text modifiers={[font({ weight: 'black', size: isLarge ? 15 : 13 }), accentStyle]}>
-                                                {deal.salePrice.toFixed(0)} {currency}
-                                            </Text>
-                                            <Text modifiers={[
-                                                font({ size: isLarge ? 11 : 10 }),
-                                                secondaryStyle,
-                                                padding({ leading: 6 }),
-                                                strikethrough({ isActive: true, pattern: 'solid' })
-                                            ]}>
-                                                {deal.originalPrice.toFixed(0)} {currency}
-                                            </Text>
-                                        </HStack>
-                                    </VStack>
-                                    <Spacer />
-                                    <VStack modifiers={[
-                                        padding({ horizontal: 6, vertical: 2 }),
-                                        cornerRadius(6),
-                                        background(isDark ? 'rgba(255,59,48,0.2)' : 'rgba(255,59,48,0.1)')
-                                    ]}>
-                                        <Text modifiers={[font({ weight: 'bold', size: 10 }), accentStyle]}>-{discount}%</Text>
-                                    </VStack>
-                                </HStack>
-                            );
-                        })}
-                    </VStack>
-                )}
-            </VStack>
-            {isLarge && activeDeals.length > showCount && (
-                <VStack modifiers={[padding({ horizontal: 16, bottom: 12 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                    <Spacer />
-                    <Text modifiers={[font({ size: 11 }), secondaryStyle]}>+ {activeDeals.length - showCount} autres offres</Text>
-                </VStack>
-            )}
+                ))}
+            </HStack>
         </VStack>
     );
 };
 
-const DealsWidget = createWidget('DealsWidget', DealsWidgetComponent);
-export default DealsWidget;
-
-DealsWidget.updateSnapshot({
-    activeDeals: [
-        { id: '1', title: 'Collection d\'Été Active', description: '50% de réduction', salePrice: 45.00, originalPrice: 90.00, imageUrl: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=500&q=80' },
-        { id: '2', title: 'Sneakers Flash Sale', description: 'Offre limitée', salePrice: 120.00, originalPrice: 200.00, imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&q=80' },
-        { id: '3', title: 'Accessoires Premium', description: 'Prix exclusif', salePrice: 35.00, originalPrice: 50.00 }
-    ],
-    currency: 'TND'
-});
-
+export default createWidget('DealsWidget', DealsWidgetView);

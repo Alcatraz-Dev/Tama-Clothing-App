@@ -71,15 +71,19 @@ export const generateTrackingId = () => {
   return result;
 };
 
-interface OrderShipmentData {
-  customerId?: string;
+export interface OrderShipmentData {
+  orderId: string;
+  customerId: string;
   customerName: string;
   phone: string;
   address: string;
-  items: string[];
+  items: any[] | string[];
   total: number;
   deliveryCost?: number;
-  orderId?: string;
+  storeName?: string;
+  pickupAddress?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
 }
 
 export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
@@ -111,16 +115,16 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
 
   const shipmentData = {
     senderId: orderData.customerId || 'anonymous',
-    senderName: orderData.customerName || 'Customer',
-    senderPhone: orderData.phone || '',
-    senderAddress: orderData.address,
+    senderName: orderData.storeName || 'Bey3a Store',
+    senderPhone: '+216 71 000 000',
+    senderAddress: orderData.pickupAddress || 'Bey3a Store, Tunis',
     receiverName: orderData.customerName,
     receiverPhone: orderData.phone,
     deliveryAddress: orderData.address,
     items: orderData.items,
     weight: '1kg',
     serviceType: 'Standard',
-    carrierName: 'Tama Logistics',
+    carrierName: 'Bey3a Logistics',
     carrierPhone: '+216 71 000 000',
     shippingPrice: orderData.deliveryCost || 0,
     totalPrice: orderData.total,
@@ -167,9 +171,16 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
     receiverName: orderData.customerName,
     receiverPhone: orderData.phone,
     deliveryAddress: orderData.address,
-    deliveryLocation: deliveryLocation || null,
+    deliveryLatitude: deliveryLocation?.latitude || 36.8065,
+    deliveryLongitude: deliveryLocation?.longitude || 10.1815,
+    storeName: orderData.storeName || 'Bey3a Store',
+    pickupAddress: orderData.pickupAddress || 'Bey3a Store, Tunis',
+    pickupLatitude: orderData.pickupLatitude || 36.8065,
+    pickupLongitude: orderData.pickupLongitude || 10.1815,
     zoneId,
-    items: orderData.items.map((name: string) => ({ name, quantity: 1 })),
+    itemsCount: Array.isArray(orderData.items) ? orderData.items.length : 1,
+    totalAmount: orderData.total || 0,
+    items: Array.isArray(orderData.items) ? orderData.items.map((item: any) => ({ name: typeof item === 'string' ? item : item?.name || 'Item', quantity: item?.quantity || 1 })) : [{ name: 'Item', quantity: 1 }],
     weight: 1,
     status: 'pending',
     priority: 'normal',
@@ -257,8 +268,14 @@ export const createShipment = async (shipmentData: Omit<Shipment, 'id' | 'tracki
     receiverName: shipmentData.receiverName,
     receiverPhone: shipmentData.receiverPhone,
     deliveryAddress: shipmentData.deliveryAddress,
-    deliveryLocation: deliveryLocation || null,
+    deliveryLatitude: deliveryLocation?.latitude || 36.8065,
+    deliveryLongitude: deliveryLocation?.longitude || 10.1815,
+    pickupAddress: shipmentData.senderAddress || 'Sender Location',
+    pickupLatitude: 36.8065, // ideally geocoded from senderAddress
+    pickupLongitude: 10.1815,
     zoneId,
+    itemsCount: shipmentData.items?.length || 1,
+    totalAmount: shipmentData.totalPrice || 0,
     items: shipmentData.items?.map((name: string) => ({ name, quantity: 1 })) || [],
     weight: parseFloat(shipmentData.weight) || 1,
     status: 'pending',
@@ -620,7 +637,7 @@ body {
         <div class="header-logo">
           <img src="${logoUri}" />
         </div>
-        <div>${safe(shipment.senderName || "TAMA LOGISTICS")}</div>
+        <div>${safe(shipment.senderName || "BEY3A LOGISTICS")}</div>
       </div>
       <div>${safe(shipment.serviceType || "STANDARD TND")}</div>
     </div>
@@ -628,7 +645,7 @@ body {
     <div class="section">
       <div class="sender">
         <strong>EXPÉDITEUR :</strong><br/>
-        ${safe(shipment.senderName || "TAMA LOGISTICS")}<br/>
+        ${safe(shipment.senderName || "BEY3A LOGISTICS")}<br/>
         ${(shipment.senderAddress || "Tunis, Tunisie 1000").split(",").map(l => safe(l.trim())).join("<br/>")}<br/>
         Tél: ${safe(shipment.senderPhone || shipment.carrierPhone || "+216 71 000 000")}
       </div>
@@ -677,7 +694,7 @@ body {
 
     <div class="tracking">
       <div class="tracking-title">
-        N° DE SUIVI ${safe(shipment.carrierName || "TAMA")}
+        N° DE SUIVI ${safe(shipment.carrierName || "BEY3A")}
       </div>
       <div class="tracking-content">
         <div class="tracking-qr">
@@ -691,7 +708,7 @@ body {
     </div>
 
     <div class="footer">
-      <div>${safe(shipment.carrierName || "TAMA LOGISTICS")}</div>
+      <div>${safe(shipment.carrierName || "BEY3A LOGISTICS")}</div>
       <div>${new Date().toLocaleDateString("en-GB")}</div>
     </div>
 
@@ -881,7 +898,7 @@ export const getShipmentByTrackingId = async (trackingId: string): Promise<Shipm
 
 export const notifyDriversOfNewDelivery = async (deliveryZone: string, deliveryId: string) => {
   const driversQuery = query(
-    collection(db, 'Drivers'),
+    collection(db, 'drivers'),
     where('serviceAreas', 'array-contains', deliveryZone),
     where('isAvailable', '==', true)
   );

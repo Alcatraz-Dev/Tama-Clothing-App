@@ -383,7 +383,7 @@ export default function LiveAnalyticsScreen(props: Props) {
                 </Animatable.View>
 
                 <View style={styles.footer}>
-                    <Text style={styles.footerText}>{t('analyticsGeneratedByTama')}</Text>
+                    <Text style={styles.footerText}>{t('analyticsGeneratedByBey3a') || 'Analytics provided by Bey3a'}</Text>
                 </View>
             </ScrollView>
         </View>

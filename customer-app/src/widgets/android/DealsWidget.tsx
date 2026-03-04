@@ -98,7 +98,7 @@ export const DealsWidget = ({ activeDeals = [], size = 'MEDIUM', isDark = true }
                     }}
                 >
                     <TextWidget
-                        text="DEALS"
+                        text="BEY3A DEALS"
                         style={{ color: '#ffffff', fontSize: 8, fontWeight: '900' }}
                     />
                 </FlexWidget>

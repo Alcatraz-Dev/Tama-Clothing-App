@@ -85,7 +85,7 @@ export function EnhancedShipmentTracking({
 
                 const driverQuery = await import('firebase/firestore').then(firestore =>
                     import('../api/firebase').then(({ db }) => {
-                        return firestore.getDoc(firestore.doc(db, 'Drivers', delivery.driverId!));
+                        return firestore.getDoc(firestore.doc(db, 'drivers', delivery.driverId!));
                     })
                 );
 
@@ -113,13 +113,17 @@ export function EnhancedShipmentTracking({
 
                     const result = await Location.geocodeAsync(searchAddress);
                     if (result && result.length > 0) {
-                        setEnrichedDelivery(prev => ({
-                            ...prev,
-                            deliveryLocation: {
-                                latitude: result[0].latitude,
-                                longitude: result[0].longitude
-                            }
-                        }));
+                        setEnrichedDelivery(prev => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                deliveryLocation: {
+                                    latitude: result[0].latitude,
+                                    longitude: result[0].longitude,
+                                    timestamp: new Date()
+                                }
+                            };
+                        });
                     }
                 } catch (e) {
                     console.log("Geocoding failed in enhanced screen:", e);

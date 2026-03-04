@@ -4,7 +4,7 @@
 # This script sets up and runs the development build for real device testing
 
 echo "==================================="
-echo "Tama Clothing - Development Build"
+echo "Bey3a - Development Build"
 echo "==================================="
 echo ""
 

@@ -23,15 +23,18 @@ const UniversalVideoPlayer: React.FC<UniversalVideoPlayerProps> = ({
     useNativeControls = false,
     contentFit,
 }) => {
-    const videoSource = typeof source === 'number' ? source : source.uri;
-
-    const player = useVideoPlayer(videoSource, (player) => {
-        player.loop = isLooping;
-        player.muted = isMuted;
-        if (shouldPlay) {
-            player.play();
+    // Pass source directly as useVideoPlayer handles both URI strings, objects, and local assets
+    const player = useVideoPlayer(source, (player) => {
+        if (player) {
+            player.loop = isLooping;
+            player.muted = isMuted;
+            if (shouldPlay) {
+                player.play();
+            }
         }
     });
+
+    console.log('Video Player initialized:', !!player);
 
     useEffect(() => {
         if (player) {

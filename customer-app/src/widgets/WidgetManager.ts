@@ -1,23 +1,46 @@
-/**
- * Widget Manager for Expo Integration
- * 
- * Provides a unified interface for managing home screen widgets
- * across both iOS and Android platforms.
- */
-
 import { Platform, Appearance } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { WidgetType, WidgetSize, WidgetSpecificData, DEFAULT_REFRESH_INTERVALS } from './types';
 import WidgetDataService from './services/WidgetDataService';
 
-// Import iOS Widgets (Android versions export null)
-// @ts-ignore
-import CartWidget from './CartHomeWidget';
-// @ts-ignore
-import DealsWidget from './DealsWidget';
-// @ts-ignore
-import OrderTrackingWidget from './OrderTrackingWidget';
-// @ts-ignore
-import RecommendationsWidget from './RecommendationsWidget';
+// ✅ Robust Expo Go detection to skip native widget modules
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  Constants.appOwnership === 'expo' ||
+  !Constants.expoConfig; // Extra layer for vanilla/Go differences
+
+console.log('Widget Environment:', {
+  env: Constants.executionEnvironment,
+  ownership: Constants.appOwnership,
+  isExpoGo
+});
+
+// ✅ Conditionally import iOS Widgets to avoid crashes in Expo Go
+let CartWidget: any = null;
+let DealsWidget: any = null;
+let OrderTrackingWidget: any = null;
+let RecommendationsWidget: any = null;
+
+if (!isExpoGo && Platform.OS === 'ios') {
+  try {
+    // Check if the native module for ExpoUI is actually present before requiring
+    // This is safer than relying solely on isExpoGo
+    const { requireNativeModule } = require('expo-modules-core');
+    try {
+      requireNativeModule('ExpoUI');
+
+      // If we are here, we are likely in a dev client or a production build with the module
+      CartWidget = require('./CartHomeWidget').default;
+      DealsWidget = require('./DealsWidget').default;
+      OrderTrackingWidget = require('./OrderTrackingWidget').default;
+      RecommendationsWidget = require('./RecommendationsWidget').default;
+    } catch (e) {
+      console.log('ExpoUI native module not found, skipping widgets');
+    }
+  } catch (error) {
+    console.log('Skipping native iOS widgets (Expected in Expo Go)');
+  }
+}
 
 // ============================================
 // WIDGET MANAGER
@@ -52,6 +75,12 @@ class WidgetManager {
   public async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
+    if (isExpoGo) {
+      console.log('WidgetManager: Skipping native initialization in Expo Go');
+      this.isInitialized = true;
+      return;
+    }
+
     try {
       // Initialize data service
       await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
@@ -75,8 +104,13 @@ class WidgetManager {
     data: WidgetSpecificData
   ): Promise<void> {
     try {
-      // Save to local cache
+      // Save to local cache - this uses AsyncStorage so it's always safe
       await this.dataService.saveWidgetData(widgetType, size, data);
+
+      // Skip native updates in Expo Go
+      if (isExpoGo) {
+        return;
+      }
 
       // Trigger platform-specific widget update
       if (Platform.OS === 'ios') {
@@ -165,17 +199,13 @@ class WidgetManager {
       switch (widgetType) {
         case WidgetType.CART: {
           const cachedData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
-          if (cachedData && isCartWidgetData(cachedData) && CartWidget) {
+          if (cachedData && isCartWidgetData(cachedData) && CartWidget?.updateSnapshot) {
             CartWidget.updateSnapshot({
               itemCount: cachedData.itemCount,
               totalAmount: cachedData.totalAmount,
               currency: cachedData.currency,
-              isDark,
-              items: cachedData.items.map((item: any) => ({
-                name: item.name,
-                price: item.price,
-                imageUrl: item.imageUrl
-              }))
+              items: cachedData.items,
+              isDark
             });
           }
           break;
@@ -183,10 +213,10 @@ class WidgetManager {
 
         case WidgetType.DEALS: {
           const cachedData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.MEDIUM);
-          if (cachedData && isDealsWidgetData(cachedData) && DealsWidget) {
+          if (cachedData && isDealsWidgetData(cachedData) && DealsWidget?.updateSnapshot) {
             DealsWidget.updateSnapshot({
               activeDeals: cachedData.activeDeals,
-              currency: 'TND',
+              currency: cachedData.currency || 'TND',
               isDark
             });
           }
@@ -195,11 +225,12 @@ class WidgetManager {
 
         case WidgetType.ORDER_TRACKING: {
           const cachedData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.MEDIUM);
-          if (cachedData && isOrderTrackingWidgetData(cachedData) && OrderTrackingWidget) {
+          if (cachedData && isOrderTrackingWidgetData(cachedData) && OrderTrackingWidget?.updateSnapshot) {
+            const etaMinutes = cachedData.estimatedDelivery ? Math.ceil((cachedData.estimatedDelivery - Date.now()) / 60000) : 15;
             OrderTrackingWidget.updateSnapshot({
               orderId: cachedData.orderId,
               statusText: cachedData.statusText,
-              estimatedDelivery: cachedData.estimatedDelivery ? new Date(cachedData.estimatedDelivery).toLocaleDateString() : undefined,
+              estimatedDelivery: etaMinutes > 60 ? `${Math.floor(etaMinutes / 60)}h ${etaMinutes % 60}m` : `${etaMinutes}m`,
               isDark
             });
           }
@@ -208,10 +239,9 @@ class WidgetManager {
 
         case WidgetType.RECOMMENDATIONS: {
           const cachedData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.MEDIUM);
-          if (cachedData && isRecommendationsWidgetData(cachedData) && RecommendationsWidget) {
+          if (cachedData && isRecommendationsWidgetData(cachedData) && RecommendationsWidget?.updateSnapshot) {
             RecommendationsWidget.updateSnapshot({
               products: cachedData.products,
-              currency: 'TND',
               isDark
             });
           }
@@ -223,9 +253,7 @@ class WidgetManager {
     }
   }
 
-  /**
-   * Android widget update via react-native-android-widget
-   */
+
   private async updateAndroidWidget(widgetType: WidgetType): Promise<void> {
     try {
       const { requestWidgetUpdate } = await import('react-native-android-widget');
@@ -236,7 +264,6 @@ class WidgetManager {
       switch (widgetType) {
         case WidgetType.CART: {
           const { CartWidget } = await import('./android/CartWidget');
-          // Update Medium
           const medData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.MEDIUM);
           if (medData && isCartWidgetData(medData)) {
             requestWidgetUpdate({
@@ -250,7 +277,6 @@ class WidgetManager {
               })
             });
           }
-          // Update Large
           const largeData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.LARGE) || medData;
           if (largeData && isCartWidgetData(largeData)) {
             requestWidgetUpdate({
@@ -260,20 +286,6 @@ class WidgetManager {
                 totalAmountValue: largeData.totalAmount,
                 currencyCode: largeData.currency,
                 size: WidgetSize.LARGE,
-                isDark
-              })
-            });
-          }
-          // Update Small
-          const smallData = await this.dataService.getWidgetData(WidgetType.CART, WidgetSize.SMALL) || medData;
-          if (smallData && isCartWidgetData(smallData)) {
-            requestWidgetUpdate({
-              widgetName: 'CartWidgetSmall',
-              renderWidget: () => React.createElement(CartWidget, {
-                itemCountValue: smallData.itemCount,
-                totalAmountValue: smallData.totalAmount,
-                currencyCode: smallData.currency,
-                size: WidgetSize.SMALL,
                 isDark
               })
             });
@@ -305,17 +317,6 @@ class WidgetManager {
               })
             });
           }
-          const smallData = await this.dataService.getWidgetData(WidgetType.DEALS, WidgetSize.SMALL) || medData;
-          if (smallData && isDealsWidgetData(smallData)) {
-            requestWidgetUpdate({
-              widgetName: 'DealsWidgetSmall',
-              renderWidget: () => React.createElement(DealsWidget, {
-                activeDeals: smallData.activeDeals || [],
-                size: WidgetSize.SMALL,
-                isDark
-              })
-            });
-          }
           break;
         }
 
@@ -328,6 +329,8 @@ class WidgetManager {
               renderWidget: () => React.createElement(OrderTrackingWidget, {
                 orderIdString: medData.orderId,
                 statusString: medData.statusText,
+                progress: medData.progress || 0,
+                estimatedDelivery: medData.estimatedDelivery,
                 size: WidgetSize.MEDIUM,
                 isDark
               })
@@ -340,19 +343,9 @@ class WidgetManager {
               renderWidget: () => React.createElement(OrderTrackingWidget, {
                 orderIdString: largeData.orderId,
                 statusString: largeData.statusText,
+                progress: largeData.progress || 0,
+                estimatedDelivery: largeData.estimatedDelivery,
                 size: WidgetSize.LARGE,
-                isDark
-              })
-            });
-          }
-          const smallData = await this.dataService.getWidgetData(WidgetType.ORDER_TRACKING, WidgetSize.SMALL) || medData;
-          if (smallData && isOrderTrackingWidgetData(smallData)) {
-            requestWidgetUpdate({
-              widgetName: 'OrderTrackingWidgetSmall',
-              renderWidget: () => React.createElement(OrderTrackingWidget, {
-                orderIdString: smallData.orderId,
-                statusString: smallData.statusText,
-                size: WidgetSize.SMALL,
                 isDark
               })
             });
@@ -384,17 +377,6 @@ class WidgetManager {
               })
             });
           }
-          const smallData = await this.dataService.getWidgetData(WidgetType.RECOMMENDATIONS, WidgetSize.SMALL) || medData;
-          if (smallData && isRecommendationsWidgetData(smallData)) {
-            requestWidgetUpdate({
-              widgetName: 'RecommendationsWidgetSmall',
-              renderWidget: () => React.createElement(RecommendationsWidget, {
-                products: smallData.products || [],
-                size: WidgetSize.SMALL,
-                isDark
-              })
-            });
-          }
           break;
         }
       }
@@ -402,7 +384,6 @@ class WidgetManager {
       console.error('Android widget update failed:', error);
     }
   }
-
   /**
    * Get refresh interval for widget type
    */

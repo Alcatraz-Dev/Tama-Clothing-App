@@ -1940,7 +1940,7 @@ export default function HostLiveScreen(props: Props) {
                         itemBuilder: (message: any) => {
                             const senderName = message.sender.userName || 'Viewer';
                             const isHostMsg = senderName.trim().includes('Host') ||
-                                senderName.trim() === 'Tama Clothing' ||
+                                senderName.trim() === 'Bey3a' ||
                                 message.sender.userID === userId;
 
                             return (
@@ -2768,7 +2768,7 @@ export default function HostLiveScreen(props: Props) {
 
                         {/* Share Button */}
                         <TouchableOpacity
-                            onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
+                            onPress={() => Share.share({ message: `Watch my live stream on Bey3a!` })}
                             style={{
                                 width: 37,
                                 height: 37,

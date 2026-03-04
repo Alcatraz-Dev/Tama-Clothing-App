@@ -39,7 +39,7 @@ export default function ShipmentCreationScreen({ onBack, onComplete, t, hideHead
         items: '',
         weight: '1.0kg',
         serviceType: 'Express',
-        carrierName: 'Tama Logistics',
+        carrierName: 'Bey3a Logistics',
         carrierPhone: '+216 71 000 000'
     });
 
@@ -56,7 +56,7 @@ export default function ShipmentCreationScreen({ onBack, onComplete, t, hideHead
             // 1. Create Shipment in Database
             const shipmentData = {
                 senderId: auth.currentUser?.uid || 'anonymous',
-                senderName: auth.currentUser?.displayName || 'Tama Client',
+                senderName: auth.currentUser?.displayName || 'Bey3a Client',
                 receiverName: formData.receiverName,
                 receiverPhone: formData.receiverPhone,
                 deliveryAddress: formData.deliveryAddress,

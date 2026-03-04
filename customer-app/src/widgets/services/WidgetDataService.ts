@@ -1,5 +1,5 @@
 /**
- * Widget Data Service for TamaClothing App
+ * Widget Data Service for Bey3a App
  * 
  * Handles widget data fetching, caching, and synchronization
  * with Firebase backend.
@@ -181,7 +181,7 @@ class WidgetDataService {
    */
   public async fetchCartData(): Promise<CartWidgetData> {
     try {
-      const savedCart = await AsyncStorage.getItem('@tama_cart');
+      const savedCart = await AsyncStorage.getItem('@bey3a_cart');
       const items = savedCart ? JSON.parse(savedCart) : [];
 
       const parsedItems = Array.isArray(items) ? items : [];
@@ -285,11 +285,11 @@ class WidgetDataService {
 
       if (!targetOrder) {
         return {
-          orderId: 'TAMA-REC',
+          orderId: 'BEY3A-Rec',
           status: OrderStatus.CONFIRMED,
           statusText: 'Prêt pour envoi',
           estimatedDelivery: Date.now() + 86400000,
-          currentLocation: 'Entrepôt Tama',
+          currentLocation: 'BEY3A',
           items: [],
           trackingSteps: []
         };

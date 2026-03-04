@@ -98,7 +98,7 @@ export const CartWidget = ({
                     }}
                 >
                     <TextWidget
-                        text={itemCountValue > 0 ? `${itemCountValue} Articles` : 'Panier Vide'}
+                        text={itemCountValue > 0 ? `${itemCountValue} BEY3A` : 'BEY3A VIDE'}
                         style={{ color: '#ffffff', fontSize: 13, fontWeight: 'bold' }}
                     />
                 </FlexWidget>

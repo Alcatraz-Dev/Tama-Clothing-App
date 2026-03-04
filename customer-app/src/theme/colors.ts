@@ -26,7 +26,7 @@ export const lightColors = {
   icon: "#6b7280",
   tabIconDefault: "#6b7280",
   tabIconSelected: "#1fa7f0",
-  // Accent colors - TamaClothing brand colors
+  // Accent colors - Bey3a brand colors
   coral: "#1fa7f0",
   coralLight: "#FF8E8E",
   coralDark: "#E85555",
@@ -69,7 +69,7 @@ export const darkColors = {
   icon: "#9ca3af",
   tabIconDefault: "#9ca3af",
   tabIconSelected: "#1fa7f0",
-  // Accent colors - TamaClothing brand colors
+  // Accent colors - Bey3a brand colors
   coral: "#1fa7f0",
   coralLight: "#FF8E8E",
   coralDark: "#E85555",

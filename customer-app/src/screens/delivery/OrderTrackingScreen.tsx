@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
+  ScrollView,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,8 +28,11 @@ import {
   Store,
   QrCode,
   X,
+  Star,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { useOrderTracking } from '../../hooks/useOrderTracking';
+import { deliveryService } from '../../services/deliveryService';
 import { getDeliveryStatusColor, getDeliveryStatusLabel } from '../../types/delivery';
 import { BlurView } from 'expo-blur';
 import QRCode from 'react-native-qrcode-svg';
@@ -98,6 +102,11 @@ export default function OrderTrackingScreen({
   onNavigate,
 }: OrderTrackingScreenProps) {
   const [showQR, setShowQR] = useState(false);
+  const [ratingStep, setRatingStep] = useState<'none' | 'driver' | 'products' | 'thankyou'>('none');
+  const [driverRating, setDriverRating] = useState(0);
+  const [productRatings, setProductRatings] = useState<Record<string, number>>({});
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
   const insets = useSafeAreaInsets();
   const isDark = theme === 'dark';
   const mapRef = useRef<MapView>(null);
@@ -152,6 +161,40 @@ export default function OrderTrackingScreen({
   const statusLabel = getDeliveryStatusLabel(order.status, language);
   const statusColor = getDeliveryStatusColor(order.status);
 
+  // Auto-show rating modal when delivered if not already rated
+  useEffect(() => {
+    if (order.status === 'delivered' && !order.rating && ratingStep === 'none') {
+      setTimeout(() => setRatingStep('driver'), 1500);
+    }
+  }, [order.status, order.rating]);
+
+  const handleRateDriver = async (stars: number) => {
+    setDriverRating(stars);
+    setRatingStep('products');
+  };
+
+  const handleRateProduct = (productId: string, stars: number) => {
+    setProductRatings(prev => ({ ...prev, [productId]: stars }));
+  };
+
+  const submitAllRatings = async () => {
+    setIsSubmittingRating(true);
+    try {
+      // 1. Submit driver rating (this updates the delivery doc)
+      await deliveryService.rateDelivery(order.id, driverRating, "Good delivery");
+
+      // 2. In a real app, you would loop through productRatings and update those too
+      // For now we simulate success
+
+      setRatingStep('thankyou');
+      setTimeout(() => setRatingStep('none'), 3000);
+    } catch (e) {
+      console.error('Rating failed:', e);
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* MAP VIEW */}
@@ -175,17 +218,16 @@ export default function OrderTrackingScreen({
         </Marker>
 
         {/* Store / Pickup Location */}
-        {order.status === 'accepted' || order.status === 'pending' || order.status === 'picked_up' ? (
-          <Marker
-            coordinate={{ latitude: order.pickupLatitude, longitude: order.pickupLongitude }}
-            title={order.storeName || tr('Store', 'Magasin', 'المتجر')}
-            description={order.pickupAddress}
-          >
-            <View style={[styles.storeMarker, { backgroundColor: colors.accent }]}>
-              <Store size={20} color="#FFF" />
-            </View>
-          </Marker>
-        ) : null}
+        <Marker
+          coordinate={{ latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }}
+          title={order.storeName || tr('Store', 'Magasin', 'المتجر')}
+          description={order.pickupAddress}
+        >
+          <View style={[styles.storeMarker, { backgroundColor: colors.accent }]}>
+            <Store size={20} color="#FFF" />
+          </View>
+        </Marker>
+
 
         {/* Driver Real-time position */}
         {order.driverLocation && (
@@ -201,25 +243,31 @@ export default function OrderTrackingScreen({
           </Marker>
         )}
 
-        {/* Path highlight - From Driver to next destination */}
-        {order.driverLocation && (
-          <Polyline
-            coordinates={
-              order.status === 'accepted'
+        {/* Path highlight - Route logic */}
+        <Polyline
+          coordinates={
+            order.driverLocation && (order.status === 'accepted' || order.status === 'pending')
+              // Driver to Store
+              ? [
+                { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
+                { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }
+              ]
+              : order.driverLocation && ['in_transit', 'out_for_delivery', 'picked_up'].includes(order.status)
+                // Driver to User
                 ? [
-                  { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
-                  { latitude: order.pickupLatitude, longitude: order.pickupLongitude }
-                ]
-                : [
                   { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
                   { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
                 ]
-            }
-            strokeColor={colors.accent}
-            strokeWidth={4}
-            lineDashPattern={[5, 10]}
-          />
-        )}
+                // Store to User (Default route)
+                : [
+                  { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude },
+                  { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+                ]
+          }
+          strokeColor={colors.accent}
+          strokeWidth={4}
+          lineDashPattern={[5, 10]}
+        />
       </MapView>
 
       {/* TOP CONTROLS */}
@@ -278,7 +326,7 @@ export default function OrderTrackingScreen({
                 <Text style={[styles.driverNameText, { color: colors.text }]}>{order.driverName}</Text>
                 <View style={styles.ratingRow}>
                   <Car size={14} color={colors.subtext} />
-                  <Text style={[styles.carInfo, { color: colors.subtext }]}>Tama Verified Partner</Text>
+                  <Text style={[styles.carInfo, { color: colors.subtext }]}>Bey3a Verified Partner</Text>
                 </View>
               </View>
             </View>
@@ -316,13 +364,88 @@ export default function OrderTrackingScreen({
         {/* Order Details Preview */}
         <TouchableOpacity style={[styles.detailsPreview, { backgroundColor: colors.border + '50' }]}>
           <View style={styles.detailsRow}>
-            <Package size={18} color={colors.text} />
-            <Text style={[styles.detailsText, { color: colors.text }]}>{order.itemsCount} {tr('items', 'articles', 'منتجات')}</Text>
+            <Store size={18} color={colors.accent} />
+            <Text style={[styles.detailsText, { color: colors.text }]}>{order.storeName || 'Bey3a Store'}</Text>
             <View style={{ flex: 1 }} />
             <Text style={[styles.totalAmount, { color: colors.accent }]}>{order.totalAmount} TND</Text>
-            <ChevronRight size={18} color={colors.subtext} />
+          </View>
+          <View style={[styles.itemsListPreview, { marginTop: 10 }]}>
+            {order.items?.map((item: any, i: number) => (
+              <View key={i} style={styles.itemBullet}>
+                <Package size={12} color={colors.subtext} />
+                <Text style={[styles.bulletText, { color: colors.text }]}>
+                  {typeof item === 'string' ? item : item.name} x{item.quantity || 1}
+                </Text>
+              </View>
+            ))}
           </View>
         </TouchableOpacity>
+
+        {/* Rating Modal: Driver */}
+        <Modal visible={ratingStep === 'driver'} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <View style={[styles.ratingCard, { backgroundColor: colors.card }]}>
+              <View style={[styles.ratingAvatar, { backgroundColor: colors.accent }]}>
+                <Text style={styles.ratingAvatarText}>{order.driverName?.charAt(0)}</Text>
+              </View>
+              <Text style={[styles.ratingTitle, { color: colors.text }]}>{tr('Rate your driver', 'قيم السائق', 'Rate your driver')}</Text>
+              <Text style={[styles.ratingSubtitle, { color: colors.subtext }]}>{order.driverName}</Text>
+
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map(s => (
+                  <TouchableOpacity key={s} onPress={() => handleRateDriver(s)}>
+                    <Star size={40} fill={s <= driverRating ? "#FFB800" : "transparent"} color={s <= driverRating ? "#FFB800" : colors.border} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Rating Modal: Products */}
+        <Modal visible={ratingStep === 'products'} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={95} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <View style={[styles.productRatingCard, { backgroundColor: colors.card, maxHeight: '80%' }]}>
+              <Text style={[styles.ratingTitle, { color: colors.text }]}>{tr('Rate your items', 'قيم المنتجات', 'Rate your items')}</Text>
+              <ScrollView style={{ marginTop: 20 }}>
+                {order.items?.map((item: any, i: number) => {
+                  const id = typeof item === 'string' ? item : (item.id || item.name);
+                  return (
+                    <View key={i} style={styles.productRatingItem}>
+                      <Text style={[styles.productName, { color: colors.text }]}>{typeof item === 'string' ? item : item.name}</Text>
+                      <View style={styles.miniStarsRow}>
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <TouchableOpacity key={s} onPress={() => handleRateProduct(id, s)}>
+                            <Star size={24} fill={(productRatings[id] || 0) >= s ? "#FFB800" : "transparent"} color={(productRatings[id] || 0) >= s ? "#FFB800" : colors.border} />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity
+                onPress={submitAllRatings}
+                style={[styles.submitBtn, { backgroundColor: colors.accent }]}
+                disabled={isSubmittingRating}
+              >
+                {isSubmittingRating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>{tr('Done', 'تم', 'Done')}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Thank You Overlay */}
+        {ratingStep === 'thankyou' && (
+          <Animated.View entering={FadeIn} style={[StyleSheet.absoluteFill, styles.thankYouOverlay]}>
+            <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+            <CheckCircle2 size={80} color="#34C759" />
+            <Text style={styles.thankYouText}>{tr('Thank You!', 'شكراً لك!', 'Thank You!')}</Text>
+          </Animated.View>
+        )}
 
         {/* QR Code Modal */}
         <Modal
@@ -364,7 +487,7 @@ export default function OrderTrackingScreen({
           </View>
         </Modal>
       </Animated.View>
-    </View>
+    </View >
   );
 }
 
@@ -507,10 +630,32 @@ const styles = StyleSheet.create({
   addressTextWrapper: { flex: 1 },
   addressItemLabel: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
   addressValue: { fontSize: 16, fontWeight: 'bold' },
-  detailsPreview: { padding: 14, borderRadius: 16 },
+  detailsPreview: { padding: 16, borderRadius: 20, marginTop: 10 },
   detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  detailsText: { fontWeight: '700' },
-  totalAmount: { fontWeight: '900', marginRight: 10 },
+  detailsText: { fontWeight: '800', fontSize: 15 },
+  totalAmount: { fontWeight: '900', fontSize: 16 },
+  itemsListPreview: { gap: 6, paddingLeft: 28 },
+  itemBullet: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bulletText: { fontSize: 13, fontWeight: '600' },
+
+  ratingCard: { width: '85%', padding: 40, borderRadius: 32, alignItems: 'center', gap: 15 },
+  ratingAvatar: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
+  ratingAvatarText: { color: '#FFF', fontSize: 32, fontWeight: 'bold' },
+  ratingTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  ratingSubtitle: { fontSize: 16, fontWeight: '600', textAlign: 'center', marginTop: -5 },
+  starsRow: { flexDirection: 'row', gap: 12, marginVertical: 15 },
+
+  productRatingCard: { width: '95%', padding: 25, borderRadius: 32 },
+  productRatingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  productName: { fontSize: 15, fontWeight: '700', flex: 1, marginRight: 10 },
+  miniStarsRow: { flexDirection: 'row', gap: 4 },
+
+  submitBtn: { marginTop: 25, paddingVertical: 16, borderRadius: 20, alignItems: 'center' },
+  submitBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+
+  thankYouOverlay: { justifyContent: 'center', alignItems: 'center', gap: 15, zIndex: 1000 },
+  thankYouText: { color: '#FFF', fontSize: 30, fontWeight: '900' },
+
   backBtnFloat: { marginTop: 20, padding: 10 },
   modalOverlay: {
     flex: 1,

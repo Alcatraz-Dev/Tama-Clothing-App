@@ -1,3 +1,652 @@
+diff --git a/node_modules/zego-zpns-react-native/android/.classpath b/node_modules/zego-zpns-react-native/android/.classpath
+new file mode 100644
+index 0000000..bbe97e5
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/.classpath
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<classpath>
++	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-17/"/>
++	<classpathentry kind="con" path="org.eclipse.buildship.core.gradleclasspathcontainer"/>
++	<classpathentry kind="output" path="bin/default"/>
++</classpath>
+diff --git a/node_modules/zego-zpns-react-native/android/.project b/node_modules/zego-zpns-react-native/android/.project
+new file mode 100644
+index 0000000..8878933
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/.project
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>zego-zpns-react-native</name>
++	<comment>Project zego-zpns-react-native created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1772579485928</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/zego-zpns-react-native/android/.settings/org.eclipse.buildship.core.prefs b/node_modules/zego-zpns-react-native/android/.settings/org.eclipse.buildship.core.prefs
+new file mode 100644
+index 0000000..1675490
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/.settings/org.eclipse.buildship.core.prefs
+@@ -0,0 +1,2 @@
++connection.project.dir=../../../android
++eclipse.preferences.version=1
+diff --git a/node_modules/zego-zpns-react-native/android/build.gradle b/node_modules/zego-zpns-react-native/android/build.gradle
+index 13388c1..5f84f9a 100644
+--- a/node_modules/zego-zpns-react-native/android/build.gradle
++++ b/node_modules/zego-zpns-react-native/android/build.gradle
+@@ -1,20 +1,8 @@
+-
+ // android/build.gradle
+ 
+-// based on:
+-//
+-// * https://github.com/facebook/react-native/blob/0.60-stable/template/android/build.gradle
+-//   original location:
+-//   - https://github.com/facebook/react-native/blob/0.58-stable/local-cli/templates/HelloWorld/android/build.gradle
+-//
+-// * https://github.com/facebook/react-native/blob/0.60-stable/template/android/app/build.gradle
+-//   original location:
+-//   - https://github.com/facebook/react-native/blob/0.58-stable/local-cli/templates/HelloWorld/android/app/build.gradle
+-
+-def DEFAULT_COMPILE_SDK_VERSION = 28
+-def DEFAULT_BUILD_TOOLS_VERSION = '28.0.3'
+-def DEFAULT_MIN_SDK_VERSION = 16
+-def DEFAULT_TARGET_SDK_VERSION = 28
++def DEFAULT_COMPILE_SDK_VERSION = 34
++def DEFAULT_MIN_SDK_VERSION = 24
++def DEFAULT_TARGET_SDK_VERSION = 34
+ 
+ def safeExtGet(prop, fallback) {
+     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+@@ -22,29 +10,8 @@ def safeExtGet(prop, fallback) {
+ 
+ apply plugin: 'com.android.library'
+ 
+-buildscript {
+-    // The Android Gradle plugin is only required when opening the android folder stand-alone.
+-    // This avoids unnecessary downloads and potential conflicts when the library is included as a
+-    // module dependency in an application project.
+-    // ref: https://docs.gradle.org/current/userguide/tutorial_using_tasks.html#sec:build_script_external_dependencies
+-    if (project == rootProject) {
+-        repositories {
+-            maven { url 'https://storage.zego.im/maven' }
+-            google()
+-            maven { url 'https://developer.huawei.com/repo/' }
+-            maven { url "https://maven.google.com" }
+-        }
+-        dependencies {
+-            classpath 'com.android.tools.build:gradle:3.4.1'
+-        }
+-    }
+-}
+-
+-apply plugin: 'com.android.library'
+-
+ android {
+     compileSdkVersion safeExtGet('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION)
+-    buildToolsVersion safeExtGet('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION)
+     defaultConfig {
+         minSdkVersion safeExtGet('minSdkVersion', DEFAULT_MIN_SDK_VERSION)
+         targetSdkVersion safeExtGet('targetSdkVersion', DEFAULT_TARGET_SDK_VERSION)
+@@ -54,26 +21,21 @@ android {
+     lintOptions {
+         abortOnError false
+     }
++    namespace "im.zego.zpns_reactnative_sdk"
+ }
+ 
+ repositories {
+-    // ref: https://www.baeldung.com/maven-local-repository
+     maven { url 'https://storage.zego.im/maven' }
+     mavenLocal()
+     maven {
+-        // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+         url "$rootDir/../node_modules/react-native/android"
+     }
+-    maven {
+-        // Android JSC is installed from npm
+-        url "$rootDir/../node_modules/jsc-android/dist"
+-    }
+     google()
+-
++    mavenCentral()
+ }
+ 
+ dependencies {
+     implementation 'com.facebook.react:react-native:+'
+     api 'im.zego:zpns:2.8.0'
+-    implementation 'com.google.firebase:firebase-messaging:21.1.0'
++    implementation 'com.google.firebase:firebase-messaging:23.1.0'
+ }
+diff --git a/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/results.bin b/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/transformed/classes/classes_dex/classes.dex b/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..db13b4c
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/.transforms/02aef8a93e1377369812d2bcbd29b1e7/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/generated/source/buildConfig/debug/im/zego/zpns_reactnative_sdk/BuildConfig.java b/node_modules/zego-zpns-react-native/android/build/generated/source/buildConfig/debug/im/zego/zpns_reactnative_sdk/BuildConfig.java
+new file mode 100644
+index 0000000..b7ee02a
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/generated/source/buildConfig/debug/im/zego/zpns_reactnative_sdk/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package im.zego.zpns_reactnative_sdk;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "im.zego.zpns_reactnative_sdk";
++  public static final String BUILD_TYPE = "debug";
++}
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..6175ed2
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,43 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="im.zego.zpns_reactnative_sdk" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
++
++    <application>
++        <receiver
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsPluginEventHandler"
++            android:enabled="true"
++            android:exported="true" >
++            <intent-filter>
++                <action android:name="im.zego.zim.zpns.intent.action.MESSAGE" />
++            </intent-filter>
++        </receiver>
++        <receiver
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsFCMReceiver"
++            android:exported="true"
++            android:permission="com.google.android.c2dm.permission.SEND" >
++            <intent-filter>
++                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
++            </intent-filter>
++        </receiver>
++
++        <service
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsService"
++            android:directBootAware="true"
++            android:exported="false"
++            android:permission="android.permission.BIND_JOB_SERVICE" >
++        </service>
++
++        <!-- Developers can fill in this configuration to specify additional native layer callbacks -->
++        <!--
++         <meta-data
++        android:name="ZPNsBackgroundMessageHandlerClassPath"
++        android:value="YOUR CLASS PATH"/>
++        -->
++
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..e6ed7ac
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "im.zego.zpns_reactnative_sdk",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/zego-zpns-react-native/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/zego-zpns-react-native/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/zego-zpns-react-native/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..7da2a52
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/zego-zpns-react-native/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..e9c50da
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/zego-zpns-react-native/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..9bf7fe2
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Mon Mar 02 00:10:24 CET 2026
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..4e3a63a
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/build/generated/res/resValues/debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/build/generated/res/resValues/debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..1a40336
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/debug/assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/build/intermediates/shader_assets/debug/compileDebugShaders/out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..c8ecfc4
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/debug/jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..ae38fa0
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/debug/shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/BuildConfig.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/BuildConfig.class
+new file mode 100644
+index 0000000..d6f114d
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/BuildConfig.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsModule.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsModule.class
+new file mode 100644
+index 0000000..06354d6
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsModule.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsPackage.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsPackage.class
+new file mode 100644
+index 0000000..a371fae
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/RCTZegoZPNsPackage.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/callback/ZPNsBackgroundMessageHandler.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/callback/ZPNsBackgroundMessageHandler.class
+new file mode 100644
+index 0000000..cce734e
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/callback/ZPNsBackgroundMessageHandler.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter$1.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter$1.class
+new file mode 100644
+index 0000000..dd7ab47
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter$1.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter.class
+new file mode 100644
+index 0000000..a53a212
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsConverter.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsFCMReceiver.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsFCMReceiver.class
+new file mode 100644
+index 0000000..b1e8444
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsFCMReceiver.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsLogWriter.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsLogWriter.class
+new file mode 100644
+index 0000000..50da375
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsLogWriter.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$1.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$1.class
+new file mode 100644
+index 0000000..3bfac7a
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$1.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$2.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$2.class
+new file mode 100644
+index 0000000..94b328e
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$2.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$3.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$3.class
+new file mode 100644
+index 0000000..9e87e6f
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$3.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$4.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$4.class
+new file mode 100644
+index 0000000..09d4e31
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler$4.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler.class
+new file mode 100644
+index 0000000..9fbd34e
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginEventHandler.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginUtils.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginUtils.class
+new file mode 100644
+index 0000000..4f98959
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsPluginUtils.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$1.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$1.class
+new file mode 100644
+index 0000000..9f02f5a
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$1.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CommandProcessor.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CommandProcessor.class
+new file mode 100644
+index 0000000..eacf070
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CommandProcessor.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatJobEngine.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatJobEngine.class
+new file mode 100644
+index 0000000..8d192e7
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatJobEngine.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkEnqueuer.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkEnqueuer.class
+new file mode 100644
+index 0000000..268c11d
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkEnqueuer.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkItem.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkItem.class
+new file mode 100644
+index 0000000..e47fb20
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$CompatWorkItem.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$ComponentNameWithWakeful.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$ComponentNameWithWakeful.class
+new file mode 100644
+index 0000000..fbe4ba3
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$ComponentNameWithWakeful.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$GenericWorkItem.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$GenericWorkItem.class
+new file mode 100644
+index 0000000..d7f4879
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$GenericWorkItem.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl$WrapperWorkItem.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl$WrapperWorkItem.class
+new file mode 100644
+index 0000000..eee0219
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl$WrapperWorkItem.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl.class
+new file mode 100644
+index 0000000..87f17f3
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobServiceEngineImpl.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobWorkEnqueuer.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobWorkEnqueuer.class
+new file mode 100644
+index 0000000..06a8785
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$JobWorkEnqueuer.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$WorkEnqueuer.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$WorkEnqueuer.class
+new file mode 100644
+index 0000000..7400de6
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService$WorkEnqueuer.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService.class b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService.class
+new file mode 100644
+index 0000000..7aeb6b8
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/im/zego/zpns_reactnative_sdk/internal/ZPNsService.class differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/zego-zpns-react-native/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/zego-zpns-react-native/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..ded3af7
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,65 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="im.zego.zpns_reactnative_sdk" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
++7-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:4:1-73
++7-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:4:18-70
++8
++9    <application>
++9-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:6:1-37:15
++10        <receiver
++10-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:7:5-14:16
++11            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsPluginEventHandler"
++11-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:8:9-84
++12            android:enabled="true"
++12-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:9:9-31
++13            android:exported="true" >
++13-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:10:9-32
++14            <intent-filter>
++14-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:11:9-13:25
++15                <action android:name="im.zego.zim.zpns.intent.action.MESSAGE" />
++15-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:12:13-77
++15-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:12:21-74
++16            </intent-filter>
++17        </receiver>
++18        <receiver
++18-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:16:5-23:16
++19            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsFCMReceiver"
++19-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:17:9-77
++20            android:exported="true"
++20-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:18:9-32
++21            android:permission="com.google.android.c2dm.permission.SEND" >
++21-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:19:9-69
++22            <intent-filter>
++22-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:20:9-22:25
++23                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
++23-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:21:13-77
++23-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:21:21-74
++24            </intent-filter>
++25        </receiver>
++26
++27        <service
++27-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:25:5-30:15
++28            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsService"
++28-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:26:9-73
++29            android:directBootAware="true"
++29-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:29:9-39
++30            android:exported="false"
++30-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:27:9-33
++31            android:permission="android.permission.BIND_JOB_SERVICE" >
++31-->/Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:28:9-65
++32        </service>
++33
++34        <!-- Developers can fill in this configuration to specify additional native layer callbacks -->
++35        <!--
++36         <meta-data
++37        android:name="ZPNsBackgroundMessageHandlerClassPath"
++38        android:value="YOUR CLASS PATH"/>
++39        -->
++40
++41    </application>
++42
++43</manifest>
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/zego-zpns-react-native/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..6175ed2
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,43 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="im.zego.zpns_reactnative_sdk" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
++
++    <application>
++        <receiver
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsPluginEventHandler"
++            android:enabled="true"
++            android:exported="true" >
++            <intent-filter>
++                <action android:name="im.zego.zim.zpns.intent.action.MESSAGE" />
++            </intent-filter>
++        </receiver>
++        <receiver
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsFCMReceiver"
++            android:exported="true"
++            android:permission="com.google.android.c2dm.permission.SEND" >
++            <intent-filter>
++                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
++            </intent-filter>
++        </receiver>
++
++        <service
++            android:name="im.zego.zpns_reactnative_sdk.internal.ZPNsService"
++            android:directBootAware="true"
++            android:exported="false"
++            android:permission="android.permission.BIND_JOB_SERVICE" >
++        </service>
++
++        <!-- Developers can fill in this configuration to specify additional native layer callbacks -->
++        <!--
++         <meta-data
++        android:name="ZPNsBackgroundMessageHandlerClassPath"
++        android:value="YOUR CLASS PATH"/>
++        -->
++
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/zego-zpns-react-native/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/zego-zpns-react-native/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/zego-zpns-react-native/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..665c148
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/zego-zpns-react-native/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/zego-zpns-react-native/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..96c9e40
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++im.zego.zpns_reactnative_sdk
+diff --git a/node_modules/zego-zpns-react-native/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/zego-zpns-react-native/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..3b07180
+--- /dev/null
++++ b/node_modules/zego-zpns-react-native/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,61 @@
++-- Merging decision tree log ---
++manifest
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:1:1-39:12
++INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:1:1-39:12
++	package
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:2:5-43
++		INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml
++	xmlns:android
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:1:11-69
++uses-permission#android.permission.FOREGROUND_SERVICE
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:4:1-73
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:4:18-70
++application
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:6:1-37:15
++receiver#im.zego.zpns_reactnative_sdk.internal.ZPNsPluginEventHandler
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:7:5-14:16
++	android:enabled
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:9:9-31
++	android:exported
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:10:9-32
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:8:9-84
++intent-filter#action:name:im.zego.zim.zpns.intent.action.MESSAGE
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:11:9-13:25
++action#im.zego.zim.zpns.intent.action.MESSAGE
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:12:13-77
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:12:21-74
++receiver#im.zego.zpns_reactnative_sdk.internal.ZPNsFCMReceiver
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:16:5-23:16
++	android:exported
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:18:9-32
++	android:permission
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:19:9-69
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:17:9-77
++intent-filter#action:name:com.google.android.c2dm.intent.RECEIVE
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:20:9-22:25
++action#com.google.android.c2dm.intent.RECEIVE
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:21:13-77
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:21:21-74
++service#im.zego.zpns_reactnative_sdk.internal.ZPNsService
++ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:25:5-30:15
++	android:exported
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:27:9-33
++	android:permission
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:28:9-65
++	android:directBootAware
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:29:9-39
++	android:name
++		ADDED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml:26:9-73
++uses-sdk
++INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml
++INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from /Users/haythem_dhahri/Desktop/projects/website/TamaClothing/customer-app/node_modules/zego-zpns-react-native/android/src/main/AndroidManifest.xml
+diff --git a/node_modules/zego-zpns-react-native/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/zego-zpns-react-native/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..2a76f48
+Binary files /dev/null and b/node_modules/zego-zpns-react-native/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
 diff --git a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h b/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h
 index cc71a29..a41fecc 100644
 --- a/node_modules/zego-zpns-react-native/ios/RCTZPNsEventManager.h
@@ -74,7 +723,7 @@ index f30aca7..0a302b8 100644
    API_AVAILABLE(ios(10), macosx(10.14))
    struct {
      unsigned int willPresentNotification : 1;
-@@ -19,7 +22,8 @@ @interface RCTZPNsEventManager () <ZPNsNotificationCenterDelegate,
+@@ -19,7 +22,8 @@
  
  @property(nonatomic, assign) BOOL isDebug;
  
@@ -84,7 +733,7 @@ index f30aca7..0a302b8 100644
  
  @end
  
-@@ -29,7 +33,8 @@ @interface RCTZPNsEventManager () <ZPNsNotificationCenterDelegate,
+@@ -29,7 +33,8 @@ static NSMutableDictionary *_completionSeqMap = nil;
  @implementation RCTZPNsEventManager
  
  + (void)load {
@@ -94,7 +743,7 @@ index f30aca7..0a302b8 100644
  }
  
  + (instancetype)sharedInstance {
-@@ -71,8 +76,9 @@ - (void)listenAppDidFinishLaunchingNotification {
+@@ -71,8 +76,9 @@ static NSMutableDictionary *_completionSeqMap = nil;
  - (void)registerDeviceToken:(NSData *)deviceToken {
    NSString *dataStr = [self getHexStringForData:deviceToken];
    [[ZPNsUtils getInstance]
@@ -106,7 +755,7 @@ index f30aca7..0a302b8 100644
            moduleName:@""];
    [[ZPNs shared] setDeviceToken:deviceToken isProduct:!self.isDebug];
  }
-@@ -88,19 +94,20 @@ - (void)handleNotificationClickEvent:(NSDictionary *)userInfo
+@@ -88,19 +94,20 @@ static NSMutableDictionary *_completionSeqMap = nil;
    NSMutableDictionary *notificationMap = [NSMutableDictionary dictionary];
  
    NSString *payload = @"";
@@ -134,7 +783,7 @@ index f30aca7..0a302b8 100644
  }
  
  - (void)handleNotificationArriveEvent:(NSDictionary *)userInfo
-@@ -110,28 +117,34 @@ - (void)handleNotificationArriveEvent:(NSDictionary *)userInfo
+@@ -110,28 +117,34 @@ static NSMutableDictionary *_completionSeqMap = nil;
    [notificationMap safeSetObject:userInfo forKey:@"userInfo"];
    [notificationMap safeSetObject:title forKey:@"title"];
    [notificationMap safeSetObject:content forKey:@"content"];
@@ -180,7 +829,7 @@ index f30aca7..0a302b8 100644
  }
  
  - (nullable NSDictionary *)getNotificationMapFromClickedNotification {
-@@ -149,8 +162,10 @@ - (void)clearBuffer {
+@@ -149,8 +162,10 @@ static NSMutableDictionary *_completionSeqMap = nil;
  }
  
  - (void)throughMessageReceivedCompletion:(NSString *)seq {
@@ -193,7 +842,7 @@ index f30aca7..0a302b8 100644
  }
  
  - (NSString *)getHexStringForData:(NSData *)data {
-@@ -167,8 +182,10 @@ - (NSString *)getHexStringForData:(NSData *)data {
+@@ -167,8 +182,10 @@ static NSMutableDictionary *_completionSeqMap = nil;
      return hexString;
    } else {
      NSString *myToken = [[data description]
@@ -206,7 +855,7 @@ index f30aca7..0a302b8 100644
      return myToken;
    }
  }
-@@ -179,27 +196,31 @@ - (NSString *)getUserInfoJson:(NSDictionary *)userInfo {
+@@ -179,27 +196,31 @@ static NSMutableDictionary *_completionSeqMap = nil;
    }
  
    NSError *error;
@@ -244,7 +893,7 @@ index f30aca7..0a302b8 100644
              moduleName:@""];
    }
  
-@@ -209,31 +230,40 @@ - (void)application_onDidFinishLaunchingNotification:(nonnull NSNotification *)n
+@@ -209,31 +230,40 @@ static NSMutableDictionary *_completionSeqMap = nil;
  
      if (notificationCenter.delegate != nil) {
        _originalNotificationCenterDelegate = notificationCenter.delegate;
@@ -299,7 +948,7 @@ index f30aca7..0a302b8 100644
      notificationCenter.delegate = strongSelf;
    }
  }
-@@ -242,21 +272,24 @@ - (void)application_onDidFinishLaunchingNotification:(nonnull NSNotification *)n
+@@ -242,21 +272,24 @@ static NSMutableDictionary *_completionSeqMap = nil;
  - (void)userNotificationCenter:(UNUserNotificationCenter *)center
         willPresentNotification:(UNNotification *)notification
           withCompletionHandler:
@@ -331,7 +980,7 @@ index f30aca7..0a302b8 100644
      if (self.isWillPresentBadge) {
        presentationOptions |= UNNotificationPresentationOptionBadge;
      }
-@@ -273,9 +306,13 @@ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+@@ -273,9 +306,13 @@ static NSMutableDictionary *_completionSeqMap = nil;
    }
  
    [[ZPNsUtils getInstance]
@@ -348,7 +997,7 @@ index f30aca7..0a302b8 100644
            moduleName:@""];
  }
  
-@@ -286,35 +323,41 @@ - (void)userNotificationCenter:(UNUserNotificationCenter *)center
+@@ -286,35 +323,41 @@ static NSMutableDictionary *_completionSeqMap = nil;
      API_AVAILABLE(macos(10.14), ios(10.0)) {
    [self ZPNsNotificationCenter:center
        didReceiveNotificationResponse:response
@@ -402,7 +1051,7 @@ index f30aca7..0a302b8 100644
  #pragma clang diagnostic push
  #pragma clang diagnostic ignored "-Wunguarded-availability-new"
      [_originalNotificationCenterDelegate userNotificationCenter:center
-@@ -332,7 +375,8 @@ - (void)onRegistered:(NSString *)pushID {
+@@ -332,7 +375,8 @@ static NSMutableDictionary *_completionSeqMap = nil;
  - (void)ZPNsNotificationCenter:(UNUserNotificationCenter *)center
         willPresentNotification:(UNNotification *)notification
                        userInfo:(NSDictionary *)userInfo
@@ -412,7 +1061,7 @@ index f30aca7..0a302b8 100644
    [self handleNotificationArriveEvent:userInfo
                                  title:notification.request.content.title
                                content:notification.request.content.body];
-@@ -343,9 +387,10 @@ - (void)ZPNsNotificationCenter:(UNUserNotificationCenter *)center
+@@ -343,9 +387,10 @@ static NSMutableDictionary *_completionSeqMap = nil;
                            userInfo:(NSDictionary *)userInfo
               withCompletionHandler:(void (^)(void))completionHandler
      API_AVAILABLE(macos(10.14), ios(10.0)) {
@@ -442,7 +1091,7 @@ index f243662..5de5fde 100644
  
  @implementation RCTZPNsSwizzler
  
-@@ -15,20 +17,27 @@ + (void)load {
+@@ -15,20 +17,27 @@
    static dispatch_once_t onceToken;
    dispatch_once(&onceToken, ^{
      [self hookMethod:@selector(application:didFinishLaunchingWithOptions:)
@@ -477,7 +1126,7 @@ index f243662..5de5fde 100644
                andDef:@selector(defaultApplication:
                           didReceiveRemoteNotification:fetchCompletionHandler:)
                andNew:@selector(zpnsHookedApplication:
-@@ -38,22 +47,38 @@ + (void)load {
+@@ -38,22 +47,38 @@
  
  + (void)hookMethod:(SEL)oldSEL andDef:(SEL)defaultSEL andNew:(SEL)newSEL {
    Class oldClass = objc_getClass([@"AppDelegate" UTF8String]);
@@ -522,7 +1171,7 @@ index f243662..5de5fde 100644
            moduleName:@""];
    [[RCTZPNsEventManager sharedInstance] registerZPNsEventDelegate];
    [self zpnsHookedApplication:application didFinishLaunchingWithOptions:dic];
-@@ -62,10 +87,10 @@ - (BOOL)zpnsHookedApplication:(UIApplication *)application
+@@ -62,10 +87,10 @@
  
  - (void)zpnsHookedApplication:(UIApplication *)application
      didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
@@ -537,7 +1186,7 @@ index f243662..5de5fde 100644
    [[RCTZPNsEventManager sharedInstance] registerDeviceToken:deviceToken];
    [self zpnsHookedApplication:application
        didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
-@@ -73,22 +98,25 @@ - (void)zpnsHookedApplication:(UIApplication *)application
+@@ -73,22 +98,25 @@
  
  - (void)zpnsHookedApplication:(UIApplication *)application
      didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
@@ -572,7 +1221,7 @@ index f243662..5de5fde 100644
    [self zpnsHookedApplication:application
        didReceiveRemoteNotification:userInfo
              fetchCompletionHandler:completionHandler];
-@@ -106,7 +134,7 @@ - (void)defaultApplication:(UIApplication *)application
+@@ -106,7 +134,7 @@
  }
  - (void)defaultApplication:(UIApplication *)application
      didReceiveRemoteNotification:(NSDictionary *)userInfo

@@ -34,7 +34,7 @@ interface DriverDeliveryScreenProps {
   onNavigate?: (screen: string, params?: any) => void;
 }
 
-// Default store location (TamaClothing store)
+// Default store location (Bey3a Store)
 const STORE_LOCATION = {
   latitude: 36.8065,  // Tunis, Tunisia
   longitude: 10.1815,

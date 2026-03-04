@@ -1,0 +1,26 @@
+diff --git a/node_modules/expo-video/build/VideoPlayer.js b/node_modules/expo-video/build/VideoPlayer.js
+index 5d14763..8f67e01 100644
+--- a/node_modules/expo-video/build/VideoPlayer.js
++++ b/node_modules/expo-video/build/VideoPlayer.js
+@@ -22,7 +22,9 @@ NativeVideoModule.VideoPlayer.prototype.replaceAsync = function (source) {
+  */
+ export function createVideoPlayer(source, playerBuilderOptions) {
+     const parsedSource = parseSource(source);
+-    return new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions);
++    return playerBuilderOptions
++        ? new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions)
++        : new NativeVideoModule.VideoPlayer(parsedSource, false);
+ }
+ /**
+  * Creates a `VideoPlayer`, which will be automatically cleaned up when the component is unmounted.
+@@ -33,7 +35,9 @@ export function createVideoPlayer(source, playerBuilderOptions) {
+ export function useVideoPlayer(source, setup, playerBuilderOptions) {
+     const parsedSource = parseSource(source);
+     return useReleasingSharedObject(() => {
+-        const player = new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions);
++        const player = playerBuilderOptions
++            ? new NativeVideoModule.VideoPlayer(parsedSource, false, playerBuilderOptions)
++            : new NativeVideoModule.VideoPlayer(parsedSource, false);
+         setup?.(player);
+         return player;
+     }, [JSON.stringify(parsedSource), JSON.stringify(playerBuilderOptions)]);

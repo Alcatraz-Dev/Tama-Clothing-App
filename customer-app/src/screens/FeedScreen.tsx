@@ -747,14 +747,14 @@ export default function FeedScreen(props: FeedScreenProps) {
             const { uri } = await FileSystem.downloadAsync(url, fileUri);
 
             await Share.share({
-                message: `${work.text || 'Check this out!'} \nShared via Tama App`,
+                message: `${work.text || 'Check this out!'} \nShared via Bey3a App`,
                 url: uri, // Sharing local URI shares the file
             });
         } catch (e) {
             console.error('Error sharing:', e);
             // Fallback
             await Share.share({
-                message: `Check out this work on Tama: ${work.text || ''}`,
+                message: `Check out this work on Bey3a: ${work.text || ''}`,
                 url: work.url || work.imageUrl
             });
         }
@@ -842,7 +842,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             if (!url) return;
 
             const extension = url.split('.').pop()?.split('?')[0] || 'jpg';
-            const fileUri = FileSystem.documentDirectory + `tama_${work.id}.${extension}`;
+            const fileUri = FileSystem.documentDirectory + `bey3a_${work.id}.${extension}`;
 
             const { uri } = await FileSystem.downloadAsync(url, fileUri);
             await MediaLibrary.createAssetAsync(uri);
@@ -1035,7 +1035,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                             </View>
                         )}
                         <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }}>
-                            {ad.brandName ? (typeof ad.brandName === 'object' ? (ad.brandName[language] || ad.brandName.en) : ad.brandName).toUpperCase() : 'TAMA CLOTHING'}
+                            {ad.brandName ? (typeof ad.brandName === 'object' ? (ad.brandName[language] || ad.brandName.en) : ad.brandName).toUpperCase() : 'BEY3A'}
                         </Text>
                     </View>
 

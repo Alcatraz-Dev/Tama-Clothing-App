@@ -33,7 +33,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const loadCart = async () => {
             try {
-                const savedCart = await AsyncStorage.getItem('@tama_cart');
+                const savedCart = await AsyncStorage.getItem('@bey3a_cart');
                 if (savedCart) {
                     const parsed = JSON.parse(savedCart);
                     if (Array.isArray(parsed)) {
@@ -55,7 +55,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const saveCart = async () => {
             try {
-                await AsyncStorage.setItem('@tama_cart', JSON.stringify(cart));
+                await AsyncStorage.setItem('@bey3a_cart', JSON.stringify(cart));
                 // Update widgets with real data
                 WidgetManager.getInstance().refreshWidget(WidgetType.CART, WidgetSize.MEDIUM).catch(console.error);
                 WidgetManager.getInstance().refreshWidget(WidgetType.CART, WidgetSize.LARGE).catch(console.error);

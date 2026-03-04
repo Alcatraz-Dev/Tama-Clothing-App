@@ -180,7 +180,7 @@ export default function ProductCard({
               style={styles.heroBrandName}
               numberOfLines={1}
             >
-              {product.brandName || "TAMA"}
+              {product.brandName || "BEY3A"}
             </Text>
             <Text
               variant="title"
@@ -291,7 +291,7 @@ export default function ProductCard({
               variant="caption"
               style={{ color: textMutedColor, letterSpacing: 0.5 }}
             >
-              {String(getName(product.brandName) || "TAMA").toUpperCase()}
+              {String(getName(product.brandName) || "BEY3A").toUpperCase()}
             </Text>
             <Text
               variant="subtitle"
@@ -423,7 +423,7 @@ export default function ProductCard({
             style={styles.modernBrandName}
             numberOfLines={1}
           >
-            {String(getName(product.brandName) || "TAMA").toUpperCase()}
+            {String(getName(product.brandName) || "BEY3A").toUpperCase()}
           </Text>
           <Text
             variant="subtitle"

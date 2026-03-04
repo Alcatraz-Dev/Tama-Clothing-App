@@ -143,7 +143,7 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                                         style={[styles.qrWrapper, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
                                     >
                                         <QRCode
-                                            value={`tama-clothing://collab/${collab.id}`}
+                                            value={`bey3a-app://collab/${collab.id}`}
                                             size={BADGE_WIDTH * 0.4}
                                             backgroundColor="transparent"
                                             color={isDark ? '#FFF' : '#000'}
@@ -298,8 +298,8 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                     onPress={async () => {
                         try {
                             await Share.share({
-                                message: `Check out this collaboration: ${getName(collab.name)}\n\ntama-clothing://collab/${collab.id}`,
-                                url: `tama-clothing://collab/${collab.id}`
+                                message: `Check out this collaboration: ${getName(collab.name)}\n\nbey3a-app://collab/${collab.id}`,
+                                url: `bey3a-app://collab/${collab.id}`
                             });
                         } catch (error) {
                             console.error('Error sharing:', error);

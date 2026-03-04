@@ -1625,7 +1625,7 @@ export default function AudienceLiveScreen(props: Props) {
                     inRoomChatConfig: {
                         itemBuilder: (message: any) => {
                             const senderName = message.sender.userName || 'Viewer';
-                            const isHostMsg = senderName.includes('Host') || senderName === 'Tama Clothing';
+                            const isHostMsg = senderName.includes('Host') || senderName === 'Bey3a';
 
                             return (
                                 <View style={{
@@ -2717,7 +2717,7 @@ export default function AudienceLiveScreen(props: Props) {
 
                 {/* Share Button - TikTok Style Glass */}
                 <TouchableOpacity
-                    onPress={() => Share.share({ message: `Watch my live stream on Tama!` })}
+                    onPress={() => Share.share({ message: `Watch my live stream on Bey3a!` })}
                     style={{
                         width: 37,
                         height: 37,

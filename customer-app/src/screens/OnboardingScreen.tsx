@@ -43,7 +43,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
     };
 
     const handleFinish = () => {
-        AsyncStorage.setItem('tama_onboarding_seen', 'true');
+        AsyncStorage.setItem('bey3a_onboarding_seen', 'true');
         onFinish();
     };
 
@@ -139,7 +139,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
                         elevation: 10
                     }}
                 >
-                    <Text style={{ color: '#000',  fontSize: 15, fontWeight: '800', letterSpacing: 1 }}>
+                    <Text style={{ color: '#000', fontSize: 15, fontWeight: '800', letterSpacing: 1 }}>
                         {currentIndex === slides.length - 1 ? t('onboardGetStarted') : t('onboardNext')}
                     </Text>
                     <ArrowRight size={20} color="#000" strokeWidth={3} style={{ marginLeft: 10 }} />

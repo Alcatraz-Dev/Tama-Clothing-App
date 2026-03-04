@@ -1,17 +1,23 @@
+/**
+ * OrderTrackingActivity - Platform router
+ *
+ * On iOS  → returns the LiveActivityFactory from expo-widgets
+ *           (factory.start(props) → LiveActivity instance)
+ *           (instance.update(props) / instance.end('immediate'))
+ *
+ * On Android / Expo Go → returns null (use WidgetManager directly)
+ */
 import { Platform } from 'react-native';
 
-export interface ActivityHandle {
-    start: (props: any) => Promise<void>;
-    update: (props: any) => Promise<void>;
-    stop: () => Promise<void>;
-    stopAll: () => Promise<void>;
-    getActivities: () => Promise<any[]>;
-}
+let OrderTrackingActivity: any = null;
 
-const OrderTrackingActivity: ActivityHandle | null = Platform.select({
-    ios: require('./OrderTrackingActivity.ios').default,
-    android: require('./OrderTrackingActivity.android').default,
-    default: null,
-});
+try {
+    if (Platform.OS === 'ios') {
+        OrderTrackingActivity = require('./OrderTrackingActivity.ios').default;
+    }
+} catch (e) {
+    // Expo Go or module unavailable — silently ignore
+    console.log('[OrderTrackingActivity] iOS Live Activity not available:', e);
+}
 
 export default OrderTrackingActivity;

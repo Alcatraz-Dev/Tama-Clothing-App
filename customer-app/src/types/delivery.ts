@@ -4,7 +4,9 @@ export type DeliveryStatus =
   | 'accepted'          // Driver accepted the order
   | 'picked_up'         // Driver picked up the order
   | 'in_transit'        // Driver is on the way
+  | 'out_for_delivery'  // Driver is out for delivery
   | 'delivered'         // Order delivered successfully
+  | 'returned'          // Order returned
   | 'cancelled';        // Order cancelled
 
 // Delivery order interface
@@ -56,8 +58,44 @@ export interface DeliveryOrder {
   totalAmount: number;
 
   // Route info
-  estimatedDistance?: number;  // in kilometers
-  estimatedDuration?: number;  // in minutes
+  estimatedDistance?: number;      // in kilometers
+  estimatedDuration?: number;      // in minutes
+  estimatedDeliveryTime?: string;  // ISO date string
+
+  // Legacy alias – some screens use deliveryLocation instead of driverLocation
+  deliveryLocation?: {
+    latitude: number;
+    longitude: number;
+    heading?: number;
+    speed?: number;
+    timestamp: Date;
+  };
+
+  // Optional extended info
+  receiverName?: string;
+  receiverPhone?: string;
+  senderName?: string;
+  senderPhone?: string;
+  senderAddress?: string;
+  items?: any[];
+  weight?: number;
+  priority?: string;
+  senderId?: string;
+  timeWindow?: {
+    start: string;
+    end: string;
+  };
+  pricing?: {
+    basePrice: number;
+    distancePrice: number;
+    timeWindowCost: number;
+    priorityCost: number;
+    total: number;
+  };
+  rating?: {
+    stars: number;
+    comment: string;
+  };
 }
 
 // Driver location update
@@ -101,16 +139,32 @@ export const DEFAULT_TIME_WINDOWS: TimeWindow[] = [
   { id: 'evening', label: 'Evening (5PM-9PM)', startTime: '17:00', endTime: '21:00', price: 5 },
 ];
 
-// Driver interface
 export interface Driver {
   id: string;
-  name: string;
+  uid?: string;
+  name?: string;
+  fullName?: string;
+  email?: string;
   phone: string;
   photoUrl?: string;
+  profileImage?: string;
   vehicleType?: string;
+  vehicleCapacity?: number;
   rating?: number;
   isOnline?: boolean;
+  status?: 'online' | 'offline' | 'busy';
   currentLocation?: Coordinates;
+  serviceAreas?: string[];
+  metrics?: {
+    completedDeliveries: number;
+    averageRating: number;
+    onTimeRate: number;
+    weeklyDeliveries: number;
+    monthlyDeliveries: number;
+    totalEarnings: number;
+    totalDistanceKm: number;
+    currentStreak?: number;
+  };
 }
 
 // GeoPoint for Firestore
@@ -210,10 +264,23 @@ export const getDeliveryStatusColor = (status: DeliveryStatus): string => {
     case 'accepted': return '#5856D6';   // Purple
     case 'picked_up': return '#007AFF';  // Blue
     case 'in_transit': return '#FF2D55'; // Pink/Red
+    case 'out_for_delivery': return '#FF2D55'; // Pink/Red
     case 'delivered': return '#34C759';  // Green
+    case 'returned': return '#FF9500';   // Orange
     case 'cancelled': return '#FF3B30';  // Red
     default: return '#8E8E93';          // Gray
   }
+};
+
+export const DELIVERY_STATUS_COLORS: Record<DeliveryStatus, string> = {
+  pending: '#F59E0B',
+  accepted: '#3B82F6',
+  picked_up: '#8B5CF6',
+  in_transit: '#06B6D4',
+  out_for_delivery: '#10B981',
+  delivered: '#10B981',
+  returned: '#F59E0B',
+  cancelled: '#EF4444',
 };
 
 // Delivery status labels (multilingual)
@@ -224,7 +291,9 @@ export const getDeliveryStatusLabel = (status: DeliveryStatus, language: string 
       accepted: 'Driver Assigned',
       picked_up: 'Picked Up',
       in_transit: 'In Transit',
+      out_for_delivery: 'Out for Delivery',
       delivered: 'Delivered',
+      returned: 'Returned',
       cancelled: 'Cancelled',
     },
     fr: {
@@ -232,7 +301,9 @@ export const getDeliveryStatusLabel = (status: DeliveryStatus, language: string 
       accepted: 'Chauffeur assigné',
       picked_up: 'Retiré',
       in_transit: 'En livraison',
+      out_for_delivery: 'En route pour la livraison',
       delivered: 'Livré',
+      returned: 'Retourné',
       cancelled: 'Annulé',
     },
     ar: {
@@ -240,7 +311,9 @@ export const getDeliveryStatusLabel = (status: DeliveryStatus, language: string 
       accepted: 'السائق تم',
       picked_up: 'تم الاستلام',
       in_transit: 'في الطريق',
+      out_for_delivery: 'في التوصيل',
       delivered: 'تم التوصيل',
+      returned: 'تم الإرجاع',
       cancelled: 'ملغى',
     },
   };

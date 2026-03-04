@@ -141,7 +141,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
             });
 
             // Resolve Brand Details
-            let finalSenderName = profileData?.brandName || 'TAMA LOGISTICS';
+            let finalSenderName = profileData?.brandName || 'BEY3A LOGISTICS';
             let finalSenderAddress = 'Tunis, Tunisie 1000';
             let finalSenderPhone = '+216 71 000 000';
             let finalLogoUrl = undefined;
@@ -174,7 +174,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                 items: itemsList,
                 weight: 'Inconnu',
                 serviceType: 'Livraison standard',
-                carrierName: 'Tama Logistics',
+                carrierName: 'Bey3a Logistics',
                 carrierPhone: '+216 71 000 000',
                 totalPrice: selectedOrder.total,
                 shippingPrice: 7,
@@ -231,7 +231,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                         const productSize = firstItem?.selectedSize || '';
                         const productColor = firstItem?.selectedColor || '';
                         const productImage = firstItem?.mainImage || firstItem?.image || '';
-                        
+
                         return (
                             <TouchableOpacity
                                 onPress={() => setSelectedOrder(item)}
@@ -244,14 +244,14 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                                         {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : ''}
                                     </Text>
                                 </View>
-                                
+
                                 {/* Product Preview - Show first product with image, name, size, color */}
                                 {firstItem && (
                                     <View style={[sc.productPreview, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F8F8FA' }]}>
                                         {productImage ? (
-                                            <Image 
-                                                source={{ uri: productImage }} 
-                                                style={[sc.productPreviewImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]} 
+                                            <Image
+                                                source={{ uri: productImage }}
+                                                style={[sc.productPreviewImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}
                                             />
                                         ) : (
                                             <View style={[sc.productPreviewImage, sc.productPlaceholder, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}>
@@ -283,7 +283,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                                         )}
                                     </View>
                                 )}
-                                
+
                                 <View style={sc.orderCardBottom}>
                                     <Text style={[sc.orderMeta, { color: colors.textMuted }]}>
                                         {customer.fullName} • {item.total} TND

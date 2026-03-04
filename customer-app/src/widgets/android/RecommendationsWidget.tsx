@@ -96,7 +96,7 @@ export const RecommendationsWidget = ({ products = [], size = 'MEDIUM', isDark =
                     }}
                 >
                     <TextWidget
-                        text="FOR YOU"
+                        text="BEY3A REC"
                         style={{ color: '#ffffff', fontSize: 8, fontWeight: '900' }}
                     />
                 </FlexWidget>

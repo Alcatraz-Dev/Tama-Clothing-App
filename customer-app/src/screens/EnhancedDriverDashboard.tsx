@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,15 @@ import {
     Switch,
     Modal,
     ScrollView,
+    Platform,
+    Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn, FadeInDown, SlideInRight, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { BlurView } from 'expo-blur';
+import * as Animatable from 'react-native-animatable';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     Truck,
     MapPin,
@@ -18,10 +26,13 @@ import {
     CheckCircle2,
     Navigation,
     QrCode,
+    Trophy,
+    ShoppingBag,
     Package,
     ArrowLeft,
     Power,
     Clock,
+    X,
     Star,
     Zap,
     Route,
@@ -32,7 +43,23 @@ import {
     PackageCheck,
     Timer,
     MapPinned,
+    Flame,
+    BarChart3,
+    ArrowUpRight,
+    ArrowDownRight,
+    LineChart as LineChartIcon,
+    PieChart,
+    Activity,
+    RotateCcw
 } from 'lucide-react-native';
+import Svg, {
+    Path,
+    Circle as CircleSvg,
+    Defs,
+    Stop,
+    G,
+    LinearGradient as LinearGradientSvg
+} from 'react-native-svg';
 import { useAppTheme } from '../context/ThemeContext';
 import { db, rtdb } from '../api/firebase';
 import {
@@ -85,13 +112,258 @@ export default function EnhancedDriverDashboard({
     const [loading, setLoading] = useState(true);
     const [activeDeliveryId, setActiveDeliveryId] = useState<string | null>(null);
     const [showStatusModal, setShowStatusModal] = useState(false);
+    const [showMap, setShowMap] = useState(false);
+    const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+    const insets = useSafeAreaInsets();
 
 
     const translate = t || ((k: string) => k);
 
+    const tr = (fr: string, ar: string, en: string) => {
+        return language === 'ar' ? ar : (language === 'fr' ? fr : en);
+    };
+
     useEffect(() => {
         initDriver();
     }, [user?.uid]);
+
+    const computedMetrics = useMemo(() => {
+        const delivered = myDeliveries.filter(d => d.status === 'delivered');
+        const cancelled = myDeliveries.filter(d => d.status === 'cancelled');
+        const returnedCount = myDeliveries.filter(d => d.status === 'returned').length;
+        const inProgress = myDeliveries.filter(d => !['delivered', 'cancelled', 'returned'].includes(d.status));
+
+        const totalEarnings = delivered.reduce((sum, d) => sum + (d.pricing?.total || 0), 0);
+        const totalDistance = delivered.reduce((sum, d) => sum + (d.estimatedDistance || 0), 0);
+
+        // Group by day of week (Mon-Sun: 0-6)
+        const revenueByDay = [0, 0, 0, 0, 0, 0, 0];
+        const kmByDay = [0, 0, 0, 0, 0, 0, 0];
+        const productCounts: Record<string, number> = {};
+
+        delivered.forEach(d => {
+            if (d.deliveredAt) {
+                const date = new Date(d.deliveredAt);
+                // getDay() is 0 (Sun) to 6 (Sat)
+                // We want 0 (Mon) to 6 (Sun)
+                const day = date.getDay();
+                const index = day === 0 ? 6 : day - 1;
+                if (index >= 0 && index < 7) {
+                    revenueByDay[index] += d.pricing?.total || 0;
+                    kmByDay[index] += d.estimatedDistance || 0;
+                }
+            }
+
+            // Product analytics
+            if (d.items && Array.isArray(d.items)) {
+                d.items.forEach((item: any) => {
+                    const name = typeof item === 'string' ? item : (item.name || 'Unknown');
+                    productCounts[name] = (productCounts[name] || 0) + (item.quantity || 1);
+                });
+            }
+        });
+
+        const topProducts = Object.entries(productCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name, count]) => ({ name, count }));
+
+        const ratings = delivered.filter(d => d.rating?.stars).map(d => d.rating!.stars);
+        const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b) / ratings.length : 5.0;
+
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+
+        return {
+            deliveredCount: delivered.length,
+            cancelledCount: cancelled.length,
+            returnedCount,
+            inProgressCount: inProgress.length,
+            totalEarnings,
+            totalDistance,
+            avgRating,
+            revenueByDay,
+            kmByDay,
+            topProducts,
+            todayIndex,
+            currentStreak: driverData?.metrics?.currentStreak || 0
+        };
+    }, [myDeliveries, driverData?.metrics]);
+
+    const PerformanceRing = () => {
+        const { deliveredCount, cancelledCount, returnedCount } = computedMetrics;
+        const total = deliveredCount + cancelledCount + returnedCount || 0.001;
+        const successRate = (deliveredCount / total) * 100;
+
+        const size = Dimensions.get('window').width - 120;
+        const radius = size / 2;
+        const strokeWidth = 15;
+        const normalizedRadius = radius - strokeWidth / 2;
+        const circumference = normalizedRadius * 2 * Math.PI;
+        const strokeDashoffset = circumference - (successRate / 100) * circumference;
+
+        return (
+            <View style={[styles.gaugeContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
+                <View style={styles.gaugeHeader}>
+                    <Trophy size={20} color="#FFB800" />
+                    <Text style={[styles.chartTitle, { color: colors.foreground, marginLeft: 10 }]}>{tr('Taux de succès', 'معدل النجاح', 'Success Rate')}</Text>
+                </View>
+                <View style={{ alignItems: 'center', marginTop: 10 }}>
+                    <Svg height={size / 2 + 20} width={size}>
+                        <G rotation="-90" origin={`${radius}, ${radius}`}>
+                            <CircleSvg
+                                cx={radius}
+                                cy={radius}
+                                r={normalizedRadius}
+                                stroke={colors.border}
+                                strokeWidth={strokeWidth}
+                                fill="transparent"
+                                strokeDasharray={`${circumference} ${circumference}`}
+                                strokeDashoffset={circumference / 2}
+                                strokeLinecap="round"
+                            />
+                            <CircleSvg
+                                cx={radius}
+                                cy={radius}
+                                r={normalizedRadius}
+                                stroke="#10B981"
+                                strokeWidth={strokeWidth}
+                                fill="transparent"
+                                strokeDasharray={`${circumference} ${circumference}`}
+                                strokeDashoffset={circumference - (successRate / 100) * (circumference / 2)}
+                                strokeLinecap="round"
+                            />
+                        </G>
+                    </Svg>
+                    <View style={{ position: 'absolute', bottom: 10, width: '100%', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 32, fontWeight: '900', color: colors.foreground }}>{Math.round(successRate)}%</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '700' }}>{tr('Score Global', 'النتيجة الإجمالية', 'Overall Score')}</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
+    const LineChart = () => {
+        const points = computedMetrics.revenueByDay.map(v => Math.max(0, Math.min(v * (100 / (Math.max(...computedMetrics.revenueByDay, 1) + 1)), 100)));
+        const width = Dimensions.get('window').width - 80;
+        const height = 100;
+
+        return (
+            <View style={[styles.chartContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
+                <View style={styles.chartHeader}>
+                    <View>
+                        <Text style={[styles.chartTitle, { color: colors.foreground }]}>{tr('Tendance Revenus', 'اتجاه الأرباح', 'Revenue Trend')}</Text>
+                        <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>{tr('Semaine actuelle', 'الأسبوع الحالي', 'Current Week')}</Text>
+                    </View>
+                    <LineChartIcon size={20} color={colors.accent} />
+                </View>
+                <View style={{ height, width, marginTop: 20 }}>
+                    <Svg height="100%" width="100%" viewBox={`0 0 ${width} 100`}>
+                        <Defs>
+                            <LinearGradientSvg id="grad" x1="0" y1="0" x2="0" y2="1">
+                                <Stop offset="0" stopColor={colors.accent} stopOpacity="0.3" />
+                                <Stop offset="1" stopColor={colors.accent} stopOpacity="0" />
+                            </LinearGradientSvg>
+                        </Defs>
+                        <Path
+                            d={`M ${points.map((p, i) => `${(i * (width / (points.length - 1)))} ${100 - p}`).join(' L ')}`}
+                            fill="none"
+                            stroke={colors.accent}
+                            strokeWidth="3"
+                        />
+                        <Path
+                            d={`M 0 100 L ${points.map((p, i) => `${(i * (width / (points.length - 1)))} ${100 - p}`).join(' L ')} L ${width} 100 Z`}
+                            fill="url(#grad)"
+                        />
+                        {points.map((p, i) => (
+                            <CircleSvg key={i} cx={(i * (width / (points.length - 1)))} cy={100 - p} r="3" fill={colors.accent} />
+                        ))}
+                    </Svg>
+                </View>
+            </View>
+        );
+    };
+
+    const ActivityBreakdown = () => {
+        const { deliveredCount, inProgressCount, cancelledCount, returnedCount } = computedMetrics;
+        const total = (deliveredCount || 0) + (inProgressCount || 0) + (cancelledCount || 0) + (returnedCount || 0) || 1;
+
+        const segments = [
+            { count: deliveredCount, color: '#10B981', label: tr('Livré', 'تم التوصيل', 'Delivered') },
+            { count: inProgressCount, color: '#3B82F6', label: tr('En cours', 'قيد التنفيذ', 'In Progress') },
+            { count: returnedCount, color: '#F59E0B', label: tr('Retourné', 'تم الإرجاع', 'Returned') },
+            { count: cancelledCount, color: '#EF4444', label: tr('Annulée', 'ملغاة', 'Cancelled') }
+        ];
+
+        return (
+            <View style={[styles.breakdownCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF', padding: 20 }]}>
+                <Text style={[styles.chartTitle, { color: colors.foreground, marginBottom: 20 }]}>
+                    {tr('Répartition de l\'activité', 'توزيع النشاط', 'Activity Breakdown')}
+                </Text>
+                <View style={[styles.multiProgressBar, { height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 20 }]}>
+                    {segments.map((seg, i) => (
+                        <View
+                            key={i}
+                            style={{
+                                flex: (seg.count || 0) + 0.01,
+                                backgroundColor: seg.color,
+                                height: '100%'
+                            }}
+                        />
+                    ))}
+                </View>
+                <View style={{ gap: 12 }}>
+                    {segments.map((seg, i) => (
+                        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: seg.color }} />
+                                <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>{seg.label}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ color: colors.foreground, fontWeight: '800', fontSize: 14 }}>{seg.count}</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                                    ({Math.round(((seg.count || 0) / total) * 100)}%)
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            </View>
+        );
+    };
+
+    const KMHistory = () => {
+        const data = computedMetrics.kmByDay;
+        const max = Math.max(...data, 10);
+        const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+        const today = new Date().getDay();
+        const todayIndex = today === 0 ? 6 : today - 1;
+        const distanceToday = data[todayIndex] || 0;
+
+        return (
+            <View style={[styles.chartContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
+                <View style={[styles.chartHeader, { marginBottom: 15 }]}>
+                    <View>
+                        <Text style={[styles.chartTitle, { color: colors.foreground }]}>{tr('Activités (KM)', 'النشاط (كم)', 'Activity (KM)')}</Text>
+                        <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>{tr('Aujourd\'hui', 'اليوم', 'Today')}: {distanceToday.toFixed(1)} km</Text>
+                    </View>
+                    <Activity size={20} color="#8B5CF6" />
+                </View>
+                <View style={[styles.chartContent, { height: 80 }]}>
+                    {data.map((val, i) => (
+                        <View key={i} style={styles.chartBarWrapper}>
+                            <View style={[styles.chartBarBackground, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
+                                <View style={[styles.chartBarFill, { height: `${(val / max) * 100}%` as any, backgroundColor: '#8B5CF6' }]} />
+                            </View>
+                            <Text style={[styles.chartDayText, { color: colors.textMuted }]}>{days[i]}</Text>
+                        </View>
+                    ))}
+                </View>
+            </View>
+        );
+    };
 
     useEffect(() => {
         if (!driverData?.id) return;
@@ -121,12 +393,34 @@ export default function EnhancedDriverDashboard({
         }
     }, [isOnline, driverData?.id]);
 
+    useEffect(() => {
+        if (!currentLocation || !isOnline || !driverData?.id) return;
+
+        const activeTypes = ['accepted', 'picked_up', 'in_transit'];
+        myDeliveries.forEach(delivery => {
+            if (activeTypes.includes(delivery.status)) {
+                deliveryService.updateDriverLocation(
+                    delivery.id,
+                    {
+                        latitude: currentLocation.latitude,
+                        longitude: currentLocation.longitude,
+                        heading: (currentLocation as any).heading || 0,
+                        speed: (currentLocation as any).speed || 0,
+                    },
+                    driverData.id,
+                    delivery.trackingId
+                ).catch(err => console.log('Failed to update tracking location:', err));
+            }
+        });
+    }, [currentLocation, isOnline, driverData?.id]); // Note: leaving myDeliveries out on purpose to avoid re-triggering just on status update, but it's safe if it changes slowly OR we can include it. Actually, letting it be out is fine, it will use the latest state if we use a ref or just let it update when location changes.
+
+
     const initDriver = async () => {
         if (!user?.uid) return;
 
         try {
             const driversQuery = query(
-                collection(db, 'Drivers'),
+                collection(db, 'drivers'),
                 where('uid', '==', user.uid),
                 limit(1)
             );
@@ -150,7 +444,7 @@ export default function EnhancedDriverDashboard({
                     serviceAreas: [profileData?.city || 'Tunis'],
                 });
 
-                const newDriverDoc = await getDoc(doc(db, 'Drivers', newDriverId));
+                const newDriverDoc = await getDoc(doc(db, 'drivers', newDriverId));
                 setDriverData({ id: newDriverId, ...newDriverDoc.data() } as Driver);
             }
         } catch (error) {
@@ -235,7 +529,12 @@ export default function EnhancedDriverDashboard({
         if (!driverData?.id) return;
 
         try {
-            await deliveryService.acceptDelivery(driverData.id, delivery.id);
+            await deliveryService.acceptDelivery(
+                delivery.id,
+                driverData.id,
+                driverData.fullName || driverData.name || 'Driver',
+                driverData.phone || ''
+            );
             Alert.alert(t('success'), t('deliveryAccepted') || 'Delivery accepted!');
             setActiveTab('my_deliveries');
         } catch (error: any) {
@@ -259,19 +558,20 @@ export default function EnhancedDriverDashboard({
         onOpenProof(delivery);
     };
 
-    const handleOpenMap = (address: string) => {
-        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-        require('react-native').Linking.openURL(url);
+    const handleOpenMap = (delivery: Delivery) => {
+        setSelectedDelivery(delivery);
+        setShowMap(true);
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'pending': return '#F59E0B';
-            case 'assigned': return '#3B82F6';
+            case 'accepted': return '#3B82F6';
             case 'in_transit': return '#8B5CF6';
             case 'out_for_delivery': return '#06B6D4';
             case 'delivered': return '#10B981';
             case 'cancelled': return '#EF4444';
+            case 'returned': return '#6366F1';
             default: return '#6B7280';
         }
     };
@@ -279,12 +579,13 @@ export default function EnhancedDriverDashboard({
     const getStatusLabel = (status: string) => {
         const labels: Record<string, string> = {
             pending: t('statusPending') || 'Pending',
-            assigned: t('statusAssigned') || 'Assigned',
+            accepted: t('statusAccepted') || 'Accepted',
             picked_up: t('statusPickedUp') || 'Picked Up',
             in_transit: t('statusInTransit') || 'In Transit',
             out_for_delivery: t('statusOutForDelivery') || 'Out for Delivery',
             delivered: t('statusDelivered') || 'Delivered',
             cancelled: t('statusCancelled') || 'Cancelled',
+            returned: tr('Retourné', 'مرتجع', 'Returned'),
         };
         return labels[status] || status;
     };
@@ -315,16 +616,26 @@ export default function EnhancedDriverDashboard({
                     <View style={styles.infoRow}>
                         <MapPin size={20} color={colors.accent} />
                         <View style={styles.infoCol}>
-                            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{translate('receiver')}</Text>
-                            <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.receiverName}</Text>
-                            <Text style={[styles.infoSubValue, { color: colors.textMuted }]}>{item.deliveryAddress}</Text>
+                            {item.status === 'pending' || item.status === 'accepted' ? (
+                                <>
+                                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{translate('pickupFrom') || 'Pickup From'}</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.storeName || item.senderName || 'Store'}</Text>
+                                    <Text style={[styles.infoSubValue, { color: colors.textMuted }]}>{item.pickupAddress || item.senderAddress || 'N/A'}</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{translate('deliverTo') || 'Deliver To'}</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{item.receiverName}</Text>
+                                    <Text style={[styles.infoSubValue, { color: colors.textMuted }]}>{item.deliveryAddress}</Text>
+                                </>
+                            )}
                         </View>
                     </View>
 
                     <View style={styles.infoRow}>
                         <Phone size={20} color={colors.accent} />
                         <Text style={[styles.infoValue, { color: colors.foreground }]}>
-                            {activeTab === 'available' ? '********' : item.receiverPhone}
+                            {activeTab === 'available' ? '********' : (item.status === 'pending' || item.status === 'accepted' ? (item.senderPhone || 'N/A') : item.receiverPhone)}
                         </Text>
                     </View>
 
@@ -370,7 +681,7 @@ export default function EnhancedDriverDashboard({
                         <>
                             <TouchableOpacity
                                 style={[styles.actionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flex: 1 }]}
-                                onPress={() => handleOpenMap(item.deliveryAddress)}
+                                onPress={() => handleOpenMap(item)}
                             >
                                 <Navigation size={18} color={colors.foreground} />
                                 <Text style={[styles.actionBtnText, { color: colors.foreground, marginLeft: 6 }]}>
@@ -378,7 +689,7 @@ export default function EnhancedDriverDashboard({
                                 </Text>
                             </TouchableOpacity>
 
-                            {(item.status === 'assigned' || item.status === 'pending') && (
+                            {(item.status === 'accepted' || item.status === 'pending') && (
                                 <TouchableOpacity
                                     style={[styles.actionBtn, { backgroundColor: '#3B82F6', flex: 1, marginLeft: 8 }]}
                                     onPress={() => handleStartDelivery(item)}
@@ -415,90 +726,180 @@ export default function EnhancedDriverDashboard({
         );
     };
 
-    const renderStats = () => {
-        const metrics = driverData?.metrics;
+    const StatCard = ({ label, value, icon: Icon, color, trend, style }: any) => (
+        <Animated.View
+            entering={FadeInDown.delay(200)}
+            style={[styles.premiumStatCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }, style]}
+        >
+            <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
+                <Icon size={20} color={color} />
+            </View>
+            <Text style={[styles.statValueText, { color: colors.foreground }]}>{value}</Text>
+            <Text style={[styles.statLabelText, { color: colors.textMuted }]}>{label}</Text>
+            {trend && (
+                <View style={styles.trendContainer}>
+                    {trend > 0 ? <ArrowUpRight size={12} color="#10B981" /> : <ArrowDownRight size={12} color="#EF4444" />}
+                    <Text style={[styles.trendText, { color: trend > 0 ? '#10B981' : '#EF4444' }]}>
+                        {Math.abs(trend)}%
+                    </Text>
+                </View>
+            )}
+        </Animated.View>
+    );
+
+    const RevenueChart = () => {
+        const data = computedMetrics.revenueByDay;
+        const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        const max = Math.max(...data, 10);
 
         return (
-            <ScrollView style={styles.statsContainer}>
-                <View style={styles.statsGrid}>
-                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <PackageCheck size={24} color="#10B981" />
-                        <Text style={[styles.statValue, { color: colors.foreground }]}>
-                            {metrics?.completedDeliveries || 0}
-                        </Text>
-                        <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-                            {translate('completed')}
-                        </Text>
+            <View style={[styles.chartContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
+                <View style={styles.chartHeader}>
+                    <View>
+                        <Text style={[styles.chartTitle, { color: colors.foreground }]}>{tr('Revenu hebdomadaire', 'الأرباح الأسبوعية', 'Weekly Revenue')}</Text>
+                        <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>{tr('Total', 'المجموع', 'Total')}: {computedMetrics.totalEarnings.toFixed(2)} TND</Text>
                     </View>
+                    <BarChart3 size={20} color={colors.accent} />
+                </View>
+                <View style={styles.chartContent}>
+                    {data.map((val, i) => (
+                        <View key={i} style={styles.chartBarWrapper}>
+                            <View style={styles.chartBarBackground}>
+                                <Animated.View
+                                    entering={FadeInDown.delay(i * 100)}
+                                    style={[
+                                        styles.chartBarFill,
+                                        {
+                                            height: `${(val / max) * 100}%` as any,
+                                            backgroundColor: colors.accent
+                                        }
+                                    ]}
+                                >
+                                    <LinearGradient
+                                        colors={[colors.accent, colors.accent + '99']}
+                                        style={StyleSheet.absoluteFill}
+                                    />
+                                </Animated.View>
+                            </View>
+                            <Text style={[styles.chartDayText, { color: colors.textMuted }]}>{days[i]}</Text>
+                        </View>
+                    ))}
+                </View>
+            </View>
+        );
+    };
 
-                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <TrendingUp size={24} color="#3B82F6" />
-                        <Text style={[styles.statValue, { color: colors.foreground }]}>
-                            {metrics?.onTimeRate?.toFixed(0) || 100}%
-                        </Text>
-                        <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-                            {translate('onTime')}
-                        </Text>
-                    </View>
+    const renderStats = () => {
+        const metrics = computedMetrics;
 
-                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Star size={24} color="#F59E0B" />
-                        <Text style={[styles.statValue, { color: colors.foreground }]}>
-                            {metrics?.averageRating?.toFixed(1) || '5.0'}
-                        </Text>
-                        <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-                            {translate('rating')}
+        return (
+            <ScrollView
+                style={styles.statsContainer}
+                contentContainerStyle={{ paddingBottom: 120 }}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Header Stats */}
+                <LinearGradient
+                    colors={theme === 'dark' ? ['#2C2C2E', '#1C1C1E'] : ['#F9F9FB', '#FFFFFF']}
+                    style={styles.mainEarningsCard}
+                >
+                    <View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF2D55' }} />
+                            <Text style={[styles.totalEarningsLabel, { color: colors.textMuted, marginBottom: 0 }]}>
+                                {tr('Total cumulé', 'المجموع التراكمي', 'Total Earnings')} (LIVE)
+                            </Text>
+                        </View>
+                        <Text style={[styles.totalEarningsValue, { color: colors.foreground }]}>
+                            {metrics.totalEarnings.toFixed(2)} <Text style={{ fontSize: 18 }}>TND</Text>
                         </Text>
                     </View>
+                    <View style={styles.streakBadge}>
+                        <Flame size={16} color="#FF6B00" />
+                        <Text style={styles.streakText}>{metrics.currentStreak} {tr('Jours', 'أيام', 'Days')}</Text>
+                    </View>
+                </LinearGradient>
 
-                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <Zap size={24} color="#8B5CF6" />
-                        <Text style={[styles.statValue, { color: colors.foreground }]}>
-                            {metrics?.currentStreak || 0}
-                        </Text>
-                        <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-                            {translate('streak')}
-                        </Text>
-                    </View>
+                {/* Performance Summary Grid */}
+                <View style={styles.newStatsGrid}>
+                    <StatCard
+                        label={tr('Livraisons', 'التوصيلات', 'Deliveries')}
+                        value={metrics.deliveredCount}
+                        icon={PackageCheck}
+                        color="#10B981"
+                    />
+                    <StatCard
+                        label={tr('Retournés', 'المرجعات', 'Returns')}
+                        value={metrics.returnedCount}
+                        icon={RotateCcw}
+                        color="#F59E0B"
+                    />
+                    <StatCard
+                        label={tr('Annulée', 'ملغاة', 'Cancelled')}
+                        value={metrics.cancelledCount}
+                        icon={X}
+                        color="#EF4444"
+                    />
+                    <StatCard
+                        label={tr('KM aujourd\'hui', 'كم اليوم', 'Daily KM')}
+                        value={`${metrics.kmByDay[metrics.todayIndex].toFixed(1)} km`}
+                        icon={Route}
+                        color="#8B5CF6"
+                    />
+                    <StatCard
+                        label={tr('Note', 'تقييم', 'Rating')}
+                        value={metrics.avgRating.toFixed(1)}
+                        icon={Star}
+                        color="#FAB005"
+                        style={{ width: '100%' }}
+                    />
                 </View>
 
-                <View style={[styles.statsDetailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[styles.statsDetailTitle, { color: colors.foreground }]}>
-                        {translate('weeklyStats')}
-                    </Text>
-                    <View style={styles.statsDetailRow}>
-                        <Text style={[styles.statsDetailLabel, { color: colors.textMuted }]}>
-                            {translate('weeklyDeliveries')}
-                        </Text>
-                        <Text style={[styles.statsDetailValue, { color: colors.foreground }]}>
-                            {metrics?.weeklyDeliveries || 0}
-                        </Text>
+                {/* Success Rate Gauge */}
+                <PerformanceRing />
+
+                {/* Top Products Analytics */}
+                <View style={[styles.chartContainer, { marginTop: 10, backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
+                    <View style={styles.chartHeader}>
+                        <View>
+                            <Text style={[styles.chartTitle, { color: colors.foreground }]}>{tr('Produits les plus livrés', 'المنتجات الأكثر توصيلاً', 'Top Products Delivered')}</Text>
+                            <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>{tr('Top 5 articles', 'أعلى 5 منتجات', 'Top 5 items')}</Text>
+                        </View>
+                        <ShoppingBag size={20} color="#3B82F6" />
                     </View>
-                    <View style={styles.statsDetailRow}>
-                        <Text style={[styles.statsDetailLabel, { color: colors.textMuted }]}>
-                            {translate('monthlyDeliveries')}
-                        </Text>
-                        <Text style={[styles.statsDetailValue, { color: colors.foreground }]}>
-                            {metrics?.monthlyDeliveries || 0}
-                        </Text>
+                    <View style={{ marginTop: 10, gap: 15 }}>
+                        {metrics.topProducts.map((p, i) => {
+                            const maxCount = metrics.topProducts[0].count;
+                            return (
+                                <View key={i}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                        <Text style={{ color: colors.foreground, fontWeight: '700', fontSize: 13, flex: 1 }} numberOfLines={1}>{p.name}</Text>
+                                        <Text style={{ color: colors.accent, fontWeight: '900', fontSize: 13 }}>{p.count}</Text>
+                                    </View>
+                                    <View style={{ height: 6, backgroundColor: colors.border + '30', borderRadius: 3, overflow: 'hidden' }}>
+                                        <View style={{ height: '100%', width: `${(p.count / maxCount) * 100}%`, backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][i % 5], borderRadius: 3 }} />
+                                    </View>
+                                </View>
+                            );
+                        })}
                     </View>
-                    <View style={styles.statsDetailRow}>
-                        <Text style={[styles.statsDetailLabel, { color: colors.textMuted }]}>
-                            {translate('totalEarnings')}
-                        </Text>
-                        <Text style={[styles.statsDetailValue, { color: colors.foreground }]}>
-                            {metrics?.totalEarnings?.toFixed(2) || '0.00'} TND
-                        </Text>
-                    </View>
-                    <View style={styles.statsDetailRow}>
-                        <Text style={[styles.statsDetailLabel, { color: colors.textMuted }]}>
-                            {translate('totalDistance')}
-                        </Text>
-                        <Text style={[styles.statsDetailValue, { color: colors.foreground }]}>
-                            {metrics?.totalDistanceKm?.toFixed(1) || 0} km
-                        </Text>
-                    </View>
+                    {metrics.topProducts.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: colors.textMuted, marginVertical: 10, fontSize: 13 }}>{tr('Aucune donnée', 'لا توجد بيانات', 'No data available yet')}</Text>
+                    )}
                 </View>
+
+                {/* Line Chart for Trends */}
+                <LineChart />
+
+                {/* Activity Visualizer (KM) */}
+                <KMHistory />
+
+                {/* Success Rate Breakdown */}
+                <ActivityBreakdown />
+
+                {/* Daily Revenue (Bar Chart) */}
+                <RevenueChart />
+
             </ScrollView>
         );
     };
@@ -533,7 +934,7 @@ export default function EnhancedDriverDashboard({
             case 'my_deliveries':
             case 'batch':
                 const activeDeliveries = myDeliveries.filter(d =>
-                    d.status !== 'delivered' && d.status !== 'cancelled'
+                    !['delivered', 'cancelled', 'returned'].includes(d.status)
                 );
                 return (
                     <FlatList
@@ -619,9 +1020,97 @@ export default function EnhancedDriverDashboard({
 
                 {renderContent()}
             </View>
+
+            <Modal visible={showMap} animationType="slide">
+                <View style={{ flex: 1, backgroundColor: '#000' }}>
+                    <MapView
+                        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                        style={StyleSheet.absoluteFill}
+                        customMapStyle={theme === 'dark' ? mapStyle : undefined}
+                        initialRegion={{
+                            latitude: currentLocation?.latitude || selectedDelivery?.pickupLatitude || selectedDelivery?.deliveryLatitude || 35.8256,
+                            longitude: currentLocation?.longitude || selectedDelivery?.pickupLongitude || selectedDelivery?.deliveryLongitude || 10.6369,
+                            latitudeDelta: 0.05,
+                            longitudeDelta: 0.05,
+                        }}
+                    >
+                        {/* Pickup/Merchant Location */}
+                        {(selectedDelivery?.status === 'accepted' || selectedDelivery?.status === 'pending') && selectedDelivery?.pickupLatitude && (
+                            <Marker coordinate={{ latitude: selectedDelivery.pickupLatitude, longitude: selectedDelivery.pickupLongitude }} title={translate('pickupLocation') || 'Pickup Location'}>
+                                <View style={[styles.driverMarker, { backgroundColor: '#F59E0B' }]}>
+                                    <MapPin size={20} color="#FFF" />
+                                </View>
+                            </Marker>
+                        )}
+
+                        {/* Driver Location */}
+                        {currentLocation && (
+                            <Marker coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }} title="You">
+                                <Animatable.View animation={(selectedDelivery?.status === 'in_transit' || selectedDelivery?.status === 'out_for_delivery') ? 'pulse' : 'bounce'} iterationCount="infinite" style={styles.driverMarker}>
+                                    <Truck size={20} color="#FFF" />
+                                </Animatable.View>
+                            </Marker>
+                        )}
+
+                        {/* Delivery Location */}
+                        {selectedDelivery?.deliveryLatitude && (
+                            <Marker coordinate={{ latitude: selectedDelivery.deliveryLatitude, longitude: selectedDelivery.deliveryLongitude }} title="Destination">
+                                <View style={[styles.driverMarker, { backgroundColor: selectedDelivery.status === 'delivered' ? '#10B981' : '#6366F1' }]}>
+                                    <Package size={20} color="#FFF" />
+                                </View>
+                            </Marker>
+                        )}
+
+                        {/* Route: From driver to delivery when in transit */}
+                        {(selectedDelivery?.status === 'in_transit' || selectedDelivery?.status === 'out_for_delivery') && currentLocation && selectedDelivery.deliveryLatitude && (
+                            <Polyline
+                                coordinates={[currentLocation, { latitude: selectedDelivery.deliveryLatitude, longitude: selectedDelivery.deliveryLongitude }]}
+                                strokeColor={selectedDelivery.status === 'out_for_delivery' ? '#10B981' : '#3B82F6'}
+                                strokeWidth={4}
+                                lineDashPattern={selectedDelivery.status === 'out_for_delivery' ? undefined : [10, 10]}
+                            />
+                        )}
+
+                        {/* Route: From driver to pickup when at pickup phase */}
+                        {selectedDelivery?.status === 'accepted' && currentLocation && selectedDelivery.pickupLatitude && (
+                            <Polyline
+                                coordinates={[currentLocation, { latitude: selectedDelivery.pickupLatitude, longitude: selectedDelivery.pickupLongitude }]}
+                                strokeColor="#F59E0B"
+                                strokeWidth={3}
+                                lineDashPattern={[6, 3]}
+                            />
+                        )}
+                    </MapView>
+
+                    <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.mapHeader}>
+                        <TouchableOpacity onPress={() => setShowMap(false)} style={[styles.closeMapBtn, { backgroundColor: isBusy ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.2)' }]}>
+                            <X color={theme === 'dark' ? '#FFF' : '#000'} size={24} />
+                        </TouchableOpacity>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.mapTitle, { color: theme === 'dark' ? '#FFF' : '#000' }]}>{translate('deliveryDetails') || 'Delivery Map'}</Text>
+                            <Text style={[styles.mapSubTitle, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }]}>{selectedDelivery?.status === 'accepted' ? (selectedDelivery.pickupAddress || selectedDelivery.senderAddress) : selectedDelivery?.deliveryAddress}</Text>
+                        </View>
+                    </BlurView>
+                </View>
+            </Modal>
         </View>
     );
 }
+
+const mapStyle = [
+    {
+        "elementType": "geometry",
+        "stylers": [{ "color": "#212121" }]
+    },
+    {
+        "elementType": "labels.icon",
+        "stylers": [{ "visibility": "off" }]
+    },
+    {
+        "elementType": "labels.text.fill",
+        "stylers": [{ "color": "#757575" }]
+    }
+];
 
 const styles = StyleSheet.create({
     container: {
@@ -788,53 +1277,240 @@ const styles = StyleSheet.create({
     },
     statsContainer: {
         flex: 1,
-        padding: 20,
+        paddingHorizontal: 20,
     },
-    statsGrid: {
+    mainEarningsCard: {
+        borderRadius: 24,
+        padding: 24,
+        marginTop: 20,
+        marginBottom: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 5,
+    },
+    totalEarningsLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    totalEarningsValue: {
+        fontSize: 32,
+        fontWeight: '900',
+    },
+    streakBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFE5D3',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 16,
+        gap: 6,
+    },
+    streakText: {
+        color: '#FF6B00',
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    newStatsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
+        marginBottom: 20,
     },
-    statCard: {
-        width: '47%',
+    premiumStatCard: {
+        width: (Dimensions.get('window').width - 52) / 2,
+        borderRadius: 20,
         padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    statIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'center',
+        marginBottom: 12,
     },
-    statValue: {
-        fontSize: 28,
+    statValueText: {
+        fontSize: 20,
         fontWeight: '900',
+        marginBottom: 4,
     },
-    statLabel: {
+    statLabelText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    trendContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        gap: 4,
+    },
+    trendText: {
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    chartContainer: {
+        padding: 20,
+        borderRadius: 24,
+        marginBottom: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    chartHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 24,
+    },
+    chartTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        marginBottom: 4,
+    },
+    chartSubtitle: {
         fontSize: 12,
         fontWeight: '600',
     },
-    statsDetailCard: {
-        marginTop: 20,
-        padding: 20,
-        borderRadius: 16,
-        borderWidth: 1,
-    },
-    statsDetailTitle: {
-        fontSize: 16,
-        fontWeight: '900',
-        marginBottom: 16,
-    },
-    statsDetailRow: {
+    chartContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
+        alignItems: 'flex-end',
+        height: 120,
+        paddingTop: 10,
     },
-    statsDetailLabel: {
-        fontSize: 14,
-        fontWeight: '500',
+    chartBarWrapper: {
+        alignItems: 'center',
+        flex: 1,
     },
-    statsDetailValue: {
-        fontSize: 14,
+    chartBarBackground: {
+        width: 12,
+        height: '100%',
+        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderRadius: 6,
+        overflow: 'hidden',
+        justifyContent: 'flex-end',
+    },
+    chartBarFill: {
+        width: '100%',
+        borderRadius: 6,
+    },
+    chartDayText: {
+        marginTop: 8,
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    targetCard: {
+        padding: 20,
+        borderRadius: 24,
+        marginBottom: 40,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    targetTitle: {
+        fontSize: 16,
         fontWeight: '800',
+        marginBottom: 16,
     },
+    targetProgressWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+    },
+    targetProgressBar: {
+        flex: 1,
+        height: 8,
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    targetProgressFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    targetPercent: {
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    targetSub: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    breakdownCard: {
+        padding: 20,
+        borderRadius: 24,
+        marginBottom: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    multiProgressBar: {
+        height: 12,
+        flexDirection: 'row',
+        borderRadius: 6,
+        overflow: 'hidden',
+        marginBottom: 15,
+    },
+    progressSegment: {
+        height: '100%',
+    },
+    legendRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    legendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    legendText: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    mapHeader: { position: 'absolute', top: 0, left: 0, right: 0, padding: 20, paddingTop: 60, flexDirection: 'row', alignItems: 'center', gap: 15 },
+    closeMapBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+    mapTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+    mapSubTitle: { fontSize: 13, fontWeight: '600' },
+    gaugeContainer: {
+        padding: 20,
+        borderRadius: 24,
+        marginBottom: 20,
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    gaugeHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        marginBottom: 10,
+    },
+    driverMarker: { width: 44, height: 44, backgroundColor: '#3B82F6', borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }
 });
