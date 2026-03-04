@@ -3,9 +3,6 @@ import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow
 import { createWidget } from 'expo-widgets';
 import type { WidgetBase } from 'expo-widgets';
 
-const BEY3A_ACCENT = '#8A2BE2';
-const RemoteImage = Image as any;
-
 const RecommendationsWidgetView = (props: WidgetBase<any>) => {
     'widget';
     const {
@@ -14,25 +11,21 @@ const RecommendationsWidgetView = (props: WidgetBase<any>) => {
         isDark = true
     } = props || {};
 
-    const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
-    const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
-    const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
-    const secondaryColor = isDark ? '#8E8E93' : '#636366';
-    const secondaryStyle = foregroundStyle(secondaryColor);
+    const BEY3A_ACCENT = '#8A2BE2';
+    const bgColor = isDark ? '#1C1C1E' : '#FFFFFF';
+    const cardBgColor = isDark ? '#2C2C2E' : '#F2F2F7';
+    const primaryColor = isDark ? '#FFFFFF' : '#1C1C1E';
+    const secondaryColor = '#8E8E93';
 
     if (family === 'systemSmall') {
         const product = products[0];
         return (
             <VStack modifiers={[frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }), background(bgColor)]}>
-                {product?.imageUrl ? (
-                    <RemoteImage source={{ uri: product.imageUrl }} modifiers={[frame({ maxWidth: 9999, height: 90 }), cornerRadius(0)]} />
-                ) : (
-                    <VStack modifiers={[frame({ maxWidth: 9999, height: 90, alignment: 'center' }), background(cardBgColor)]}>
-                        <Image systemName="sparkles" modifiers={[font({ size: 30 }), foregroundStyle(BEY3A_ACCENT)]} />
-                    </VStack>
-                )}
+                <VStack modifiers={[frame({ maxWidth: 9999, height: 90, alignment: 'center' }), background(BEY3A_ACCENT + '20')]}>
+                    <Image systemName="sparkles" modifiers={[font({ size: 30 }), foregroundStyle(BEY3A_ACCENT)]} />
+                </VStack>
                 <VStack modifiers={[padding({ horizontal: 10, vertical: 8 }), frame({ maxWidth: 9999, alignment: 'leading' })]}>
-                    <Text modifiers={[font({ size: 10, weight: 'black' }), secondaryStyle]}>POUR VOUS</Text>
+                    <Text modifiers={[font({ size: 10, weight: 'black' }), foregroundStyle(secondaryColor)]}>POUR VOUS</Text>
                     <Text modifiers={[font({ size: 13, weight: 'bold' }), foregroundStyle(primaryColor)]}>
                         {product?.name || 'Découvrir'}
                     </Text>
@@ -52,10 +45,14 @@ const RecommendationsWidgetView = (props: WidgetBase<any>) => {
 
             <HStack modifiers={[padding({ horizontal: 10, vertical: 10 }), frame({ maxWidth: 9999 })]}>
                 {products.slice(0, 3).map((item: any, i: number) => (
-                    <VStack key={i} modifiers={[padding({ horizontal: 4 }), frame({ width: family === 'systemMedium' ? 100 : 140 })]}>
-                        {item.imageUrl && (
-                            <RemoteImage source={{ uri: item.imageUrl }} modifiers={[frame({ maxWidth: 9999, height: 80 }), cornerRadius(10), shadow({ radius: 2 })]} />
-                        )}
+                    <VStack key={i} modifiers={[padding({ horizontal: 4 }), frame({ minWidth: 60, maxWidth: 120 })]}>
+                        <VStack modifiers={[
+                            frame({ height: 80, alignment: 'center' }),
+                            cornerRadius(10),
+                            background(cardBgColor)
+                        ]}>
+                            <Image systemName="star.fill" modifiers={[font({ size: 24 }), foregroundStyle(BEY3A_ACCENT)]} />
+                        </VStack>
                         <Text modifiers={[font({ size: 11, weight: 'bold' }), foregroundStyle(primaryColor), padding({ top: 4 })]}>
                             {item.name?.slice(0, 15)}
                         </Text>

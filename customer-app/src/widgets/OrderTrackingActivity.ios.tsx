@@ -13,15 +13,19 @@ type DeliveryActivityProps = {
 // ─── Per-status icon & color ──────────────────────────────────────────
 const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
     'widget';
-    const {
-        orderId = 'ID#000',
-        status = 'Traitement...',
-        progress = 0,
-        etaMinutes = 15,
-        driverName = 'Bey3a'
-    } = props || {};
+    const data = props || {
+        orderId: 'ID#000',
+        status: 'Traitement...',
+        progress: 0,
+        etaMinutes: 15,
+        driverName: 'Bey3a'
+    };
 
-    // ── Per-status icon & color ──────────────────────────────────────────
+    const status = data.status || 'Traitement...';
+    const orderId = data.orderId || 'ID#000';
+    const progress = data.progress || 0;
+    const etaMinutes = data.etaMinutes || 15;
+
     const getStatusConfig = (s: string) => {
         const val = String(s || '').toLowerCase();
         if (val.includes('livré') || val.includes('delivered')) return { icon: 'checkmark.seal.fill', color: '#34C759' };
@@ -32,7 +36,9 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
         return { icon: 'bag.fill', color: '#8A2BE2' };
     };
 
-    const { icon, color } = getStatusConfig(status);
+    const config = getStatusConfig(status);
+    const activeIcon = config.icon as any;
+    const activeColor = config.color;
     const isDelivered = status.toLowerCase().includes('livré');
     const etaText = etaMinutes <= 0 ? 'Maintenant' : `${etaMinutes}m`;
 
@@ -42,7 +48,7 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
             <VStack modifiers={[padding({ all: 16 }), background('#1C1C1E'), frame({ minWidth: 200 })]}>
                 <HStack modifiers={[frame({ maxWidth: 9999 })]}>
                     <VStack alignment="leading">
-                        <Text modifiers={[font({ size: 14, weight: 'bold' }), foregroundStyle(color)]}>
+                        <Text modifiers={[font({ size: 14, weight: 'bold' }), foregroundStyle(activeColor)]}>
                             {status}
                         </Text>
                         <Text modifiers={[font({ size: 11 }), foregroundStyle('#8E8E93')]}>
@@ -50,8 +56,8 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
                         </Text>
                     </VStack>
                     <Spacer />
-                    <VStack modifiers={[frame({ width: 36, height: 36, alignment: 'center' }), cornerRadius(8), background(color + '33')]}>
-                        <Image systemName={icon as any} modifiers={[font({ size: 20 }), foregroundStyle(color)]} />
+                    <VStack modifiers={[frame({ width: 36, height: 36, alignment: 'center' }), cornerRadius(8), background(`${activeColor}33`)]}>
+                        <Image systemName={activeIcon} modifiers={[font({ size: 20 }), foregroundStyle(activeColor)]} />
                     </VStack>
                 </HStack>
                 {!isDelivered && (
@@ -59,9 +65,9 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
                         <HStack modifiers={[padding({ bottom: 4 })]}>
                             <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle('#8E8E93')]}>PRÉVU : {etaText}</Text>
                             <Spacer />
-                            <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle(color)]}>{Math.round(progress * 100)}%</Text>
+                            <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle(activeColor)]}>{Math.round(progress * 100)}%</Text>
                         </HStack>
-                        <ProgressView value={progress} modifiers={[foregroundStyle(color)]} />
+                        <ProgressView value={progress} modifiers={[foregroundStyle(activeColor)]} />
                     </VStack>
                 )}
             </VStack>
@@ -70,13 +76,13 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
         // ── Compact View ───────────────────────────────────────────────────
         compactLeading: (
             <HStack modifiers={[padding({ leading: 8 })]}>
-                <Image systemName={icon as any} modifiers={[font({ size: 14 }), foregroundStyle(color)]} />
+                <Image systemName={activeIcon} modifiers={[font({ size: 14 }), foregroundStyle(activeColor)]} />
             </HStack>
         ),
 
         compactTrailing: (
             <HStack modifiers={[padding({ trailing: 8 })]}>
-                <Text modifiers={[font({ size: 12, weight: 'bold' }), foregroundStyle(color)]}>
+                <Text modifiers={[font({ size: 12, weight: 'bold' }), foregroundStyle(activeColor)]}>
                     {isDelivered ? '✓' : etaText}
                 </Text>
             </HStack>
@@ -84,26 +90,26 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
 
         // ── Minimal ───────────────────────────────────────────────────────────
         minimal: (
-            <Image systemName={icon as any} modifiers={[font({ size: 14 }), foregroundStyle(color)]} />
+            <Image systemName={activeIcon} modifiers={[font({ size: 14 }), foregroundStyle(activeColor)]} />
         ),
 
         // ── Expanded Views ─────────────────────────────────────────────────────
         expandedLeading: (
             <VStack alignment="leading" modifiers={[padding({ leading: 14, top: 12 })]}>
-                <VStack modifiers={[frame({ width: 44, height: 44, alignment: 'center' }), cornerRadius(12), background(color + '40')]}>
-                    <Image systemName={icon as any} modifiers={[font({ size: 22 }), foregroundStyle(color)]} />
+                <VStack modifiers={[frame({ width: 44, height: 44, alignment: 'center' }), background(`${activeColor}40`), cornerRadius(25)]}>
+                    <Image systemName={activeIcon} modifiers={[font({ size: 22 }), foregroundStyle(activeColor)]} />
                 </VStack>
-                <Text modifiers={[font({ size: 10, weight: 'black' }), foregroundStyle(color), padding({ top: 8 })]}>BEY3A</Text>
+                <Text modifiers={[font({ size: 10, weight: 'black' }), foregroundStyle(activeColor), padding({ top: 8 })]}>BEY3A</Text>
             </VStack>
         ),
 
         expandedTrailing: (
             <VStack alignment="trailing" modifiers={[padding({ trailing: 14, top: 12 })]}>
                 <VStack alignment="trailing">
-                    <Text modifiers={[font({ size: 24, weight: 'heavy' }), foregroundStyle(color)]}>
+                    <Text modifiers={[font({ size: 24, weight: 'heavy' }), foregroundStyle(activeColor)]}>
                         {isDelivered ? '✓' : String(etaMinutes)}
                     </Text>
-                    <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle(color)]}>
+                    <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle(activeColor)]}>
                         {isDelivered ? 'LIVRÉ' : 'MINUTES'}
                     </Text>
                 </VStack>
@@ -113,7 +119,7 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
         expandedBottom: (
             <VStack modifiers={[padding({ horizontal: 16, bottom: 14 }), frame({ maxWidth: 9999 })]}>
                 {!isDelivered && (
-                    <ProgressView value={progress} modifiers={[foregroundStyle(color), padding({ bottom: 14 })]} />
+                    <ProgressView value={progress} modifiers={[foregroundStyle(activeColor), padding({ bottom: 14 })]} />
                 )}
                 <HStack modifiers={[frame({ maxWidth: 9999, alignment: 'leading' })]}>
                     <VStack alignment="leading">
@@ -121,14 +127,14 @@ const DeliveryActivity = (props: DeliveryActivityProps | undefined) => {
                             {status}
                         </Text>
                         <Text modifiers={[font({ size: 12 }), foregroundStyle('#8E8E93')]}>
-                            {isDelivered ? 'Commande terminée avec succès' : `Votre colis #${orderId.split('#').pop()}`}
+                            {isDelivered ? 'Commande terminée avec succès' : `Votre colis #${String(orderId).split('#').pop()}`}
                         </Text>
                     </VStack>
                     <Spacer />
                     {isDelivered ? (
                         <Image systemName={"checkmark.circle.fill" as any} modifiers={[font({ size: 24 }), foregroundStyle('#34C759')]} />
                     ) : (
-                        <Image systemName={"box.truck.fill" as any} modifiers={[font({ size: 24 }), foregroundStyle(color)]} />
+                        <Image systemName={"box.truck.fill" as any} modifiers={[font({ size: 24 }), foregroundStyle(activeColor)]} />
                     )}
                 </HStack>
             </VStack>

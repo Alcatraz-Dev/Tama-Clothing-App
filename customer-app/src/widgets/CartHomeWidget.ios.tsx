@@ -3,9 +3,6 @@ import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow
 import { createWidget } from 'expo-widgets';
 import type { WidgetBase } from 'expo-widgets';
 
-const BEY3A_ACCENT = '#8A2BE2';
-const RemoteImage = Image as any;
-
 const CartHomeWidget = (props: WidgetBase<any>) => {
     'widget';
     const {
@@ -17,6 +14,7 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
         isDark = true
     } = props || {};
 
+    const BEY3A_ACCENT = '#8A2BE2';
     const bgColor = isDark ? '#1c1c1e' : '#f5f5f7';
     const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
     const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
@@ -32,43 +30,22 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
                 frame({ maxWidth: 9999, maxHeight: 9999, alignment: 'topLeading' }),
                 background(bgColor)
             ]}>
-                {firstItem?.imageUrl ? (
-                    <RemoteImage
-                        source={{ uri: firstItem.imageUrl }}
-                        modifiers={[
-                            frame({ maxWidth: 9999, height: 80 }),
-                            cornerRadius(0)
-                        ]}
-                    />
-                ) : (
-                    <VStack modifiers={[
-                        frame({ maxWidth: 9999, height: 80, alignment: 'center' }),
-                        background(cardBgColor)
-                    ]}>
-                        <Image systemName="cart.fill" modifiers={[font({ size: 32 }), foregroundStyle(BEY3A_ACCENT)]} />
-                    </VStack>
-                )}
+                <VStack modifiers={[
+                    frame({ maxWidth: 9999, height: 80, alignment: 'center' }),
+                    background(cardBgColor)
+                ]}>
+                    <Image systemName="cart.fill" modifiers={[font({ size: 32 }), foregroundStyle(BEY3A_ACCENT)]} />
+                </VStack>
 
                 <VStack modifiers={[
                     padding({ horizontal: 10, vertical: 8 }),
                     frame({ maxWidth: 9999, alignment: 'leading' })
                 ]}>
-                    <HStack modifiers={[frame({ maxWidth: 9999 })]}>
-                        <Text modifiers={[font({ size: 11, weight: 'black' }), secondaryStyle]}>PANIER</Text>
-                        <Spacer />
-                        <VStack modifiers={[
-                            padding({ horizontal: 6, vertical: 2 }),
-                            cornerRadius(8),
-                            background(BEY3A_ACCENT)
-                        ]}>
-                            <Text modifiers={[font({ size: 10, weight: 'bold' }), foregroundStyle('#ffffff')]}>
-                                {itemCount}
-                            </Text>
-                        </VStack>
-                    </HStack>
+                    <Text modifiers={[font({ size: 11, weight: 'black' }), secondaryStyle]}>PANIER</Text>
                     <Text modifiers={[font({ size: 16, weight: 'black' }), accentStyle, padding({ top: 2 })]}>
-                        {totalAmount.toFixed(0)} {currency}
+                        {totalAmount || 0} {currency}
                     </Text>
+                    <Text modifiers={[font({ size: 11 }), secondaryStyle]}>{itemCount} articles</Text>
                 </VStack>
             </VStack>
         );
@@ -120,24 +97,13 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
                     ) : (
                         showItems.map((item: any, i: number) => (
                             <HStack key={i} modifiers={[padding({ trailing: 10 })]}>
-                                {item.imageUrl ? (
-                                    <RemoteImage
-                                        source={{ uri: item.imageUrl }}
-                                        modifiers={[
-                                            frame({ width: 52, height: 52 }),
-                                            cornerRadius(10),
-                                            shadow({ radius: 4, y: 2, color: 'rgba(0,0,0,0.15)' })
-                                        ]}
-                                    />
-                                ) : (
-                                    <VStack modifiers={[
-                                        frame({ width: 52, height: 52, alignment: 'center' }),
-                                        cornerRadius(10),
-                                        background(cardBgColor)
-                                    ]}>
-                                        <Image systemName="bag.fill" modifiers={[font({ size: 22 }), foregroundStyle(BEY3A_ACCENT)]} />
-                                    </VStack>
-                                )}
+                                <VStack modifiers={[
+                                    frame({ width: 52, height: 52, alignment: 'center' }),
+                                    cornerRadius(10),
+                                    background(cardBgColor)
+                                ]}>
+                                    <Image systemName="bag.fill" modifiers={[font({ size: 22 }), foregroundStyle(BEY3A_ACCENT)]} />
+                                </VStack>
                             </HStack>
                         ))
                     )}
@@ -175,12 +141,13 @@ const CartHomeWidget = (props: WidgetBase<any>) => {
             ]}>
                 {items.slice(0, 4).map((item: any, i: number) => (
                     <HStack key={i} modifiers={[padding({ vertical: 6 })]}>
-                        {item.imageUrl && (
-                            <RemoteImage
-                                source={{ uri: item.imageUrl }}
-                                modifiers={[frame({ width: 40, height: 40 }), cornerRadius(8)]}
-                            />
-                        )}
+                        <VStack modifiers={[
+                            frame({ width: 40, height: 40, alignment: 'center' }),
+                            cornerRadius(8),
+                            background(cardBgColor)
+                        ]}>
+                            <Image systemName="cart.fill" modifiers={[font({ size: 18 }), foregroundStyle(BEY3A_ACCENT)]} />
+                        </VStack>
                         <VStack alignment="leading" modifiers={[padding({ leading: 10 })]}>
                             <Text modifiers={[font({ size: 14, weight: 'semibold' }), foregroundStyle(primaryColor)]}>{item.name}</Text>
                             <Text modifiers={[font({ size: 12, weight: 'bold' }), accentStyle]}>{item.price} {currency}</Text>

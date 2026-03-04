@@ -3,19 +3,6 @@ import { font, foregroundStyle, padding, frame, cornerRadius, background, shadow
 import { createWidget } from 'expo-widgets';
 import type { WidgetBase } from 'expo-widgets';
 
-const BEY3A_ACCENT = '#0A84FF'; // Royal Blue for tracking
-const RemoteImage = Image as any;
-
-// Map status text to SF Symbols
-const getStatusIcon = (status: string) => {
-    const s = String(status || '').toLowerCase();
-    if (s.includes('livré') || s.includes('delivered')) return 'checkmark.seal.fill';
-    if (s.includes('livraison') || s.includes('out_for_delivery')) return 'box.truck.fill';
-    if (s.includes('transit')) return 'location.fill';
-    if (s.includes('pris') || s.includes('picked')) return 'hand.raised.fill';
-    return 'bag.fill';
-};
-
 const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
     'widget';
     const {
@@ -27,12 +14,23 @@ const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
         isDark = true
     } = props || {};
 
+    const BEY3A_ACCENT = '#0A84FF';
     const bgColor = isDark ? '#1c1c1e' : '#f2f2f7';
     const cardBgColor = isDark ? '#2c2c2e' : '#ffffff';
     const primaryColor = isDark ? '#ffffff' : '#1c1c1e';
     const secondaryColor = isDark ? '#8E8E93' : '#636366';
     const secondaryStyle = foregroundStyle(secondaryColor);
     const accentStyle = foregroundStyle(BEY3A_ACCENT);
+
+    // Map status text to SF Symbols
+    const getStatusIcon = (status: string) => {
+        const s = String(status || '').toLowerCase();
+        if (s.includes('livré') || s.includes('delivered')) return 'checkmark.seal.fill';
+        if (s.includes('livraison') || s.includes('out_for_delivery')) return 'box.truck.fill';
+        if (s.includes('transit')) return 'location.fill';
+        if (s.includes('pris') || s.includes('picked')) return 'hand.raised.fill';
+        return 'bag.fill';
+    };
     const sfIcon = getStatusIcon(statusText);
 
     // ── Small ─────────────────────────────────────────────────────────────────
@@ -49,9 +47,9 @@ const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
                     <VStack modifiers={[
                         frame({ width: 50, height: 50, alignment: 'center' }),
                         cornerRadius(25),
-                        background(`${BEY3A_ACCENT}20`)
+                        background(BEY3A_ACCENT + '33')
                     ]}>
-                        <Image systemName={sfIcon} modifiers={[font({ size: 24 }), foregroundStyle(BEY3A_ACCENT)]} />
+                        <Image systemName={sfIcon as any} modifiers={[font({ size: 24 }), foregroundStyle(BEY3A_ACCENT)]} />
                     </VStack>
                 </VStack>
 
@@ -88,9 +86,9 @@ const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
                     <VStack modifiers={[
                         frame({ width: 44, height: 44, alignment: 'center' }),
                         cornerRadius(10),
-                        background(`${BEY3A_ACCENT}15`)
+                        background(BEY3A_ACCENT + '26')
                     ]}>
-                        <Image systemName={sfIcon} modifiers={[font({ size: 22 }), foregroundStyle(BEY3A_ACCENT)]} />
+                        <Image systemName={sfIcon as any} modifiers={[font({ size: 22 }), foregroundStyle(BEY3A_ACCENT)]} />
                     </VStack>
                 </HStack>
 
@@ -132,7 +130,7 @@ const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
                     </Text>
                 </VStack>
                 <Spacer />
-                <Image systemName={sfIcon} modifiers={[font({ size: 30 }), foregroundStyle(BEY3A_ACCENT)]} />
+                <Image systemName={sfIcon as any} modifiers={[font({ size: 30 }), foregroundStyle(BEY3A_ACCENT)]} />
             </HStack>
 
             <VStack modifiers={[padding({ horizontal: 16, vertical: 16 }), frame({ maxWidth: 9999 })]}>
@@ -155,5 +153,6 @@ const OrderTrackingWidgetView = (props: WidgetBase<any>) => {
         </VStack>
     );
 };
+
 
 export default createWidget('OrderTrackingWidget', OrderTrackingWidgetView);
