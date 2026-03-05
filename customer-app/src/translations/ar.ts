@@ -698,6 +698,59 @@ export const ar = {
   allZones: 'بكل البلايص',
   locationDetected: 'لقينا موقعك',
   filteringBy: 'هانا نصفيو بـ',
+
+  // ── COD Financial Model & Logistics ──────────────────────────────────────────
+  brandRevenue: 'مرابيح الماركة',
+  confirmedBalance: 'الرصيد المؤكد',
+  pendingBalance: 'متانتظر (يوصل التوصيل)',
+  totalEarned: 'مجموع الربح',
+  withdrawn: 'المسحوب',
+  completedOrders: 'المنجزة',
+  pendingOrders: 'COD متانتظر',
+  totalTransactions: 'الم��عاملات',
+  commissionBreakdown: 'تفصيل العمولة',
+  deliveryFeeLabel: 'سوم التوصيل',
+  platformCommission: 'عمولة المنصة',
+  codSettlement: 'تسوية COD',
+  transactionHistory: 'تاريخ التحويلات',
+  noTransactions: 'ما ثماش معاملات توا',
+  transactionsAppearHere: 'المرابيح متاعك باش تظهر هنا من بعد ما تتسلم الطرود.',
+  platformRevenue: 'مرابيح المنصة',
+
+  // ── Delivery Companies ─────────────────────────────────────────────────────
+  deliveryCompanies: 'شركات التوصيل',
+  newDeliveryCompany: 'شركة جديدة',
+  editCompany: 'عدل الشركة',
+  createCompany: 'حل الشركة',
+  companyName: 'اسم الشركة',
+  searchCompanies: 'لوج ع الشركات...',
+  noDeliveryCompanies: 'ما ثماش شركات توصيل توا',
+  addFirstCompany: 'زيد أول شركة توصيل باش تبدأ في اللوجيستيك.',
+  deleteCompany: 'فسخ الشركة',
+  confirmDeleteCompany: 'متأكد تحب تفسخ شركة التوصيل هذي؟',
+  activate: 'نشط',
+  deactivate: 'أوقف',
+  apiKey: 'مفتاح API',
+
+  // ── FDG Integration ────────────────────────────────────────────────────────
+  fdgTrackingNumber: 'رقم تتبع FDG',
+
+  // ── Withdrawal ──────────────────────────────────────────────────────────────
+  withdrawFunds: 'اسحب فلوس',
+  withdrawalRequested: 'طلب السحب تبعث بنجاح',
+  insufficientBalance: 'الرصيد ما يكفيش',
+  invalidAmount: 'ادخل مبلغ صحيح',
+  enterAmount: 'ادخل المبلغ (دينار)',
+  availableBalance: 'الرصيد المتاح',
+  withdrawalRequests: 'طلبات السحب',
+  approved: 'مقبول',
+  rejected: 'مرفوض',
+  approve: 'اقبل',
+  noWithdrawalRequests: 'ما ثماش طلبات سحب',
 };
+
+
+
+
 
 

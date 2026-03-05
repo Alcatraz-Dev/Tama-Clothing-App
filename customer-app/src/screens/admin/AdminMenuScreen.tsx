@@ -60,6 +60,7 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('dashboard'), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support', 'brand_owner', 'nor_kam', 'partner'], color: '#5856D6' },
         { label: t('products'), icon: Package, route: 'AdminProducts', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55' },
         { label: t('orders'), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support', 'brand_owner', 'nor_kam'], color: '#34C759' },
+        { label: t('brandRevenue'), icon: Ticket, route: 'BrandRevenue', roles: ['admin', 'brand_owner'], color: '#EC4899' },
         { label: t('clients'), icon: UsersIcon, route: 'AdminUsers', roles: ['admin', 'support'], color: '#5AC8FA' },
         { label: t('categories'), icon: ListTree, route: 'AdminCategories', roles: ['admin', 'nor_kam'], color: '#AF52DE' },
         { label: t('brands'), icon: Shield, route: 'AdminBrands', roles: ['admin'], color: '#007AFF' },
@@ -74,6 +75,8 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('support'), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
         { label: t('identityVerification'), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
         { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
+        { label: t('deliveryCompanies'), icon: Truck, route: 'AdminDeliveryCompanies', roles: ['admin'], color: '#F59E0B' },
+        { label: t('platformRevenue'), icon: Ticket, route: 'AdminFinanceDashboard', roles: ['admin'], color: '#10B981' },
         { label: t('settings'), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
     ].filter(item => item.roles.includes(role));
     const iconColor = theme === 'dark' ? '#FFF' : '#000';

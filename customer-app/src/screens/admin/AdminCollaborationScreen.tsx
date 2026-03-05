@@ -488,7 +488,7 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
                                             ]}
                                             onPress={() => setBrandId(b.id)}
                                         >
-                                            <Text style={{ color: brandId === b.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 10, fontWeight: '800' }}>{b.name.fr.toUpperCase()}</Text>
+                                            <Text style={{ color: brandId === b.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground, fontSize: 10, fontWeight: '800' }}>{b.name.fr}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>

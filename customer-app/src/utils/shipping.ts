@@ -200,6 +200,51 @@ export const createShipmentFromOrder = async (orderData: OrderShipmentData) => {
   });
 
   console.log('Delivery record also created');
+
+  // ── Trigger First Delivery Group API (non-blocking) ──────────────────────────
+  setTimeout(async () => {
+    try {
+      const { createFDGShipment, syncFDGTrackingToFirestore } = await import('./firstDeliveryApi');
+      const fdgResult = await createFDGShipment({
+        customerName: orderData.customerName,
+        phone: orderData.phone,
+        address: orderData.address,
+        city: zoneId,
+        description: Array.isArray(orderData.items)
+          ? orderData.items.map((i: any) => (typeof i === 'string' ? i : i?.name || 'Item')).join(', ')
+          : 'Articles',
+        codAmount: orderData.total,
+        pieces: Array.isArray(orderData.items) ? orderData.items.length : 1,
+        weight: 1,
+        reference: orderData.orderId,
+        sellerName: orderData.storeName ?? 'TamaClothing',
+        sellerAddress: orderData.pickupAddress,
+      });
+      if (fdgResult.success) {
+        await syncFDGTrackingToFirestore(shipmentDoc.id, fdgResult);
+      }
+    } catch (e) {
+      console.warn('[FDG] Shipment creation failed (non-blocking):', e);
+    }
+  }, 1500);
+
+  // ── Record pending COD transaction ─────────────────────────────────────────
+  setTimeout(async () => {
+    try {
+      const { recordPendingCOD } = await import('../services/codFinancialService');
+      await recordPendingCOD({
+        orderId: orderData.orderId,
+        brandId: orderData.customerId || 'anonymous',
+        brandName: orderData.storeName ?? 'TamaClothing Store',
+        deliveryCompanyId: 'first_delivery_group',
+        codAmount: orderData.total,
+        deliveryFee: orderData.deliveryCost ?? 8,
+      });
+    } catch (e) {
+      console.warn('[COD] Pending COD recording failed (non-blocking):', e);
+    }
+  }, 2000);
+
   return { id: shipmentDoc.id, trackingId };
 };
 
@@ -718,6 +763,18 @@ body {
 `;
 };
 export const updateShipmentStatus = async (shipmentId: string, trackingId: string, status: ShipmentStatus, extraData: any = {}) => {
+  // ── COD Settlement on delivery ──────────────────────────────────────────────
+  if (status === 'Delivered') {
+    try {
+      const { settleCODByOrderId } = await import('../services/codFinancialService');
+      // Fetch orderId from shipment
+      const shipSnap = await getDoc(doc(db, 'shipments', shipmentId));
+      const orderId = shipSnap.exists() ? (shipSnap.data().orderId ?? shipmentId) : shipmentId;
+      await settleCODByOrderId(orderId);
+    } catch (e) {
+      console.warn('[COD] Settlement failed (non-blocking):', e);
+    }
+  }
   const statusMap: Record<string, string> = {
     'Pending': 'pending',
     'In Transit': 'in_transit',

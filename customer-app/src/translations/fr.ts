@@ -689,5 +689,53 @@ export const fr = {
   allZones: 'TOUTES LES ZONES',
   locationDetected: 'Position Détectée',
   filteringBy: 'Filtrage par',
-};
 
+  // ── COD Financial Model & Logistics ──────────────────────────────────────────
+  brandRevenue: 'Revenus Marque',
+  confirmedBalance: 'Solde Confirmé',
+  pendingBalance: 'En Attente (Livraison)',
+  totalEarned: 'Total Gagné',
+  withdrawn: 'Retiré',
+  completedOrders: 'Complétées',
+  pendingOrders: 'COD En Attente',
+  totalTransactions: 'Transactions',
+  commissionBreakdown: 'Détail des Commissions',
+  deliveryFeeLabel: 'Frais de Livraison',
+  platformCommission: 'Commission Plateforme',
+  codSettlement: 'Règlement COD',
+  transactionHistory: 'Historique des Transactions',
+  noTransactions: 'Aucune transaction pour le moment',
+  transactionsAppearHere: 'Vos revenus apparaîtront ici après chaque livraison confirmée.',
+  platformRevenue: 'Revenus Plateforme',
+
+  // ── Delivery Companies ─────────────────────────────────────────────────────
+  deliveryCompanies: 'Sociétés de Livraison',
+  newDeliveryCompany: 'Nouvelle Société',
+  editCompany: 'Modifier la Société',
+  createCompany: 'Créer la Société',
+  companyName: 'Nom de la Société',
+  searchCompanies: 'Rechercher des sociétés...',
+  noDeliveryCompanies: 'Aucune société de livraison',
+  addFirstCompany: 'Ajoutez votre première société pour gérer la logistique.',
+  deleteCompany: 'Supprimer la Société',
+  confirmDeleteCompany: 'Êtes-vous sûr de vouloir supprimer cette société de livraison ?',
+  activate: 'Activer',
+  deactivate: 'Désactiver',
+  apiKey: 'Clé API',
+
+  // ── FDG Integration ────────────────────────────────────────────────────────
+  fdgTrackingNumber: 'Numéro de Suivi FDG',
+
+  // ── Withdrawal ──────────────────────────────────────────────────────────────
+  withdrawFunds: 'Retirer des Fonds',
+  withdrawalRequested: 'Demande de retrait soumise avec succès',
+  insufficientBalance: 'Solde insuffisant',
+  invalidAmount: 'Veuillez entrer un montant valide',
+  enterAmount: 'Entrer le montant (TND)',
+  availableBalance: 'Solde disponible',
+  withdrawalRequests: 'Demandes de Retrait',
+  approved: 'Approuvé',
+  rejected: 'Rejeté',
+  approve: 'Approuver',
+  noWithdrawalRequests: 'Aucune demande de retrait',
+};

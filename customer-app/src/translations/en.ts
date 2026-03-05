@@ -896,4 +896,53 @@ export const en = {
   giftSave: 'SAVE',
   addGift: 'ADD GIFT',
   listGifts: 'GIFTS LIST',
+
+  // ── COD Financial Model & Logistics ──────────────────────────────────────────
+  brandRevenue: 'Brand Revenue',
+  confirmedBalance: 'Confirmed Balance',
+  pendingBalance: 'Pending (Awaiting Delivery)',
+  totalEarned: 'Total Earned',
+  withdrawn: 'Withdrawn',
+  completedOrders: 'Completed',
+  pendingOrders: 'Pending COD',
+  totalTransactions: 'Transactions',
+  commissionBreakdown: 'Commission Breakdown',
+  deliveryFeeLabel: 'Delivery Fee',
+  platformCommission: 'Platform Commission',
+  codSettlement: 'COD Settlement',
+  transactionHistory: 'Transaction History',
+  noTransactions: 'No transactions yet',
+  transactionsAppearHere: 'Your revenue will appear here once orders are delivered.',
+  platformRevenue: 'Platform Revenue',
+
+  // ── Delivery Companies ─────────────────────────────────────────────────────
+  deliveryCompanies: 'Delivery Companies',
+  newDeliveryCompany: 'New Company',
+  editCompany: 'Edit Company',
+  createCompany: 'Create Company',
+  companyName: 'Company Name',
+  searchCompanies: 'Search companies...',
+  noDeliveryCompanies: 'No delivery companies yet',
+  addFirstCompany: 'Add your first delivery company to start managing logistics.',
+  deleteCompany: 'Delete Company',
+  confirmDeleteCompany: 'Are you sure you want to delete this delivery company?',
+  activate: 'Activate',
+  deactivate: 'Deactivate',
+  apiKey: 'API Key',
+
+  // ── FDG Integration ────────────────────────────────────────────────────────
+  fdgTrackingNumber: 'FDG Tracking Number',
+
+  // ── Withdrawal ──────────────────────────────────────────────────────────────
+  withdrawFunds: 'Withdraw Funds',
+  withdrawalRequested: 'Withdrawal request submitted successfully',
+  insufficientBalance: 'Insufficient balance',
+  invalidAmount: 'Please enter a valid amount',
+  enterAmount: 'Enter amount (TND)',
+  availableBalance: 'Available balance',
+  withdrawalRequests: 'Withdrawal Requests',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  approve: 'Approve',
+  noWithdrawalRequests: 'No withdrawal requests',
 };
