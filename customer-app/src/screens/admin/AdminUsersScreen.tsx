@@ -50,7 +50,7 @@ import {
     EmptyState,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
 
 const { width } = Dimensions.get('window');
 
@@ -80,6 +80,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [userRole, setUserRole] = useState('customer');
     const [userBrandId, setUserBrandId] = useState('');
+    const blurTargetRef = useRef(null);
 
     const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -253,188 +254,190 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
     // ─── Render ──────────────────────────────────────────────────────────────────
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('clients')} onBack={onBack} />
+            <AdminHeader title={t('clients')} onBack={onBack} blurTarget={blurTargetRef} />
 
-            <Animated.FlatList
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: false }
-                )}
-                scrollEventThrottle={16}
-                data={filteredUsers}
-                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
-                keyExtractor={(item) => item.uid}
-                ListHeaderComponent={
-                    <View style={{ marginBottom: 15 }}>
-                        {/* Stats Grid */}
-                        <View style={sc.statsGrid}>
-                            <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', borderColor: colors.border }]}>
-                                <SectionLabel text={t('total')} style={{ marginBottom: 4 }} />
-                                <Text style={[sc.statVal, { color: colors.foreground }]}>{totalCustomers}</Text>
-                            </View>
-                            <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', borderColor: colors.border }]}>
-                                <SectionLabel text={t('revenue')} style={{ marginBottom: 4 }} />
-                                <Text style={[sc.statVal, { color: colors.foreground }]}>{totalRevenue.toFixed(0)} TND</Text>
-                            </View>
-                            {bannedCount > 0 && (
-                                <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#2A1212' : '#FEF2F2', borderColor: '#EF4444' }]}>
-                                    <SectionLabel text={t('banned')} style={{ color: '#EF4444', marginBottom: 4 }} />
-                                    <Text style={[sc.statVal, { color: '#EF4444' }]}>{bannedCount}</Text>
+            <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                <Animated.FlatList
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: false }
+                    )}
+                    scrollEventThrottle={16}
+                    data={filteredUsers}
+                    contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                    keyExtractor={(item) => item.uid}
+                    ListHeaderComponent={
+                        <View style={{ marginBottom: 15 }}>
+                            {/* Stats Grid */}
+                            <View style={sc.statsGrid}>
+                                <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', borderColor: colors.border }]}>
+                                    <SectionLabel text={t('total')} style={{ marginBottom: 4 }} />
+                                    <Text style={[sc.statVal, { color: colors.foreground }]}>{totalCustomers}</Text>
                                 </View>
-                            )}
-                        </View>
-
-                        {/* Search */}
-                        <View style={[sc.searchContainer, { backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderColor: colors.border }]}>
-                            <Search size={18} color={colors.textMuted} />
-                            <TextInput
-                                style={[sc.searchInput, { color: colors.foreground }]}
-                                placeholder={t('searchClients')}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                                placeholderTextColor={colors.textMuted}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <X size={16} color={colors.textMuted} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-                }
-                renderItem={({ item }) => {
-                    const stats = getUserStats(item);
-                    const isExpanded = expandedUser === item.uid;
-                    const isBanned = item.isBanned === true;
-
-                    return (
-                        <AdminCard style={{
-                            borderColor: isBanned ? '#EF4444' : colors.border,
-                            borderWidth: isBanned ? 1.5 : 1,
-                            padding: 14,
-                        }}>
-                            <TouchableOpacity
-                                onPress={() => setExpandedUser(isExpanded ? null : item.uid)}
-                                activeOpacity={0.7}
-                            >
-                                {/* User Info Row */}
-                                <View style={sc.userRow}>
-                                    <View style={[sc.avatarWrap, { backgroundColor: isBanned ? (theme === 'dark' ? '#311212' : '#FEE2E2') : (theme === 'dark' ? '#000' : '#F2F2F7') }]}>
-                                        {item.avatarUrl ? (
-                                            <Image source={{ uri: item.avatarUrl }} style={[sc.avatarImg, { opacity: isBanned ? 0.6 : 1 }]} />
-                                        ) : (
-                                            <Text style={[sc.initials, { color: isBanned ? '#EF4444' : colors.textMuted }]}>{getInitials(item.fullName)}</Text>
-                                        )}
+                                <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#121218' : '#F9F9FB', borderColor: colors.border }]}>
+                                    <SectionLabel text={t('revenue')} style={{ marginBottom: 4 }} />
+                                    <Text style={[sc.statVal, { color: colors.foreground }]}>{totalRevenue.toFixed(0)} TND</Text>
+                                </View>
+                                {bannedCount > 0 && (
+                                    <View style={[sc.statCard, { backgroundColor: theme === 'dark' ? '#2A1212' : '#FEF2F2', borderColor: '#EF4444' }]}>
+                                        <SectionLabel text={t('banned')} style={{ color: '#EF4444', marginBottom: 4 }} />
+                                        <Text style={[sc.statVal, { color: '#EF4444' }]}>{bannedCount}</Text>
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                            <Text style={[sc.userName, { color: isBanned ? '#EF4444' : colors.foreground }]}>
-                                                {item.fullName || 'Unknown'}
+                                )}
+                            </View>
+
+                            {/* Search */}
+                            <View style={[sc.searchContainer, { backgroundColor: theme === 'dark' ? '#121218' : '#F2F2F7', borderColor: colors.border }]}>
+                                <Search size={18} color={colors.textMuted} />
+                                <TextInput
+                                    style={[sc.searchInput, { color: colors.foreground }]}
+                                    placeholder={t('searchClients')}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                    placeholderTextColor={colors.textMuted}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                        <X size={16} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+                    }
+                    renderItem={({ item }) => {
+                        const stats = getUserStats(item);
+                        const isExpanded = expandedUser === item.uid;
+                        const isBanned = item.isBanned === true;
+
+                        return (
+                            <AdminCard style={{
+                                borderColor: isBanned ? '#EF4444' : colors.border,
+                                borderWidth: isBanned ? 1.5 : 1,
+                                padding: 14,
+                            }}>
+                                <TouchableOpacity
+                                    onPress={() => setExpandedUser(isExpanded ? null : item.uid)}
+                                    activeOpacity={0.7}
+                                >
+                                    {/* User Info Row */}
+                                    <View style={sc.userRow}>
+                                        <View style={[sc.avatarWrap, { backgroundColor: isBanned ? (theme === 'dark' ? '#311212' : '#FEE2E2') : (theme === 'dark' ? '#000' : '#F2F2F7') }]}>
+                                            {item.avatarUrl ? (
+                                                <Image source={{ uri: item.avatarUrl }} style={[sc.avatarImg, { opacity: isBanned ? 0.6 : 1 }]} />
+                                            ) : (
+                                                <Text style={[sc.initials, { color: isBanned ? '#EF4444' : colors.textMuted }]}>{getInitials(item.fullName)}</Text>
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                <Text style={[sc.userName, { color: isBanned ? '#EF4444' : colors.foreground }]}>
+                                                    {item.fullName || 'Unknown'}
+                                                </Text>
+                                                {(item.role === 'brand_owner' || item.role === 'nor_kam' || item.role === 'editor' || item.role === 'partner') && item.brandName && (
+                                                    <View style={[sc.roleTag, { backgroundColor: colors.accent }]}>
+                                                        <Text style={[sc.roleTagText, { color: '#FFF' }]}>{item.brandName.toUpperCase()}</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={[sc.userSub, { color: colors.textMuted }]}>
+                                                {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role || 'customer'))).toUpperCase()}
                                             </Text>
-                                            {(item.role === 'brand_owner' || item.role === 'nor_kam' || item.role === 'editor' || item.role === 'partner') && item.brandName && (
-                                                <View style={[sc.roleTag, { backgroundColor: colors.accent }]}>
-                                                    <Text style={[sc.roleTagText, { color: '#FFF' }]}>{item.brandName.toUpperCase()}</Text>
-                                                </View>
-                                            )}
                                         </View>
-                                        <Text style={[sc.userSub, { color: colors.textMuted }]}>
-                                            {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role || 'customer'))).toUpperCase()}
-                                        </Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <TouchableOpacity onPress={() => openRoleEdit(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                            <Settings size={18} color={colors.foreground} />
-                                        </TouchableOpacity>
-                                        <ChevronDown
-                                            size={18}
-                                            color={colors.textMuted}
-                                            style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}
-                                        />
-                                    </View>
-                                </View>
-
-                                {/* Quick Stats Grid */}
-                                <View style={[sc.statsRow, { borderTopColor: theme === 'dark' ? '#1A1A24' : '#F0F0F5' }]}>
-                                    <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                                        <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{t('orders').toUpperCase()}</Text>
-                                        <Text style={[sc.miniStatVal, { color: colors.foreground }]}>{stats.totalOrders}</Text>
-                                    </View>
-                                    <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                                        <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{t('completed').toUpperCase()}</Text>
-                                        <Text style={[sc.miniStatVal, { color: '#10B981' }]}>{stats.completedOrders}</Text>
-                                    </View>
-                                    <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
-                                        <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role) ? t('revenue').toUpperCase() : 'AVG'}</Text>
-                                        <Text style={[sc.miniStatVal, { color: colors.foreground }]}>
-                                            {['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role)
-                                                ? stats.totalSpent.toFixed(0)
-                                                : (stats.totalOrders > 0 ? (stats.totalSpent / stats.totalOrders).toFixed(0) : '0')} TND
-                                        </Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-
-                            {/* Expanded Details */}
-                            {isExpanded && (
-                                <Animatable.View animation="fadeIn" duration={300}>
-                                    <View style={[sc.expandedContent, { borderTopColor: theme === 'dark' ? '#1A1A24' : '#F0F0F5' }]}>
-                                        <SectionLabel text={t('contactInfo')} style={{ marginBottom: 12 }} />
-                                        <View style={{ gap: 10 }}>
-                                            <View style={sc.infoItem}>
-                                                <Mail size={14} color={colors.textMuted} />
-                                                <Text style={[sc.infoText, { color: colors.foreground }]}>{item.email}</Text>
-                                            </View>
-                                            {item.phone && (
-                                                <View style={sc.infoItem}>
-                                                    <Phone size={14} color={colors.textMuted} />
-                                                    <Text style={[sc.infoText, { color: colors.foreground }]}>{item.phone}</Text>
-                                                </View>
-                                            )}
-                                            {item.address && (
-                                                <View style={sc.infoItem}>
-                                                    <MapPin size={14} color={colors.textMuted} />
-                                                    <Text style={[sc.infoText, { color: colors.foreground }]}>{item.address}</Text>
-                                                </View>
-                                            )}
-                                            <View style={sc.infoItem}>
-                                                <Calendar size={14} color={colors.textMuted} />
-                                                <Text style={[sc.infoText, { color: colors.foreground }]}>
-                                                    {t('joined')} {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : '—'}
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        {/* Action Buttons */}
-                                        <View style={sc.actionsRow}>
-                                            <TouchableOpacity
-                                                onPress={() => toggleBan(item)}
-                                                style={[sc.actionBtn, {
-                                                    backgroundColor: isBanned ? '#10B981' : (theme === 'dark' ? '#3F2B00' : '#FEF3C7'),
-                                                }]}
-                                            >
-                                                <Shield size={16} color={isBanned ? '#FFF' : (theme === 'dark' ? '#FFD666' : '#D97706')} />
-                                                <Text style={[sc.actionBtnText, { color: isBanned ? '#FFF' : (theme === 'dark' ? '#FFD666' : '#D97706') }]}>
-                                                    {isBanned ? t('unban').toUpperCase() : t('banUser').toUpperCase()}
-                                                </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <TouchableOpacity onPress={() => openRoleEdit(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                                <Settings size={18} color={colors.foreground} />
                                             </TouchableOpacity>
-                                            <TouchableOpacity
-                                                onPress={() => deleteUser(item)}
-                                                style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2' }]}
-                                            >
-                                                <Trash2 size={16} color="#EF4444" />
-                                                <Text style={[sc.actionBtnText, { color: '#EF4444' }]}>{t('delete').toUpperCase()}</Text>
-                                            </TouchableOpacity>
+                                            <ChevronDown
+                                                size={18}
+                                                color={colors.textMuted}
+                                                style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}
+                                            />
                                         </View>
                                     </View>
-                                </Animatable.View>
-                            )}
-                        </AdminCard>
-                    );
-                }}
-                ListEmptyComponent={
-                    <EmptyState message={t('noClients')} icon={<UsersIcon size={40} color={colors.textMuted} />} />
-                }
-            />
+
+                                    {/* Quick Stats Grid */}
+                                    <View style={[sc.statsRow, { borderTopColor: theme === 'dark' ? '#1A1A24' : '#F0F0F5' }]}>
+                                        <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                                            <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{t('orders').toUpperCase()}</Text>
+                                            <Text style={[sc.miniStatVal, { color: colors.foreground }]}>{stats.totalOrders}</Text>
+                                        </View>
+                                        <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                                            <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{t('completed').toUpperCase()}</Text>
+                                            <Text style={[sc.miniStatVal, { color: '#10B981' }]}>{stats.completedOrders}</Text>
+                                        </View>
+                                        <View style={[sc.miniStat, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                                            <Text style={[sc.miniStatLabel, { color: colors.textMuted }]}>{['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role) ? t('revenue').toUpperCase() : 'AVG'}</Text>
+                                            <Text style={[sc.miniStatVal, { color: colors.foreground }]}>
+                                                {['brand_owner', 'nor_kam', 'editor', 'partner'].includes(item.role)
+                                                    ? stats.totalSpent.toFixed(0)
+                                                    : (stats.totalOrders > 0 ? (stats.totalSpent / stats.totalOrders).toFixed(0) : '0')} TND
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+
+                                {/* Expanded Details */}
+                                {isExpanded && (
+                                    <Animatable.View animation="fadeIn" duration={300}>
+                                        <View style={[sc.expandedContent, { borderTopColor: theme === 'dark' ? '#1A1A24' : '#F0F0F5' }]}>
+                                            <SectionLabel text={t('contactInfo')} style={{ marginBottom: 12 }} />
+                                            <View style={{ gap: 10 }}>
+                                                <View style={sc.infoItem}>
+                                                    <Mail size={14} color={colors.textMuted} />
+                                                    <Text style={[sc.infoText, { color: colors.foreground }]}>{item.email}</Text>
+                                                </View>
+                                                {item.phone && (
+                                                    <View style={sc.infoItem}>
+                                                        <Phone size={14} color={colors.textMuted} />
+                                                        <Text style={[sc.infoText, { color: colors.foreground }]}>{item.phone}</Text>
+                                                    </View>
+                                                )}
+                                                {item.address && (
+                                                    <View style={sc.infoItem}>
+                                                        <MapPin size={14} color={colors.textMuted} />
+                                                        <Text style={[sc.infoText, { color: colors.foreground }]}>{item.address}</Text>
+                                                    </View>
+                                                )}
+                                                <View style={sc.infoItem}>
+                                                    <Calendar size={14} color={colors.textMuted} />
+                                                    <Text style={[sc.infoText, { color: colors.foreground }]}>
+                                                        {t('joined')} {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : '—'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Action Buttons */}
+                                            <View style={sc.actionsRow}>
+                                                <TouchableOpacity
+                                                    onPress={() => toggleBan(item)}
+                                                    style={[sc.actionBtn, {
+                                                        backgroundColor: isBanned ? '#10B981' : (theme === 'dark' ? '#3F2B00' : '#FEF3C7'),
+                                                    }]}
+                                                >
+                                                    <Shield size={16} color={isBanned ? '#FFF' : (theme === 'dark' ? '#FFD666' : '#D97706')} />
+                                                    <Text style={[sc.actionBtnText, { color: isBanned ? '#FFF' : (theme === 'dark' ? '#FFD666' : '#D97706') }]}>
+                                                        {isBanned ? t('unban').toUpperCase() : t('banUser').toUpperCase()}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => deleteUser(item)}
+                                                    style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? '#311212' : '#FEE2E2' }]}
+                                                >
+                                                    <Trash2 size={16} color="#EF4444" />
+                                                    <Text style={[sc.actionBtnText, { color: '#EF4444' }]}>{t('delete').toUpperCase()}</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </Animatable.View>
+                                )}
+                            </AdminCard>
+                        );
+                    }}
+                    ListEmptyComponent={
+                        <EmptyState message={t('noClients')} icon={<UsersIcon size={40} color={colors.textMuted} />} />
+                    }
+                />
+            </BlurTargetView>
 
             {/* Role Management Modal */}
             <Modal visible={roleModalVisible} animationType="slide" presentationStyle="pageSheet">

@@ -43,6 +43,7 @@ import {
     AdminInput,
     AdminHeader,
 } from '../../components/admin/AdminUI';
+import { BlurTargetView } from 'expo-blur';
 import { uploadToBunny } from '../../utils/bunny';
 
 export default function AdminNotificationsScreen({ onBack, t }: any) {
@@ -61,6 +62,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const scrollY = useRef(new Animated.Value(0)).current;
+    const blurTargetRef = useRef<View>(null);
 
     const handlePickImage = async () => {
         try {
@@ -190,7 +192,7 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
 
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader title={t('broadcast')} onBack={onBack} />
+            <AdminHeader title={t('broadcast')} onBack={onBack} blurTarget={blurTargetRef} />
 
             <View style={[sc.topNav, { marginTop: insets.top + 58 }]}>
                 <AdminChip
@@ -205,100 +207,102 @@ export default function AdminNotificationsScreen({ onBack, t }: any) {
                 />
             </View>
 
-            <Animated.ScrollView
-                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                contentContainerStyle={[sc.scrollContent, { paddingTop: 20 }]}
-            >
-                {activeTab === 'send' ? (
-                    <AdminCard>
-                        <AdminInput
-                            label={t('title').toUpperCase() + " (FR)"}
-                            value={title}
-                            onChangeText={setTitle}
-                            placeholder="Summer Sale (FR)..."
-                        />
-                        <AdminInput
-                            label={t('titleEn').toUpperCase() + " (EN)"}
-                            value={titleEn}
-                            onChangeText={setTitleEn}
-                            placeholder="Summer Sale (EN)..."
-                        />
-                        <AdminInput
-                            label={t('titleAr').toUpperCase()}
-                            value={titleAr}
-                            onChangeText={setTitleAr}
-                            placeholder="تخفيضات الصيف..."
-                        />
-                        <AdminInput
-                            label={t('message').toUpperCase() + " (FR)"}
-                            value={message}
-                            onChangeText={setMessage}
-                            multiline
-                            placeholder="Get up to 50% off (FR)..."
-                        />
-                        <AdminInput
-                            label={t('messageEn').toUpperCase() + " (EN)"}
-                            value={messageEn}
-                            onChangeText={setMessageEn}
-                            multiline
-                            placeholder="Get up to 50% off (EN)..."
-                        />
-                        <AdminInput
-                            label={t('messageAr').toUpperCase()}
-                            value={messageAr}
-                            onChangeText={setMessageAr}
-                            multiline
-                            placeholder="احصل على خصم يصل إلى 50%..."
-                        />
+            <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                <Animated.ScrollView
+                    onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+                    contentContainerStyle={[sc.scrollContent, { paddingTop: 20 }]}
+                >
+                    {activeTab === 'send' ? (
+                        <AdminCard>
+                            <AdminInput
+                                label={t('title').toUpperCase() + " (FR)"}
+                                value={title}
+                                onChangeText={setTitle}
+                                placeholder="Summer Sale (FR)..."
+                            />
+                            <AdminInput
+                                label={t('titleEn').toUpperCase() + " (EN)"}
+                                value={titleEn}
+                                onChangeText={setTitleEn}
+                                placeholder="Summer Sale (EN)..."
+                            />
+                            <AdminInput
+                                label={t('titleAr').toUpperCase()}
+                                value={titleAr}
+                                onChangeText={setTitleAr}
+                                placeholder="تخفيضات الصيف..."
+                            />
+                            <AdminInput
+                                label={t('message').toUpperCase() + " (FR)"}
+                                value={message}
+                                onChangeText={setMessage}
+                                multiline
+                                placeholder="Get up to 50% off (FR)..."
+                            />
+                            <AdminInput
+                                label={t('messageEn').toUpperCase() + " (EN)"}
+                                value={messageEn}
+                                onChangeText={setMessageEn}
+                                multiline
+                                placeholder="Get up to 50% off (EN)..."
+                            />
+                            <AdminInput
+                                label={t('messageAr').toUpperCase()}
+                                value={messageAr}
+                                onChangeText={setMessageAr}
+                                multiline
+                                placeholder="احصل على خصم يصل إلى 50%..."
+                            />
 
-                        <InputLabel text={t('image').toUpperCase()} />
-                        <TouchableOpacity
-                            onPress={handlePickImage}
-                            style={[sc.imagePicker, { borderColor: colors.border, borderStyle: image ? 'solid' : 'dashed' }]}
-                        >
-                            {image ? <Image source={{ uri: image }} style={sc.pickedImg} /> : (
-                                <View style={sc.pickerPlaceholder}>
-                                    <ImageIcon size={32} color={colors.textMuted} />
-                                    <Text style={[sc.pickerText, { color: colors.textMuted }]}>{t('tapToUpload').toUpperCase()}</Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleSend}
-                            disabled={sending}
-                            style={[sc.sendBtn, { backgroundColor: colors.foreground }]}
-                        >
-                            {sending ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : (
-                                <>
-                                    <Text style={[sc.sendBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('broadcastNow').toUpperCase()}</Text>
-                                    <Send size={16} color={theme === 'dark' ? '#000' : '#FFF'} />
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </AdminCard>
-                ) : (
-                    loadingHistory ? <ActivityIndicator style={{ marginTop: 20 }} color={colors.foreground} /> : (
-                        notifications.length === 0 ? <EmptyState message={t('noHistory')} subtitle="Vos diffusions apparaîtront ici" icon={<Bell size={36} color={colors.textMuted} strokeWidth={1.5} />} /> : (
-                            notifications.map(n => (
-                                <AdminCard key={n.id} style={sc.historyCard}>
-                                    <View style={sc.historyHeader}>
-                                        <Text style={[sc.historyTitle, { color: colors.foreground }]}>{n.title}</Text>
-                                        <TouchableOpacity onPress={() => handleDeleteNotification(n.id)}>
-                                            <Trash2 size={16} color={colors.error} />
-                                        </TouchableOpacity>
+                            <InputLabel text={t('image').toUpperCase()} />
+                            <TouchableOpacity
+                                onPress={handlePickImage}
+                                style={[sc.imagePicker, { borderColor: colors.border, borderStyle: image ? 'solid' : 'dashed' }]}
+                            >
+                                {image ? <Image source={{ uri: image }} style={sc.pickedImg} /> : (
+                                    <View style={sc.pickerPlaceholder}>
+                                        <ImageIcon size={32} color={colors.textMuted} />
+                                        <Text style={[sc.pickerText, { color: colors.textMuted }]}>{t('tapToUpload').toUpperCase()}</Text>
                                     </View>
-                                    <Text style={[sc.historyMsg, { color: colors.textMuted }]}>{n.message}</Text>
-                                    <Text style={[sc.historyTime, { color: colors.textMuted }]}>
-                                        {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : ''}
-                                    </Text>
-                                </AdminCard>
-                            ))
+                                )}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={handleSend}
+                                disabled={sending}
+                                style={[sc.sendBtn, { backgroundColor: colors.foreground }]}
+                            >
+                                {sending ? <ActivityIndicator color={theme === 'dark' ? '#000' : '#FFF'} /> : (
+                                    <>
+                                        <Text style={[sc.sendBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('broadcastNow').toUpperCase()}</Text>
+                                        <Send size={16} color={theme === 'dark' ? '#000' : '#FFF'} />
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </AdminCard>
+                    ) : (
+                        loadingHistory ? <ActivityIndicator style={{ marginTop: 20 }} color={colors.foreground} /> : (
+                            notifications.length === 0 ? <EmptyState message={t('noHistory')} subtitle="Vos diffusions apparaîtront ici" icon={<Bell size={36} color={colors.textMuted} strokeWidth={1.5} />} /> : (
+                                notifications.map(n => (
+                                    <AdminCard key={n.id} style={sc.historyCard}>
+                                        <View style={sc.historyHeader}>
+                                            <Text style={[sc.historyTitle, { color: colors.foreground }]}>{n.title}</Text>
+                                            <TouchableOpacity onPress={() => handleDeleteNotification(n.id)}>
+                                                <Trash2 size={16} color={colors.error} />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <Text style={[sc.historyMsg, { color: colors.textMuted }]}>{n.message}</Text>
+                                        <Text style={[sc.historyTime, { color: colors.textMuted }]}>
+                                            {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : ''}
+                                        </Text>
+                                    </AdminCard>
+                                ))
+                            )
                         )
-                    )
-                )}
-                <View style={{ height: 100 }} />
-            </Animated.ScrollView>
+                    )}
+                    <View style={{ height: 100 }} />
+                </Animated.ScrollView>
+            </BlurTargetView>
         </View>
     );
 }

@@ -17,6 +17,7 @@ interface AdminHeaderProps {
     onBack: () => void;
     scrollY?: Animated.Value;
     rightElement?: React.ReactNode;
+    blurTarget?: React.RefObject<any>;
 }
 
 /**
@@ -30,6 +31,7 @@ export function AdminHeader({
     onBack,
     scrollY: scrollYProp,
     rightElement,
+    blurTarget,
 }: AdminHeaderProps) {
     const { colors, theme } = useAppTheme();
     const isDark = theme === 'dark';
@@ -53,9 +55,11 @@ export function AdminHeader({
 
             {/* ── Always-present blur — exactly like Analytics screen ── */}
             <BlurView
+                blurTarget={blurTarget}
                 intensity={85}
                 tint={isDark ? 'dark' : 'extraLight'}
                 style={StyleSheet.absoluteFill}
+                blurMethod="dimezisBlurView"
             />
 
             {/* Tinted overlay for richness */}

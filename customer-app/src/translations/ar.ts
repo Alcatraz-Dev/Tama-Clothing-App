@@ -5,7 +5,7 @@ export const ar = {
   collections: 'الكوليكسيونات', flashSale: 'برومو', campaigns: 'الحملات',
   featured: 'طالعين برشة', newDrop: 'جديد بيعة', brands: 'الماركات', categories: 'الكاتيغوريات',
   orderHistory: 'لي كوماند', savedItems: 'المحفوظات',
-  officialPartner: 'بارتنر رسمي', shopCollection: 'اشري م الكوليكسيون', follow: 'اصنع فولو', unfollow: 'نحي الفولو', rating: 'تقييم', followers: 'فولورز', connect: 'تواصل', socialMedia: 'سوشيال ميديا', viewAllCollection: 'شوف الكوليكسيون الكل', noProductsAvailable: 'ما ثماش سلع توا.', partner: 'بارتنر', checkOut: 'اكتشف', leaveReview: 'أعطي رايك', website: 'الموقع',
+  officialPartner: 'بارتنر رسمي', shopCollection: 'اشري م الكوليكسيون', follow: 'اصنع فولو', unfollow: 'نحي الفولو', rating: 'تقييم', followers: 'فولورز', connect: 'تواصل', socialMedia: 'سوشيال ميديا', viewAllCollection: 'شوف الكوليكسيون الكل', allProducts: 'كل السلع', noProducts: 'لا توجد سلع', noProductsAvailable: 'ما ثماش سلع توا.', partner: 'بارتنر', checkOut: 'اكتشف', leaveReview: 'أعطي رايك', website: 'الموقع',
   projects: 'مشاريع',
   settings: 'إعدادات', language: 'اللغة', signOut: 'خرج الكونت', info: 'معلومات', about: 'حول',
   writeReviewPlaceholder: 'شنوة رايك في البارتنر هذا؟', comment: 'تعليق',
@@ -693,6 +693,11 @@ export const ar = {
   giftSave: 'حفظ',
   addGift: 'إضافة هدية',
   listGifts: 'قائمة الهدايا',
+  location: 'الموقع',
+  useMyLocation: 'استعمل موقعي',
+  allZones: 'بكل البلايص',
+  locationDetected: 'لقينا موقعك',
+  filteringBy: 'هانا نصفيو بـ',
 };
 
 

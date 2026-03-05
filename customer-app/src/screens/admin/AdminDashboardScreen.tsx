@@ -15,6 +15,7 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { BlurView, AdminHeader } from '../../components/admin/AdminUI';
+import { BlurTargetView } from 'expo-blur';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2;
@@ -57,6 +58,7 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
     const [recentOrders, setRecentOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const scrollY = useRef(new Animated.Value(0)).current;
+    const blurTargetRef = useRef<View>(null);
 
     const fetchDashboardData = async () => {
         try {
@@ -153,142 +155,144 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
 
-            <AdminHeader title={t('dashboard')} onBack={onBack} />
+            <AdminHeader title={t('dashboard')} onBack={onBack} blurTarget={blurTargetRef} />
 
-            <Animated.ScrollView
-                contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
-                showsVerticalScrollIndicator={false}
-                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                scrollEventThrottle={16}
-            >
-                {loading ? <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 100 }} /> : (
-                    <>
-                        {profileData?.role === 'brand_owner' && (
-                            <View style={[
-                                sc.brandBanner,
-                                {
-                                    backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                    borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                }
-                            ]}>
-                                <View style={sc.brandBannerContent}>
-                                    <View>
-                                        <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
-                                        <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
-                                    </View>
-                                    <View style={[sc.badgeRole, { backgroundColor: 'rgba(52, 199, 89, 0.15)' }]}>
-                                        <Text style={[sc.badgeRoleText, { color: '#34C759' }]}>VERIFIED</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        )}
-
-                        <View style={sc.statsGrid}>
-                            <StatCard label={t('totalSales')} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
-                            <StatCard label={t('orders')} value={stats.orders.toString()} icon={Package} color="#5856D6" />
-                            {profileData?.role !== 'brand_owner' && (
-                                <StatCard label={t('clients')} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
-                            )}
-                            <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
-                        </View>
-
-                        {profileData?.role === 'admin' && (
-                            <>
-                                <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{t('quickActions').toUpperCase()}</Text>
-                                <TouchableOpacity
-                                    onPress={() => onNavigate && onNavigate('AdminKYC')}
-                                    style={[
-                                        sc.quickActionCard,
-                                        {
-                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                        }
-                                    ]}
-                                >
-                                    <View style={[sc.statIconBox, { backgroundColor: '#34C759' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
-                                        <ShieldCheck size={20} color="#34C759" />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('identityVerification')}</Text>
-                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('verifyIdentityDesc').toUpperCase()}</Text>
-                                    </View>
-                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    onPress={() => onNavigate && onNavigate('AdminNotreSelection')}
-                                    style={[
-                                        sc.quickActionCard,
-                                        {
-                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                        }
-                                    ]}
-                                >
-                                    <View style={[sc.statIconBox, { backgroundColor: '#10B981' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
-                                        <ListTree size={20} color="#10B981" />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('ourSelection')}</Text>
-                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('ourSelectionDesc').toUpperCase()}</Text>
-                                    </View>
-                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    onPress={() => onNavigate && onNavigate('AdminGifts')}
-                                    style={[
-                                        sc.quickActionCard,
-                                        {
-                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
-                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
-                                        }
-                                    ]}
-                                >
-                                    <View style={[sc.statIconBox, { backgroundColor: '#FFD700' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
-                                        <Gift size={20} color="#FFD700" />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('manageGifts')}</Text>
-                                        <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('manageGiftsDesc').toUpperCase()}</Text>
-                                    </View>
-                                    <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
-                                </TouchableOpacity>
-                            </>
-                        )}
-
-                        {recentOrders.length > 0 && (
-                            <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 25 }]}>{t('recentOrders').toUpperCase()}</Text>
-                        )}
-
-                        {recentOrders.map(order => (
-                            <View
-                                key={order.id}
-                                style={[
-                                    sc.orderCard,
+            <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                <Animated.ScrollView
+                    contentContainerStyle={[sc.scrollContent, { paddingTop: insets.top + 80 }]}
+                    showsVerticalScrollIndicator={false}
+                    onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+                    scrollEventThrottle={16}
+                >
+                    {loading ? <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 100 }} /> : (
+                        <>
+                            {profileData?.role === 'brand_owner' && (
+                                <View style={[
+                                    sc.brandBanner,
                                     {
                                         backgroundColor: isDark ? '#111118' : '#FFFFFF',
                                         borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
                                     }
-                                ]}
-                            >
-                                <View style={sc.orderRow}>
-                                    <Text style={[sc.orderId, { color: colors.foreground }]}>#{order.id.slice(0, 8).toUpperCase()}</Text>
-                                    <Text style={[sc.orderTotal, { color: colors.foreground }]}>{order.total.toFixed(2)} TND</Text>
-                                </View>
-                                <View style={sc.orderRow}>
-                                    <View style={[sc.statusTag, { backgroundColor: getStatusColor(order.status) + '15' }]}>
-                                        <Text style={[sc.statusText, { color: getStatusColor(order.status) }]}>{getStatusLabel(order.status).toUpperCase()}</Text>
+                                ]}>
+                                    <View style={sc.brandBannerContent}>
+                                        <View>
+                                            <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
+                                            <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
+                                        </View>
+                                        <View style={[sc.badgeRole, { backgroundColor: 'rgba(52, 199, 89, 0.15)' }]}>
+                                            <Text style={[sc.badgeRoleText, { color: '#34C759' }]}>VERIFIED</Text>
+                                        </View>
                                     </View>
-                                    <Text style={[sc.orderDate, { color: colors.textMuted }]}>
-                                        {new Date(order.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}
-                                    </Text>
                                 </View>
+                            )}
+
+                            <View style={sc.statsGrid}>
+                                <StatCard label={t('totalSales')} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
+                                <StatCard label={t('orders')} value={stats.orders.toString()} icon={Package} color="#5856D6" />
+                                {profileData?.role !== 'brand_owner' && (
+                                    <StatCard label={t('clients')} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
+                                )}
+                                <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />
                             </View>
-                        ))}
-                    </>
-                )}
-            </Animated.ScrollView>
+
+                            {profileData?.role === 'admin' && (
+                                <>
+                                    <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 10 }]}>{t('quickActions').toUpperCase()}</Text>
+                                    <TouchableOpacity
+                                        onPress={() => onNavigate && onNavigate('AdminKYC')}
+                                        style={[
+                                            sc.quickActionCard,
+                                            {
+                                                backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                                borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                            }
+                                        ]}
+                                    >
+                                        <View style={[sc.statIconBox, { backgroundColor: '#34C759' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                            <ShieldCheck size={20} color="#34C759" />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                            <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('identityVerification')}</Text>
+                                            <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('verifyIdentityDesc').toUpperCase()}</Text>
+                                        </View>
+                                        <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() => onNavigate && onNavigate('AdminNotreSelection')}
+                                        style={[
+                                            sc.quickActionCard,
+                                            {
+                                                backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                                borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                            }
+                                        ]}
+                                    >
+                                        <View style={[sc.statIconBox, { backgroundColor: '#10B981' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                            <ListTree size={20} color="#10B981" />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                            <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('ourSelection')}</Text>
+                                            <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('ourSelectionDesc').toUpperCase()}</Text>
+                                        </View>
+                                        <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() => onNavigate && onNavigate('AdminGifts')}
+                                        style={[
+                                            sc.quickActionCard,
+                                            {
+                                                backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                                borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                            }
+                                        ]}
+                                    >
+                                        <View style={[sc.statIconBox, { backgroundColor: '#FFD700' + (isDark ? '20' : '14'), marginBottom: 0 }]}>
+                                            <Gift size={20} color="#FFD700" />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                            <Text style={[sc.quickActionTitle, { color: colors.foreground }]}>{t('manageGifts')}</Text>
+                                            <Text style={[sc.quickActionSub, { color: colors.textMuted }]}>{t('manageGiftsDesc').toUpperCase()}</Text>
+                                        </View>
+                                        <ChevronLeft size={18} color={colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+                                    </TouchableOpacity>
+                                </>
+                            )}
+
+                            {recentOrders.length > 0 && (
+                                <Text style={[sc.sectionTitle, { color: colors.foreground, marginTop: 25 }]}>{t('recentOrders').toUpperCase()}</Text>
+                            )}
+
+                            {recentOrders.map(order => (
+                                <View
+                                    key={order.id}
+                                    style={[
+                                        sc.orderCard,
+                                        {
+                                            backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'
+                                        }
+                                    ]}
+                                >
+                                    <View style={sc.orderRow}>
+                                        <Text style={[sc.orderId, { color: colors.foreground }]}>#{order.id.slice(0, 8).toUpperCase()}</Text>
+                                        <Text style={[sc.orderTotal, { color: colors.foreground }]}>{order.total.toFixed(2)} TND</Text>
+                                    </View>
+                                    <View style={sc.orderRow}>
+                                        <View style={[sc.statusTag, { backgroundColor: getStatusColor(order.status) + '15' }]}>
+                                            <Text style={[sc.statusText, { color: getStatusColor(order.status) }]}>{getStatusLabel(order.status).toUpperCase()}</Text>
+                                        </View>
+                                        <Text style={[sc.orderDate, { color: colors.textMuted }]}>
+                                            {new Date(order.createdAt?.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR')}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </>
+                    )}
+                </Animated.ScrollView>
+            </BlurTargetView>
         </View>
     );
 }

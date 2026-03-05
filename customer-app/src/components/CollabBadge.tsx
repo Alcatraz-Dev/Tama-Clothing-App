@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
+import { useRef } from 'react';
 import QRCode from 'react-native-qrcode-svg';
 import Animated, {
     useAnimatedStyle,
@@ -39,6 +40,8 @@ interface CollabBadgeProps {
 }
 
 export default function CollabBadge({ collab, isDark, language, onClose, onVisitProfile, t }: CollabBadgeProps) {
+    const frontTargetRef = useRef<View>(null);
+    const backTargetRef = useRef<View>(null);
     const getName = (field: any, fallback = '') => {
         if (!field) return fallback;
         if (typeof field === 'string') return field;
@@ -101,12 +104,20 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
                     <View style={{ width: BADGE_WIDTH, height: BADGE_HEIGHT }}>
                         {/* FRONT SIDE */}
                         <Animated.View style={[styles.card, frontStyle, { backfaceVisibility: 'hidden' }]}>
-                            <Image
-                                source={{ uri: collab.imageUrl }}
+                            <BlurTargetView ref={frontTargetRef} style={StyleSheet.absoluteFillObject}>
+                                <Image
+                                    source={{ uri: collab.imageUrl }}
+                                    style={StyleSheet.absoluteFillObject}
+                                    resizeMode="cover"
+                                />
+                            </BlurTargetView>
+                            <BlurView
+                                blurTarget={frontTargetRef}
+                                intensity={80}
+                                tint={isDark ? 'dark' : 'light'}
                                 style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
+                                blurMethod="dimezisBlurView"
                             />
-                            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFillObject} />
 
                             <View style={styles.frontContent}>
                                 <View style={styles.header}>
@@ -190,12 +201,20 @@ export default function CollabBadge({ collab, isDark, language, onClose, onVisit
 
                         {/* BACK SIDE */}
                         <Animated.View style={[styles.card, backStyle, styles.backCard, { backfaceVisibility: 'hidden' }]}>
-                            <Image
-                                source={{ uri: collab.imageUrl }}
+                            <BlurTargetView ref={backTargetRef} style={StyleSheet.absoluteFillObject}>
+                                <Image
+                                    source={{ uri: collab.imageUrl }}
+                                    style={StyleSheet.absoluteFillObject}
+                                    resizeMode="cover"
+                                />
+                            </BlurTargetView>
+                            <BlurView
+                                blurTarget={backTargetRef}
+                                intensity={100}
+                                tint={isDark ? 'dark' : 'light'}
                                 style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
+                                blurMethod="dimezisBlurView"
                             />
-                            <BlurView intensity={100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFillObject} />
 
                             <View style={styles.backContent}>
                                 <View style={styles.backHeader}>

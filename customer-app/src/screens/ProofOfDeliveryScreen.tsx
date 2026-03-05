@@ -29,10 +29,10 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
         return (
             <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
                 <Text style={{ color: colors.foreground, textAlign: 'center', marginBottom: 20 }}>
-                    We need your permission to show the camera
+                    {translate('cameraPermissionMsg')}
                 </Text>
                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.foreground }]} onPress={requestPermission}>
-                    <Text style={{ color: theme === 'dark' ? '#000' : '#FFF' }}>Grant Permission</Text>
+                    <Text style={{ color: theme === 'dark' ? '#000' : '#FFF' }}>{translate('grantPermission')}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -44,7 +44,7 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
                 const result = await cameraRef.current.takePictureAsync();
                 setPhoto(result);
             } catch (err) {
-                Alert.alert("Error", "Failed to take photo");
+                Alert.alert(translate('error'), translate('failedTakePhoto') || 'Failed to take photo');
             }
         }
     };
@@ -70,7 +70,7 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
             onComplete();
         } catch (error: any) {
             console.error(error);
-            Alert.alert(translate('error') || 'Error', error.message);
+            Alert.alert(translate('error'), error.message);
         } finally {
             setLoading(false);
         }
@@ -96,7 +96,7 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
                             disabled={loading}
                         >
                             <RefreshCcw size={24} color="#FFF" />
-                            <Text style={styles.actionBtnText}>{translate('retake') || 'Retake'}</Text>
+                            <Text style={styles.actionBtnText}>{translate('retake')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.actionBtn, { backgroundColor: '#10B981' }]}

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { useColor } from "@/hooks/useColor";
-import { Clock, Heart, Play, ShoppingBag, Star } from "lucide-react-native";
+import { Clock, Heart, Play, ShoppingBag, Spool, Star, Store } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   Dimensions,
@@ -89,6 +89,7 @@ export default function ProductCard({
   horizontal = false,
   customWidth,
   flashSaleEndTime,
+  colors,
 }: ProductCardProps) {
   const bgColor = useColor("card");
   const fgColor = useColor("foreground");
@@ -175,13 +176,34 @@ export default function ProductCard({
                 </Text>
               </View>
             )}
-            <Text
-              variant="caption"
-              style={styles.heroBrandName}
-              numberOfLines={1}
-            >
-              {product.brandName || "BEY3A"}
-            </Text>
+            {(product.categoryName || product.subCategoryName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                {product.categoryName && (
+                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '800' }}>
+                    {getName(product.categoryName).toUpperCase()}
+                  </Text>
+                )}
+                {product.subCategoryName && (
+                  <>
+                    <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+                    <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '800' }}>
+                      {getName(product.subCategoryName).toUpperCase()}
+                    </Text>
+                  </>
+                )}
+                <View style={{ width: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 2 }} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Store size={8} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text
+                    variant="caption"
+                    style={[styles.heroBrandName, { marginBottom: 0, fontSize: 9 }]}
+                    numberOfLines={1}
+                  >
+                    {String(product.brandName || product.marque || "TAMA CLOTHING").toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            )}
             <Text
               variant="title"
               style={styles.heroProductName}
@@ -287,12 +309,15 @@ export default function ProductCard({
         <View style={styles.horizontalInfo}>
           <View>
             {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
-            <Text
-              variant="caption"
-              style={{ color: textMutedColor, letterSpacing: 0.5 }}
-            >
-              {String(getName(product.brandName) || "BEY3A").toUpperCase()}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+              <Store size={10} color={colors?.accent || fgColor} />
+              <Text
+                variant="caption"
+                style={{ color: textMutedColor, letterSpacing: 0.5 }}
+              >
+                {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
+              </Text>
+            </View>
             <Text
               variant="subtitle"
               style={{ color: fgColor }}
@@ -418,13 +443,34 @@ export default function ProductCard({
               </Text>
             </View>
           )}
-          <Text
-            variant="caption"
-            style={styles.modernBrandName}
-            numberOfLines={1}
-          >
-            {String(getName(product.brandName) || "BEY3A").toUpperCase()}
-          </Text>
+          {(product.categoryName || product.subCategoryName) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, flexWrap: 'wrap' }}>
+              {product.categoryName && (
+                <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
+                  {getName(product.categoryName).toUpperCase()}
+                </Text>
+              )}
+              {product.subCategoryName && (
+                <>
+                  <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
+                    {getName(product.subCategoryName).toUpperCase()}
+                  </Text>
+                </>
+              )}
+              <View style={{ width: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <Store size={8} color="rgba(255,255,255,0.8)" />
+                <Text
+                  variant="caption"
+                  style={[styles.modernBrandName, { marginBottom: 0, fontSize: 8, fontWeight: '800' }]}
+                  numberOfLines={1}
+                >
+                  {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          )}
           <Text
             variant="subtitle"
             style={styles.modernProductName}

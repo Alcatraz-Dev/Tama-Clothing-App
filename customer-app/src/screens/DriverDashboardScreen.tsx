@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Animatable from 'react-native-animatable';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../context/ThemeContext';
 import { db, rtdb } from '../api/firebase';
@@ -58,6 +58,7 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
     const [currentLocation, setCurrentLocation] = useState<any>(null);
     const [eta, setEta] = useState<string>('');
     const mapRef = React.useRef<MapView>(null);
+    const blurTargetRef = React.useRef<View>(null);
 
     const translate = t || ((k: string) => k);
 
@@ -83,8 +84,8 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
         return 'pending';
     };
 
-    const deliveryPhase = useMemo(() => 
-        selectedShipment ? getDeliveryPhase(selectedShipment.status) : 'pending', 
+    const deliveryPhase = useMemo(() =>
+        selectedShipment ? getDeliveryPhase(selectedShipment.status) : 'pending',
         [selectedShipment?.status]
     );
 
@@ -523,67 +524,75 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
 
             <Modal visible={showMap} animationType="slide">
                 <View style={{ flex: 1, backgroundColor: '#000' }}>
-                    <MapView
-                        ref={mapRef}
-                        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                        style={StyleSheet.absoluteFill}
-                        customMapStyle={mapStyle}
-                        initialRegion={{
-                            latitude: currentLocation?.latitude || selectedShipment?.deliveryLocation?.latitude || 35.8256,
-                            longitude: currentLocation?.longitude || selectedShipment?.deliveryLocation?.longitude || 10.6369,
-                            latitudeDelta: 0.05,
-                            longitudeDelta: 0.05,
-                        }}
+                    <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
+                        <MapView
+                            ref={mapRef}
+                            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                            style={StyleSheet.absoluteFill}
+                            customMapStyle={mapStyle}
+                            initialRegion={{
+                                latitude: currentLocation?.latitude || selectedShipment?.deliveryLocation?.latitude || 35.8256,
+                                longitude: currentLocation?.longitude || selectedShipment?.deliveryLocation?.longitude || 10.6369,
+                                latitudeDelta: 0.05,
+                                longitudeDelta: 0.05,
+                            }}
+                        >
+                            {/* Pickup/Merchant Location - shown when picking up */}
+                            {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && selectedShipment?.pickupLocation) && (
+                                <Marker coordinate={selectedShipment.pickupLocation} title={translate('pickupLocation') || 'Pickup Location'}>
+                                    <View style={[styles.driverMarker, { backgroundColor: '#F59E0B' }]}>
+                                        <MapPin size={20} color="#FFF" />
+                                    </View>
+                                </Marker>
+                            )}
+
+                            {/* Driver Location */}
+                            {currentLocation && (
+                                <Marker coordinate={currentLocation} title="You">
+                                    <Animatable.View animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'} iterationCount="infinite" style={styles.driverMarker}>
+                                        <Truck size={20} color="#FFF" />
+                                    </Animatable.View>
+                                </Marker>
+                            )}
+
+                            {/* Delivery Location */}
+                            {selectedShipment?.deliveryLocation && (
+                                <Marker coordinate={selectedShipment.deliveryLocation} title="Destination">
+                                    <View style={[styles.driverMarker, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
+                                        <Package size={20} color="#FFF" />
+                                    </View>
+                                </Marker>
+                            )}
+
+                            {/* Route: From driver to delivery when in transit */}
+                            {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && currentLocation && selectedShipment?.deliveryLocation && (
+                                <Polyline
+                                    coordinates={[currentLocation, selectedShipment.deliveryLocation]}
+                                    strokeColor={deliveryPhase === 'out_for_delivery' ? '#10B981' : '#3B82F6'}
+                                    strokeWidth={4}
+                                    lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [10, 10]}
+                                />
+                            )}
+
+                            {/* Route: From pickup to delivery when at pickup phase */}
+                            {deliveryPhase === 'picking_up' && selectedShipment?.pickupLocation && selectedShipment?.deliveryLocation && (
+                                <Polyline
+                                    coordinates={[selectedShipment.pickupLocation, selectedShipment.deliveryLocation]}
+                                    strokeColor="#F59E0B"
+                                    strokeWidth={3}
+                                    lineDashPattern={[6, 3]}
+                                />
+                            )}
+                        </MapView>
+                    </BlurTargetView>
+
+                    <BlurView
+                        intensity={80}
+                        tint="dark"
+                        blurTarget={blurTargetRef}
+                        blurMethod="dimezisBlurView"
+                        style={styles.mapHeader}
                     >
-                        {/* Pickup/Merchant Location - shown when picking up */}
-                        {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && selectedShipment?.pickupLocation) && (
-                            <Marker coordinate={selectedShipment.pickupLocation} title={translate('pickupLocation') || 'Pickup Location'}>
-                                <View style={[styles.driverMarker, { backgroundColor: '#F59E0B' }]}>
-                                    <MapPin size={20} color="#FFF" />
-                                </View>
-                            </Marker>
-                        )}
-
-                        {/* Driver Location */}
-                        {currentLocation && (
-                            <Marker coordinate={currentLocation} title="You">
-                                <Animatable.View animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'} iterationCount="infinite" style={styles.driverMarker}>
-                                    <Truck size={20} color="#FFF" />
-                                </Animatable.View>
-                            </Marker>
-                        )}
-
-                        {/* Delivery Location */}
-                        {selectedShipment?.deliveryLocation && (
-                            <Marker coordinate={selectedShipment.deliveryLocation} title="Destination">
-                                <View style={[styles.driverMarker, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
-                                    <Package size={20} color="#FFF" />
-                                </View>
-                            </Marker>
-                        )}
-
-                        {/* Route: From driver to delivery when in transit */}
-                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && currentLocation && selectedShipment?.deliveryLocation && (
-                            <Polyline
-                                coordinates={[currentLocation, selectedShipment.deliveryLocation]}
-                                strokeColor={deliveryPhase === 'out_for_delivery' ? '#10B981' : '#3B82F6'}
-                                strokeWidth={4}
-                                lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [10, 10]}
-                            />
-                        )}
-
-                        {/* Route: From pickup to delivery when at pickup phase */}
-                        {deliveryPhase === 'picking_up' && selectedShipment?.pickupLocation && selectedShipment?.deliveryLocation && (
-                            <Polyline
-                                coordinates={[selectedShipment.pickupLocation, selectedShipment.deliveryLocation]}
-                                strokeColor="#F59E0B"
-                                strokeWidth={3}
-                                lineDashPattern={[6, 3]}
-                            />
-                        )}
-                    </MapView>
-
-                    <BlurView intensity={80} tint="dark" style={styles.mapHeader}>
                         <TouchableOpacity onPress={() => setShowMap(false)} style={styles.closeMapBtn}>
                             <X color="#FFF" size={24} />
                         </TouchableOpacity>
@@ -594,7 +603,13 @@ export default function DriverDashboardScreen({ user, profileData, onBack, onOpe
                     </BlurView>
 
                     <View style={styles.mapFooter}>
-                        <BlurView intensity={90} tint="dark" style={styles.etaBadge}>
+                        <BlurView
+                            intensity={90}
+                            tint="dark"
+                            blurTarget={blurTargetRef}
+                            blurMethod="dimezisBlurView"
+                            style={styles.etaBadge}
+                        >
                             <Clock size={16} color="#FFCC00" />
                             <Text style={styles.etaText}>ETA: {eta}</Text>
                         </BlurView>

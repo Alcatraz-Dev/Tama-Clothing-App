@@ -80,15 +80,15 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     .filter(shipment => {
                         // Filter out deleted shipments
                         if (shipment.deletedForCustomer === true) return false;
-                        
+
                         // Filter by sender or receiver
                         const isSender = shipment.senderId === auth.currentUser?.uid;
-                        const isReceiver = profileData?.phone && 
+                        const isReceiver = profileData?.phone &&
                             shipment.receiverPhone === profileData.phone;
-                        
+
                         return isSender || isReceiver;
                     });
-                
+
                 setShipments(shipmentsList);
                 setLoading(false);
                 setRefreshing(false);
@@ -162,7 +162,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                             await deliveryService.deleteDelivery(id);
                         } catch (error) {
                             console.error('Error deleting shipment:', error);
-                            Alert.alert(translate('error'), 'Failed to delete shipment');
+                            Alert.alert(translate('error'), translate('failedDeleteShipment'));
                         }
                     }
                 }
@@ -224,7 +224,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                                 {translate('deliveryAddress')}
                             </Text>
                             <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={2}>
-                                {shipment.deliveryAddress || 'N/A'}
+                                {shipment.deliveryAddress || translate('na')}
                             </Text>
                         </View>
                     </View>
@@ -274,7 +274,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                         <ArrowLeft color={colors.foreground} size={24} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                        {translate('myShipments') || 'My Shipments'}
+                        {translate('myShipments')}
                     </Text>
                     <View style={{ width: 24 }} />
                 </View>
@@ -290,7 +290,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     <ArrowLeft color={colors.foreground} size={24} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                    {translate('myShipments') || 'My Shipments'}
+                    {translate('myShipments')}
                 </Text>
                 <View style={{ width: 24 }} />
             </View>
@@ -301,7 +301,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('all')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'all' ? colors.foreground : colors.textMuted }]}>
-                        {String(translate('all') || 'TOUT').toUpperCase()} ({shipments?.length || 0})
+                        {String(translate('all')).toUpperCase()} ({shipments?.length || 0})
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -309,7 +309,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('pending')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'pending' ? colors.foreground : colors.textMuted }]}>
-                        {String(translate('pending') || 'EN ATTENTE').toUpperCase()} ({shipments?.filter(s => {
+                        {String(translate('pending')).toUpperCase()} ({shipments?.filter(s => {
                             const st = s?.status?.toLowerCase() || '';
                             return st !== 'delivered' && st !== 'cancelled';
                         })?.length || 0})
@@ -320,7 +320,7 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     onPress={() => setActiveTab('delivered')}
                 >
                     <Text style={[styles.tabText, { color: activeTab === 'delivered' ? colors.foreground : colors.textMuted }]}>
-                        {String(translate('delivered') || 'LIVRÉ').toUpperCase()} ({shipments?.filter(s => (s?.status?.toLowerCase() || '') === 'delivered')?.length || 0})
+                        {String(translate('delivered')).toUpperCase()} ({shipments?.filter(s => (s?.status?.toLowerCase() || '') === 'delivered')?.length || 0})
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -344,10 +344,10 @@ export default function MyShipmentsScreen({ onBack, onTrackShipment, t, user, pr
                     <View style={styles.emptyContainer}>
                         <Package size={64} color={colors.border} />
                         <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                            {translate('noShipments') || 'No shipments yet'}
+                            {translate('noShipments')}
                         </Text>
                         <Text style={[styles.emptySubText, { color: colors.textMuted }]}>
-                            {translate('createFirstShipment') || 'Create your first shipment to get started'}
+                            {translate('createFirstShipment')}
                         </Text>
                     </View>
                 }
@@ -425,8 +425,8 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 6,
         gap: 4,
-        width:"100%",
-        maxWidth:170
+        width: "100%",
+        maxWidth: 170
     },
     statusText: {
         fontSize: 10,

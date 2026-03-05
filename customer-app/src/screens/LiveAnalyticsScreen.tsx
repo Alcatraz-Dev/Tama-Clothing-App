@@ -9,7 +9,8 @@ import {
     StatusBar,
     Platform,
 } from "react-native";
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
+import { useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     ChevronLeft,
@@ -61,6 +62,7 @@ type Props = {
 };
 
 export default function LiveAnalyticsScreen(props: Props) {
+    const blurTargetRef = useRef<View>(null);
     const insets = useSafeAreaInsets();
     const isDark = props.theme === 'dark';
     const primaryColor = useColor('primary');
@@ -223,7 +225,13 @@ export default function LiveAnalyticsScreen(props: Props) {
 
             {/* Glass Header */}
             <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: 'transparent' }]}>
-                <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                <BlurView
+                    blurTarget={blurTargetRef}
+                    intensity={Platform.OS === 'ios' ? 80 : 100}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={StyleSheet.absoluteFill}
+                    blurMethod="dimezisBlurView"
+                />
                 <View style={styles.headerContent}>
                     <TouchableOpacity onPress={handleBack} style={[styles.iconBtn, { backgroundColor: isDark ? '#1A1A1A' : '#EEE' }]}>
                         <ChevronLeft size={22} color={foregroundColor} />
@@ -241,151 +249,153 @@ export default function LiveAnalyticsScreen(props: Props) {
                 </View>
             </View>
 
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={{ paddingTop: insets.top + 90, paddingBottom: insets.bottom + 40 }}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Host Info Card */}
-                <Animatable.View animation="fadeInDown" duration={800} style={styles.mainCard}>
-                    <LinearGradient
-                        colors={isDark ? ['#121212', '#0A0A0A'] : ['#FFFFFF', '#FDFDFD']}
-                        style={styles.gradientBorder}
-                    >
-                        <View style={styles.hostRow}>
-                            <View style={styles.hostInfo}>
-                                <Text style={styles.hostName}>{sessionData.hostName || t('liveSession')}</Text>
-                                <View style={styles.dateRow}>
-                                    <Calendar size={12} color={textColorMuted} />
-                                    <Text style={styles.dateText}>{formatDate(sessionData.startedAt)}</Text>
-                                </View>
-                            </View>
-                            <View style={[styles.liveIndicator, { backgroundColor: primaryColor + '20' }]}>
-                                <Target size={14} color={primaryColor} />
-                            </View>
-                        </View>
-                        <Separator style={{ marginVertical: 15, opacity: 0.1 }} />
-                        <Text style={styles.summaryDesc}>{t('analyticsSummaryDescription')}</Text>
-                    </LinearGradient>
-                </Animatable.View>
-
-                {/* Main Stats Grid */}
-                <View style={styles.statsGrid}>
-                    {stats.map((stat, index) => (
-                        <Animatable.View
-                            key={stat.id}
-                            animation="fadeInUp"
-                            delay={100 + index * 50}
-                            style={styles.statItem}
-                        >
-                            <View style={[styles.statBox, { backgroundColor: isDark ? '#111' : '#FFF' }]}>
-                                <LinearGradient colors={[stat.color + '20', 'transparent']} style={styles.statGradient} />
-                                <View style={[styles.statIconCircle, { backgroundColor: stat.color + '15' }]}>
-                                    <stat.icon size={20} color={stat.color} />
-                                </View>
-                                <Text style={styles.statValLabel}>{stat.value}</Text>
-                                <Text style={styles.statLabelText}>{stat.label}</Text>
-                            </View>
-                        </Animatable.View>
-                    ))}
-                </View>
-
-                {/* Performance Charts */}
-                <View style={styles.sectionHeader}>
-                    <TrendingUp size={20} color={primaryColor} />
-                    <Text style={styles.sectionTitle}>{t('performanceTrend')}</Text>
-                </View>
-
-                <Animatable.View animation="fadeInUp" delay={400} style={styles.chartWrapper}>
-                    <Card style={styles.chartCard}>
-                        <CardHeader style={styles.chartHeader}>
-                            <View style={styles.chartHeaderTitleRow}>
-                                <LineChartIcon size={18} color={primaryColor} />
-                                <CardTitle style={styles.chartTitleText}>{t('audienceRetention')}</CardTitle>
-                            </View>
-                            <TouchableOpacity style={styles.infoBtn}>
-                                <ArrowUpRight size={16} color={primaryColor} />
-                            </TouchableOpacity>
-                        </CardHeader>
-                        <CardContent style={{ paddingBottom: 10 }}>
-                            <LineChart
-                                data={viewerTrendData}
-                                config={{
-                                    height: 200,
-                                    gradient: true,
-                                    animated: true,
-                                    showGrid: true,
-                                    interactive: true,
-                                    showYLabels: true,
-                                    yLabelCount: 4,
-                                    padding: 20
-                                }}
-                            />
-                            <View style={styles.peakRow}>
-                                <Text style={styles.peakText}>
-                                    {t('peakViewers')}: <Text style={{ color: primaryColor, fontWeight: '900' }}>{sessionData.peakViewers || 0}</Text>
-                                </Text>
-                            </View>
-                        </CardContent>
-                    </Card>
-                </Animatable.View>
-
-                <Animatable.View animation="fadeInUp" delay={500} style={styles.chartWrapper}>
-                    <Card style={styles.chartCard}>
-                        <CardHeader style={styles.chartHeader}>
-                            <View style={styles.chartHeaderTitleRow}>
-                                <BarChart3 size={18} color="#7209B7" />
-                                <CardTitle style={styles.chartTitleText}>{t('engagementMetrics')}</CardTitle>
-                            </View>
-                        </CardHeader>
-                        <CardContent>
-                            <BarChart
-                                data={engagementData}
-                                config={{
-                                    height: 200,
-                                    animated: true,
-                                    duration: 1000
-                                }}
-                            />
-                        </CardContent>
-                    </Card>
-                </Animatable.View>
-
-                {/* Engagement Metrics Ribbon */}
-                <Animatable.View
-                    animation="fadeInUp"
-                    delay={600}
-                    style={[
-                        styles.metricsRibbon,
-                        { backgroundColor: isDark ? '#111' : '#FFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-                    ]}
+            <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={{ paddingTop: insets.top + 90, paddingBottom: insets.bottom + 40 }}
+                    showsVerticalScrollIndicator={false}
                 >
-                    <View style={styles.ribbonHeader}>
-                        <Zap size={18} color="#FF9F1C" />
-                        <Text style={[styles.ribbonTitle, { color: isDark ? '#FFF' : '#333' }]}>{t('engagementRate')}</Text>
-                    </View>
-                    <View style={styles.ribbonContent}>
-                        <View style={styles.ribbonItem}>
-                            <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('likesPerMin')}</Text>
-                            <Text style={[styles.ribbonVal, { color: '#FF4D6D' }]}>{engagement.likesPerMin}</Text>
-                        </View>
-                        <View style={styles.ribbonDivider} />
-                        <View style={styles.ribbonItem}>
-                            <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('giftsPerMin')}</Text>
-                            <Text style={[styles.ribbonVal, { color: '#7209B7' }]}>{engagement.giftsPerMin}</Text>
-                        </View>
-                        <View style={styles.ribbonDivider} />
-                        <View style={styles.ribbonItem}>
-                            <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('avgViewers')}</Text>
-                            <Text style={[styles.ribbonVal, { color: '#4361EE' }]}>{engagement.avgViewers}</Text>
-                        </View>
-                    </View>
-                </Animatable.View>
+                    {/* Host Info Card */}
+                    <Animatable.View animation="fadeInDown" duration={800} style={styles.mainCard}>
+                        <LinearGradient
+                            colors={isDark ? ['#121212', '#0A0A0A'] : ['#FFFFFF', '#FDFDFD']}
+                            style={styles.gradientBorder}
+                        >
+                            <View style={styles.hostRow}>
+                                <View style={styles.hostInfo}>
+                                    <Text style={styles.hostName}>{sessionData.hostName || t('liveSession')}</Text>
+                                    <View style={styles.dateRow}>
+                                        <Calendar size={12} color={textColorMuted} />
+                                        <Text style={styles.dateText}>{formatDate(sessionData.startedAt)}</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.liveIndicator, { backgroundColor: primaryColor + '20' }]}>
+                                    <Target size={14} color={primaryColor} />
+                                </View>
+                            </View>
+                            <Separator style={{ marginVertical: 15, opacity: 0.1 }} />
+                            <Text style={styles.summaryDesc}>{t('analyticsSummaryDescription')}</Text>
+                        </LinearGradient>
+                    </Animatable.View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>{t('analyticsGeneratedByBey3a') || 'Analytics provided by Bey3a'}</Text>
-                </View>
-            </ScrollView>
+                    {/* Main Stats Grid */}
+                    <View style={styles.statsGrid}>
+                        {stats.map((stat, index) => (
+                            <Animatable.View
+                                key={stat.id}
+                                animation="fadeInUp"
+                                delay={100 + index * 50}
+                                style={styles.statItem}
+                            >
+                                <View style={[styles.statBox, { backgroundColor: isDark ? '#111' : '#FFF' }]}>
+                                    <LinearGradient colors={[stat.color + '20', 'transparent']} style={styles.statGradient} />
+                                    <View style={[styles.statIconCircle, { backgroundColor: stat.color + '15' }]}>
+                                        <stat.icon size={20} color={stat.color} />
+                                    </View>
+                                    <Text style={styles.statValLabel}>{stat.value}</Text>
+                                    <Text style={styles.statLabelText}>{stat.label}</Text>
+                                </View>
+                            </Animatable.View>
+                        ))}
+                    </View>
+
+                    {/* Performance Charts */}
+                    <View style={styles.sectionHeader}>
+                        <TrendingUp size={20} color={primaryColor} />
+                        <Text style={styles.sectionTitle}>{t('performanceTrend')}</Text>
+                    </View>
+
+                    <Animatable.View animation="fadeInUp" delay={400} style={styles.chartWrapper}>
+                        <Card style={styles.chartCard}>
+                            <CardHeader style={styles.chartHeader}>
+                                <View style={styles.chartHeaderTitleRow}>
+                                    <LineChartIcon size={18} color={primaryColor} />
+                                    <CardTitle style={styles.chartTitleText}>{t('audienceRetention')}</CardTitle>
+                                </View>
+                                <TouchableOpacity style={styles.infoBtn}>
+                                    <ArrowUpRight size={16} color={primaryColor} />
+                                </TouchableOpacity>
+                            </CardHeader>
+                            <CardContent style={{ paddingBottom: 10 }}>
+                                <LineChart
+                                    data={viewerTrendData}
+                                    config={{
+                                        height: 200,
+                                        gradient: true,
+                                        animated: true,
+                                        showGrid: true,
+                                        interactive: true,
+                                        showYLabels: true,
+                                        yLabelCount: 4,
+                                        padding: 20
+                                    }}
+                                />
+                                <View style={styles.peakRow}>
+                                    <Text style={styles.peakText}>
+                                        {t('peakViewers')}: <Text style={{ color: primaryColor, fontWeight: '900' }}>{sessionData.peakViewers || 0}</Text>
+                                    </Text>
+                                </View>
+                            </CardContent>
+                        </Card>
+                    </Animatable.View>
+
+                    <Animatable.View animation="fadeInUp" delay={500} style={styles.chartWrapper}>
+                        <Card style={styles.chartCard}>
+                            <CardHeader style={styles.chartHeader}>
+                                <View style={styles.chartHeaderTitleRow}>
+                                    <BarChart3 size={18} color="#7209B7" />
+                                    <CardTitle style={styles.chartTitleText}>{t('engagementMetrics')}</CardTitle>
+                                </View>
+                            </CardHeader>
+                            <CardContent>
+                                <BarChart
+                                    data={engagementData}
+                                    config={{
+                                        height: 200,
+                                        animated: true,
+                                        duration: 1000
+                                    }}
+                                />
+                            </CardContent>
+                        </Card>
+                    </Animatable.View>
+
+                    {/* Engagement Metrics Ribbon */}
+                    <Animatable.View
+                        animation="fadeInUp"
+                        delay={600}
+                        style={[
+                            styles.metricsRibbon,
+                            { backgroundColor: isDark ? '#111' : '#FFF', borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+                        ]}
+                    >
+                        <View style={styles.ribbonHeader}>
+                            <Zap size={18} color="#FF9F1C" />
+                            <Text style={[styles.ribbonTitle, { color: isDark ? '#FFF' : '#333' }]}>{t('engagementRate')}</Text>
+                        </View>
+                        <View style={styles.ribbonContent}>
+                            <View style={styles.ribbonItem}>
+                                <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('likesPerMin')}</Text>
+                                <Text style={[styles.ribbonVal, { color: '#FF4D6D' }]}>{engagement.likesPerMin}</Text>
+                            </View>
+                            <View style={styles.ribbonDivider} />
+                            <View style={styles.ribbonItem}>
+                                <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('giftsPerMin')}</Text>
+                                <Text style={[styles.ribbonVal, { color: '#7209B7' }]}>{engagement.giftsPerMin}</Text>
+                            </View>
+                            <View style={styles.ribbonDivider} />
+                            <View style={styles.ribbonItem}>
+                                <Text style={[styles.ribbonLabel, { color: isDark ? '#FFF' : '#666' }]}>{t('avgViewers')}</Text>
+                                <Text style={[styles.ribbonVal, { color: '#4361EE' }]}>{engagement.avgViewers}</Text>
+                            </View>
+                        </View>
+                    </Animatable.View>
+
+                    <View style={styles.footer}>
+                        <Text style={styles.footerText}>{t('analyticsGeneratedByBey3a') || 'Analytics provided by Bey3a'}</Text>
+                    </View>
+                </ScrollView>
+            </BlurTargetView>
         </View>
     );
 }

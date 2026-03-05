@@ -34,7 +34,7 @@ import {
 import { useOrderTracking } from '../../hooks/useOrderTracking';
 import { deliveryService } from '../../services/deliveryService';
 import { getDeliveryStatusColor, getDeliveryStatusLabel } from '../../types/delivery';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
 import QRCode from 'react-native-qrcode-svg';
 import Animated, {
   FadeIn,
@@ -110,6 +110,7 @@ export default function OrderTrackingScreen({
   const insets = useSafeAreaInsets();
   const isDark = theme === 'dark';
   const mapRef = useRef<MapView>(null);
+  const blurTargetRef = useRef<View>(null);
   const isRtl = language === 'ar';
 
   const { order, isLoading, eta } = useOrderTracking({ orderId, language });
@@ -197,78 +198,81 @@ export default function OrderTrackingScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* MAP VIEW */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        initialRegion={{
-          latitude: order.driverLocation?.latitude || order.deliveryLatitude,
-          longitude: order.driverLocation?.longitude || order.deliveryLongitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        customMapStyle={isDark ? DARK_MAP_STYLE : []}
-      >
-        {/* User Destination */}
-        <Marker coordinate={{ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }}>
-          <View style={[styles.destMarker, { backgroundColor: colors.success }]}>
-            <MapPin size={20} color="#FFF" />
-          </View>
-        </Marker>
-
-        {/* Store / Pickup Location */}
-        <Marker
-          coordinate={{ latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }}
-          title={order.storeName || tr('Store', 'Magasin', 'المتجر')}
-          description={order.pickupAddress}
+      {/* MAIN CONTENT WRAPPER FOR BLUR */}
+      <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
+        {/* MAP VIEW */}
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: order.driverLocation?.latitude || order.deliveryLatitude,
+            longitude: order.driverLocation?.longitude || order.deliveryLongitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          customMapStyle={isDark ? DARK_MAP_STYLE : []}
         >
-          <View style={[styles.storeMarker, { backgroundColor: colors.accent }]}>
-            <Store size={20} color="#FFF" />
-          </View>
-        </Marker>
-
-
-        {/* Driver Real-time position */}
-        {order.driverLocation && (
-          <Marker
-            coordinate={{
-              latitude: order.driverLocation.latitude,
-              longitude: order.driverLocation.longitude
-            }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            flat={true}
-          >
-            <DriverMarker color={colors.accent} heading={order.driverLocation.heading} />
+          {/* User Destination */}
+          <Marker coordinate={{ latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }}>
+            <View style={[styles.destMarker, { backgroundColor: colors.success }]}>
+              <MapPin size={20} color="#FFF" />
+            </View>
           </Marker>
-        )}
 
-        {/* Path highlight - Route logic */}
-        <Polyline
-          coordinates={
-            order.driverLocation && (order.status === 'accepted' || order.status === 'pending')
-              // Driver to Store
-              ? [
-                { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
-                { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }
-              ]
-              : order.driverLocation && ['in_transit', 'out_for_delivery', 'picked_up'].includes(order.status)
-                // Driver to User
+          {/* Store / Pickup Location */}
+          <Marker
+            coordinate={{ latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }}
+            title={order.storeName || tr('Store', 'Magasin', 'المتجر')}
+            description={order.pickupAddress}
+          >
+            <View style={[styles.storeMarker, { backgroundColor: colors.accent }]}>
+              <Store size={20} color="#FFF" />
+            </View>
+          </Marker>
+
+
+          {/* Driver Real-time position */}
+          {order.driverLocation && (
+            <Marker
+              coordinate={{
+                latitude: order.driverLocation.latitude,
+                longitude: order.driverLocation.longitude
+              }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat={true}
+            >
+              <DriverMarker color={colors.accent} heading={order.driverLocation.heading} />
+            </Marker>
+          )}
+
+          {/* Path highlight - Route logic */}
+          <Polyline
+            coordinates={
+              order.driverLocation && (order.status === 'accepted' || order.status === 'pending')
+                // Driver to Store
                 ? [
                   { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
-                  { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+                  { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude }
                 ]
-                // Store to User (Default route)
-                : [
-                  { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude },
-                  { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
-                ]
-          }
-          strokeColor={colors.accent}
-          strokeWidth={4}
-          lineDashPattern={[5, 10]}
-        />
-      </MapView>
+                : order.driverLocation && ['in_transit', 'out_for_delivery', 'picked_up'].includes(order.status)
+                  // Driver to User
+                  ? [
+                    { latitude: order.driverLocation.latitude, longitude: order.driverLocation.longitude },
+                    { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+                  ]
+                  // Store to User (Default route)
+                  : [
+                    { latitude: order.pickupLatitude || order.deliveryLatitude, longitude: order.pickupLongitude || order.deliveryLongitude },
+                    { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+                  ]
+            }
+            strokeColor={colors.accent}
+            strokeWidth={4}
+            lineDashPattern={[5, 10]}
+          />
+        </MapView>
+      </BlurTargetView>
 
       {/* TOP CONTROLS */}
       <View style={[styles.topOverlay, { top: insets.top + 10 }]}>
@@ -384,7 +388,13 @@ export default function OrderTrackingScreen({
         {/* Rating Modal: Driver */}
         <Modal visible={ratingStep === 'driver'} transparent animationType="fade">
           <View style={styles.modalOverlay}>
-            <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <BlurView
+              intensity={90}
+              tint={isDark ? 'dark' : 'light'}
+              blurTarget={blurTargetRef}
+              blurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
             <View style={[styles.ratingCard, { backgroundColor: colors.card }]}>
               <View style={[styles.ratingAvatar, { backgroundColor: colors.accent }]}>
                 <Text style={styles.ratingAvatarText}>{order.driverName?.charAt(0)}</Text>
@@ -406,7 +416,13 @@ export default function OrderTrackingScreen({
         {/* Rating Modal: Products */}
         <Modal visible={ratingStep === 'products'} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <BlurView intensity={95} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <BlurView
+              intensity={95}
+              tint={isDark ? 'dark' : 'light'}
+              blurTarget={blurTargetRef}
+              blurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
             <View style={[styles.productRatingCard, { backgroundColor: colors.card, maxHeight: '80%' }]}>
               <Text style={[styles.ratingTitle, { color: colors.text }]}>{tr('Rate your items', 'قيم المنتجات', 'Rate your items')}</Text>
               <ScrollView style={{ marginTop: 20 }}>
@@ -441,7 +457,13 @@ export default function OrderTrackingScreen({
         {/* Thank You Overlay */}
         {ratingStep === 'thankyou' && (
           <Animated.View entering={FadeIn} style={[StyleSheet.absoluteFill, styles.thankYouOverlay]}>
-            <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView
+              intensity={100}
+              tint="dark"
+              blurTarget={blurTargetRef}
+              blurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
             <CheckCircle2 size={80} color="#34C759" />
             <Text style={styles.thankYouText}>{tr('Thank You!', 'شكراً لك!', 'Thank You!')}</Text>
           </Animated.View>
@@ -455,7 +477,13 @@ export default function OrderTrackingScreen({
           onRequestClose={() => setShowQR(false)}
         >
           <View style={styles.modalOverlay}>
-            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <BlurView
+              intensity={80}
+              tint={isDark ? 'dark' : 'light'}
+              blurTarget={blurTargetRef}
+              blurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
             <Animated.View entering={FadeInDown} style={[styles.qrModal, { backgroundColor: colors.card }]}>
               <TouchableOpacity
                 onPress={() => setShowQR(false)}

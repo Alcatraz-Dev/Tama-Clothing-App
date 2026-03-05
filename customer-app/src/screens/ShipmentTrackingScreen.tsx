@@ -15,7 +15,7 @@ import {
     StatusBar,
     Alert,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
 import {
     ArrowLeft,
     MapPin,
@@ -81,6 +81,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [demoMode, setDemoMode] = useState(false); // Demo mode for testing tracking
     const [pathHistory, setPathHistory] = useState<any[]>([]);
+    const blurTargetRef = useRef(null);
 
     // Demo path - simulates driver route for testing (remove when real tracking is ready)
     const demoPath = useMemo(() => {
@@ -404,7 +405,13 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
 
             {/* Header */}
             <Animated.View style={[styles.topHeader, { transform: [{ translateY: headerTranslateY }] }]}>
-                <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.headerBlur}>
+                <BlurView
+                    blurTarget={blurTargetRef}
+                    intensity={80}
+                    tint={theme === 'dark' ? 'dark' : 'light'}
+                    style={styles.headerBlur}
+                    blurMethod="dimezisBlurView"
+                >
                     <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
                         <ArrowLeft color={colors.foreground} size={24} />
                     </TouchableOpacity>
@@ -418,398 +425,400 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                 </BlurView>
             </Animated.View>
 
-            <Animated.ScrollView
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true }
-                )}
-                scrollEventThrottle={16}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Map Section */}
-                <Animated.View style={[styles.mapSection, { transform: [{ scale: mapScale }] }]}>
-                    <MapView
-                        ref={mapRef}
-                        style={StyleSheet.absoluteFill}
-                        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                        initialRegion={{
-                            latitude: shipment?.deliveryLocation?.latitude || 35.8256,
-                            longitude: shipment?.deliveryLocation?.longitude || 10.6369,
-                            latitudeDelta: 0.05,
-                            longitudeDelta: 0.05,
-                        }}
-                        customMapStyle={theme === 'dark' ? darkMapStyle : []}
-                    >
-                        {/* Merchant/Pickup Location Marker - shown when order is pending or being picked up */}
-                        {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && (shipment.pickupLocation || shipment.senderLocation)) && (
-                            <Marker coordinate={shipment.pickupLocation || shipment.senderLocation}>
-                                <View style={styles.pickupMarker}>
-                                    <View style={[styles.markerInner, { backgroundColor: '#F59E0B' }]}>
-                                        <MapPin size={20} color="#FFF" />
+            <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                <Animated.ScrollView
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: true }
+                    )}
+                    scrollEventThrottle={16}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Map Section */}
+                    <Animated.View style={[styles.mapSection, { transform: [{ scale: mapScale }] }]}>
+                        <MapView
+                            ref={mapRef}
+                            style={StyleSheet.absoluteFill}
+                            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                            initialRegion={{
+                                latitude: shipment?.deliveryLocation?.latitude || 35.8256,
+                                longitude: shipment?.deliveryLocation?.longitude || 10.6369,
+                                latitudeDelta: 0.05,
+                                longitudeDelta: 0.05,
+                            }}
+                            customMapStyle={theme === 'dark' ? darkMapStyle : []}
+                        >
+                            {/* Merchant/Pickup Location Marker - shown when order is pending or being picked up */}
+                            {((deliveryPhase === 'pending' || deliveryPhase === 'picking_up') && (shipment.pickupLocation || shipment.senderLocation)) && (
+                                <Marker coordinate={shipment.pickupLocation || shipment.senderLocation}>
+                                    <View style={styles.pickupMarker}>
+                                        <View style={[styles.markerInner, { backgroundColor: '#F59E0B' }]}>
+                                            <MapPin size={20} color="#FFF" />
+                                        </View>
+                                        <View style={styles.markerShadow} />
                                     </View>
-                                    <View style={styles.markerShadow} />
-                                </View>
-                            </Marker>
-                        )}
-
-                        {/* Delivery Location Marker - always shown when available (or default) */}
-                        {shipment.deliveryLocation ? (
-                            <Marker coordinate={shipment.deliveryLocation}>
-                                <View style={styles.destinationMarker}>
-                                    <View style={[styles.markerInner, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
-                                        <MapPin size={20} color="#FFF" />
-                                    </View>
-                                    <View style={styles.markerShadow} />
-                                </View>
-                            </Marker>
-                        ) : (
-                            // Default marker when no delivery location
-                            <Marker
-                                coordinate={{ latitude: 35.8256, longitude: 10.6369 }}
-                                title={translate('delivery_address')}
-                                description={shipment.deliveryAddress || translate('address_placeholder')}
-                            >
-                                <View style={styles.destinationMarker}>
-                                    <View style={[styles.markerInner, { backgroundColor: '#6366F1' }]}>
-                                        <MapPin size={20} color="#FFF" />
-                                    </View>
-                                    <View style={styles.markerShadow} />
-                                </View>
-                            </Marker>
-                        )}
-
-                        {/* Show delivery address label during delivery phase */}
-                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && shipment.deliveryAddress && (
-                            <Marker coordinate={shipment.deliveryLocation || { latitude: 35.8256, longitude: 10.6369 }}>
-                                <View style={[styles.addressLabel, { backgroundColor: colors.surface }]}>
-                                    <Text style={[styles.addressLabelText, { color: colors.foreground }]} numberOfLines={1}>
-                                        {shipment.deliveryAddress}
-                                    </Text>
-                                </View>
-                            </Marker>
-                        )}
-
-                        {/* Driver Location Marker - shown when driver is assigned */}
-                        {hasDriver && driverLocation && (
-                            <Marker coordinate={driverLocation}>
-                                <Animatable.View
-                                    animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'}
-                                    iterationCount="infinite"
-                                    style={styles.driverMarker}
-                                >
-                                    <View style={[styles.markerInner, { backgroundColor: colors.accent }]}>
-                                        <Truck size={20} color={colors.accentForeground} />
-                                    </View>
-                                </Animatable.View>
-                            </Marker>
-                        )}
-
-                        {/* Route: From pickup to delivery when in transit */}
-                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') &&
-                            shipment.deliveryLocation && (
-                                <>
-                                    {/* Show full traveled path if available */}
-                                    {pathHistory.length > 1 && (
-                                        <Polyline
-                                            coordinates={pathHistory}
-                                            strokeColor={colors.accent + '80'}
-                                            strokeWidth={3}
-                                            lineDashPattern={[4, 2]}
-                                        />
-                                    )}
-
-                                    {/* Show route from driver to delivery */}
-                                    {driverLocation && (
-                                        <Polyline
-                                            coordinates={[driverLocation, shipment.deliveryLocation]}
-                                            strokeColor={colors.accent}
-                                            strokeWidth={4}
-                                            lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [8, 4]}
-                                        />
-                                    )}
-                                    {/* Show route from pickup to delivery when driver is at pickup */}
-                                    {(shipment.pickupLocation || shipment.senderLocation) && !driverLocation && (
-                                        <Polyline
-                                            coordinates={[
-                                                shipment.pickupLocation || shipment.senderLocation,
-                                                shipment.deliveryLocation
-                                            ]}
-                                            strokeColor="#F59E0B"
-                                            strokeWidth={3}
-                                            lineDashPattern={[6, 3]}
-                                        />
-                                    )}
-                                </>
+                                </Marker>
                             )}
 
-                        {/* Route: From driver to delivery when out for delivery */}
-                        {deliveryPhase === 'out_for_delivery' && driverLocation && shipment.deliveryLocation && (
-                            <>
-                                <Polyline
-                                    coordinates={[driverLocation, shipment.deliveryLocation]}
-                                    strokeColor="#10B981"
-                                    strokeWidth={4}
-                                />
-                            </>
-                        )}
+                            {/* Delivery Location Marker - always shown when available (or default) */}
+                            {shipment.deliveryLocation ? (
+                                <Marker coordinate={shipment.deliveryLocation}>
+                                    <View style={styles.destinationMarker}>
+                                        <View style={[styles.markerInner, { backgroundColor: deliveryPhase === 'delivered' ? '#10B981' : '#6366F1' }]}>
+                                            <MapPin size={20} color="#FFF" />
+                                        </View>
+                                        <View style={styles.markerShadow} />
+                                    </View>
+                                </Marker>
+                            ) : (
+                                // Default marker when no delivery location
+                                <Marker
+                                    coordinate={{ latitude: 35.8256, longitude: 10.6369 }}
+                                    title={translate('delivery_address')}
+                                    description={shipment.deliveryAddress || translate('address_placeholder')}
+                                >
+                                    <View style={styles.destinationMarker}>
+                                        <View style={[styles.markerInner, { backgroundColor: '#6366F1' }]}>
+                                            <MapPin size={20} color="#FFF" />
+                                        </View>
+                                        <View style={styles.markerShadow} />
+                                    </View>
+                                </Marker>
+                            )}
 
-                        {/* Demo Path - show full route when in demo mode */}
-                        {demoMode && demoPath.length > 0 && (deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
-                            <>
-                                <Polyline
-                                    coordinates={demoPath}
-                                    strokeColor={colors.accent}
-                                    strokeWidth={3}
-                                    lineDashPattern={[8, 4]}
-                                />
-                                {/* Show remaining path from current position to delivery */}
-                                {driverLocation && shipment.deliveryLocation && (
+                            {/* Show delivery address label during delivery phase */}
+                            {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && shipment.deliveryAddress && (
+                                <Marker coordinate={shipment.deliveryLocation || { latitude: 35.8256, longitude: 10.6369 }}>
+                                    <View style={[styles.addressLabel, { backgroundColor: colors.surface }]}>
+                                        <Text style={[styles.addressLabelText, { color: colors.foreground }]} numberOfLines={1}>
+                                            {shipment.deliveryAddress}
+                                        </Text>
+                                    </View>
+                                </Marker>
+                            )}
+
+                            {/* Driver Location Marker - shown when driver is assigned */}
+                            {hasDriver && driverLocation && (
+                                <Marker coordinate={driverLocation}>
+                                    <Animatable.View
+                                        animation={deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery' ? 'pulse' : 'bounce'}
+                                        iterationCount="infinite"
+                                        style={styles.driverMarker}
+                                    >
+                                        <View style={[styles.markerInner, { backgroundColor: colors.accent }]}>
+                                            <Truck size={20} color={colors.accentForeground} />
+                                        </View>
+                                    </Animatable.View>
+                                </Marker>
+                            )}
+
+                            {/* Route: From pickup to delivery when in transit */}
+                            {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') &&
+                                shipment.deliveryLocation && (
+                                    <>
+                                        {/* Show full traveled path if available */}
+                                        {pathHistory.length > 1 && (
+                                            <Polyline
+                                                coordinates={pathHistory}
+                                                strokeColor={colors.accent + '80'}
+                                                strokeWidth={3}
+                                                lineDashPattern={[4, 2]}
+                                            />
+                                        )}
+
+                                        {/* Show route from driver to delivery */}
+                                        {driverLocation && (
+                                            <Polyline
+                                                coordinates={[driverLocation, shipment.deliveryLocation]}
+                                                strokeColor={colors.accent}
+                                                strokeWidth={4}
+                                                lineDashPattern={deliveryPhase === 'out_for_delivery' ? undefined : [8, 4]}
+                                            />
+                                        )}
+                                        {/* Show route from pickup to delivery when driver is at pickup */}
+                                        {(shipment.pickupLocation || shipment.senderLocation) && !driverLocation && (
+                                            <Polyline
+                                                coordinates={[
+                                                    shipment.pickupLocation || shipment.senderLocation,
+                                                    shipment.deliveryLocation
+                                                ]}
+                                                strokeColor="#F59E0B"
+                                                strokeWidth={3}
+                                                lineDashPattern={[6, 3]}
+                                            />
+                                        )}
+                                    </>
+                                )}
+
+                            {/* Route: From driver to delivery when out for delivery */}
+                            {deliveryPhase === 'out_for_delivery' && driverLocation && shipment.deliveryLocation && (
+                                <>
                                     <Polyline
                                         coordinates={[driverLocation, shipment.deliveryLocation]}
                                         strokeColor="#10B981"
                                         strokeWidth={4}
                                     />
-                                )}
-                            </>
-                        )}
-                    </MapView>
-                    <LinearGradient
-                        colors={['transparent', colors.background]}
-                        style={styles.mapOverlay}
-                    />
-                </Animated.View>
+                                </>
+                            )}
 
-                {/* Tracking Info Card */}
-                <Animatable.View animation="fadeInUp" duration={800} style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <View style={styles.pullBar} />
-
-                    <View style={styles.statusHeader}>
-                        <View>
-                            <Text style={[styles.statusTitle, { color: colors.foreground }]}>
-                                {getStatusLabel(shipment.status)}
-                            </Text>
-                            <Text style={[styles.statusSubtitle, { color: colors.textMuted }]}>
-                                {deliveryPhase === 'pending' && (translate('order_confirmed'))}
-                                {deliveryPhase === 'picking_up' && (translate('picked_up'))}
-                                {deliveryPhase === 'in_transit' && (eta ? `${translate('arriving_in')} ${eta}` : translate('in_transit'))}
-                                {deliveryPhase === 'out_for_delivery' && (eta ? `${translate('arriving_in')} ${eta}` : translate('out_for_delivery'))}
-                                {deliveryPhase === 'delivered' && (translate('delivered'))}
-                                {deliveryPhase === 'cancelled' && (translate('cancelled'))}
-                                {deliveryPhase === 'failed' && (translate('failed'))}
-                            </Text>
-                        </View>
-                        {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
-                            <View style={[styles.statusBadge, { backgroundColor: colors.accent + '20' }]}>
-                                <Clock size={16} color={colors.accent} />
-                                <Text style={[styles.badgeText, { color: colors.accent }]}>{eta || '...'}</Text>
-                            </View>
-                        )}
-                        {/* Demo Mode Indicator - for testing only */}
-                        {demoMode && (
-                            <View style={[styles.statusBadge, { backgroundColor: '#F59E0B20' }]}>
-                                <Text style={{ fontSize: 10 }}>🧪</Text>
-                                <Text style={[styles.badgeText, { color: '#F59E0B' }]}>Demo</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Progress Bar */}
-                    <View style={styles.progressContainer}>
-                        {STATUS_STEPS.map((step, idx) => (
-                            <View key={step.key} style={styles.progressStep}>
-                                <View style={[
-                                    styles.progressNode,
-                                    { backgroundColor: idx <= currentIndex ? colors.accent : colors.border }
-                                ]}>
-                                    {idx < currentIndex && <CheckCircle size={10} color={colors.accentForeground} />}
-                                </View>
-                                {idx < STATUS_STEPS.length - 1 && (
-                                    <View style={[
-                                        styles.progressLine,
-                                        { backgroundColor: idx < currentIndex ? colors.accent : colors.border }
-                                    ]} />
-                                )}
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Driver Card - show when driver is assigned (driverId) OR when driver info exists in shipment */}
-                    {(shipment.driverId || shipment.driverName || shipment.driver) && (
-                        <Animatable.View animation="fadeIn" delay={300} style={[styles.driverBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <View style={styles.driverMain}>
-                                {(driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage) ? (
-                                    <Image
-                                        source={{ uri: driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage }}
-                                        style={styles.driverAvatar}
+                            {/* Demo Path - show full route when in demo mode */}
+                            {demoMode && demoPath.length > 0 && (deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
+                                <>
+                                    <Polyline
+                                        coordinates={demoPath}
+                                        strokeColor={colors.accent}
+                                        strokeWidth={3}
+                                        lineDashPattern={[8, 4]}
                                     />
-                                ) : (
-                                    <View style={[styles.driverAvatar, { backgroundColor: colors.accent + '30', alignItems: 'center', justifyContent: 'center' }]}>
-                                        <User size={28} color={colors.accent} />
+                                    {/* Show remaining path from current position to delivery */}
+                                    {driverLocation && shipment.deliveryLocation && (
+                                        <Polyline
+                                            coordinates={[driverLocation, shipment.deliveryLocation]}
+                                            strokeColor="#10B981"
+                                            strokeWidth={4}
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </MapView>
+                        <LinearGradient
+                            colors={['transparent', colors.background]}
+                            style={styles.mapOverlay}
+                        />
+                    </Animated.View>
+
+                    {/* Tracking Info Card */}
+                    <Animatable.View animation="fadeInUp" duration={800} style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <View style={styles.pullBar} />
+
+                        <View style={styles.statusHeader}>
+                            <View>
+                                <Text style={[styles.statusTitle, { color: colors.foreground }]}>
+                                    {getStatusLabel(shipment.status)}
+                                </Text>
+                                <Text style={[styles.statusSubtitle, { color: colors.textMuted }]}>
+                                    {deliveryPhase === 'pending' && (translate('order_confirmed'))}
+                                    {deliveryPhase === 'picking_up' && (translate('picked_up'))}
+                                    {deliveryPhase === 'in_transit' && (eta ? `${translate('arriving_in')} ${eta}` : translate('in_transit'))}
+                                    {deliveryPhase === 'out_for_delivery' && (eta ? `${translate('arriving_in')} ${eta}` : translate('out_for_delivery'))}
+                                    {deliveryPhase === 'delivered' && (translate('delivered'))}
+                                    {deliveryPhase === 'cancelled' && (translate('cancelled'))}
+                                    {deliveryPhase === 'failed' && (translate('failed'))}
+                                </Text>
+                            </View>
+                            {(deliveryPhase === 'in_transit' || deliveryPhase === 'out_for_delivery') && (
+                                <View style={[styles.statusBadge, { backgroundColor: colors.accent + '20' }]}>
+                                    <Clock size={16} color={colors.accent} />
+                                    <Text style={[styles.badgeText, { color: colors.accent }]}>{eta || '...'}</Text>
+                                </View>
+                            )}
+                            {/* Demo Mode Indicator - for testing only */}
+                            {demoMode && (
+                                <View style={[styles.statusBadge, { backgroundColor: '#F59E0B20' }]}>
+                                    <Text style={{ fontSize: 10 }}>🧪</Text>
+                                    <Text style={[styles.badgeText, { color: '#F59E0B' }]}>Demo</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Progress Bar */}
+                        <View style={styles.progressContainer}>
+                            {STATUS_STEPS.map((step, idx) => (
+                                <View key={step.key} style={styles.progressStep}>
+                                    <View style={[
+                                        styles.progressNode,
+                                        { backgroundColor: idx <= currentIndex ? colors.accent : colors.border }
+                                    ]}>
+                                        {idx < currentIndex && <CheckCircle size={10} color={colors.accentForeground} />}
                                     </View>
-                                )}
-                                <View style={styles.driverInfo}>
-                                    <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || shipment.driver?.name || shipment.driver?.fullName || translate('driver_default_name')}</Text>
-                                    <View style={styles.driverRating}>
-                                        <Star size={14} color="#FBBF24" fill="#FBBF24" />
-                                        <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
+                                    {idx < STATUS_STEPS.length - 1 && (
+                                        <View style={[
+                                            styles.progressLine,
+                                            { backgroundColor: idx < currentIndex ? colors.accent : colors.border }
+                                        ]} />
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Driver Card - show when driver is assigned (driverId) OR when driver info exists in shipment */}
+                        {(shipment.driverId || shipment.driverName || shipment.driver) && (
+                            <Animatable.View animation="fadeIn" delay={300} style={[styles.driverBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                <View style={styles.driverMain}>
+                                    {(driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage) ? (
+                                        <Image
+                                            source={{ uri: driverProfile?.photoURL || driverProfile?.photoUrl || driverProfile?.avatarUrl || driverProfile?.profileImage || shipment.driverImage || shipment.driver?.photoURL || shipment.driver?.photoUrl || shipment.driver?.avatarUrl || shipment.driver?.profileImage }}
+                                            style={styles.driverAvatar}
+                                        />
+                                    ) : (
+                                        <View style={[styles.driverAvatar, { backgroundColor: colors.accent + '30', alignItems: 'center', justifyContent: 'center' }]}>
+                                            <User size={28} color={colors.accent} />
+                                        </View>
+                                    )}
+                                    <View style={styles.driverInfo}>
+                                        <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || shipment.driver?.name || shipment.driver?.fullName || translate('driver_default_name')}</Text>
+                                        <View style={styles.driverRating}>
+                                            <Star size={14} color="#FBBF24" fill="#FBBF24" />
+                                            <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
 
-                            {/* Pickup & Delivery Time */}
-                            <View style={styles.timeRow}>
-                                {(shipment.pickupTime || shipment.estimatedPickupTime) && (
-                                    <View style={styles.timeItem}>
-                                        <Clock size={14} color={colors.accent} />
-                                        <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('pickup_time')}</Text>
-                                        <Text style={[styles.timeValue, { color: colors.foreground }]}>
-                                            {shipment.pickupTime ? new Date(shipment.pickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) :
-                                                shipment.estimatedPickupTime ? new Date(shipment.estimatedPickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                        </Text>
-                                    </View>
-                                )}
-                                {(shipment.deliveryTime || shipment.estimatedDeliveryTime || eta) && (
-                                    <View style={styles.timeItem}>
-                                        <MapPin size={14} color="#10B981" />
-                                        <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('estimated_arrival')}</Text>
-                                        <Text style={[styles.timeValue, { color: '#10B981' }]}>
-                                            {eta || '-'}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
+                                {/* Pickup & Delivery Time */}
+                                <View style={styles.timeRow}>
+                                    {(shipment.pickupTime || shipment.estimatedPickupTime) && (
+                                        <View style={styles.timeItem}>
+                                            <Clock size={14} color={colors.accent} />
+                                            <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('pickup_time')}</Text>
+                                            <Text style={[styles.timeValue, { color: colors.foreground }]}>
+                                                {shipment.pickupTime ? new Date(shipment.pickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) :
+                                                    shipment.estimatedPickupTime ? new Date(shipment.estimatedPickupTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {(shipment.deliveryTime || shipment.estimatedDeliveryTime || eta) && (
+                                        <View style={styles.timeItem}>
+                                            <MapPin size={14} color="#10B981" />
+                                            <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{translate('estimated_arrival')}</Text>
+                                            <Text style={[styles.timeValue, { color: '#10B981' }]}>
+                                                {eta || '-'}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
 
-                            <View style={styles.driverActions}>
-                                <TouchableOpacity onPress={handleCall} style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
-                                    <Phone size={20} color={colors.accent} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={handleMessage} style={[styles.actionBtn, { backgroundColor: '#10B98115' }]}>
-                                    <MessageCircle size={20} color="#10B981" />
-                                </TouchableOpacity>
+                                <View style={styles.driverActions}>
+                                    <TouchableOpacity onPress={handleCall} style={[styles.actionBtn, { backgroundColor: colors.accent + '15' }]}>
+                                        <Phone size={20} color={colors.accent} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={handleMessage} style={[styles.actionBtn, { backgroundColor: '#10B98115' }]}>
+                                        <MessageCircle size={20} color="#10B981" />
+                                    </TouchableOpacity>
+                                </View>
+                            </Animatable.View>
+                        )}
+                        <View style={[styles.safetyBadge, { backgroundColor: '#10B98110' }]}>
+                            <Shield size={16} color="#10B981" />
+                            <Text style={styles.safetyText}>{translate('contactless_delivery')}</Text>
+                        </View>
+
+                        {/* Items Card - check multiple possible field names */}
+                        {shipment.items || shipment.products || shipment.orderItems || shipment.articles ? (
+                            <View style={[styles.itemsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                                <Text style={[styles.itemsTitle, { color: colors.foreground }]}>
+                                    {translate('items')} ({(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).length})
+                                </Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+                                    {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).map((item: any, index: number) => (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.border }]}
+                                            onPress={() => setSelectedItem(item)}
+                                            activeOpacity={0.7}
+                                        >
+                                            {(item.image || item.mainImage || item.productImage || item.thumbnail) ? (
+                                                <Image
+                                                    source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }}
+                                                    style={styles.itemImage}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.accent + '20' }]}>
+                                                    <Package size={24} color={colors.accent} />
+                                                </View>
+                                            )}
+                                            <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={2}>
+                                                {item.name || item.title || item.productName || item.product?.name || 'Item'}
+                                            </Text>
+                                            <View style={styles.itemMetaRow}>
+                                                {(item.selectedColor || item.color) && (
+                                                    <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                        {item.selectedColor || item.color}
+                                                    </Text>
+                                                )}
+                                                {(item.selectedSize || item.size) && (
+                                                    <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                        {item.selectedSize || item.size}
+                                                    </Text>
+                                                )}
+                                                {item.quantity && (
+                                                    <Text style={[styles.itemQty, { color: colors.textMuted }]}>
+                                                        x{item.quantity}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        ) : null}
+
+                        {/* Address Card */}
+                        <View style={styles.detailCol}>
+                            <View style={[styles.detailIcon, { backgroundColor: colors.accent + '10' }]}>
+                                <MapPin size={20} color={colors.accent} />
+                            </View>
+                            <View style={styles.detailContent}>
+                                <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('delivery_address')}</Text>
+                                <Text style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={2}>
+                                    {shipment.deliveryAddress || translate('address_placeholder')}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.mapButton, { backgroundColor: colors.accent + '15' }]}
+                                onPress={() => {
+                                    if (shipment?.deliveryLocation?.latitude && shipment?.deliveryLocation?.longitude) {
+                                        try {
+                                            openInNativeMaps(
+                                                shipment.deliveryLocation.latitude,
+                                                shipment.deliveryLocation.longitude,
+                                                shipment.deliveryAddress
+                                            );
+                                        } catch (err) {
+                                            console.log('Error opening maps:', err);
+                                        }
+                                    } else {
+                                        console.log('No delivery location available');
+                                    }
+                                }}
+                            >
+                                <MapPin size={16} color={colors.accent} />
+                                <Text style={[styles.mapButtonText, { color: colors.accent }]}>{translate('open_in_maps')}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Timeline Expansion */}
+                        <TouchableOpacity
+                            style={styles.expandTimeline}
+                            onPress={() => setShowHistoryModal(true)}
+                        >
+                            <Text style={[styles.expandText, { color: colors.accent }]}>{translate('view_detailed_history')}</Text>
+                            <ChevronUp size={16} color={colors.accent} />
+                        </TouchableOpacity>
+                    </Animatable.View>
+
+                    {/* Rating Card (Only if delivered) */}
+                    {shipment.status?.toLowerCase() === 'delivered' && !shipment.rating && (
+                        <Animatable.View animation="fadeInUp" delay={500} style={[styles.ratingCard, { backgroundColor: colors.surface }]}>
+                            <Text style={[styles.ratingTitle, { color: colors.foreground }]}>{translate('how_was_delivery')}</Text>
+                            <Text style={[styles.ratingDesc, { color: colors.textMuted }]}>{translate('feedback_help')}</Text>
+                            <View style={styles.stars}>
+                                {[1, 2, 3, 4, 5].map(s => (
+                                    <TouchableOpacity key={s} onPress={() => submitRating(s)}>
+                                        <Star
+                                            size={40}
+                                            color={(rating || shipment.rating) >= s ? '#FBBF24' : colors.border}
+                                            fill={(rating || shipment.rating) >= s ? '#FBBF24' : 'transparent'}
+                                            style={{ marginHorizontal: 5 }}
+                                        />
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         </Animatable.View>
                     )}
-                    <View style={[styles.safetyBadge, { backgroundColor: '#10B98110' }]}>
-                        <Shield size={16} color="#10B981" />
-                        <Text style={styles.safetyText}>{translate('contactless_delivery')}</Text>
-                    </View>
-
-                    {/* Items Card - check multiple possible field names */}
-                    {shipment.items || shipment.products || shipment.orderItems || shipment.articles ? (
-                        <View style={[styles.itemsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                            <Text style={[styles.itemsTitle, { color: colors.foreground }]}>
-                                {translate('items')} ({(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).length})
-                            </Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
-                                {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).map((item: any, index: number) => (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.border }]}
-                                        onPress={() => setSelectedItem(item)}
-                                        activeOpacity={0.7}
-                                    >
-                                        {(item.image || item.mainImage || item.productImage || item.thumbnail) ? (
-                                            <Image
-                                                source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }}
-                                                style={styles.itemImage}
-                                                resizeMode="cover"
-                                            />
-                                        ) : (
-                                            <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.accent + '20' }]}>
-                                                <Package size={24} color={colors.accent} />
-                                            </View>
-                                        )}
-                                        <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={2}>
-                                            {item.name || item.title || item.productName || item.product?.name || 'Item'}
-                                        </Text>
-                                        <View style={styles.itemMetaRow}>
-                                            {(item.selectedColor || item.color) && (
-                                                <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                                                    {item.selectedColor || item.color}
-                                                </Text>
-                                            )}
-                                            {(item.selectedSize || item.size) && (
-                                                <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                                                    {item.selectedSize || item.size}
-                                                </Text>
-                                            )}
-                                            {item.quantity && (
-                                                <Text style={[styles.itemQty, { color: colors.textMuted }]}>
-                                                    x{item.quantity}
-                                                </Text>
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    ) : null}
-
-                    {/* Address Card */}
-                    <View style={styles.detailCol}>
-                        <View style={[styles.detailIcon, { backgroundColor: colors.accent + '10' }]}>
-                            <MapPin size={20} color={colors.accent} />
-                        </View>
-                        <View style={styles.detailContent}>
-                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('delivery_address')}</Text>
-                            <Text style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={2}>
-                                {shipment.deliveryAddress || translate('address_placeholder')}
-                            </Text>
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.mapButton, { backgroundColor: colors.accent + '15' }]}
-                            onPress={() => {
-                                if (shipment?.deliveryLocation?.latitude && shipment?.deliveryLocation?.longitude) {
-                                    try {
-                                        openInNativeMaps(
-                                            shipment.deliveryLocation.latitude,
-                                            shipment.deliveryLocation.longitude,
-                                            shipment.deliveryAddress
-                                        );
-                                    } catch (err) {
-                                        console.log('Error opening maps:', err);
-                                    }
-                                } else {
-                                    console.log('No delivery location available');
-                                }
-                            }}
-                        >
-                            <MapPin size={16} color={colors.accent} />
-                            <Text style={[styles.mapButtonText, { color: colors.accent }]}>{translate('open_in_maps')}</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Timeline Expansion */}
-                    <TouchableOpacity
-                        style={styles.expandTimeline}
-                        onPress={() => setShowHistoryModal(true)}
-                    >
-                        <Text style={[styles.expandText, { color: colors.accent }]}>{translate('view_detailed_history')}</Text>
-                        <ChevronUp size={16} color={colors.accent} />
-                    </TouchableOpacity>
-                </Animatable.View>
-
-                {/* Rating Card (Only if delivered) */}
-                {shipment.status?.toLowerCase() === 'delivered' && !shipment.rating && (
-                    <Animatable.View animation="fadeInUp" delay={500} style={[styles.ratingCard, { backgroundColor: colors.surface }]}>
-                        <Text style={[styles.ratingTitle, { color: colors.foreground }]}>{translate('how_was_delivery')}</Text>
-                        <Text style={[styles.ratingDesc, { color: colors.textMuted }]}>{translate('feedback_help')}</Text>
-                        <View style={styles.stars}>
-                            {[1, 2, 3, 4, 5].map(s => (
-                                <TouchableOpacity key={s} onPress={() => submitRating(s)}>
-                                    <Star
-                                        size={40}
-                                        color={(rating || shipment.rating) >= s ? '#FBBF24' : colors.border}
-                                        fill={(rating || shipment.rating) >= s ? '#FBBF24' : 'transparent'}
-                                        style={{ marginHorizontal: 5 }}
-                                    />
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </Animatable.View>
-                )}
-            </Animated.ScrollView>
+                </Animated.ScrollView>
+            </BlurTargetView>
 
             {/* Detailed History Modal */}
             <Modal

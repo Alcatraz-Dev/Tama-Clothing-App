@@ -59,7 +59,7 @@ import { Text } from '@/components/ui/text';
 import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
 import { Popover, PopoverTrigger, PopoverContent, PopoverBody } from '@/components/ui/popover';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColor } from '@/hooks/useColor';
 import { router } from 'expo-router';
@@ -88,6 +88,7 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
     const [viewMode, setViewMode] = useState<'chat' | 'camera'>('chat');
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<any>(null);
+    const blurTargetRef = useRef<View>(null);
     const insets = useSafeAreaInsets();
 
     const chatId = [user?.uid, targetUser?.uid].sort().join('_');
@@ -460,16 +461,21 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <BlurView intensity={theme === 'dark' ? 20 : 40} tint={theme === 'dark' ? 'dark' : 'light'} style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: insets.top + 64,
-                zIndex: 10,
-                borderBottomWidth: 1,
-                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-            }}>
+            <BlurView
+                intensity={theme === 'dark' ? 20 : 40}
+                tint={theme === 'dark' ? 'dark' : 'light'}
+                blurTarget={blurTargetRef}
+                blurMethod="dimezisBlurView"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: insets.top + 64,
+                    zIndex: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                }}>
                 <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -536,53 +542,60 @@ export default function DirectMessageScreen({ user, targetUser, onBack, t, langu
             </BlurView>
 
             {/* Messages */}
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={(item) => item.id}
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingTop: insets.top + 74, paddingBottom: insets.bottom + 90 }}
-                showsVerticalScrollIndicator={false}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                ListEmptyComponent={!loading ? (
-                    <View style={{ alignItems: 'center', marginTop: 150, paddingHorizontal: 40 }}>
-                        <View style={{
-                            width: 100,
-                            height: 100,
-                            borderRadius: 50,
-                            backgroundColor: colors.card,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 24
-                        }}>
-                            <MessageCircle size={48} color={colors.textMuted} strokeWidth={1} />
+            <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={(item) => item.id}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ paddingTop: insets.top + 74, paddingBottom: insets.bottom + 90 }}
+                    showsVerticalScrollIndicator={false}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    ListEmptyComponent={!loading ? (
+                        <View style={{ alignItems: 'center', marginTop: 150, paddingHorizontal: 40 }}>
+                            <View style={{
+                                width: 100,
+                                height: 100,
+                                borderRadius: 50,
+                                backgroundColor: colors.card,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 24
+                            }}>
+                                <MessageCircle size={48} color={colors.textMuted} strokeWidth={1} />
+                            </View>
+                            <Text variant="title" style={{ fontSize: 20, textAlign: 'center' }}>
+                                {tr('Dites bonjour 👋', 'قل مرحباً 👋', 'Say hello 👋')}
+                            </Text>
+                            <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 8, fontSize: 14 }}>
+                                {tr('Dites bonjour à', 'قل مرحباً لـ', 'Say hello to')} {targetUser.fullName || targetUser.displayName || 'your friend'}!
+                            </Text>
                         </View>
-                        <Text variant="title" style={{ fontSize: 20, textAlign: 'center' }}>
-                            {tr('Dites bonjour 👋', 'قل مرحباً 👋', 'Say hello 👋')}
-                        </Text>
-                        <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 8, fontSize: 14 }}>
-                            {tr('Dites bonjour à', 'قل مرحباً لـ', 'Say hello to')} {targetUser.fullName || targetUser.displayName || 'your friend'}!
-                        </Text>
-                    </View>
-                ) : (
-                    <ActivityIndicator color={colors.blue} style={{ marginTop: 100 }} />
-                )}
-            />
+                    ) : (
+                        <ActivityIndicator color={colors.blue} style={{ marginTop: 100 }} />
+                    )}
+                />
+            </BlurTargetView>
 
             {/* Input Area */}
-            <BlurView intensity={theme === 'dark' ? 30 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                paddingHorizontal: 16,
-                paddingTop: 12,
-                paddingBottom: insets.bottom + 12,
-                borderTopWidth: 1,
-                borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-            }}>
+            <BlurView
+                intensity={theme === 'dark' ? 30 : 60}
+                tint={theme === 'dark' ? 'dark' : 'light'}
+                blurTarget={blurTargetRef}
+                blurMethod="dimezisBlurView"
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    paddingHorizontal: 16,
+                    paddingTop: 12,
+                    paddingBottom: insets.bottom + 12,
+                    borderTopWidth: 1,
+                    borderTopColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
                         onPress={() => setIsMediaModalVisible(true)}

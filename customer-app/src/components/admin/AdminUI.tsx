@@ -584,6 +584,7 @@ interface AdminHeaderProps {
     onBack: () => void;
     scrollY?: Animated.Value;
     rightElement?: React.ReactNode;
+    blurTarget?: React.RefObject<any>;
 }
 
 export function AdminHeader({
@@ -592,6 +593,7 @@ export function AdminHeader({
     onBack,
     scrollY: scrollYProp,
     rightElement,
+    blurTarget,
 }: AdminHeaderProps) {
     const { colors, theme } = useAppTheme();
     const isDark = theme === 'dark';
@@ -610,7 +612,13 @@ export function AdminHeader({
 
     return (
         <View style={[adminStyles.headerContainer, { height: HEADER_H, paddingTop: insets.top }]}>
-            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <BlurView
+                blurTarget={blurTarget}
+                intensity={80}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+                blurMethod="dimezisBlurView"
+            />
 
             <View
                 pointerEvents="none"

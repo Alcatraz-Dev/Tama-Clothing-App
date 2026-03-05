@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
+import { useRef } from 'react';
 import { X, Scan, Zap, ZapOff } from 'lucide-react-native';
 import Animated, {
     useAnimatedStyle,
@@ -23,6 +24,7 @@ interface QRScannerProps {
 }
 
 export default function QRScanner({ onScan, onClose, isDark, t }: QRScannerProps) {
+    const cameraTargetRef = useRef<View>(null);
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
     const [flash, setFlash] = useState(false);
@@ -85,54 +87,74 @@ export default function QRScanner({ onScan, onClose, isDark, t }: QRScannerProps
 
     return (
         <View style={styles.container}>
-            <CameraView
-                style={StyleSheet.absoluteFill}
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-                barcodeScannerSettings={{
-                    barcodeTypes: ['qr'],
-                }}
-                enableTorch={flash}
-            >
-                <View style={styles.overlay}>
-                    <View style={styles.unfocusedContainer} />
-                    <View style={styles.middleContainer}>
+            <BlurTargetView ref={cameraTargetRef} style={StyleSheet.absoluteFill}>
+                <CameraView
+                    style={StyleSheet.absoluteFill}
+                    onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                    barcodeScannerSettings={{
+                        barcodeTypes: ['qr'],
+                    }}
+                    enableTorch={flash}
+                >
+                    <View style={styles.overlay}>
                         <View style={styles.unfocusedContainer} />
-                        <View style={styles.focusedContainer}>
-                            <View style={[styles.corner, styles.topLeft, { borderColor: '#00FF9D' }]} />
-                            <View style={[styles.corner, styles.topRight, { borderColor: '#00FF9D' }]} />
-                            <View style={[styles.corner, styles.bottomLeft, { borderColor: '#00FF9D' }]} />
-                            <View style={[styles.corner, styles.bottomRight, { borderColor: '#00FF9D' }]} />
+                        <View style={styles.middleContainer}>
+                            <View style={styles.unfocusedContainer} />
+                            <View style={styles.focusedContainer}>
+                                <View style={[styles.corner, styles.topLeft, { borderColor: '#00FF9D' }]} />
+                                <View style={[styles.corner, styles.topRight, { borderColor: '#00FF9D' }]} />
+                                <View style={[styles.corner, styles.bottomLeft, { borderColor: '#00FF9D' }]} />
+                                <View style={[styles.corner, styles.bottomRight, { borderColor: '#00FF9D' }]} />
 
-                            <Animated.View style={[styles.scanLine, lineStyle]} />
+                                <Animated.View style={[styles.scanLine, lineStyle]} />
+                            </View>
+                            <View style={styles.unfocusedContainer} />
                         </View>
-                        <View style={styles.unfocusedContainer} />
+                        <View style={[styles.unfocusedContainer, { justifyContent: 'flex-start' }]}>
+                            <Text style={styles.instructionText}>
+                                {t('alignQrCode')}
+                            </Text>
+                        </View>
                     </View>
-                    <View style={[styles.unfocusedContainer, { justifyContent: 'flex-start' }]}>
-                        <Text style={styles.instructionText}>
-                            {t('alignQrCode')}
-                        </Text>
+
+                    <View style={styles.topControls}>
+                        <TouchableOpacity onPress={onClose} style={styles.iconButton}>
+                            <BlurView
+                                blurTarget={cameraTargetRef}
+                                intensity={60}
+                                tint="dark"
+                                style={StyleSheet.absoluteFill}
+                                blurMethod="dimezisBlurView"
+                            />
+                            <X size={24} color="#FFF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => setFlash(!flash)} style={styles.iconButton}>
+                            <BlurView
+                                blurTarget={cameraTargetRef}
+                                intensity={60}
+                                tint="dark"
+                                style={StyleSheet.absoluteFill}
+                                blurMethod="dimezisBlurView"
+                            />
+                            {flash ? <Zap size={24} color="#00FF9D" /> : <ZapOff size={24} color="#FFF" />}
+                        </TouchableOpacity>
                     </View>
-                </View>
 
-                <View style={styles.topControls}>
-                    <TouchableOpacity onPress={onClose} style={styles.iconButton}>
-                        <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
-                        <X size={24} color="#FFF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => setFlash(!flash)} style={styles.iconButton}>
-                        <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
-                        {flash ? <Zap size={24} color="#00FF9D" /> : <ZapOff size={24} color="#FFF" />}
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.bottomControls}>
-                    <BlurView intensity={40} tint="dark" style={styles.bottomBar}>
-                        <Scan size={32} color="#00FF9D" />
-                        <Text style={styles.bottomBarText}>{t('scanningBadge')}</Text>
-                    </BlurView>
-                </View>
-            </CameraView>
+                    <View style={styles.bottomControls}>
+                        <BlurView
+                            blurTarget={cameraTargetRef}
+                            intensity={40}
+                            tint="dark"
+                            style={styles.bottomBar}
+                            blurMethod="dimezisBlurView"
+                        >
+                            <Scan size={32} color="#00FF9D" />
+                            <Text style={styles.bottomBarText}>{t('scanningBadge')}</Text>
+                        </BlurView>
+                    </View>
+                </CameraView>
+            </BlurTargetView>
         </View>
     );
 }

@@ -1,33 +1,51 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
-    Text,
     StyleSheet,
     FlatList,
     TouchableOpacity,
     TextInput,
-    Alert,
-    Animated,
+    Animated as RNAnimated,
     RefreshControl,
     Image,
+    Dimensions,
+    Platform,
+    StatusBar,
 } from 'react-native';
-import { 
-    ArrowLeft, 
-    Search, 
-    Eye, 
-    EyeOff, 
-    Pin, 
-    PinOff, 
-    CheckCircle, 
-    Circle, 
+import {
+    ArrowLeft,
+    Search,
+    Eye,
+    EyeOff,
+    Pin,
+    PinOff,
+    CheckCircle,
+    Circle,
     Command,
     Clock,
     X,
     Palette,
     Box,
     ShoppingBag,
+    Filter,
+    ChevronRight,
+    TrendingUp,
 } from 'lucide-react-native';
+import { BlurView, BlurTargetView } from 'expo-blur';
+import { useRef } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Animatable from 'react-native-animatable';
 import { useAppTheme } from '../context/ThemeContext';
+
+// BNA UI Components
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ProductCommand {
     id: string;
@@ -150,107 +168,39 @@ const SAMPLE_COMMANDS: ProductCommand[] = [
         createdAt: new Date('2024-02-10'),
         orderId: 'ORD-006',
     },
-    {
-        id: '7',
-        productName: 'Summer Dress',
-        productImage: 'https://picsum.photos/200/200?random=7',
-        color: 'Floral',
-        size: 'S',
-        price: 75.00,
-        quantity: 2,
-        category: 'Clothing',
-        isPinned: false,
-        isCompleted: true,
-        isHidden: false,
-        usageCount: 7,
-        createdAt: new Date('2024-01-25'),
-        orderId: 'ORD-007',
-    },
-    {
-        id: '8',
-        productName: 'Running Shoes',
-        productImage: 'https://picsum.photos/200/200?random=8',
-        color: 'Black/Red',
-        size: '44',
-        price: 95.00,
-        quantity: 1,
-        category: 'Footwear',
-        isPinned: false,
-        isCompleted: false,
-        isHidden: true,
-        usageCount: 2,
-        createdAt: new Date('2024-02-15'),
-        orderId: 'ORD-008',
-    },
-    {
-        id: '9',
-        productName: 'Cashmere Cardigan',
-        productImage: 'https://picsum.photos/200/200?random=9',
-        color: 'Beige',
-        size: 'M',
-        price: 180.00,
-        quantity: 1,
-        category: 'Clothing',
-        isPinned: false,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 18,
-        createdAt: new Date('2024-01-05'),
-        orderId: 'ORD-009',
-    },
-    {
-        id: '10',
-        productName: 'Baseball Cap',
-        productImage: 'https://picsum.photos/200/200?random=10',
-        color: 'Black',
-        size: 'Adjustable',
-        price: 25.00,
-        quantity: 4,
-        category: 'Accessories',
-        isPinned: false,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 6,
-        createdAt: new Date('2024-01-12'),
-        orderId: 'ORD-010',
-    },
 ];
 
 type FilterType = 'all' | 'pinned' | 'completed' | 'hidden';
 
 export default function CommandScreen({ onBack, t }: CommandScreenProps) {
-    const { colors } = useAppTheme();
+    const { colors, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const isDark = theme === 'dark';
+
     const [commands, setCommands] = useState<ProductCommand[]>(SAMPLE_COMMANDS);
-    const [filteredCommands, setFilteredCommands] = useState<ProductCommand[]>(SAMPLE_COMMANDS);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [showSearch, setShowSearch] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const blurTargetRef = useRef<View>(null);
 
     const translate = t || ((k: string) => k);
-    // Use colors directly from context (now has all needed colors including coral)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const c = colors;
-    // For compatibility, replace all themeColors references
-    const themeColors = colors;
 
-    // Filter commands based on search query and active filter
-    useEffect(() => {
+    const filteredCommands = useMemo(() => {
         let result = [...commands];
 
-        // Apply search filter
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             result = result.filter(
-                cmd => 
+                cmd =>
                     cmd.productName.toLowerCase().includes(query) ||
                     cmd.color.toLowerCase().includes(query) ||
                     cmd.size.toLowerCase().includes(query) ||
-                    cmd.category.toLowerCase().includes(query)
+                    cmd.category.toLowerCase().includes(query) ||
+                    (cmd.orderId && cmd.orderId.toLowerCase().includes(query))
             );
         }
 
-        // Apply category filter
         switch (activeFilter) {
             case 'pinned':
                 result = result.filter(cmd => cmd.isPinned && !cmd.isHidden);
@@ -267,723 +217,355 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                 break;
         }
 
-        // Sort: pinned items first, then by usage count
         result.sort((a, b) => {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
             return b.usageCount - a.usageCount;
         });
 
-        setFilteredCommands(result);
+        return result;
     }, [commands, searchQuery, activeFilter]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        setTimeout(() => {
-            setRefreshing(false);
-        }, 1000);
+        setTimeout(() => setRefreshing(false), 1000);
     };
 
     const togglePin = (id: string) => {
-        setCommands(prev => prev.map(cmd => 
+        setCommands(prev => prev.map(cmd =>
             cmd.id === id ? { ...cmd, isPinned: !cmd.isPinned } : cmd
         ));
     };
 
     const toggleCompleted = (id: string) => {
-        setCommands(prev => prev.map(cmd => 
+        setCommands(prev => prev.map(cmd =>
             cmd.id === id ? { ...cmd, isCompleted: !cmd.isCompleted } : cmd
         ));
     };
 
     const toggleHidden = (id: string) => {
-        setCommands(prev => prev.map(cmd => 
+        setCommands(prev => prev.map(cmd =>
             cmd.id === id ? { ...cmd, isHidden: !cmd.isHidden } : cmd
         ));
     };
 
     const getCategoryColor = (category: string) => {
-        const categoryColors: Record<string, string> = {
-            'Clothing': themeColors.blue,
-            'Footwear': themeColors.green,
-            'Accessories': themeColors.purple,
-            'Bags': themeColors.orange,
+        const catMap: Record<string, string> = {
+            'Clothing': '#4361EE',
+            'Footwear': '#F72585',
+            'Accessories': '#7209B7',
+            'Bags': '#FF9F1C',
         };
-        return categoryColors[category] || themeColors.textMuted;
+        return catMap[category] || colors.primary;
     };
 
-    const getSizeColor = (size: string) => {
-        const sizeColors: Record<string, string> = {
-            'S': '#10B981',
-            'M': '#3B82F6',
-            'L': '#8B5CF6',
-            'XL': '#F59E0B',
-            'XXL': '#EF4444',
-        };
-        return sizeColors[size] || themeColors.textMuted;
-    };
+    const counts = useMemo(() => ({
+        pinned: commands.filter(c => c.isPinned && !c.isHidden).length,
+        completed: commands.filter(c => c.isCompleted && !c.isHidden).length,
+        hidden: commands.filter(c => c.isHidden).length,
+        all: commands.filter(c => !c.isHidden).length,
+    }), [commands]);
 
-    const renderCommand = ({ item: command, index }: { item: ProductCommand; index: number }) => {
-        const categoryColor = getCategoryColor(command.category);
-        const sizeColor = getSizeColor(command.size);
-        
+    const renderCommand = ({ item, index }: { item: ProductCommand; index: number }) => {
+        const catColor = getCategoryColor(item.category);
+
         return (
-            <Animated.View 
-                style={[
-                    styles.cardWrapper,
-                    { 
-                        backgroundColor: themeColors.card,
-                        borderColor: themeColors.border,
-                        opacity: command.isHidden ? 0.6 : 1,
-                    }
-                ]}
+            <Animatable.View
+                animation="fadeInUp"
+                duration={400}
+                delay={index * 100}
+                style={styles.cardContainer}
             >
-                {/* Card Header with Product Image */}
-                <View style={styles.cardHeader}>
-                    <View style={styles.productImageContainer}>
-                        <Image 
-                            source={{ uri: command.productImage }}
-                            style={styles.productImage}
-                            resizeMode="cover"
-                        />
-                        {command.isPinned && (
-                            <View style={[styles.pinnedBadge, { backgroundColor: themeColors.orange }]}>
-                                <Pin size={10} color="#FFFFFF" />
+                <Card style={StyleSheet.flatten([styles.card, { backgroundColor: colors.card }])}>
+                    <CardContent style={styles.cardContent}>
+                        <View style={styles.cardHeader}>
+                            <View style={styles.imageWrapper}>
+                                <Image source={{ uri: item.productImage }} style={styles.productImage} />
+                                {item.isPinned && (
+                                    <View style={[styles.miniPinned, { backgroundColor: '#FF9F1C' }]}>
+                                        <Pin size={10} color="#FFF" fill="#FFF" />
+                                    </View>
+                                )}
                             </View>
-                        )}
-                    </View>
-                    
-                    <View style={styles.productInfo}>
-                        <Text style={[styles.productName, { color: themeColors.foreground }]} numberOfLines={2}>
-                            {command.productName}
-                        </Text>
-                        {command.orderId && (
-                            <Text style={[styles.orderId, { color: themeColors.textMuted }]}>
-                                {command.orderId}
-                            </Text>
-                        )}
-                    </View>
 
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity 
-                            style={styles.actionBtn}
-                            onPress={() => togglePin(command.id)}
-                        >
-                            {command.isPinned ? (
-                                <Pin size={18} color={themeColors.orange} fill={themeColors.orange} />
-                            ) : (
-                                <PinOff size={18} color={themeColors.textMuted} />
-                            )}
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={styles.actionBtn}
-                            onPress={() => toggleHidden(command.id)}
-                        >
-                            {command.isHidden ? (
-                                <EyeOff size={18} color={themeColors.textMuted} />
-                            ) : (
-                                <Eye size={18} color={themeColors.textMuted} />
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                            <View style={styles.mainInfo}>
+                                <Text variant="subtitle" numberOfLines={1} style={styles.productName}>{item.productName}</Text>
+                                <Text variant="caption" style={{ color: colors.textMuted }}>{item.orderId || `ID#${item.id}`}</Text>
+                                <View style={styles.badgeRow}>
+                                    <Badge label={item.category} variant="secondary" style={StyleSheet.flatten([styles.catBadge, { backgroundColor: catColor + '15' }])} textStyle={{ color: catColor, fontSize: 10 }} />
+                                    {item.isCompleted && <Badge label="LIVRÉ" variant="success" style={styles.statusBadge} />}
+                                </View>
+                            </View>
 
-                {/* Product Details */}
-                <View style={styles.productDetails}>
-                    {/* Color */}
-                    <View style={styles.detailItem}>
-                        <View style={[styles.detailIcon, { backgroundColor: categoryColor + '20' }]}>
-                            <Palette size={14} color={categoryColor} />
+                            <View style={styles.actions}>
+                                <TouchableOpacity onPress={() => togglePin(item.id)} style={styles.actionIcon}>
+                                    <Pin size={20} color={item.isPinned ? '#FF9F1C' : colors.textMuted} fill={item.isPinned ? '#FF9F1C' : 'transparent'} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <View style={styles.detailContent}>
-                            <Text style={[styles.detailLabel, { color: themeColors.textMuted }]}>
-                                Color
-                            </Text>
-                            <Text style={[styles.detailValue, { color: themeColors.foreground }]}>
-                                {command.color}
-                            </Text>
-                        </View>
-                    </View>
 
-                    {/* Size */}
-                    <View style={styles.detailItem}>
-                        <View style={[styles.detailIcon, { backgroundColor: sizeColor + '20' }]}>
-                            <Box size={14} color={sizeColor} />
+                        <Separator style={styles.cardSep} />
+
+                        <View style={styles.detailsGrid}>
+                            <View style={styles.detailCol}>
+                                <View style={styles.detailItem}>
+                                    <Palette size={14} color={colors.textMuted} />
+                                    <View style={styles.detailTextContainer}>
+                                        <Text variant="caption" style={styles.detailLabel}>COULEUR</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.color}</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.detailItem, { marginTop: 10 }]}>
+                                    <ShoppingBag size={14} color={colors.textMuted} />
+                                    <View style={styles.detailTextContainer}>
+                                        <Text variant="caption" style={styles.detailLabel}>QUANTITÉ</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.quantity} pcs</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <View style={styles.detailCol}>
+                                <View style={styles.detailItem}>
+                                    <Box size={14} color={colors.textMuted} />
+                                    <View style={styles.detailTextContainer}>
+                                        <Text variant="caption" style={styles.detailLabel}>TAILLE</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.size}</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.detailItem, { marginTop: 10 }]}>
+                                    <TrendingUp size={14} color={colors.textMuted} />
+                                    <View style={styles.detailTextContainer}>
+                                        <Text variant="caption" style={styles.detailLabel}>PRIX TOTAL</Text>
+                                        <Text variant="body" style={{ fontWeight: '900', fontSize: 12, color: colors.primary }}>{(item.price * item.quantity).toFixed(2)} TND</Text>
+                                    </View>
+                                </View>
+                            </View>
                         </View>
-                        <View style={styles.detailContent}>
-                            <Text style={[styles.detailLabel, { color: themeColors.textMuted }]}>
-                                Size
-                            </Text>
-                            <View style={[styles.sizeBadge, { backgroundColor: sizeColor + '20' }]}>
-                                <Text style={[styles.sizeValue, { color: sizeColor }]}>
-                                    {command.size}
+
+                        <View style={styles.cardFooter}>
+                            <View style={styles.footerLeft}>
+                                <Clock size={12} color={colors.textMuted} />
+                                <Text variant="caption" style={{ color: colors.textMuted, marginLeft: 4 }}>
+                                    Utilisé {item.usageCount} fois
                                 </Text>
                             </View>
-                        </View>
-                    </View>
 
-                    {/* Quantity */}
-                    <View style={styles.detailItem}>
-                        <View style={[styles.detailIcon, { backgroundColor: themeColors.green + '20' }]}>
-                            <ShoppingBag size={14} color={themeColors.green} />
+                            <TouchableOpacity
+                                onPress={() => toggleCompleted(item.id)}
+                                style={StyleSheet.flatten([styles.completeToggle, { backgroundColor: item.isCompleted ? colors.primary + '10' : 'transparent' }])}
+                            >
+                                {item.isCompleted ? (
+                                    <CheckCircle size={18} color={colors.primary} />
+                                ) : (
+                                    <Circle size={18} color={colors.textMuted} />
+                                )}
+                                <Text variant="body" style={{ color: item.isCompleted ? colors.primary : colors.textMuted, marginLeft: 6, fontWeight: '700', fontSize: 12 }}>
+                                    {item.isCompleted ? 'Terminé' : 'En cours'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
-                        <View style={styles.detailContent}>
-                            <Text style={[styles.detailLabel, { color: themeColors.textMuted }]}>
-                                Qty
-                            </Text>
-                            <Text style={[styles.detailValue, { color: themeColors.foreground }]}>
-                                {command.quantity}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Price */}
-                    <View style={styles.detailItem}>
-                        <View style={[styles.detailIcon, { backgroundColor: themeColors.blue + '20' }]}>
-                            <Text style={[styles.priceIcon, { color: themeColors.blue }]}>$</Text>
-                        </View>
-                        <View style={styles.detailContent}>
-                            <Text style={[styles.detailLabel, { color: themeColors.textMuted }]}>
-                                Price
-                            </Text>
-                            <Text style={[styles.priceValue, { color: themeColors.blue }]}>
-                                ${command.price.toFixed(2)}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Category Tag */}
-                <View style={styles.categoryRow}>
-                    <View style={[styles.categoryBadge, { backgroundColor: categoryColor + '15' }]}>
-                        <Text style={[styles.categoryText, { color: categoryColor }]}>
-                            {command.category}
-                        </Text>
-                    </View>
-                    <Text style={[styles.totalPrice, { color: themeColors.foreground }]}>
-                        Total: ${(command.price * command.quantity).toFixed(2)}
-                    </Text>
-                </View>
-
-                {/* Card Footer */}
-                <View style={[styles.cardFooter, { borderTopColor: themeColors.border }]}>
-                    <TouchableOpacity 
-                        style={styles.completedBtn}
-                        onPress={() => toggleCompleted(command.id)}
-                    >
-                        {command.isCompleted ? (
-                            <CheckCircle size={20} color={themeColors.green} fill={themeColors.green} />
-                        ) : (
-                            <Circle size={20} color={themeColors.textMuted} />
-                        )}
-                        <Text style={[
-                            styles.completedText, 
-                            { color: command.isCompleted ? themeColors.green : themeColors.textMuted }
-                        ]}>
-                            {command.isCompleted ? 'Completed' : 'Mark Complete'}
-                        </Text>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.usageContainer}>
-                        <Clock size={14} color={themeColors.textMuted} />
-                        <Text style={[styles.usageText, { color: themeColors.textMuted }]}>
-                            Used {command.usageCount}x
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Hidden Badge */}
-                {command.isHidden && (
-                    <View style={[styles.hiddenBadge, { backgroundColor: themeColors.red + '15' }]}>
-                        <EyeOff size={12} color={themeColors.red} />
-                        <Text style={[styles.hiddenText, { color: themeColors.red }]}>
-                            Hidden
-                        </Text>
-                    </View>
-                )}
-            </Animated.View>
+                    </CardContent>
+                </Card>
+            </Animatable.View>
         );
     };
 
-    const getCounts = () => {
-        const pinned = commands.filter(c => c.isPinned && !c.isHidden).length;
-        const completed = commands.filter(c => c.isCompleted && !c.isHidden).length;
-        const hidden = commands.filter(c => c.isHidden).length;
-        const visible = commands.filter(c => !c.isHidden).length;
-        return { pinned, completed, hidden, visible, total: commands.length };
-    };
-
-    const counts = getCounts();
-
-    const FilterButton = ({ 
-        filter, 
-        label, 
-        count, 
-        active 
-    }: { 
-        filter: FilterType; 
-        label: string; 
-        count: number;
-        active: boolean;
-    }) => (
-        <TouchableOpacity
-            style={[
-                styles.filterBtn,
-                active && { 
-                    backgroundColor: themeColors.primary,
-                    borderColor: themeColors.primary,
-                },
-                { borderColor: themeColors.border }
-            ]}
-            onPress={() => setActiveFilter(filter)}
-        >
-            <Text style={[
-                styles.filterText,
-                { color: active ? themeColors.primaryForeground : themeColors.textMuted }
-            ]}>
-                {label}
-            </Text>
-            <View style={[
-                styles.filterCount,
-                { backgroundColor: active ? themeColors.primaryForeground + '20' : themeColors.muted }
-            ]}>
-                <Text style={[
-                    styles.filterCountText,
-                    { color: active ? themeColors.primary : themeColors.textMuted }
-                ]}>
-                    {count}
-                </Text>
-            </View>
-        </TouchableOpacity>
-    );
-
     return (
-        <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-                        <ArrowLeft color={themeColors.foreground} size={24} />
+        <View style={[styles.container, { backgroundColor: isDark ? '#050505' : '#F8F9FA' }]}>
+            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+            {/* Premium Header */}
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+                <BlurView
+                    blurTarget={blurTargetRef}
+                    intensity={Platform.OS === 'ios' ? 80 : 100}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={StyleSheet.absoluteFill}
+                    blurMethod="dimezisBlurView"
+                />
+                <View style={styles.headerContent}>
+                    <TouchableOpacity onPress={onBack} style={[styles.iconBtn, { backgroundColor: isDark ? '#1A1A1A' : '#EEE' }]}>
+                        <ArrowLeft size={22} color={colors.foreground} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: themeColors.foreground }]}>
-                        {translate('commands') || 'Commands'}
-                    </Text>
-                    <TouchableOpacity 
-                        onPress={() => setShowSearch(!showSearch)}
-                        style={styles.searchToggleBtn}
-                    >
-                        {showSearch ? (
-                            <X color={themeColors.foreground} size={24} />
-                        ) : (
-                            <Search color={themeColors.foreground} size={24} />
-                        )}
+                    <View style={styles.titleContainer}>
+                        <Text variant="subtitle" style={[styles.headerTitle, { fontWeight: '900', color: colors.foreground }]}>{translate('commands') || 'Mes Commandes'}</Text>
+                        <Text variant="caption" style={{ color: colors.textMuted }}>{filteredCommands.length} {translate('articles') || 'articles'}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={[styles.iconBtn, { backgroundColor: showSearch ? colors.primary : (isDark ? '#1A1A1A' : '#EEE') }]}>
+                        <Search size={22} color={showSearch ? '#FFF' : colors.foreground} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Search Bar */}
                 {showSearch && (
-                    <View style={[styles.searchContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-                        <Search size={20} color={themeColors.textMuted} />
-                        <TextInput
-                            style={[styles.searchInput, { color: themeColors.foreground }]}
-                            placeholder={translate('searchCommands') || 'Search products, colors, sizes...'}
-                            placeholderTextColor={themeColors.textMuted}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                <X size={20} color={themeColors.textMuted} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
+                    <Animatable.View animation="fadeInDown" duration={300} style={styles.searchWrapper}>
+                        <View style={[styles.searchBar, { backgroundColor: isDark ? '#111' : '#FFF', borderColor: colors.border }]}>
+                            <Search size={18} color={colors.textMuted} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.foreground }]}
+                                placeholder="Rechercher une commande..."
+                                placeholderTextColor={colors.textMuted}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <X size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </Animatable.View>
                 )}
+
+                {/* Filter Tabs */}
+                <View style={styles.tabsBar}>
+                    <TouchableOpacity onPress={() => setActiveFilter('all')} style={[styles.tab, activeFilter === 'all' && styles.activeTab]}>
+                        <Text style={[styles.tabText, activeFilter === 'all' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>TOUT</Text>
+                        {activeFilter === 'all' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setActiveFilter('pinned')} style={[styles.tab, activeFilter === 'pinned' && styles.activeTab]}>
+                        <Text style={[styles.tabText, activeFilter === 'pinned' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>IMPORTANTS</Text>
+                        {activeFilter === 'pinned' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setActiveFilter('completed')} style={[styles.tab, activeFilter === 'completed' && styles.activeTab]}>
+                        <Text style={[styles.tabText, activeFilter === 'completed' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>TERMINÉS</Text>
+                        {activeFilter === 'completed' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            {/* Filter Bar */}
-            <View style={styles.filterBar}>
+            <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
                 <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={[
-                        { filter: 'all' as FilterType, label: 'All', count: counts.visible },
-                        { filter: 'pinned' as FilterType, label: 'Pinned', count: counts.pinned },
-                        { filter: 'completed' as FilterType, label: 'Completed', count: counts.completed },
-                        { filter: 'hidden' as FilterType, label: 'Hidden', count: counts.hidden },
-                    ]}
-                    keyExtractor={item => item.filter}
-                    renderItem={({ item }) => (
-                        <FilterButton
-                            filter={item.filter}
-                            label={item.label}
-                            count={item.count}
-                            active={activeFilter === item.filter}
-                        />
-                    )}
-                    contentContainerStyle={styles.filterList}
+                    data={filteredCommands}
+                    renderItem={renderCommand}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={[styles.list, { paddingTop: insets.top + (showSearch ? 190 : 140) }]}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <LinearGradient colors={[colors.primary + '20', 'transparent']} style={styles.emptyGradient} />
+                            <Command size={80} color={colors.border} />
+                            <Text variant="heading" style={{ marginTop: 20, fontWeight: '900' }}>Rien à afficher</Text>
+                            <Text variant="body" style={{ color: colors.textMuted, textAlign: 'center', marginTop: 10 }}>
+                                {searchQuery ? "Nous n'avons trouvé aucun résultat pour votre recherche." : "Vous n'avez pas encore de commandes dans cette catégorie."}
+                            </Text>
+                            <Button onPress={() => { setSearchQuery(''); setActiveFilter('all'); }} style={{ marginTop: 30 }}>
+                                <Text style={{ color: '#FFF', fontWeight: '800' }}>RAZ FILTRES</Text>
+                            </Button>
+                        </View>
+                    }
                 />
-            </View>
-
-            {/* Commands List */}
-            <FlatList
-                data={filteredCommands}
-                renderItem={renderCommand}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.list}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={handleRefresh}
-                        tintColor={themeColors.primary}
-                    />
-                }
-                ListHeaderComponent={
-                    <View style={styles.listHeader}>
-                        <Text style={[styles.listHeaderText, { color: themeColors.textMuted }]}>
-                            {filteredCommands.length} {translate('commands') || 'products'}
-                            {searchQuery && ` found`}
-                        </Text>
-                    </View>
-                }
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Command size={64} color={themeColors.border} />
-                        <Text style={[styles.emptyText, { color: themeColors.textMuted }]}>
-                            {searchQuery 
-                                ? 'No products found' 
-                                : activeFilter === 'hidden'
-                                    ? 'No hidden commands'
-                                    : 'No commands yet'}
-                        </Text>
-                        <Text style={[styles.emptySubText, { color: themeColors.textMuted }]}>
-                            {searchQuery 
-                                ? 'Try a different search term' 
-                                : 'Your product commands will appear here'}
-                        </Text>
-                    </View>
-                }
-            />
-
-            {/* Hidden Commands Banner */}
-            {counts.hidden > 0 && activeFilter !== 'hidden' && (
-                <TouchableOpacity 
-                    style={[styles.hiddenBanner, { backgroundColor: themeColors.red + '15', borderColor: themeColors.red + '30' }]}
-                    onPress={() => setActiveFilter('hidden')}
-                >
-                    <EyeOff size={18} color={themeColors.red} />
-                    <Text style={[styles.hiddenBannerText, { color: themeColors.red }]}>
-                        {counts.hidden} hidden command{counts.hidden > 1 ? 's' : ''}
-                    </Text>
-                    <Text style={[styles.hiddenBannerAction, { color: themeColors.red }]}>
-                        Show
-                    </Text>
-                </TouchableOpacity>
-            )}
+            </BlurTargetView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        paddingHorizontal: 20,
-        paddingTop: 60,
-        paddingBottom: 15,
+        position: 'absolute',
+        top: 0, left: 0, right: 0,
+        zIndex: 100,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0,0,0,0.05)',
     },
-    headerTop: {
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
     },
-    backBtn: {
-        padding: 4,
+    iconBtn: {
+        width: 40, height: 40,
+        borderRadius: 12,
+        alignItems: 'center', justifyContent: 'center',
     },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        letterSpacing: 1,
-    },
-    searchToggleBtn: {
-        padding: 4,
-    },
-    searchContainer: {
+    titleContainer: { alignItems: 'center' },
+    headerTitle: { fontSize: 18, letterSpacing: -0.5 },
+    searchWrapper: { paddingHorizontal: 20, paddingBottom: 10 },
+    searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 16,
-        marginTop: 16,
+        paddingHorizontal: 15,
+        height: 46,
+        borderRadius: 14,
         borderWidth: 1,
-        gap: 12,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    filterBar: {
-        paddingBottom: 10,
-    },
-    filterList: {
-        paddingHorizontal: 20,
         gap: 10,
     },
-    filterBtn: {
+    searchInput: { flex: 1, fontSize: 14, fontWeight: '600' },
+    tabsBar: {
         flexDirection: 'row',
+        paddingHorizontal: 10,
+        marginTop: 5,
+    },
+    tab: {
+        paddingVertical: 12,
+        paddingHorizontal: 15,
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        borderWidth: 1,
-        gap: 8,
     },
-    filterText: {
-        fontSize: 14,
-        fontWeight: '700',
-    },
-    filterCount: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
-    },
-    filterCountText: {
-        fontSize: 12,
-        fontWeight: '800',
-    },
-    list: {
-        padding: 20,
-        paddingBottom: 40,
-    },
-    listHeader: {
-        marginBottom: 16,
-    },
-    listHeaderText: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    // Card Styles
-    cardWrapper: {
-        borderRadius: 20,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    productImageContainer: {
-        position: 'relative',
-    },
-    productImage: {
-        width: 64,
-        height: 64,
-        borderRadius: 14,
-    },
-    pinnedBadge: {
+    activeTab: {},
+    tabText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+    indicator: {
         position: 'absolute',
-        top: -4,
-        right: -4,
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
+        bottom: 0, width: 20, height: 3,
+        borderRadius: 2,
     },
-    productInfo: {
-        flex: 1,
-        marginLeft: 14,
+    list: { paddingHorizontal: 16, paddingBottom: 100 },
+    cardContainer: { marginBottom: 16 },
+    card: {
+        borderRadius: 24,
+        borderWidth: 0,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+        elevation: 5,
     },
-    productName: {
-        fontSize: 16,
-        fontWeight: '800',
-        lineHeight: 20,
+    cardContent: { padding: 16 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center' },
+    imageWrapper: { width: 70, height: 70, position: 'relative' },
+    productImage: { width: 70, height: 70, borderRadius: 16 },
+    miniPinned: {
+        position: 'absolute', top: -5, right: -5,
+        width: 20, height: 20, borderRadius: 10,
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 2, borderColor: '#FFF',
     },
-    orderId: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    headerActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    actionBtn: {
-        padding: 8,
-    },
-    // Product Details Grid
-    productDetails: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-        marginBottom: 14,
-    },
-    detailItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        minWidth: '45%',
-        gap: 8,
-    },
-    detailIcon: {
-        width: 28,
-        height: 28,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    detailContent: {
-        flex: 1,
-    },
-    detailLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    detailValue: {
-        fontSize: 14,
-        fontWeight: '800',
-    },
-    sizeBadge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
-        marginTop: 2,
-    },
-    sizeValue: {
-        fontSize: 12,
-        fontWeight: '800',
-    },
-    priceIcon: {
-        fontSize: 14,
-        fontWeight: '900',
-    },
-    priceValue: {
-        fontSize: 14,
-        fontWeight: '900',
-    },
-    // Category Row
-    categoryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    categoryBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: 10,
-    },
-    categoryText: {
-        fontSize: 11,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    totalPrice: {
-        fontSize: 16,
-        fontWeight: '900',
-    },
-    // Card Footer
+    mainInfo: { flex: 1, marginLeft: 15 },
+    productName: { marginBottom: 2, fontWeight: '800' },
+    badgeRow: { flexDirection: 'row', marginTop: 6, gap: 6 },
+    catBadge: { height: 20, paddingHorizontal: 8, borderWidth: 0 },
+    statusBadge: { height: 20, paddingHorizontal: 8 },
+    actions: { alignSelf: 'flex-start' },
+    actionIcon: { padding: 5 },
+    cardSep: { marginVertical: 15, opacity: 0.1 },
+    detailsGrid: { flexDirection: 'row', gap: 20 },
+    detailCol: { flex: 1 },
+    detailItem: { flexDirection: 'row', alignItems: 'center' },
+    detailTextContainer: { marginLeft: 10, flex: 1 },
+    detailLabel: { fontSize: 8, opacity: 0.5, marginBottom: 1, fontWeight: '700' },
     cardFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        marginTop: 18,
         paddingTop: 12,
         borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.03)',
     },
-    completedBtn: {
+    footerLeft: { flexDirection: 'row', alignItems: 'center' },
+    completeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        paddingHorizontal: 12,
         paddingVertical: 6,
-        paddingHorizontal: 10,
         borderRadius: 10,
     },
-    completedText: {
-        fontSize: 13,
-        fontWeight: '700',
-    },
-    usageContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    usageText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    // Badges
-    hiddenBadge: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-        gap: 4,
-    },
-    hiddenText: {
-        fontSize: 11,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-    },
-    // Empty State
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 60,
-        gap: 12,
-        paddingHorizontal: 40,
-    },
-    emptyText: {
-        fontSize: 17,
-        fontWeight: '800',
-        textAlign: 'center',
-    },
-    emptySubText: {
-        fontSize: 14,
-        fontWeight: '500',
-        textAlign: 'center',
-        opacity: 0.7,
-    },
-    // Hidden Banner
-    hiddenBanner: {
-        position: 'absolute',
-        bottom: 30,
-        left: 20,
-        right: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-    },
-    hiddenBannerText: {
-        flex: 1,
-        fontSize: 14,
-        fontWeight: '700',
-        marginLeft: 12,
-    },
-    hiddenBannerAction: {
-        fontSize: 14,
-        fontWeight: '900',
-    },
+    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 100, paddingHorizontal: 40 },
+    emptyGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 200 },
 });
+
+

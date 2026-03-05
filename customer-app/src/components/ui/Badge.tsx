@@ -7,7 +7,8 @@ import {
     TextStyle,
     StyleProp
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView, BlurTargetView } from 'expo-blur';
+import { useRef } from 'react';
 import { Theme } from '../../theme';
 import { useAppTheme } from '../../context/ThemeContext';
 
@@ -19,6 +20,7 @@ interface BadgeProps {
     icon?: React.ReactNode;
     style?: StyleProp<ViewStyle>;
     textStyle?: StyleProp<TextStyle>;
+    blurTarget?: React.RefObject<any>;
 }
 
 export function Badge({
@@ -26,7 +28,8 @@ export function Badge({
     variant = 'primary',
     icon,
     style,
-    textStyle
+    textStyle,
+    blurTarget,
 }: BadgeProps) {
     const { theme } = useAppTheme();
     const isDark = theme === 'dark';
@@ -64,7 +67,13 @@ export function Badge({
     return (
         <View style={containerStyles}>
             {variant === 'glass' && (
-                <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView
+                    blurTarget={blurTarget}
+                    intensity={20}
+                    tint="dark"
+                    style={StyleSheet.absoluteFill}
+                    blurMethod="dimezisBlurView"
+                />
             )}
             <View style={styles.content}>
                 {icon && <View style={styles.iconWrapper}>{icon}</View>}

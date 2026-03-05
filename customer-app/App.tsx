@@ -65,6 +65,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   Home,
   ShoppingBag,
+  Store,
   User,
   Search,
   X,
@@ -185,6 +186,7 @@ import Translations from './src/translations';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import CategoryScreen from './src/screens/CategoryScreen';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 if (!(isExpoGo && Platform.OS === 'android')) {
@@ -273,6 +275,10 @@ export default function App() {
   const [activeTabParams, setActiveTabParams] = useState<any>(null);
   const [trackingModalVisible, setTrackingModalVisible] = useState(false);
   const [trackingInput, setTrackingInput] = useState('');
+
+  // Category navigation stack: [{id, name}]
+  const [categoryStack, setCategoryStack] = useState<{ id: string; name: string }[]>([]);
+  const currentCategory = categoryStack[categoryStack.length - 1];
 
   // Hoisted state variables for global access (Feed/Profile/Chat)
   const [works, setWorks] = useState<any[]>([]);
@@ -869,30 +875,53 @@ export default function App() {
     if (!user) return;
 
     try {
-      const q = query(
+      // Query 1: notifications for this specific user
+      const qUser = query(
         collection(db, 'notifications'),
-        orderBy('createdAt', 'desc') // Ensure indexing or remove orderBy if failing
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(50)
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const allNotifs = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          // Calculate time roughly (better with date-fns)
-          time: d.data().createdAt ? new Date(d.data().createdAt.seconds * 1000).toLocaleDateString() : 'Just now'
-        }));
+      // Query 2: broadcast notifications for ALL users
+      const qAll = query(
+        collection(db, 'notifications'),
+        where('userId', '==', 'ALL'),
+        orderBy('createdAt', 'desc'),
+        limit(20)
+      );
 
-        // Client-side filtering because OR queries are complex without composite indexes
-        // Filter for: userId == user.uid OR userId == 'ALL'
-        const myNotifs = allNotifs.filter((n: any) => n.userId === user.uid || n.userId === 'ALL');
-        setNotifications(myNotifs);
+      const processNotif = (d: any) => ({
+        id: d.id,
+        ...d.data(),
+        time: d.data().createdAt ? new Date(d.data().createdAt.seconds * 1000).toLocaleDateString() : 'Maintenant'
       });
 
-      return () => unsubscribe();
+      let userNotifs: any[] = [];
+      let allNotifs: any[] = [];
+
+      const merge = () => {
+        const merged = [...allNotifs, ...userNotifs];
+        merged.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setNotifications(merged);
+      };
+
+      const unsubUser = onSnapshot(qUser, (snap) => {
+        userNotifs = snap.docs.map(processNotif);
+        merge();
+      });
+
+      const unsubAll = onSnapshot(qAll, (snap) => {
+        allNotifs = snap.docs.map(processNotif);
+        merge();
+      });
+
+      return () => { unsubUser(); unsubAll(); };
     } catch (e) {
       console.log("Notification error:", e);
     }
   }, [user]);
+
 
   useEffect(() => {
     const fetchSocials = async () => {
@@ -1339,9 +1368,22 @@ export default function App() {
     setActiveTab('Detail');
   };
 
-  const navigateToCategory = (catId: string) => {
-    setFilterCategory(catId);
-    setActiveTab('Shop');
+  const navigateToCategory = (catId: string, catName?: string) => {
+    setCategoryStack([{ id: catId, name: catName || catId }]);
+    setActiveTab('Category');
+  };
+
+  const handleSubCategoryPress = (id: string, name: string) => {
+    setCategoryStack(prev => [...prev, { id, name }]);
+    setActiveTab('Category');
+  };
+
+  const handleCategoryBack = () => {
+    const newStack = categoryStack.slice(0, -1);
+    setCategoryStack(newStack);
+    if (newStack.length === 0) {
+      setActiveTab('Home');
+    }
   };
 
   const navigateToCampaign = (campaign: any) => {
@@ -1512,6 +1554,26 @@ export default function App() {
         )
       );
       case 'Notifications': return <NotificationsScreen notifications={notifications} language={language} onClear={handleClearNotifications} onBack={() => setActiveTab('Home')} t={t} />;
+      case 'Category': return (
+        <CategoryScreen
+          categoryId={currentCategory?.id}
+          categoryName={currentCategory?.name}
+          onBack={handleCategoryBack}
+          onProductPress={navigateToProduct}
+          onSubCategoryPress={handleSubCategoryPress}
+          wishlist={wishlist}
+          toggleWishlist={toggleWishlist}
+          addToCart={(p: any) => setQuickAddProduct(p)}
+          onBrandPress={(id) => {
+            setFilterCategory(id);
+            setFilterBrand(null);
+            setActiveTab('Shop');
+          }}
+          t={t}
+          theme={theme || 'light'}
+          language={language}
+        />
+      );
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
       case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} />;
@@ -5399,7 +5461,31 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
                 />
               </View>
               <View style={{ flex: 1, paddingTop: 5 }}>
-                <Text style={{ fontSize: 11, fontWeight: '900', color: colors.foreground, letterSpacing: 1.5, marginBottom: 6 }}>{String(translateCategory(getName(product.category)) || t('collections')).toUpperCase()}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                  {product.categoryName && (
+                    <>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted, opacity: 0.5 }}>|</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted, letterSpacing: 1.2 }}>
+                        {getName(product.categoryName).toUpperCase()}
+                      </Text>
+                    </>
+                  )}
+                  {product.subCategoryName && (
+                    <>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted, opacity: 0.5 }}>|</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted, letterSpacing: 1.2 }}>
+                        {getName(product.subCategoryName).toUpperCase()}
+                      </Text>
+                    </>
+                  )}
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: colors.textMuted, opacity: 0.5 }}>|</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 }}>
+                    <Store size={10} color={colors.accent} />
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: colors.accent, letterSpacing: 1.2 }}>
+                      {String(product.brandName || product.marque || "TAMA CLOTHING").toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
                 <Text style={{ fontSize: 22, fontWeight: '900', color: colors.foreground, letterSpacing: -0.5, lineHeight: 26, marginBottom: 8 }}>{String(getName(product.name)).toUpperCase()}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: colors.foreground }}>
@@ -5414,7 +5500,7 @@ function QuickAddModal({ product, isVisible, onClose, onAddToCart, onSizeGuide, 
               </View>
             </View>
 
-            {/* Color Selector */}
+            {/* Colors Filter */}
             {product.colors && product.colors.length > 0 && (
               <View style={{ marginBottom: 25 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
@@ -6712,9 +6798,9 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
   // Stable card height - computed once to prevent rerender-induced crashes
-  const CARD_HEIGHT = useRef(height - (190 + insets.top + (Platform.OS === 'ios' ? 130 : 80))).current;
+  const CARD_HEIGHT = useRef(height - (245 + insets.top + (Platform.OS === 'ios' ? 130 : 80))).current;
   const ITEM_HEIGHT = CARD_HEIGHT + 20; // card height + marginBottom
-  const HEADER_HEIGHT = 190 + insets.top;
+  const BASE_HEADER_HEIGHT = 245 + insets.top;
 
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -6726,44 +6812,105 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [subCategories, setSubCategories] = useState<any[]>([]);
+  const [selectedSubCat, setSelectedSubCat] = useState<string | null>(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  const SUB_BAR_HEIGHT = subCategories.length > 0 ? 45 : 0;
+  const HEADER_HEIGHT = BASE_HEADER_HEIGHT + SUB_BAR_HEIGHT;
+
   useEffect(() => {
     setSelectedCat(initialCategory || null);
     setSelectedBrand(initialBrand || null);
+    setSelectedSubCat(null);
   }, [initialCategory, initialBrand]);
 
   useEffect(() => {
+    const fetchSubs = async () => {
+      setSelectedSubCat(null);
+      if (selectedCat) {
+        try {
+          const subSnap = await getDocs(query(collection(db, 'categories'), where('parentId', '==', selectedCat)));
+          setSubCategories(subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (err) {
+          console.error("Error fetching subcategories:", err);
+        }
+      } else {
+        setSubCategories([]);
+      }
+    };
+    fetchSubs();
+  }, [selectedCat]);
+
+  useEffect(() => {
     fetchData();
-  }, [selectedCat, selectedBrand]);
+  }, [selectedCat, selectedBrand, selectedSubCat, selectedZone]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      // Fetch products
+      // 1. Fetch categories first to handle hierarchy
+      let catList: any[] = categories;
+      if (categories.length === 0) {
+        const catSnap = await getDocs(collection(db, 'categories'));
+        catList = catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCategories(catList);
+      }
+
+      // 2. Build product query
       let q = query(collection(db, 'products'));
-      if (selectedCat) {
-        q = query(collection(db, 'products'), where('categoryId', '==', selectedCat));
+      if (selectedSubCat) {
+        q = query(collection(db, 'products'), where('categoryId', '==', selectedSubCat));
+      } else if (selectedCat) {
+        // Fetch products for parent AND all its children
+        const children = catList.filter(c => c.parentId === selectedCat).map(c => c.id);
+        const allIds = [selectedCat, ...children];
+        // Firestore IN limit is 30
+        q = query(collection(db, 'products'), where('categoryId', 'in', allIds.slice(0, 30)));
       } else if (selectedBrand) {
         q = query(collection(db, 'products'), where('brandId', '==', selectedBrand));
       }
+
       const prodSnap = await getDocs(q);
       const prodList = prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(prodList);
 
-      // Fetch categories if not loaded
-      if (categories.length === 0) {
-        const catSnap = await getDocs(collection(db, 'categories'));
-        setCategories(catSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
-      // Fetch brands for search functionality (always fetch to ensure brand search works)
+      // 3. Enrich products with proper category hierarchy (Parent Name | Sub Name)
+      const enrichedProds = prodList.map((p: any) => {
+        let cat = catList.find((c: any) => c.id === p.categoryId);
+        let parentName = '';
+        let subName = '';
+
+        if (cat) {
+          if (cat.parentId) {
+            const parent = catList.find((c: any) => c.id === cat.parentId);
+            parentName = parent ? parent.name : '';
+            subName = cat.name;
+          } else {
+            parentName = cat.name;
+            subName = '';
+          }
+        }
+
+        return {
+          ...p,
+          categoryName: parentName || p.categoryName || '',
+          subCategoryName: (subName && subName !== parentName) ? subName : (p.subCategoryName || ''),
+          brandName: p.brandName || p.brand || p.marque || 'TAMA CLOTHING'
+        };
+      });
+
+      setProducts(enrichedProds);
+
+      // Fetch brands for search functionality
       const brandsSnap = await getDocs(collection(db, 'brands'));
-      const allBrands: any[] = brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Filter to only show active brands
-      const activeBrands = allBrands.filter((b: any) => b.isActive !== false);
+      const activeBrands = brandsSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((b: any) => b.isActive !== false);
       setBrands(activeBrands);
     } catch (error) {
       console.error("Error fetching shop data:", error);
@@ -6798,7 +6945,10 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
     const matchesSearch = productNameMatch || brandNameMatch;
     const matchesColor = !selectedColor || p.colors?.includes(selectedColor);
     const matchesSize = !selectedSize || p.sizes?.includes(selectedSize);
-    return matchesSearch && matchesColor && matchesSize;
+    const matchesZone = !selectedZone || p.zone === selectedZone || p.zone === 'Global' || p.zone === 'Toute la Tunisie';
+    // Products from admin use categoryId for both parent/child selection
+    const matchesSubCat = !selectedSubCat || p.categoryId === selectedSubCat || p.subCategoryId === selectedSubCat;
+    return matchesSearch && matchesColor && matchesSize && matchesZone && matchesSubCat;
   });
 
   const sortedProducts = [...filteredProducts].sort((a: any, b: any) => {
@@ -6812,6 +6962,34 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'].filter(s =>
     products.some(p => p.sizes?.includes(s))
   );
+  const availableZones = Array.from(new Set(products.map(p => p.zone).filter(Boolean).filter(z => z !== 'Global')));
+
+  const handleGetCurrentLocation = async () => {
+    setGettingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('error'), t('locationPermissionDenied'));
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({});
+      const reverse = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      });
+      if (reverse && reverse[0]) {
+        const city = reverse[0].city || reverse[0].region;
+        if (city) {
+          setSelectedZone(city);
+          Alert.alert(t('locationDetected'), `${t('filteringBy')} ${city}`);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGettingLocation(false);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
@@ -6830,17 +7008,98 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
         elevation: 10,
       }}>
 
+        {/* Top Location Bar (Like Category Screen) */}
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          paddingHorizontal: 20,
+          paddingTop: 5,
+          marginBottom: 5,
+          zIndex: 2000
+        }}>
+          {gettingLocation ? (
+            <ActivityIndicator size="small" color={colors.accent} style={{ marginRight: 10 }} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity
+                onPress={handleGetCurrentLocation}
+                style={[
+                  styles.catChip,
+                  {
+                    backgroundColor: selectedZone && selectedZone !== 'Global' ? colors.accent : (theme === 'dark' ? '#1C1C1E' : '#F2F2F7'),
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    height: 28
+                  }
+                ]}
+              >
+                <MapPin size={10} color={selectedZone && selectedZone !== 'Global' ? '#FFF' : colors.textMuted} />
+                <Text style={{ fontSize: 9, fontWeight: '800', color: selectedZone && selectedZone !== 'Global' ? '#FFF' : colors.textMuted }}>
+                  {(t('nearMe') || 'Near Me').toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setSelectedZone('Global')}
+                style={[
+                  styles.catChip,
+                  {
+                    backgroundColor: selectedZone === 'Global' ? colors.accent : (theme === 'dark' ? '#17171F' : '#F2F2F7'),
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    height: 28
+                  }
+                ]}
+              >
+                <Text style={{ fontSize: 9, fontWeight: '800', color: selectedZone === 'Global' ? '#FFF' : colors.textMuted }}>
+                  {(t('global') || 'Global').toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+
+              {selectedZone && selectedZone !== 'Global' && (
+                <TouchableOpacity
+                  onPress={() => setSelectedZone(null)}
+                  style={[
+                    styles.catChip,
+                    {
+                      backgroundColor: colors.accent,
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      height: 28
+                    }
+                  ]}
+                >
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>
+                    {selectedZone.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
         <View style={styles.modernHeader}>
           <TouchableOpacity onPress={onBack} style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]}>
             <ChevronLeft size={20} color={colors.foreground} />
           </TouchableOpacity>
-          <Text pointerEvents="none" style={[styles.modernLogo, { letterSpacing: 4, color: colors.foreground }]}>{t('shop')}</Text>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text pointerEvents="none" style={[styles.modernLogo, { letterSpacing: 4, color: colors.foreground, marginLeft: 0, marginBottom: 2, height: 'auto' }]}>{t('shop')}</Text>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textMuted, opacity: 0.7 }}>
+              {products.length} {(t('products') || 'Produits').toUpperCase()}
+            </Text>
+          </View>
           <TouchableOpacity style={[styles.searchCircle, { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7' }]} activeOpacity={0.7} onPress={() => setShowSortSheet(true)}>
             <Sliders size={18} color={colors.foreground} strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
-        {/* Fixed Search and Categories in Header */}
+        {/* Fixed Search, Locations and Categories in Header */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 10, zIndex: 1000 }}>
           <View style={[
             styles.searchBar,
@@ -6854,7 +7113,7 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
               marginBottom: 12,
               height: 50,
               borderRadius: 25,
-              elevation: 5, // Static elevation to avoid focus loss on Android
+              elevation: 5,
               shadowColor: colors.foreground,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: isSearchFocused ? 0.2 : 0,
@@ -6879,10 +7138,12 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
             />
           </View>
 
+          <View style={{ height: 10 }} />
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={{ marginHorizontal: -20 }}
+            style={{ marginHorizontal: -20, marginTop: 10 }}
             contentContainerStyle={{ paddingHorizontal: 20, gap: 8, alignItems: 'center' }}
           >
             {/* Categories */}
@@ -6897,40 +7158,46 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
               <Text style={[styles.catChipText, { fontSize: 11, fontWeight: '700', color: colors.textMuted }, !selectedCat && { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('all')}</Text>
             </TouchableOpacity>
 
-            {categories.map((cat, index) => {
-              const categoryColors = ['#FF6B6B', '#4ECDC4', '#3498DB', '#FFEEAD', '#96CEB4', , '#D4A5A5', '#9B59B6', , '#45B7D1', '#E67E22'];
-              const catColor = categoryColors[index % categoryColors.length];
-              const isActive = selectedCat === cat.id;
+            {categories
+              .filter(c => {
+                const pId = String(c.parentId);
+                return !c.parentId || pId === "" || pId === "null" || pId === "undefined" || pId === "0";
+              })
+              .filter((c, i, self) => self.findIndex(t => getName(t.name) === getName(c.name)) === i) // Unique by name
+              .map((cat, index) => {
+                const categoryColors = ['#FF6B6B', '#4ECDC4', '#3498DB', '#FFEEAD', '#96CEB4', '#D4A5A5', '#9B59B6', '#45B7D1', '#E67E22'];
+                const catColor = (categoryColors[index % categoryColors.length]) || colors.accent;
+                const isActive = selectedCat === cat.id;
 
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.catChip,
-                    {
-                      backgroundColor: isActive ? catColor : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'),
-                      borderRadius: 20,
-                      height: 32,
-                      paddingHorizontal: 16,
-                      borderWidth: isActive ? 2 : 0,
-                      borderColor: isActive ? catColor : 'transparent'
-                    }
-                  ]}
-                  onPress={() => setSelectedCat(cat.id)}
-                >
-                  <Text style={[
-                    styles.catChipText,
-                    {
-                      color: isActive ? '#FFF' : (theme === 'dark' ? '#888' : '#666'),
-                      fontSize: 11,
-                      fontWeight: '700'
-                    }
-                  ]}>
-                    {translateCategory(getName(cat.name)).toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.catChip,
+                      {
+                        backgroundColor: isActive ? catColor : (theme === 'dark' ? '#1C1C1E' : '#F2F2F7'),
+                        borderRadius: 20,
+                        height: 32,
+                        paddingHorizontal: 16,
+                        borderWidth: isActive ? 2 : 0,
+                        borderColor: isActive ? catColor : 'transparent'
+                      }
+                    ]}
+                    onPress={() => setSelectedCat(cat.id)}
+                  >
+                    <Text style={[
+                      styles.catChipText,
+                      {
+                        color: isActive ? '#FFF' : (theme === 'dark' ? '#888' : '#666'),
+                        fontSize: 11,
+                        fontWeight: '700'
+                      }
+                    ]}>
+                      {translateCategory(getName(cat.name)).toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
 
             {/* Divider and Brands */}
             {brands.length > 0 && (
@@ -6965,8 +7232,58 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
                 ))}
               </>
             )}
+
             <View style={{ width: 40 }} />
           </ScrollView>
+
+          {/* Subcategories Row - conditionally rendered only when a category is selected */}
+          {selectedCat && subCategories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginHorizontal: -20, marginTop: 10 }}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, alignItems: 'center' }}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.catChip,
+                  { backgroundColor: theme === 'dark' ? '#000' : '#F2F2F7', borderRadius: 20, height: 28, paddingHorizontal: 12 },
+                  !selectedSubCat && { backgroundColor: colors.accent }
+                ]}
+                onPress={() => setSelectedSubCat(null)}
+              >
+                <Text style={[styles.catChipText, { fontSize: 10, fontWeight: '700', color: colors.textMuted }, !selectedSubCat && { color: '#FFF' }]}>{t('all')}</Text>
+              </TouchableOpacity>
+
+              {subCategories.map((sub) => (
+                <TouchableOpacity
+                  key={sub.id}
+                  style={[
+                    styles.catChip,
+                    {
+                      backgroundColor: selectedSubCat === sub.id ? colors.accent : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'),
+                      borderRadius: 20,
+                      height: 28,
+                      paddingHorizontal: 12,
+                    }
+                  ]}
+                  onPress={() => setSelectedSubCat(sub.id)}
+                >
+                  <Text style={[
+                    styles.catChipText,
+                    {
+                      color: selectedSubCat === sub.id ? '#FFF' : (theme === 'dark' ? '#888' : '#666'),
+                      fontSize: 10,
+                      fontWeight: '700'
+                    }
+                  ]}>
+                    {getName(sub.name).toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <View style={{ width: 40 }} />
+            </ScrollView>
+          )}
         </View>
       </View>
 
@@ -7107,6 +7424,36 @@ function ShopScreen({ onProductPress, initialCategory, initialBrand, setInitialB
                           styles.catChipText,
                           { color: selectedBrand === b.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted }
                         ]}>{getName(b.name)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {/* Location / Zone Filter */}
+              {availableZones.length > 0 && (
+                <>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={[styles.settingsLabel, { color: colors.textMuted, marginBottom: 0 }]}>{t('location')}</Text>
+                    <TouchableOpacity onPress={handleGetCurrentLocation} disabled={gettingLocation} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {gettingLocation ? <ActivityIndicator size="small" color={colors.accent} /> : <MapPin size={14} color={colors.accent} />}
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>{t('useMyLocation')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 30 }}>
+                    <TouchableOpacity
+                      style={[styles.catChip, { backgroundColor: !selectedZone ? colors.foreground : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'), borderRadius: 20, height: 32, paddingHorizontal: 16 }]}
+                      onPress={() => setSelectedZone(null)}
+                    >
+                      <Text style={[styles.catChipText, { fontSize: 11, fontWeight: '700', color: !selectedZone ? (theme === 'dark' ? '#000' : '#FFF') : (theme === 'dark' ? '#888' : '#666') }]}>{t('allZones')}</Text>
+                    </TouchableOpacity>
+                    {availableZones.map((z: any) => (
+                      <TouchableOpacity
+                        key={z}
+                        style={[styles.catChip, { backgroundColor: selectedZone === z ? colors.foreground : (theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7'), borderRadius: 20, height: 32, paddingHorizontal: 16 }]}
+                        onPress={() => setSelectedZone(z)}
+                      >
+                        <Text style={[styles.catChipText, { fontSize: 11, fontWeight: '700', color: selectedZone === z ? (theme === 'dark' ? '#000' : '#FFF') : (theme === 'dark' ? '#888' : '#666') }]}>{z}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
