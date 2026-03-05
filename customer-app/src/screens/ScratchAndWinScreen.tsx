@@ -99,7 +99,7 @@ const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Hours
 type Mode = 'deck' | 'scratch' | 'revealed';
 type Pt = { x: number; y: number };
 
-interface Props { onBack: () => void; user: any; t: any; theme: string; }
+interface Props { onBack: () => void; user: any; t: any; theme: string; language?: string; }
 
 interface ScratchGift {
     id: string;

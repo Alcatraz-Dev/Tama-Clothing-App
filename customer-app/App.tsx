@@ -146,6 +146,8 @@ import {
   Scan,
   Gift,
   Copy,
+  CreditCard,
+  UserPlus,
 } from 'lucide-react-native';
 import UserBadge from './src/components/UserBadge';
 import QRScanner from './src/components/QRScanner';
@@ -771,11 +773,40 @@ export default function App() {
 
     if (!(isExpoGo && Platform.OS === 'android')) {
       notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-        // Handle foreground notification
+        // Handle foreground notification with image support
+        const imageUrl = notification.request.content.data?.imageUrl || notification.request.content.data?.image;
+        
+        // If notification has image, you can handle it here
+        // For example, showing an in-app banner with the image
+        if (imageUrl) {
+          console.log('Notification received with image:', imageUrl);
+          // Could trigger a UI update or store for display
+        }
+        
+        // Mark as read in Firestore if needed
+        const notifId = notification.request.content.data?.notificationId;
+        if (notifId && typeof notifId === 'string' && user?.uid) {
+          updateDoc(doc(db, 'notifications', notifId), { read: true }).catch(console.error);
+        }
       });
 
       responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-        // Handle interaction
+        // Handle notification tap - navigate to appropriate screen
+        const data = response.notification.request.content.data as any;
+        
+        if (data?.screen && typeof data.screen === 'string') {
+          // Navigate to the specified screen
+          setActiveTab(data.screen);
+        } else if (data?.orderId) {
+          // Navigate to order tracking
+          setActiveTab('Orders');
+        } else if (data?.productId) {
+          // Navigate to product detail
+          setActiveTab('Home');
+        } else {
+          // Default: go to notifications
+          setActiveTab('Notifications');
+        }
       });
     }
 
@@ -1429,18 +1460,42 @@ export default function App() {
   };
 
   const handleClearNotifications = async () => {
-    // Ideally update all documents. For now, we can just clear local state or implement batch update.
-    // Batch update is safer.
-    // To properly "read" them, we should update each doc.
     try {
-      notifications.forEach(async (n) => {
-        if (!n.read && n.id) {
-          await updateDoc(doc(db, 'notifications', n.id), { read: true });
-        }
-      });
-      // Local optimistic update
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch (e) { console.error(e); }
+      // Show confirmation alert
+      Alert.alert(
+        t('clearAll') || 'Clear All',
+        language === 'ar' ? 'هل أنت متأكد من مسح جميع الإشعارات؟' : language === 'fr' ? 'Êtes-vous sûr de vouloir effacer toutes les notifications ?' : 'Are you sure you want to clear all notifications?',
+        [
+          { text: t('cancel') || 'Cancel', style: 'cancel' },
+          {
+            text: t('clear') || 'Clear',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Delete each notification from Firestore
+                const deletePromises = notifications.map(async (n) => {
+                  if (n.id) {
+                    await deleteDoc(doc(db, 'notifications', n.id));
+                  }
+                });
+                
+                await Promise.all(deletePromises);
+                
+                // Clear local state
+                setNotifications([]);
+                
+                // Show success feedback
+                console.log('All notifications cleared');
+              } catch (e) {
+                console.error('Error clearing notifications:', e);
+              }
+            },
+          },
+        ]
+      );
+    } catch (e) {
+      console.error('Error in clear notifications:', e);
+    }
   };
 
   const [liveStreamData, setLiveStreamData] = useState<any>(null);
@@ -1630,7 +1685,7 @@ export default function App() {
         }
       }} />;
       case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} onNavigate={(screen) => setActiveTab(screen)} user={user} t={t} theme={theme} />;
-      case 'ScratchAndWin': return <ScratchAndWinScreen onBack={() => setActiveTab('Fidelity')} user={user} t={t} theme={theme} />;
+      case 'ScratchAndWin': return <ScratchAndWinScreen onBack={() => setActiveTab('Fidelity')} user={user} t={t} theme={theme} language={language} />;
       case 'DriverDelivery': return <DriverDeliveryScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} theme={theme} t={t} language={language} />;
       case 'OrderTracking': return <OrderTrackingScreen orderId={activeTabParams?.orderId || ''} onBack={() => setActiveTab('Orders')} user={user} theme={theme} t={t} language={language} />;
       case 'Friends': return <FriendsScreen
@@ -1653,7 +1708,7 @@ export default function App() {
           }
         }}
       />;
-      case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} friend={activeTabParams?.friend} />;
+      case 'Chat': return <ChatScreen onBack={() => setActiveTab('Settings')} user={user} t={t} theme={theme} colors={getAppColors(theme)} friend={activeTabParams?.friend} language={language}  />;
       case 'PrivacyPolicy': return <PrivacyPolicyScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'TermsOfService': return <TermsOfServiceScreen onBack={() => setActiveTab('Settings')} t={t} />;
       case 'LiveAnalytics': return (
@@ -8288,15 +8343,59 @@ function SizeGuideScreen({ onBack, t, language }: any) {
 
 function NotificationsScreen({ notifications, language, onClear, onBack, t }: any) {
   const { colors, theme } = useAppTheme();
-
   const scrollY = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
-
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 50],
     outputRange: [0, 1],
     extrapolate: 'clamp'
   });
+
+  // Get notification icon based on type
+  const getNotificationIcon = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case 'order':
+      case 'commande':
+      case 'طلب':
+        return <ShoppingBag size={18} color={colors.accent} />;
+      case 'delivery':
+      case 'livraison':
+      case 'توصيل':
+        return <Truck size={18} color={colors.accent} />;
+      case 'payment':
+      case 'paiement':
+      case 'دفع':
+        return <CreditCard size={18} color={colors.accent} />;
+      case 'promo':
+      case 'offer':
+      case 'offre':
+      case 'عرض':
+        return <Gift size={18} color={colors.accent} />;
+      case 'flash_sale':
+      case 'flashsale':
+        return <Zap size={18} color={colors.accent} />;
+      case 'like':
+      case 'heart':
+        return <Heart size={18} color={colors.accent} />;
+      case 'comment':
+      case 'commentaire':
+        return <MessageCircle size={18} color={colors.accent} />;
+      case 'follow':
+      case 'abonnement':
+        return <UserPlus size={18} color={colors.accent} />;
+      default:
+        return <Bell size={18} color={colors.accent} />;
+    }
+  };
+
+  // Format notification time
+  const formatTime = (time: string) => {
+    if (!time) return '';
+    return time;
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       {/* Animated Blur Header */}
@@ -8328,46 +8427,209 @@ function NotificationsScreen({ notifications, language, onClear, onBack, t }: an
       </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={{ padding: 20, paddingTop: 64 + insets.top }}
+        contentContainerStyle={{ padding: 20, paddingTop: 64 + insets.top, paddingBottom: 100 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
       >
         {notifications.length === 0 ? (
-          <View style={{ marginTop: 100, alignItems: 'center' }}>
-            <Bell size={40} color={theme === 'dark' ? '#222' : '#E5E5EA'} />
-            <Text style={{ marginTop: 20, color: colors.textMuted, fontWeight: '600' }}>{t('noNotifications')}</Text>
+          <View style={{ marginTop: 80, alignItems: 'center', paddingHorizontal: 40 }}>
+            <View style={{ 
+              width: 120, 
+              height: 120, 
+              borderRadius: 60, 
+              backgroundColor: theme === 'dark' ? '#1A1A1A' : '#F5F5F5',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              marginBottom: 24
+            }}>
+              <Bell size={48} color={theme === 'dark' ? '#333' : '#D1D1D6'} />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 8, textAlign: 'center' }}>
+              {t('noNotifications') || 'No Notifications Yet'}
+            </Text>
+            <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 }}>
+              {language === 'ar' ? 'ستظهر إشعاراتك هنا' : language === 'fr' ? 'Vos notifications apparaîtront ici' : 'Your notifications will appear here'}
+            </Text>
           </View>
         ) : (
-          <View style={{ gap: 15 }}>
+          <View style={{ gap: 12 }}>
+            {/* Notification Count Badge */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, letterSpacing: 0.5 }}>
+                {notifications.length} {notifications.length === 1 ? (language === 'ar' ? 'إشعار' : language === 'fr' ? 'notification' : 'NOTIFICATION') : (language === 'ar' ? 'إشعارات' : language === 'fr' ? 'notifications' : 'NOTIFICATIONS')}
+              </Text>
+            </View>
+            
             {notifications.map((n: any) => (
-              <View key={n.id} style={[{ backgroundColor: theme === 'dark' ? '#121218' : 'white', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }, !n.read && { borderColor: colors.accent, backgroundColor: theme === 'dark' ? '#1A1810' : '#FFFCF0' }]}>
-                <View style={{ flexDirection: 'row', gap: 15 }}>
-                  <View style={[styles.iconCircle, { backgroundColor: n.read ? (theme === 'dark' ? '#000' : '#F2F2F7') : (theme === 'dark' ? '#2A2510' : '#FFF9E5') }]}>
-                    <Bell size={18} color={n.read ? colors.textMuted : colors.accent} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', marginBottom: 4, color: colors.foreground }}>{language === 'ar' ? n.titleAr || n.title : n.title}</Text>
-                      <Text style={{ fontSize: 10, color: colors.textMuted }}>{n.time}</Text>
+              <View 
+                key={n.id} 
+                style={[
+                  {
+                    backgroundColor: theme === 'dark' ? '#121218' : 'white',
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: !n.read ? colors.accent + '40' : colors.border,
+                    overflow: 'hidden',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: theme === 'dark' ? 0.3 : 0.08,
+                    shadowRadius: 8,
+                    elevation: 3,
+                  },
+                  !n.read && { backgroundColor: theme === 'dark' ? '#1A1810' : '#FFFCF0' }
+                ]}
+              >
+                <View style={{ padding: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+                    {/* Icon Container with gradient background */}
+                    <View style={[
+                      {
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: !n.read ? colors.accent + '15' : (theme === 'dark' ? '#1C1C1E' : '#F2F2F7')
+                      }
+                    ]}>
+                      {getNotificationIcon(n.type)}
                     </View>
-                    <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 18 }}>{language === 'ar' ? n.messageAr || n.message : n.message}</Text>
+                    
+                    {/* Content */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <Text 
+                          style={{ 
+                            fontSize: 14, 
+                            fontWeight: '700', 
+                            color: colors.foreground,
+                            flex: 1,
+                            marginRight: 8
+                          }} 
+                          numberOfLines={2}
+                        >
+                          {language === 'ar' ? n.titleAr || n.title : n.title}
+                        </Text>
+                        {!n.read && (
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent, marginTop: 4 }} />
+                        )}
+                      </View>
+                      
+                      <Text 
+                        style={{ 
+                          fontSize: 13, 
+                          color: colors.textMuted, 
+                          lineHeight: 19,
+                          marginBottom: 8 
+                        }} 
+                        numberOfLines={3}
+                      >
+                        {language === 'ar' ? n.messageAr || n.message : n.message}
+                      </Text>
+                      
+                      <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>
+                        {formatTime(n.time)}
+                      </Text>
+                    </View>
                   </View>
+                  
+                  {/* Image Display */}
+                  {n.image && (
+                    <TouchableOpacity 
+                      activeOpacity={0.9}
+                      onPress={() => setSelectedImage(n.image)}
+                      style={{ marginTop: 14 }}
+                    >
+                      <Image
+                        source={{ uri: n.image }}
+                        style={{ 
+                          width: '100%', 
+                          height: 180, 
+                          borderRadius: 14,
+                          backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F5F5F5'
+                        }}
+                        resizeMode="cover"
+                      />
+                      {/* Image overlay hint */}
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 12
+                      }}>
+                        <Text style={{ color: 'white', fontSize: 10, fontWeight: '600' }}>
+                          {language === 'ar' ? 'انقر للتكبير' : language === 'fr' ? 'Appuyez pour zoomer' : 'Tap to expand'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {/* Action Buttons (if available) */}
+                  {n.actionUrl && (
+                    <TouchableOpacity 
+                      style={{
+                        marginTop: 14,
+                        paddingVertical: 10,
+                        paddingHorizontal: 16,
+                        backgroundColor: colors.accent + '15',
+                        borderRadius: 12,
+                        alignItems: 'center'
+                      }}
+                    >
+                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13 }}>
+                        {language === 'ar' ? 'عرض التفاصيل' : language === 'fr' ? 'Voir les détails' : 'View Details'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                {n.image && (
-                  <Image
-                    source={{ uri: n.image }}
-                    style={{ width: '100%', height: 150, borderRadius: 8, marginTop: 15 }}
-                    resizeMode="cover"
-                  />
-                )}
               </View>
             ))}
           </View>
         )}
       </Animated.ScrollView>
+
+      {/* Full Screen Image Modal */}
+      <Modal 
+        visible={!!selectedImage} 
+        transparent={true} 
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }}>
+          <TouchableOpacity 
+            style={{ 
+              position: 'absolute', 
+              top: 50, 
+              right: 20, 
+              zIndex: 10,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onPress={() => setSelectedImage(null)}
+          >
+            <X size={24} color="white" />
+          </TouchableOpacity>
+          
+          {selectedImage && (
+            <Image 
+              source={{ uri: selectedImage }} 
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

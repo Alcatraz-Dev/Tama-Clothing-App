@@ -240,7 +240,7 @@ const sc = StyleSheet.create({
         fontWeight: '600'
     },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    productCard: { width: (width - 62) / 3, borderRadius: 20, overflow: 'hidden', borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+    productCard: { width: (width - 62) / 2, borderRadius: 20, overflow: 'hidden', borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
     productImg: { width: '100%', height: 100, backgroundColor: '#f0f0f0' },
     productInfo: { padding: 8, minHeight: 45 },
     productName: { fontSize: 9, fontWeight: '700', lineHeight: 12 },

@@ -8,10 +8,17 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    StyleSheet
+    StyleSheet,
+    Dimensions,
+    Alert,
+    PermissionsAndroid
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, ChevronLeft, User, MessageCircle, Image as ImageIcon, Camera, X, Video as VideoIcon, ImagePlay } from 'lucide-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Send, ChevronLeft, User, MessageCircle, Image as ImageIcon, Camera, X, Video as VideoIcon, ImagePlay, Bot, Sparkles, Camera as CameraIcon, GalleryHorizontalEnd } from 'lucide-react-native';
+import { BlurView , BlurTargetView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
+import * as Device from 'expo-device';
+import * as MediaLibrary from 'expo-media-library';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { Image, Modal } from 'react-native';
 import { db } from './src/api/firebase';
@@ -19,6 +26,77 @@ import { getDocs, where, getDoc, doc } from 'firebase/firestore';
 import UniversalVideoPlayer from './src/components/common/UniversalVideoPlayer';
 import { uploadToBunny } from './src/utils/bunny';
 import { MediaPicker, MediaAsset } from './src/components/ui/media-picker';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Bot message types
+export type BotMessageType = 'text' | 'image' | 'product' | 'order' | 'support';
+
+interface BotMessage {
+    id: string;
+    type: BotMessageType;
+    text?: string;
+    imageUrl?: string;
+    productData?: {
+        id: string;
+        name: string;
+        price: number;
+        imageUrl: string;
+    };
+    timestamp: Date;
+}
+
+// Predefined bot responses for common queries - now with image support
+const botResponses: Record<string, { text: string; type: BotMessageType; productData?: BotMessage['productData']; imageUrl?: string }> = {
+    'hello': { text: "Hello! 👋 I'm your shopping assistant. How can I help you today? I can help you find products, track orders, or answer any questions you may have!", type: 'text' },
+    'hi': { text: "Hi there! 👋 Welcome to TamaClothing! How can I assist you today?", type: 'text' },
+    'help': { text: "I'm here to help! You can ask me about:\n\n🛍️ Products and sizing\n📦 Order tracking\n💳 Payment methods\n🚚 Shipping info\n💰 Deals and discounts\n\nJust type your question!", type: 'text' },
+    'order': { text: "To check your order status, please go to the Orders tab in your profile. You can also provide your order number and I'll look it up for you!", type: 'order' },
+    'shipping': { text: "We offer fast shipping across Tunisia! Standard delivery takes 2-5 business days. Express delivery is available for an additional fee.", type: 'text' },
+    'return': { text: "You can return any item within 14 days of delivery if it's unused and in original packaging. Go to your order details to initiate a return.", type: 'text' },
+    'size': { text: "To find your perfect size, please check our Size Guide in any product page. If between sizes, we recommend sizing up for a comfortable fit!", type: 'text' },
+    'payment': { text: "We accept:\n\n💵 Cash on delivery\n💳 Credit/Debit cards\n📱 Mobile payments\n\nAll payments are secure and encrypted!", type: 'text' },
+    'contact': { text: "You can reach our support team:\n\n📧 Email: support@tamaclothing.com\n📞 Phone: +216 70 123 456\n💬 Live chat: Available 9AM-9PM", type: 'support' },
+    'thanks': { text: "You're welcome! 😊 Is there anything else I can help you with?", type: 'text' },
+    'thank you': { text: "You're welcome! 😊 Is there anything else I can help you with?", type: 'text' },
+    // New image-enhanced bot responses for iOS and Android visual consistency
+    'showcase': { 
+        text: "Check out our latest collection! Here are some featured items:", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=800'
+    },
+    'new arrival': { 
+        text: "Here are our newest arrivals! 🎉", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800'
+    },
+    'trending': { 
+        text: "These items are trending right now! 🔥", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=800'
+    },
+    'deal': { 
+        text: "Don't miss our special deals! 💰", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800'
+    },
+    'discount': { 
+        text: "Great choice! Here's a special discount offer for you:", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800'
+    },
+    'collection': { 
+        text: "Explore our exclusive collection:", 
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800'
+    },
+};
+
+// Default response for unrecognized queries
+const defaultBotResponse = { 
+    text: "I'm not sure I understand. 😅 Could you please rephrase your question? You can ask me about products, orders, shipping, returns, or any other shopping-related topics!", 
+    type: 'text' as BotMessageType 
+};
 
 async function sendPushNotification(expoPushToken: string, title: string, body: string, data = {}) {
     if (!expoPushToken) return;
@@ -54,21 +132,30 @@ interface Message {
     videoUrl?: string;
     senderId: string;
     senderName: string;
-    senderRole: 'customer' | 'support';
+    senderRole: 'customer' | 'support' | 'bot';
+    messageType?: 'text' | 'image' | 'product' | 'order' | 'support';
+    productData?: {
+        id: string;
+        name: string;
+        price: number;
+        imageUrl: string;
+    };
     timestamp: any;
     read: boolean;
 }
 
 interface ChatScreenProps {
     onBack: () => void;
+    onNavigate?: (screen: string, params?: any) => void;
     user: any;
     t: (key: string) => string;
     theme: 'light' | 'dark';
     colors: any;
     friend?: any;
+    language: 'en' | 'fr' | 'ar';
 }
 
-export default function ChatScreen({ onBack, user, t, theme, colors, friend }: ChatScreenProps) {
+export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors, friend , language }: ChatScreenProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
@@ -76,11 +163,17 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
     const [uploading, setUploading] = useState(false);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
+    const [pendingMedia, setPendingMedia] = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
+    const [showMediaPreview, setShowMediaPreview] = useState(false);
+    const insets = useSafeAreaInsets();
     const scrollViewRef = useRef<ScrollView>(null);
     // If friend is provided, create a unique chat ID based on both user IDs (sorted to ensure consistency)
     const chatId = friend ? [user?.uid, friend.uid].sort().join('_') : `chat_${user?.uid}`;
     const chatTitle = friend ? friend.fullName || friend.displayName || 'Chat' : t('Support');
-
+   // Translations helper
+    const tr = (en: string, fr: string, ar: string) => {
+        return language === 'ar' ? ar : (language === 'fr' ? fr : en);
+    };
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -124,14 +217,81 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
         }
     };
 
+    // Bot response generator - analyzes user message and returns appropriate response with image support for iOS & Android
+    const generateBotResponse = (userMessage: string): { text: string; type: BotMessageType; productData?: BotMessage['productData']; imageUrl?: string } => {
+        const lowerMessage = userMessage.toLowerCase().trim();
+        
+        // Check for exact or partial matches in bot responses
+        for (const [key, response] of Object.entries(botResponses)) {
+            if (lowerMessage.includes(key)) {
+                return response;
+            }
+        }
+        
+        // Check for product-related keywords
+        const productKeywords = ['shirt', 'dress', 'pants', 'shoes', 'jacket', 'suit', 'buy', 'price', 'cost'];
+        if (productKeywords.some(keyword => lowerMessage.includes(keyword))) {
+            return {
+                text: "I'd be happy to help you find products! Browse our Categories or use the Search feature to find exactly what you're looking for. We have a great selection of clothing and accessories!",
+                type: 'product'
+            };
+        }
+        
+        // Check for image-related queries - for both iOS and Android visual support
+        const imageKeywords = ['show', 'see', 'browse', 'look', 'view', 'check'];
+        if (imageKeywords.some(keyword => lowerMessage.includes(keyword)) && 
+            (lowerMessage.includes('product') || lowerMessage.includes('item') || lowerMessage.includes('collection'))) {
+            return {
+                text: "Here are some of our featured products:",
+                type: 'image',
+                imageUrl: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=800'
+            };
+        }
+        
+        // Default response for unrecognized messages
+        return defaultBotResponse;
+    };
+
+    // Send bot response after user message - now with image support for cross-platform iOS & Android
+    const sendBotResponse = async (userMessage: string) => {
+        // Simulate typing delay for more natural conversation
+        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1000));
+        
+        const botResponse = generateBotResponse(userMessage);
+        
+        try {
+            const messagesRef = collection(db, 'chats', chatId, 'messages');
+            const messageData: any = {
+                text: botResponse.text,
+                senderId: 'bot_assistant',
+                senderName: 'Tama Assistant',
+                senderRole: 'bot',
+                messageType: botResponse.type,
+                productData: botResponse.productData || null,
+                timestamp: serverTimestamp(),
+                read: true
+            };
+            
+            // Add image URL if bot response includes one (for both iOS and Android)
+            if (botResponse.imageUrl) {
+                messageData.imageUrl = botResponse.imageUrl;
+            }
+            
+            await addDoc(messagesRef, messageData);
+        } catch (e) {
+            console.log('Error sending bot response:', e);
+        }
+    };
+
     const sendMessage = async () => {
         if (!inputText.trim() || !user?.uid) return;
 
+        const messageText = inputText.trim();
         setSending(true);
         try {
             const messagesRef = collection(db, 'chats', chatId, 'messages');
             await addDoc(messagesRef, {
-                text: inputText.trim(),
+                text: messageText,
                 senderId: user.uid,
                 senderName: user.displayName || user.email || 'Customer',
                 senderRole: 'customer',
@@ -147,12 +307,17 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                 customerId: user.uid,
                 customerName: user.displayName || user.email || 'Customer',
                 customerEmail: user.email,
-                lastMessage: inputText.trim(),
+                lastMessage: messageText,
                 lastMessageTime: serverTimestamp(),
                 status: 'open',
             }, { merge: true });
 
-            await notifyAdmins(inputText.trim());
+            // Only notify admins if not using bot
+            if (!friend) {
+                await notifyAdmins(messageText);
+                // Trigger bot response for support chat
+                await sendBotResponse(messageText);
+            }
 
             setInputText('');
         } catch (error) {
@@ -164,17 +329,152 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
 
 
 
+    // Request media library permissions
+    const requestMediaPermissions = async (): Promise<boolean> => {
+        if (Platform.OS === 'ios') {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            return status === 'granted';
+        } else {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            return status === 'granted';
+        }
+    };
+
+    // Request camera permissions
+    const requestCameraPermissions = async (): Promise<boolean> => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        return status === 'granted';
+    };
+
+    // Pick image from gallery
+    const pickImage = async () => {
+        try {
+            const hasPermission = await requestMediaPermissions();
+            if (!hasPermission) {
+                Alert.alert(
+                    t('permissionRequired') || 'Permission Required',
+                    t('mediaPermissionMessage') || 'Please grant access to your photo library to send images.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                setPendingMedia({ uri: asset.uri, type: 'image' });
+                setShowMediaPreview(true);
+            }
+        } catch (error) {
+            console.error('Error picking image:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to pick image. Please try again.');
+        }
+    };
+
+    // Pick video from gallery
+    const pickVideo = async () => {
+        try {
+            const hasPermission = await requestMediaPermissions();
+            if (!hasPermission) {
+                Alert.alert(
+                    t('permissionRequired') || 'Permission Required',
+                    t('mediaPermissionMessage') || 'Please grant access to your video library to send videos.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                allowsEditing: true,
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                setPendingMedia({ uri: asset.uri, type: 'video' });
+                setShowMediaPreview(true);
+            }
+        } catch (error) {
+            console.error('Error picking video:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to pick video. Please try again.');
+        }
+    };
+
+    // Take photo with camera
+    const takePhoto = async () => {
+        try {
+            // Check if running on simulator
+            if (!Device.isDevice) {
+                Alert.alert(
+                    t('simulatorNotSupported') || 'Simulator Not Supported',
+                    t('cameraSimulatorMessage') || 'Camera is not supported on simulators. Please use a physical device.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            const hasPermission = await requestCameraPermissions();
+            if (!hasPermission) {
+                Alert.alert(
+                    t('permissionRequired') || 'Permission Required',
+                    t('cameraPermissionMessage') || 'Please grant access to your camera to take photos.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                setPendingMedia({ uri: asset.uri, type: 'image' });
+                setShowMediaPreview(true);
+            }
+        } catch (error) {
+            console.error('Error taking photo:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to take photo. Please try again.');
+        }
+    };
+
+    // Confirm and send pending media
+    const confirmMediaSend = async () => {
+        if (!pendingMedia) return;
+        
+        setShowMediaPreview(false);
+        await handleMediaUpload(pendingMedia.uri, pendingMedia.type);
+        setPendingMedia(null);
+    };
+
+    // Cancel pending media
+    const cancelMediaSend = () => {
+        setPendingMedia(null);
+        setShowMediaPreview(false);
+    };
+
+    // Handle media selection from modal
     const handleMediaSelection = async (assets: MediaAsset[]) => {
         if (assets.length === 0) return;
         const asset = assets[0];
         handleMediaUpload(asset.uri);
     };
 
-    const handleMediaUpload = async (uri: string) => {
+    // Handle media upload with type support
+    const handleMediaUpload = async (uri: string, forcedType?: 'image' | 'video') => {
         setUploading(true);
         try {
-            const fileType = uri.split('.').pop()?.toLowerCase();
-            const isVideo = ['mp4', 'mov', 'avi', 'mkv'].includes(fileType || '');
+            // Determine if it's a video
+            const isVideo = forcedType === 'video' || ['mp4', 'mov', 'avi', 'mkv'].includes(uri.split('.').pop()?.toLowerCase() || '');
             const bunnyUrl = await uploadToBunny(uri);
 
             const messagesRef = collection(db, 'chats', chatId, 'messages');
@@ -214,6 +514,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
 
     const renderMessage = (message: Message) => {
         const isOwnMessage = message.senderId === user?.uid;
+        const isBotMessage = message.senderRole === 'bot';
 
         return (
             <View
@@ -224,8 +525,14 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                 ]}
             >
                 {!isOwnMessage && (
-                    <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>S</Text>
+                    <View style={[styles.avatar, { backgroundColor: isBotMessage ? '#6C63FF' : colors.accent }]}>
+                        {isBotMessage ? (
+                            <Bot size={16} color="white" />
+                        ) : (
+                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>
+                                {(friend ? (friend.fullName || friend.displayName || 'U') : 'S').charAt(0).toUpperCase()}
+                            </Text>
+                        )}
                     </View>
                 )}
                 <View
@@ -233,12 +540,14 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                         styles.messageBubble,
                         isOwnMessage
                             ? { backgroundColor: theme === 'dark' ? '#FFF' : '#000', borderBottomRightRadius: 4 }
-                            : { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderBottomLeftRadius: 4, borderWidth: theme === 'dark' ? 0 : 1, borderColor: '#F2F2F7' }
+                            : isBotMessage
+                                ? { backgroundColor: theme === 'dark' ? '#2A1F4E' : '#F0EDFF', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#6C63FF30' }
+                                : { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderBottomLeftRadius: 4, borderWidth: theme === 'dark' ? 0 : 1, borderColor: '#F2F2F7' }
                     ]}
                 >
                     {!isOwnMessage && (
-                        <Text style={[styles.senderName, { color: colors.accent, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }]}>
-                            {friend ? (friend.fullName || friend.displayName || 'User') : 'Support'}
+                        <Text style={[styles.senderName, { color: isBotMessage ? '#6C63FF' : colors.accent, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }]}>
+                            {isBotMessage ? 'Tama Assistant' : (friend ? (friend.fullName || friend.displayName || 'User') : 'Support')}
                         </Text>
                     )}
                     {message.imageUrl ? (
@@ -260,7 +569,7 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                             style={[
                                 styles.messageText,
                                 {
-                                    color: isOwnMessage ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground,
+                                    color: isOwnMessage ? (theme === 'dark' ? '#000' : '#FFF') : (isBotMessage ? colors.foreground : colors.foreground),
                                     fontSize: 15,
                                     lineHeight: 21
                                 }
@@ -268,6 +577,12 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                         >
                             {message.text}
                         </Text>
+                    )}
+                    {isBotMessage && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 }}>
+                            <Sparkles size={10} color="#6C63FF" />
+                            <Text style={{ fontSize: 9, color: '#6C63FF', fontWeight: '500' }}>AI Assistant</Text>
+                        </View>
                     )}
                     <Text
                         style={[
@@ -288,21 +603,19 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            {/* Header matching modernHeader style */}
-            <View style={[styles.modernHeader, { borderBottomWidth: 1, borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#F2F2F7', paddingBottom: 10 }]}>
-                <TouchableOpacity
-                    onPress={onBack}
-                    style={[styles.backBtnSmall, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7', width: 36, height: 36 }]}
-                >
-                    <ChevronLeft size={18} color={colors.foreground} />
-                </TouchableOpacity>
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modernLogo, { color: colors.foreground, position: 'relative', left: 0, right: 0 }]}>
-                        {chatTitle}
-                    </Text>
-                </View>
-                <View style={{ width: 36 }} />
-            </View>
+            {/* Modern Blue Header - Consistent with App Theme */}
+              <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
+                        <BlurView intensity={80} tint={theme ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+                                <ChevronLeft size={24} color={colors.foreground} />
+                            </TouchableOpacity>
+                            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+                                {t('support') || 'Customer Support'}
+                            </Text>
+                            <View style={{ width: 40 }} />
+                        </View>
+                    </View>
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -346,6 +659,156 @@ export default function ChatScreen({ onBack, user, t, theme, colors, friend }: C
                             <X size={30} color="white" />
                         </TouchableOpacity>
                         {fullScreenImage && <Image source={{ uri: fullScreenImage }} style={styles.fullImage} resizeMode="contain" />}
+                    </View>
+                </Modal>
+
+                {/* Media Picker Modal */}
+                <Modal
+                    visible={isMediaModalVisible}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setIsMediaModalVisible(false)}
+                >
+                    <TouchableOpacity 
+                        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+                        activeOpacity={1}
+                        onPress={() => setIsMediaModalVisible(false)}
+                    >
+                        <View style={{ 
+                            position: 'absolute', 
+                            bottom: 0, 
+                            left: 0, 
+                            right: 0, 
+                            backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white',
+                            borderTopLeftRadius: 24,
+                            borderTopRightRadius: 24,
+                            padding: 24,
+                            paddingBottom: 40
+                        }}>
+                            <View style={{ width: 40, height: 4, backgroundColor: '#999', borderRadius: 2, alignSelf: 'center', marginBottom: 24 }} />
+                            
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 20, textAlign: 'center' }}>
+                                {t('sendMedia') || 'Send Media'}
+                            </Text>
+                            
+                            <TouchableOpacity 
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    padding: 16,
+                                    backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F2F2F7',
+                                    borderRadius: 16,
+                                    marginBottom: 12
+                                }}
+                                onPress={() => {
+                                    setIsMediaModalVisible(false);
+                                    takePhoto();
+                                }}
+                            >
+                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                    <CameraIcon size={24} color={colors.accent} />
+                                </View>
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>{t('takePhoto') || 'Take Photo'}</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('useCamera') || 'Use your camera'}</Text>
+                                </View>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    padding: 16,
+                                    backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F2F2F7',
+                                    borderRadius: 16,
+                                    marginBottom: 12
+                                }}
+                                onPress={() => {
+                                    setIsMediaModalVisible(false);
+                                    pickImage();
+                                }}
+                            >
+                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#34C75920', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                    <ImageIcon size={24} color="#34C759" />
+                                </View>
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>{t('chooseImage') || 'Choose Image'}</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('fromGallery') || 'From your photo library'}</Text>
+                                </View>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    padding: 16,
+                                    backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F2F2F7',
+                                    borderRadius: 16,
+                                    marginBottom: 12
+                                }}
+                                onPress={() => {
+                                    setIsMediaModalVisible(false);
+                                    pickVideo();
+                                }}
+                            >
+                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#FF950020', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                    <VideoIcon size={24} color="#FF9500" />
+                                </View>
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.foreground }}>{t('chooseVideo') || 'Choose Video'}</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('fromGallery') || 'From your video library'}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+
+                {/* Media Preview Modal */}
+                <Modal
+                    visible={showMediaPreview}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={cancelMediaSend}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }}>
+                        {/* Header */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 50, paddingHorizontal: 20, paddingBottom: 20 }}>
+                            <TouchableOpacity onPress={cancelMediaSend} style={{ padding: 10 }}>
+                                <X size={28} color="white" />
+                            </TouchableOpacity>
+                            <Text style={{ color: 'white', fontSize: 17, fontWeight: '600' }}>{t('preview') || 'Preview'}</Text>
+                            <TouchableOpacity 
+                                onPress={confirmMediaSend} 
+                                style={{ 
+                                    backgroundColor: colors.accent, 
+                                    paddingHorizontal: 20, 
+                                    paddingVertical: 10, 
+                                    borderRadius: 20 
+                                }}
+                            >
+                                <Text style={{ color: 'white', fontWeight: '700' }}>{t('send') || 'Send'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        {/* Media Preview */}
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                            {pendingMedia?.type === 'video' ? (
+                                <View style={{ width: '90%', aspectRatio: 16/9, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000' }}>
+                                    <UniversalVideoPlayer
+                                        source={{ uri: pendingMedia.uri }}
+                                        style={{ width: '100%', height: '100%' }}
+                                        useNativeControls
+                                        resizeMode="contain"
+                                    />
+                                </View>
+                            ) : (
+                                <Image 
+                                    source={{ uri: pendingMedia?.uri }} 
+                                    style={{ width: '90%', aspectRatio: 4/3, borderRadius: 16 }} 
+                                    resizeMode="cover"
+                                />
+                            )}
+                        </View>
                     </View>
                 </Modal>
 
@@ -548,6 +1011,56 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    // Blue Header Styles - Consistent with App Theme
+   headerContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        overflow: 'hidden',
+    },
+    headerContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+    },
+    headerButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+      backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitleSection: {
+        flex: 1,
+        alignItems: 'center',
+        marginHorizontal: 12,
+    },
+    headerTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
+    headerSubtitle: {
+        fontSize: 11,
+        fontWeight: '500',
+        marginTop: 2,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     modernHeader: {
         height: 64,
         flexDirection: 'row',
@@ -576,6 +1089,7 @@ const styles = StyleSheet.create({
     },
     messagesContainer: {
         flex: 1,
+        marginTop: 64, // Header height
     },
     messagesContent: {
         padding: 20,
@@ -651,6 +1165,13 @@ const styles = StyleSheet.create({
     messageText: {
         fontSize: 14,
         lineHeight: 20,
+    },
+     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 20,
     },
     timestamp: {
         fontSize: 10,
