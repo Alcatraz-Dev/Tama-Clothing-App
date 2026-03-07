@@ -2065,7 +2065,11 @@ export default function AudienceLiveScreen(props: Props) {
                                                 const isActiveCoupon = activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase();
 
                                                 if (isActiveCoupon) {
-                                                    if (activeCoupon.type === 'percentage') {
+                                                    const couponType = activeCoupon.discountType || activeCoupon.type;
+                                                    if (couponType === 'free_shipping') {
+                                                        // Free shipping - price stays the but shipping is free
+                                                        finalPrice = basePrice;
+                                                    } else if (couponType === 'percentage') {
                                                         finalPrice = basePrice * (1 - activeCoupon.discount / 100);
                                                     } else {
                                                         finalPrice = Math.max(0, basePrice - activeCoupon.discount);
@@ -2250,7 +2254,10 @@ export default function AudienceLiveScreen(props: Props) {
                                             const basePrice = selectedProduct.discountPrice || selectedProduct.price;
                                             let finalPrice = basePrice;
                                             if (activeCoupon && couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
-                                                if (activeCoupon.type === 'percentage') {
+                                                const couponType = activeCoupon.discountType || activeCoupon.type;
+                                                if (couponType === 'free_shipping') {
+                                                    finalPrice = basePrice;
+                                                } else if (couponType === 'percentage') {
                                                     finalPrice = basePrice * (1 - activeCoupon.discount / 100);
                                                 } else {
                                                     finalPrice = Math.max(0, basePrice - activeCoupon.discount);
@@ -2849,7 +2856,13 @@ export default function AudienceLiveScreen(props: Props) {
 
                                 <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
                                     <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer')?.toUpperCase() || 'OFFRE LIMITÉE'}</Text>
-                                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>{activeCoupon.discount}{!activeCoupon.discount.toString().includes('%') ? '%' : ''} {t('off') || 'OFF'}</Text>
+                                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>
+                                        {activeCoupon.discountType === 'free_shipping' 
+                                            ? 'FREE SHIPPING' 
+                                            : activeCoupon.discountType === 'percentage' 
+                                                ? `${activeCoupon.discount}% OFF` 
+                                                : `${activeCoupon.discount}TND OFF`}
+                                    </Text>
 
                                     {couponTimeRemaining > 0 && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
