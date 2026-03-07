@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -12,6 +12,9 @@ import {
     Alert,
     Image,
     Modal,
+    Dimensions,
+    Easing,
+    ScrollView,
 } from "react-native";
 import Constants from "expo-constants";
 import { auth, db } from "../api/firebase";
@@ -31,9 +34,22 @@ import {
     updateDoc,
 } from "firebase/firestore";
 import * as Animatable from "react-native-animatable";
-import { ShoppingCart, Package, Gift, ChevronRight, X as CloseIcon, Heart, Eye } from "lucide-react-native";
+import { ShoppingCart, Package, Gift, ChevronRight, X as CloseIcon, Heart, Eye, Share2, MessageCircle, Send, ShoppingBag, ChevronDown, ChevronUp, Wifi, WifiOff, Loader } from "lucide-react-native";
 import { BlurView } from "expo-blur";
 import { LiveSessionService } from "../services/LiveSessionService";
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+    withTiming,
+    withSequence,
+    withRepeat,
+    runOnJS,
+    interpolate,
+    Extrapolation,
+} from "react-native-reanimated";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -230,6 +246,51 @@ function LiveDevBuildOnly({
     const [pinnedProduct, setPinnedProduct] = useState<any>(null);
     const [showProductPicker, setShowProductPicker] = useState(false);
     const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+
+    // Enhanced UI State
+    const [streamStatus, setStreamStatus] = useState<'loading' | 'live' | 'buffering' | 'ended' | 'error'>('loading');
+    const [showChat, setShowChat] = useState(true);
+    const [chatInputVisible, setChatInputVisible] = useState(false);
+    const [showProductDrawer, setShowProductDrawer] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [floatingHearts, setFloatingHearts] = useState<any[]>([]);
+    const [productDrawerHeight, setProductDrawerHeight] = useState(120);
+
+    // Animation values
+    const likeButtonScale = useSharedValue(1);
+    const chatSlideAnim = useSharedValue(0);
+    const productDrawerAnim = useSharedValue(0);
+
+    // Floating hearts animation
+    const addFloatingHeart = useCallback(() => {
+        const newHeart = {
+            id: Date.now(),
+            x: Math.random() * 60 - 30,
+            color: ['#FF6B6B', '#FF8E53', '#FF5E62', '#FF2E63', '#FFE66D'][Math.floor(Math.random() * 5)],
+        };
+        setFloatingHearts(prev => [...prev, newHeart]);
+        setTimeout(() => {
+            setFloatingHearts(prev => prev.filter(h => h.id !== newHeart.id));
+        }, 2000);
+
+        // Button scale animation
+        likeButtonScale.value = withSequence(
+            withSpring(1.3, { damping: 2 }),
+            withSpring(1, { damping: 5 })
+        );
+    }, [likeButtonScale]);
+
+    // Toggle chat visibility with animation
+    const toggleChat = useCallback(() => {
+        setShowChat(prev => !prev);
+        chatSlideAnim.value = withTiming(showChat ? 1 : 0, { duration: 300 });
+    }, [showChat, chatSlideAnim]);
+
+    // Toggle product drawer
+    const toggleProductDrawer = useCallback(() => {
+        setShowProductDrawer(prev => !prev);
+        productDrawerAnim.value = withTiming(showProductDrawer ? 0 : 1, { duration: 350, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
+    }, [showProductDrawer, productDrawerAnim]);
 
     // Firestore paths
     const chatPath = useMemo(
@@ -524,20 +585,165 @@ function LiveDevBuildOnly({
 
                     {/* Action Buttons Container */}
                     <View style={styles.actionsContainer}>
+                        {/* Animated Like Button */}
                         <TouchableOpacity
                             style={styles.actionBtn}
                             onPress={onLike}
+                            onPressIn={addFloatingHeart}
                         >
-                            <Heart size={24} color="#fff" fill={likes > 0 ? "#FF3B30" : "transparent"} strokeWidth={2} />
+                            <Animated.View style={{ transform: [{ scale: likeButtonScale }] }}>
+                                <Heart 
+                                    size={24} 
+                                    color="#fff" 
+                                    fill={likes > 0 ? "#FF3B30" : "transparent"} 
+                                    strokeWidth={2} 
+                                />
+                            </Animated.View>
                         </TouchableOpacity>
 
+                        {/* Floating Hearts Animation */}
+                        {floatingHearts.map(heart => (
+                            <Animated.View
+                                key={heart.id}
+                                style={[
+                                    styles.floatingHeart,
+                                    {
+                                        left: SCREEN_WIDTH - 70 + heart.x,
+                                        bottom: 150,
+                                    }
+                                ]}
+                            >
+                                <Heart size={20} color={heart.color} fill={heart.color} />
+                            </Animated.View>
+                        ))}
+
+                        {/* Share Button */}
                         <TouchableOpacity
                             style={styles.actionBtn}
-                            onPress={() => setShowProductPicker(true)}
+                            onPress={() => setShowShareModal(true)}
                         >
-                            {isHost ? <Package size={24} color="#fff" /> : <ShoppingCart size={24} color="#fff" />}
+                            <Share2 size={22} color="#fff" />
                         </TouchableOpacity>
+
+                        {/* Chat Toggle */}
+                        <TouchableOpacity
+                            style={[styles.actionBtn, showChat && styles.actionBtnActive]}
+                            onPress={toggleChat}
+                        >
+                            <MessageCircle size={22} color="#fff" />
+                        </TouchableOpacity>
+
+                        {/* Product Drawer Toggle */}
+                        <TouchableOpacity
+                            style={[styles.actionBtn, showProductDrawer && styles.actionBtnActive]}
+                            onPress={toggleProductDrawer}
+                        >
+                            {isHost ? <Package size={22} color="#fff" /> : <ShoppingBag size={22} color="#fff" />}
+                        </TouchableOpacity>
+
+                        {/* Product Drawer */}
+                        <Animated.View 
+                            style={[
+                                styles.productDrawer,
+                                {
+                                    height: interpolate(
+                                        productDrawerAnim.value,
+                                        [0, 1],
+                                        [0, 200],
+                                        Extrapolation.CLAMP
+                                    ),
+                                    opacity: productDrawerAnim.value,
+                                }
+                            ]}
+                        >
+                            {showProductDrawer && (
+                                <View style={styles.productDrawerContent}>
+                                    <TouchableOpacity 
+                                        style={styles.drawerHandle}
+                                        onPress={toggleProductDrawer}
+                                    >
+                                        <ChevronDown size={20} color="rgba(255,255,255,0.5)" />
+                                    </TouchableOpacity>
+                                    <Text style={styles.drawerTitle}>
+                                        {isHost ? translate('pinProduct') : translate('featuredProducts')}
+                                    </Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                        {availableProducts.slice(0, 5).map(product => (
+                                            <TouchableOpacity 
+                                                key={product.id} 
+                                                style={styles.drawerProduct}
+                                                onPress={() => {
+                                                    if (isHost) {
+                                                        LiveSessionService.pinProduct(channelId, product.id);
+                                                        toggleProductDrawer();
+                                                    } else {
+                                                        onProductPress && onProductPress(product);
+                                                    }
+                                                }}
+                                            >
+                                                <Image 
+                                                    source={{ uri: product.image || product.mainImage }} 
+                                                    style={styles.drawerProductImage} 
+                                                />
+                                                <Text style={styles.drawerProductPrice} numberOfLines={1}>
+                                                    {product.price} TND
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            )}
+                        </Animated.View>
                     </View>
+
+                    {/* Stream Status Indicator */}
+                    {streamStatus !== 'live' && (
+                        <View style={styles.streamStatusContainer}>
+                            {streamStatus === 'loading' && (
+                                <View style={styles.streamStatusBadge}>
+                                    <Loader size={12} color="#fff" />
+                                    <Text style={styles.streamStatusText}>{translate('connecting')}...</Text>
+                                </View>
+                            )}
+                            {streamStatus === 'buffering' && (
+                                <View style={[styles.streamStatusBadge, styles.streamStatusBuffering]}>
+                                    <WifiOff size={12} color="#fff" />
+                                    <Text style={styles.streamStatusText}>{translate('buffering')}...</Text>
+                                </View>
+                            )}
+                            {streamStatus === 'error' && (
+                                <View style={[styles.streamStatusBadge, styles.streamStatusError]}>
+                                    <WifiOff size={12} color="#fff" />
+                                    <Text style={styles.streamStatusText}>{translate('connectionError')}</Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Share Modal */}
+                    <Modal visible={showShareModal} animationType="fade" transparent>
+                        <TouchableOpacity 
+                            style={styles.shareModalOverlay} 
+                            activeOpacity={1}
+                            onPress={() => setShowShareModal(false)}
+                        >
+                            <View style={styles.shareModalContent}>
+                                <Text style={styles.shareModalTitle}>{translate('shareStream')}</Text>
+                                <View style={styles.shareOptions}>
+                                    <TouchableOpacity style={styles.shareOption}>
+                                        <Share2 size={24} color="#fff" />
+                                        <Text style={styles.shareOptionText}>{translate('share')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity 
+                                    style={styles.shareCloseBtn}
+                                    onPress={() => setShowShareModal(false)}
+                                >
+                                    <CloseIcon size={20} color="rgba(255,255,255,0.6)" />
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableOpacity>
+                    </Modal>
                 </View>
 
                 {/* Product Picker Modal */}
@@ -659,6 +865,124 @@ const styles = StyleSheet.create({
         alignItems: "center",
         borderWidth: 1.5,
         borderColor: "rgba(255,255,255,0.2)",
+    },
+    actionBtnActive: {
+        backgroundColor: "rgba(255,255,255,0.2)",
+        borderColor: "rgba(255,255,255,0.5)",
+    },
+
+    // Floating Hearts
+    floatingHeart: {
+        position: 'absolute',
+        zIndex: 1000,
+    },
+
+    // Product Drawer
+    productDrawer: {
+        position: 'absolute',
+        bottom: 70,
+        right: -10,
+        width: SCREEN_WIDTH - 100,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    productDrawerContent: {
+        padding: 12,
+    },
+    drawerHandle: {
+        alignItems: 'center',
+        paddingBottom: 8,
+    },
+    drawerTitle: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '800',
+        marginBottom: 12,
+    },
+    drawerProduct: {
+        marginRight: 12,
+        alignItems: 'center',
+    },
+    drawerProductImage: {
+        width: 70,
+        height: 70,
+        borderRadius: 12,
+        marginBottom: 6,
+    },
+    drawerProductPrice: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+
+    // Stream Status
+    streamStatusContainer: {
+        position: 'absolute',
+        top: 100,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    streamStatusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 8,
+    },
+    streamStatusBuffering: {
+        backgroundColor: 'rgba(255,165,0,0.8)',
+    },
+    streamStatusError: {
+        backgroundColor: 'rgba(255,0,0,0.8)',
+    },
+    streamStatusText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+
+    // Share Modal
+    shareModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    shareModalContent: {
+        backgroundColor: 'rgba(30,30,30,0.95)',
+        borderRadius: 24,
+        padding: 24,
+        width: SCREEN_WIDTH * 0.8,
+        alignItems: 'center',
+    },
+    shareModalTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+        marginBottom: 20,
+    },
+    shareOptions: {
+        flexDirection: 'row',
+        gap: 24,
+    },
+    shareOption: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    shareOptionText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    shareCloseBtn: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        padding: 8,
     },
 
     pinnedProductContainer: {
