@@ -67,11 +67,12 @@ interface CommandScreenProps {
     onTrack: (trackingId: string) => void;
     t: (key: string) => string;
     language?: string;
+    onNavigate: (screen: string) => void;
 }
 
 type FilterType = 'all' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
-export default function CommandScreen({ onBack, onTrack, t, language }: CommandScreenProps) {
+export default function CommandScreen({ onBack, onTrack, t, language , onNavigate}: CommandScreenProps) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -275,8 +276,8 @@ export default function CommandScreen({ onBack, onTrack, t, language }: CommandS
                     <ArrowLeft size={22} color={isDark ? '#FFF' : '#000'} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{translate('MES COMMANDES') || 'Commandes'}</Text>
-                <TouchableOpacity style={[styles.blurBtn, { backgroundColor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.05)' }]}>
-                    <ShoppingBasket size={22} color="#FBBF24" />
+                <TouchableOpacity onPress={()=> onNavigate('MyShipments')} style={[styles.blurBtn, { backgroundColor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.05)' }]}>
+                    <Package size={22} color="#FBBF24" />
                 </TouchableOpacity>
             </View>
 

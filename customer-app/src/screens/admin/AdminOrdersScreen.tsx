@@ -521,7 +521,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
             <Animated.FlatList
                 data={filteredOrders}
                 keyExtractor={item => item.id}
-                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 160 }]}
+                contentContainerStyle={[sc.listContent]}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                 scrollEventThrottle={16}
                 ListEmptyComponent={
