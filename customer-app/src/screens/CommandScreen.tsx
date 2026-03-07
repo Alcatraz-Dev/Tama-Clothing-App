@@ -273,7 +273,8 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
             <Animatable.View
                 animation="fadeInUp"
                 duration={400}
-                delay={index * 100}
+                delay={index * 80}
+                useNativeDriver
                 style={styles.cardContainer}
             >
                 <Card style={StyleSheet.flatten([styles.card, { backgroundColor: colors.card }])}>
@@ -290,15 +291,24 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
 
                             <View style={styles.mainInfo}>
                                 <Text variant="subtitle" numberOfLines={1} style={styles.productName}>{item.productName}</Text>
-                                <Text variant="caption" style={{ color: colors.textMuted }}>{item.orderId || `ID#${item.id}`}</Text>
+                                <Text variant="caption" style={{ color: colors.textMuted, fontSize: 12 }}>{item.orderId || `ID#${item.id}`}</Text>
                                 <View style={styles.badgeRow}>
-                                    <Badge label={item.category} variant="secondary" style={StyleSheet.flatten([styles.catBadge, { backgroundColor: catColor + '15' }])} textStyle={{ color: catColor, fontSize: 10 }} />
+                                    <Badge 
+                                        label={item.category} 
+                                        variant="secondary" 
+                                        style={StyleSheet.flatten([styles.catBadge, { backgroundColor: catColor + '15' }])} 
+                                        textStyle={{ color: catColor, fontSize: 10, fontWeight: '600' }} 
+                                    />
                                     {item.isCompleted && <Badge label="LIVRÉ" variant="success" style={styles.statusBadge} />}
                                 </View>
                             </View>
 
                             <View style={styles.actions}>
-                                <TouchableOpacity onPress={() => togglePin(item.id)} style={styles.actionIcon}>
+                                <TouchableOpacity 
+                                    onPress={() => togglePin(item.id)} 
+                                    activeOpacity={0.7}
+                                    style={styles.actionIcon}
+                                >
                                     <Pin size={20} color={item.isPinned ? '#FF9F1C' : colors.textMuted} fill={item.isPinned ? '#FF9F1C' : 'transparent'} />
                                 </TouchableOpacity>
                             </View>
@@ -312,14 +322,14 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                                     <Palette size={14} color={colors.textMuted} />
                                     <View style={styles.detailTextContainer}>
                                         <Text variant="caption" style={styles.detailLabel}>COULEUR</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.color}</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.color}</Text>
                                     </View>
                                 </View>
-                                <View style={[styles.detailItem, { marginTop: 10 }]}>
+                                <View style={[styles.detailItem, { marginTop: 8 }]}>
                                     <ShoppingBag size={14} color={colors.textMuted} />
                                     <View style={styles.detailTextContainer}>
                                         <Text variant="caption" style={styles.detailLabel}>QUANTITÉ</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.quantity} pcs</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.quantity} pcs</Text>
                                     </View>
                                 </View>
                             </View>
@@ -329,14 +339,14 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                                     <Box size={14} color={colors.textMuted} />
                                     <View style={styles.detailTextContainer}>
                                         <Text variant="caption" style={styles.detailLabel}>TAILLE</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 12 }}>{item.size}</Text>
+                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.size}</Text>
                                     </View>
                                 </View>
-                                <View style={[styles.detailItem, { marginTop: 10 }]}>
+                                <View style={[styles.detailItem, { marginTop: 8 }]}>
                                     <TrendingUp size={14} color={colors.textMuted} />
                                     <View style={styles.detailTextContainer}>
                                         <Text variant="caption" style={styles.detailLabel}>PRIX TOTAL</Text>
-                                        <Text variant="body" style={{ fontWeight: '900', fontSize: 12, color: colors.primary }}>{(item.price * item.quantity).toFixed(2)} TND</Text>
+                                        <Text variant="body" style={{ fontWeight: '800', fontSize: 13, color: colors.primary }}>{(item.price * item.quantity).toFixed(2)} TND</Text>
                                     </View>
                                 </View>
                             </View>
@@ -345,7 +355,7 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                         <View style={styles.cardFooter}>
                             <View style={styles.footerLeft}>
                                 <Clock size={12} color={colors.textMuted} />
-                                <Text variant="caption" style={{ color: colors.textMuted, marginLeft: 4 }}>
+                                <Text variant="caption" style={{ color: colors.textMuted, marginLeft: 4, fontSize: 12 }}>
                                     Utilisé {item.usageCount} fois
                                 </Text>
                             </View>
@@ -384,31 +394,43 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                     blurMethod="dimezisBlurView"
                 />
                 <View style={styles.headerContent}>
-                    <TouchableOpacity onPress={onBack} style={[styles.iconBtn, { backgroundColor: isDark ? '#1A1A1A' : '#EEE' }]}>
+                    <TouchableOpacity 
+                        onPress={onBack} 
+                        activeOpacity={0.7}
+                        style={[styles.iconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 12 }]}
+                    >
                         <ArrowLeft size={22} color={colors.foreground} />
                     </TouchableOpacity>
                     <View style={styles.titleContainer}>
-                        <Text variant="subtitle" style={[styles.headerTitle, { fontWeight: '900', color: colors.foreground }]}>{translate('commands') || 'Mes Commandes'}</Text>
-                        <Text variant="caption" style={{ color: colors.textMuted }}>{filteredCommands.length} {translate('articles') || 'articles'}</Text>
+                        <Text variant="title" style={[styles.headerTitle, { fontWeight: '800', fontSize: 24, letterSpacing: -0.5, color: colors.foreground }]}>
+                            {translate('commands') || 'Mes Commandes'}
+                        </Text>
+                        <Text variant="caption" style={{ color: colors.textMuted, fontSize: 13, opacity: 0.7 }}>
+                            {filteredCommands.length} {translate('articles') || 'articles'}
+                        </Text>
                     </View>
-                    <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={[styles.iconBtn, { backgroundColor: showSearch ? colors.primary : (isDark ? '#1A1A1A' : '#EEE') }]}>
-                        <Search size={22} color={showSearch ? '#FFF' : colors.foreground} />
+                    <TouchableOpacity 
+                        onPress={() => setShowSearch(!showSearch)} 
+                        activeOpacity={0.7}
+                        style={[styles.iconBtn, { backgroundColor: showSearch ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'), borderRadius: 12 }]}
+                    >
+                        <Search size={20} color={showSearch ? '#FFF' : colors.foreground} />
                     </TouchableOpacity>
                 </View>
 
                 {showSearch && (
                     <Animatable.View animation="fadeInDown" duration={300} style={styles.searchWrapper}>
-                        <View style={[styles.searchBar, { backgroundColor: isDark ? '#111' : '#FFF', borderColor: colors.border }]}>
+                        <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFF', borderColor: 'transparent', borderRadius: 14, height: 48 }]}>
                             <Search size={18} color={colors.textMuted} />
                             <TextInput
-                                style={[styles.searchInput, { color: colors.foreground }]}
+                                style={[styles.searchInput, { color: colors.foreground, fontSize: 15 }]}
                                 placeholder="Rechercher une commande..."
                                 placeholderTextColor={colors.textMuted}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                             />
                             {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
                                     <X size={18} color={colors.textMuted} />
                                 </TouchableOpacity>
                             )}
@@ -417,17 +439,29 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                 )}
 
                 {/* Filter Tabs */}
-                <View style={styles.tabsBar}>
-                    <TouchableOpacity onPress={() => setActiveFilter('all')} style={[styles.tab, activeFilter === 'all' && styles.activeTab]}>
-                        <Text style={[styles.tabText, activeFilter === 'all' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>TOUT</Text>
+                <View style={[styles.tabsBar, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
+                    <TouchableOpacity 
+                        onPress={() => setActiveFilter('all')} 
+                        activeOpacity={0.7}
+                        style={[styles.tab, activeFilter === 'all' && styles.activeTab]}
+                    >
+                        <Text style={[styles.tabText, activeFilter === 'all' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>TOUT</Text>
                         {activeFilter === 'all' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setActiveFilter('pinned')} style={[styles.tab, activeFilter === 'pinned' && styles.activeTab]}>
-                        <Text style={[styles.tabText, activeFilter === 'pinned' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>IMPORTANTS</Text>
+                    <TouchableOpacity 
+                        onPress={() => setActiveFilter('pinned')} 
+                        activeOpacity={0.7}
+                        style={[styles.tab, activeFilter === 'pinned' && styles.activeTab]}
+                    >
+                        <Text style={[styles.tabText, activeFilter === 'pinned' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>IMPORTANTS</Text>
                         {activeFilter === 'pinned' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setActiveFilter('completed')} style={[styles.tab, activeFilter === 'completed' && styles.activeTab]}>
-                        <Text style={[styles.tabText, activeFilter === 'completed' ? { color: colors.primary, fontWeight: '900' } : { color: colors.textMuted }]}>TERMINÉS</Text>
+                    <TouchableOpacity 
+                        onPress={() => setActiveFilter('completed')} 
+                        activeOpacity={0.7}
+                        style={[styles.tab, activeFilter === 'completed' && styles.activeTab]}
+                    >
+                        <Text style={[styles.tabText, activeFilter === 'completed' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>TERMINÉS</Text>
                         {activeFilter === 'completed' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
                     </TouchableOpacity>
                 </View>
@@ -445,9 +479,23 @@ export default function CommandScreen({ onBack, t }: CommandScreenProps) {
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
-                            <LinearGradient colors={[colors.primary + '20', 'transparent']} style={styles.emptyGradient} />
-                            <Command size={80} color={colors.border} />
-                            <Text variant="heading" style={{ marginTop: 20, fontWeight: '900' }}>Rien à afficher</Text>
+                            <LinearGradient colors={[colors.primary + '15', 'transparent']} style={styles.emptyGradient} />
+                            <View style={{
+                                width: 100, height: 100,
+                                borderRadius: 50,
+                                backgroundColor: colors.primary + '15',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 20
+                            }}>
+                                <Command size={50} color={colors.primary} strokeWidth={1.5} />
+                            </View>
+                            <Text variant="heading" style={{ marginTop: 16, fontWeight: '700', fontSize: 18, color: colors.foreground }}>
+                                {translate('noCommands') || 'Aucune commande'}
+                            </Text>
+                            <Text variant="body" style={{ marginTop: 8, color: colors.textMuted, fontSize: 14, opacity: 0.7, textAlign: 'center' }}>
+                                {translate('noCommandsDesc') || 'Vos commandes apparaîtront ici'}
+                            </Text>
                             <Text variant="body" style={{ color: colors.textMuted, textAlign: 'center', marginTop: 10 }}>
                                 {searchQuery ? "Nous n'avons trouvé aucun résultat pour votre recherche." : "Vous n'avez pas encore de commandes dans cette catégorie."}
                             </Text>
@@ -468,104 +516,206 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 0, left: 0, right: 0,
         zIndex: 100,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
     },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingVertical: 10,
+        paddingVertical: 12,
     },
     iconBtn: {
-        width: 40, height: 40,
-        borderRadius: 12,
-        alignItems: 'center', justifyContent: 'center',
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    titleContainer: { alignItems: 'center' },
-    headerTitle: { fontSize: 18, letterSpacing: -0.5 },
-    searchWrapper: { paddingHorizontal: 20, paddingBottom: 10 },
+    titleContainer: { 
+        flex: 1, 
+        alignItems: 'center',
+        paddingHorizontal: 10 
+    },
+    headerTitle: { 
+        fontSize: 20, 
+        letterSpacing: -0.5,
+    },
+    searchWrapper: { 
+        paddingHorizontal: 20, 
+        paddingBottom: 12,
+    },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        height: 46,
-        borderRadius: 14,
-        borderWidth: 1,
-        gap: 10,
+        paddingHorizontal: 16,
+        height: 50,
+        borderRadius: 16,
+        borderWidth: 0,
+        gap: 12,
     },
-    searchInput: { flex: 1, fontSize: 14, fontWeight: '600' },
+    searchInput: { 
+        flex: 1, 
+        fontSize: 15, 
+        fontWeight: '500',
+    },
     tabsBar: {
         flexDirection: 'row',
-        paddingHorizontal: 10,
-        marginTop: 5,
+        paddingHorizontal: 16,
+        marginTop: 4,
     },
     tab: {
-        paddingVertical: 12,
-        paddingHorizontal: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         alignItems: 'center',
+        marginRight: 4,
     },
     activeTab: {},
-    tabText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+    tabText: { 
+        fontSize: 12, 
+        fontWeight: '600', 
+        letterSpacing: 0.5,
+    },
     indicator: {
         position: 'absolute',
-        bottom: 0, width: 20, height: 3,
+        bottom: 0,
+        width: 24,
+        height: 3,
         borderRadius: 2,
     },
-    list: { paddingHorizontal: 16, paddingBottom: 100 },
-    cardContainer: { marginBottom: 16 },
+    list: { 
+        paddingHorizontal: 16, 
+        paddingBottom: 100,
+        paddingTop: 8,
+    },
+    cardContainer: { 
+        marginBottom: 16,
+    },
     card: {
-        borderRadius: 24,
+        borderRadius: 20,
         borderWidth: 0,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.05,
-        shadowRadius: 20,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 3,
     },
-    cardContent: { padding: 16 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center' },
-    imageWrapper: { width: 70, height: 70, position: 'relative' },
-    productImage: { width: 70, height: 70, borderRadius: 16 },
+    cardContent: { 
+        padding: 16,
+    },
+    cardHeader: { 
+        flexDirection: 'row', 
+        alignItems: 'center' 
+    },
+    imageWrapper: { 
+        width: 72, 
+        height: 72, 
+        position: 'relative' 
+    },
+    productImage: { 
+        width: 72, 
+        height: 72, 
+        borderRadius: 18 
+    },
     miniPinned: {
-        position: 'absolute', top: -5, right: -5,
-        width: 20, height: 20, borderRadius: 10,
-        alignItems: 'center', justifyContent: 'center',
-        borderWidth: 2, borderColor: '#FFF',
+        position: 'absolute', 
+        top: -4, 
+        right: -4,
+        width: 22, 
+        height: 22, 
+        borderRadius: 11,
+        alignItems: 'center', 
+        justifyContent: 'center',
+        borderWidth: 2, 
+        borderColor: '#FFF',
     },
-    mainInfo: { flex: 1, marginLeft: 15 },
-    productName: { marginBottom: 2, fontWeight: '800' },
-    badgeRow: { flexDirection: 'row', marginTop: 6, gap: 6 },
-    catBadge: { height: 20, paddingHorizontal: 8, borderWidth: 0 },
-    statusBadge: { height: 20, paddingHorizontal: 8 },
-    actions: { alignSelf: 'flex-start' },
-    actionIcon: { padding: 5 },
-    cardSep: { marginVertical: 15, opacity: 0.1 },
-    detailsGrid: { flexDirection: 'row', gap: 20 },
-    detailCol: { flex: 1 },
-    detailItem: { flexDirection: 'row', alignItems: 'center' },
-    detailTextContainer: { marginLeft: 10, flex: 1 },
-    detailLabel: { fontSize: 8, opacity: 0.5, marginBottom: 1, fontWeight: '700' },
+    mainInfo: { 
+        flex: 1, 
+        marginLeft: 16 
+    },
+    productName: { 
+        marginBottom: 4, 
+        fontWeight: '700',
+        fontSize: 16,
+    },
+    badgeRow: { 
+        flexDirection: 'row', 
+        marginTop: 8, 
+        gap: 8 
+    },
+    catBadge: { 
+        height: 22, 
+        paddingHorizontal: 10, 
+        borderWidth: 0 
+    },
+    statusBadge: { 
+        height: 22, 
+        paddingHorizontal: 10 
+    },
+    actions: { 
+        alignSelf: 'flex-start' 
+    },
+    actionIcon: { 
+        padding: 8 
+    },
+    cardSep: { 
+        marginVertical: 16, 
+        opacity: 0.08 
+    },
+    detailsGrid: { 
+        flexDirection: 'row', 
+        gap: 24 
+    },
+    detailCol: { 
+        flex: 1 
+    },
+    detailItem: { 
+        flexDirection: 'row', 
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    detailTextContainer: { 
+        marginLeft: 10, 
+        flex: 1 
+    },
+    detailLabel: { 
+        fontSize: 9, 
+        opacity: 0.5, 
+        marginBottom: 2, 
+        fontWeight: '700' 
+    },
     cardFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 18,
-        paddingTop: 12,
+        marginTop: 16,
+        paddingTop: 14,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.03)',
+        borderTopColor: 'rgba(0,0,0,0.04)',
     },
-    footerLeft: { flexDirection: 'row', alignItems: 'center' },
+    footerLeft: { 
+        flexDirection: 'row', 
+        alignItems: 'center' 
+    },
     completeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
     },
-    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 100, paddingHorizontal: 40 },
-    emptyGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 200 },
+    emptyState: { 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        paddingVertical: 80, 
+        paddingHorizontal: 40 
+    },
+    emptyGradient: { 
+        position: 'absolute', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        height: 200 
+    },
 });
 
 

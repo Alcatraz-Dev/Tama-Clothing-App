@@ -27,6 +27,7 @@ import {
     Bell,
     Settings,
     ChevronLeft,
+    Store,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminUI';
@@ -74,6 +75,7 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('ourSelection'), icon: ListTree, route: 'AdminNotreSelection', roles: ['admin', 'nor_kam', 'editor'], color: '#10B981' },
         { label: t('support'), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
         { label: t('identityVerification'), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
+        { label: t('vendorApplications'), icon: Store, route: 'AdminVendorApplications', roles: ['admin'], color: '#6C63FF' },
         { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
         { label: t('deliveryCompanies'), icon: Truck, route: 'AdminDeliveryCompanies', roles: ['admin'], color: '#F59E0B' },
         { label: t('platformRevenue'), icon: Ticket, route: 'AdminFinanceDashboard', roles: ['admin'], color: '#10B981' },

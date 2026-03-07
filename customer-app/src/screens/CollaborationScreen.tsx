@@ -376,7 +376,7 @@ export default function CollaborationScreen({ t, theme, language, onNavigate, on
                                 {t('collabSubText')}
                             </Animated.Text>
 
-                            <TouchableOpacity style={[styles.bottomCtaButton, { backgroundColor: isDark ? '#FFF' : '#000' }]} onPress={() => onNavigate('Chat')}>
+                            <TouchableOpacity style={[styles.bottomCtaButton, { backgroundColor: isDark ? '#FFF' : '#000' }]} onPress={() => onNavigate('VendorRegistrationScreen')}>
                                 <Text style={[styles.bottomCtaText, { color: isDark ? '#000' : '#FFF' }]}>{t('partnerWithUs')}</Text>
                             </TouchableOpacity>
                         </View>

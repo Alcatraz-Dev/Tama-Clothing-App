@@ -10,6 +10,7 @@ import { uploadToBunny } from '@/utils/bunny';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Animatable from 'react-native-animatable';
 import {
     collection,
     deleteDoc,
@@ -34,7 +35,7 @@ import {
     Video,
     X
 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -46,7 +47,8 @@ import {
     ScrollView,
     StyleSheet,
     TouchableOpacity,
-    View
+    View,
+    Animated as AnimatedValue
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColor } from '@/hooks/useColor';
@@ -247,81 +249,128 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+            {/* Enhanced Header with blur effect */}
             <View style={{
                 paddingHorizontal: 20,
-                paddingTop: 16,
-                paddingBottom: 8,
+                paddingTop: 12,
+                paddingBottom: 16,
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                backgroundColor: colors.background,
+                borderBottomWidth: 1,
+                borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
             }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity
-                        onPress={() => onBack?.()}
-                        style={{
-                            marginRight: 10,
-                            padding: 5
-                        }}
-                    >
-                        <ChevronLeft size={28} color={colors.foreground} />
-                    </TouchableOpacity>
-                    <View>
-                        <Text variant="title" style={{ fontSize: 32, fontWeight: '800' }}>Messages</Text>
-                        <Text variant="caption" style={{ opacity: 0.5, marginTop: 2 }}>
-                            {chats.length} {tr('conversations actives', 'مادثة نشطة', 'active conversations')}
-                        </Text>
-                    </View>
-                </View>
-                <MediaPicker
-                    gallery={true}
-                    mediaType="all"
-                    onSelectionChange={handleMediaSelection}
+                <Animatable.View 
+                    animation="fadeInLeft" 
+                    duration={400}
+                    style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
                 >
                     <TouchableOpacity
+                        onPress={() => onBack?.()}
+                        activeOpacity={0.7}
                         style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            backgroundColor: theme === 'dark' ? '#2c2c2e' : '#f2f2f7',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+                            marginRight: 12,
+                            padding: 8,
+                            borderRadius: 12,
+                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'
                         }}
-                        onPress={() => onNavigate('Camera')}
                     >
-                        <Camera size={22} color={colors.foreground} />
+                        <ChevronLeft size={24} color={colors.foreground} />
                     </TouchableOpacity>
-                </MediaPicker>
+                    <View>
+                        <Text variant="title" style={{ fontSize: 28, fontWeight: '800', letterSpacing: -0.5 }}>
+                            Messages
+                        </Text>
+                        <Text variant="caption" style={{ opacity: 0.6, marginTop: 2, fontSize: 13, color: colors.textMuted }}>
+                            {chats.length} {chats.length === 1 ? 'conversation' : 'conversations'}
+                        </Text>
+                    </View>
+                </Animatable.View>
+                <Animatable.View 
+                    animation="fadeInRight" 
+                    duration={400}
+                    delay={100}
+                >
+                    <MediaPicker
+                        gallery={true}
+                        mediaType="all"
+                        onSelectionChange={handleMediaSelection}
+                    >
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 14,
+                                backgroundColor: colors.accent,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                shadowColor: colors.accent,
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 8,
+                                elevation: 4
+                            }}
+                            onPress={() => onNavigate('Camera')}
+                        >
+                            <Camera size={20} color="#FFF" />
+                        </TouchableOpacity>
+                    </MediaPicker>
+                </Animatable.View>
             </View>
 
-            {/* Search Bar */}
-            <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
-                <Input
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder={tr('Rechercher un contact...', 'بحث عن جهة اتصال...', 'Search a contact...')}
-                    icon={Search}
-                    variant="filled"
-                    containerStyle={{
-                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                        borderRadius: 14,
-                        borderWidth: 0,
-                        height: 48
-                    }}
-                    inputStyle={{ fontSize: 16, color: colors.foreground }}
-                />
+            {/* Enhanced Search Bar */}
+            <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                <Animatable.View 
+                    animation="fadeInUp" 
+                    duration={400}
+                    delay={150}
+                >
+                    <Input
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholder={tr('Rechercher un contact...', 'بحث عن جهة اتصال...', 'Search a contact...')}
+                        icon={Search}
+                        variant="filled"
+                        containerStyle={{
+                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                            borderRadius: 16,
+                            borderWidth: 0,
+                            height: 50
+                        }}
+                        inputStyle={{ fontSize: 15, color: colors.foreground, fontWeight: '500' }}
+                        placeholderTextColor={colors.textMuted}
+                    />
+                </Animatable.View>
             </View>
 
             {loading ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator color={colors.accent} />
-                </View>
-            ) : error ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
-                    <Shield size={50} color={colors.error} strokeWidth={1.5} />
-                    <Text variant="title" style={{ color: colors.foreground, marginTop: 20, fontWeight: '700' }}>
-                        Config Required
+                <Animatable.View animation="fadeIn" duration={300} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.accent} />
+                    <Text variant="body" style={{ marginTop: 16, color: colors.textMuted, fontSize: 14 }}>
+                        Loading conversations...
                     </Text>
-                </View>
+                </Animatable.View>
+            ) : error ? (
+                <Animatable.View animation="fadeIn" duration={300} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+                    <View style={{
+                        width: 80, height: 80,
+                        borderRadius: 40,
+                        backgroundColor: colors.error + '15',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16
+                    }}>
+                        <Shield size={40} color={colors.error} strokeWidth={1.5} />
+                    </View>
+                    <Text variant="title" style={{ color: colors.foreground, marginTop: 8, fontWeight: '700', fontSize: 18 }}>
+                        {tr('Erreur', 'خطأ', 'Error')}
+                    </Text>
+                    <Text variant="body" style={{ color: colors.textMuted, marginTop: 8, textAlign: 'center', fontSize: 14, lineHeight: 20 }}>
+                        {error}
+                    </Text>
+                </Animatable.View>
             ) : (
                 <>
                     {uploading && (
@@ -348,9 +397,10 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         data={filteredChats}
                         keyExtractor={(item) => item.id}
                         showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 20 }}
                         ListHeaderComponent={() => (
-                            <View style={{ marginBottom: 20 }}>
-                                <ScrollView
+                            <Animatable.View animation="fadeIn" duration={400} style={{ marginBottom: 20 }}>
+                            <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
                                     contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10 }}
@@ -470,9 +520,9 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                     marginHorizontal: 20,
                                     marginTop: 4
                                 }} />
-                            </View>
+                            </Animatable.View>
                         )}
-                        renderItem={({ item }) => {
+                        renderItem={({ item, index }) => {
                             const otherId = item.participants.find((id: string) => id !== user.uid);
                             const cachedUser = usersCache[otherId] || {};
                             const fallbackData = item.participantData?.[otherId] || { name: 'User' };
@@ -480,14 +530,22 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                             const unread = item[`unreadCount_${user.uid}`] || 0;
 
                             return (
+                                <Animatable.View 
+                                    animation="fadeInRight" 
+                                    duration={300} 
+                                    delay={index * 50}
+                                >
                                 <TouchableOpacity
                                     onPress={() => onSelectChat(item, otherId)}
                                     activeOpacity={0.7}
                                     style={{
                                         flexDirection: 'row',
                                         paddingHorizontal: 20,
-                                        paddingVertical: 12,
+                                        paddingVertical: 14,
                                         alignItems: 'center',
+                                        backgroundColor: unread > 0 ? (theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)') : 'transparent',
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
                                     }}
                                 >
                                     <View style={{ position: 'relative' }}>
@@ -549,15 +607,28 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                         </View>
                                     </View>
                                 </TouchableOpacity>
+                                </Animatable.View>
                             );
                         }}
                         ListEmptyComponent={() => !loading && (
-                            <View style={{ alignItems: 'center', marginTop: 100, opacity: 0.5 }}>
-                                <MessageCircle size={60} color={colors.textMuted} strokeWidth={1} />
-                                <Text variant="title" style={{ color: colors.textMuted, marginTop: 20, fontSize: 16 }}>
+                            <Animatable.View animation="fadeIn" duration={400} style={{ alignItems: 'center', marginTop: 100 }}>
+                                <View style={{
+                                    width: 100, height: 100,
+                                    borderRadius: 50,
+                                    backgroundColor: colors.accent + '15',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginBottom: 20
+                                }}>
+                                    <MessageCircle size={50} color={colors.accent} strokeWidth={1.5} />
+                                </View>
+                                <Text variant="title" style={{ color: colors.textMuted, fontSize: 16, fontWeight: '600' }}>
                                     {searchQuery ? tr('Aucun résultat trouvé', 'لم يتم العثور على نتائج', 'No results found') : tr('Aucun message pour le moment', 'لا توجد رسائل بعد', 'No messages yet')}
                                 </Text>
-                            </View>
+                                <Text variant="body" style={{ color: colors.textMuted, marginTop: 8, fontSize: 14, opacity: 0.7 }}>
+                                    {searchQuery ? '' : tr('Commencez une conversation avec vos amis', 'ابدأ محادثة مع أصدقائك', 'Start a conversation with your friends')}
+                                </Text>
+                            </Animatable.View>
                         )}
                     />
                 </>

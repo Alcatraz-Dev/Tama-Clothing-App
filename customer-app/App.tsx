@@ -158,6 +158,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import ChatScreen from './ChatScreen';
 import Constants from 'expo-constants';
 import CollaborationScreen from './src/screens/CollaborationScreen';
+import VendorRegistrationScreen from './src/screens/VendorRegistrationScreen';
 import AdminCollaborationScreen from './src/screens/admin/AdminCollaborationScreen';
 import StoryDetailScreen from './src/screens/StoryDetailScreen';
 import StoryCreateScreen from './src/screens/StoryCreateScreen';
@@ -170,6 +171,7 @@ import AudienceLiveScreen from './src/screens/AudienceLiveScreen';
 import LiveAnalyticsScreen from './src/screens/LiveAnalyticsScreen';
 import KYCScreen from './src/screens/KYCScreen';
 import AdminKYCScreen from './src/screens/admin/AdminKYCScreen';
+import AdminVendorApplicationsScreen from './src/screens/admin/AdminVendorApplicationsScreen';
 import { LiveSessionService, LiveSession } from './src/services/LiveSessionService';
 import WalletScreen from './src/screens/WalletScreen';
 import FeedScreen from './src/screens/FeedScreen';
@@ -244,7 +246,7 @@ export default function App() {
   });
   const [language, setLanguage] = useState<'en' | 'fr' | 'ar'>('fr'); // 'en', 'fr' or 'ar'
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [appState, setAppState] = useState<'Onboarding' | 'Auth' | 'Main' | 'SizeGuide'>('Onboarding');
+  const [appState, setAppState] = useState<'Onboarding' | 'Auth' | 'Main' | 'SizeGuide' | 'VendorRegistration'>('Onboarding');
   const [activeTab, setActiveTab] = useState('Home');
   const [previousTab, setPreviousTab] = useState('Home');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -1445,6 +1447,9 @@ export default function App() {
   const navigateToSizeGuide = () => {
     setAppState('SizeGuide');
   };
+  const navigateToVendorRegistration = () => {
+    setAppState('VendorRegistration');
+  };
 
   const handleBackToMain = () => {
     setAppState('Main');
@@ -1634,7 +1639,7 @@ export default function App() {
       );
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} onBecomeVendor={navigateToVendorRegistration} />;
       case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <OrdersScreen onBack={() => setActiveTab('Profile')} onTrack={(tid: string) => { setActiveTrackingId(tid); setActiveTab('ShipmentTracking'); }} t={t} language={language} />;
@@ -1653,6 +1658,8 @@ export default function App() {
         // @ts-ignore
         onCapture={activeTabParams?.onCapture}
       />;
+      case "VendorRegistrationScreen": return <VendorRegistrationScreen user={user} onBack={() => setActiveTab('Profile')} t={t} language={language} profileData ={profileData} updateProfile={updateProfileData}  theme={theme}/>;    
+      
       case 'Messages': return <MessagesScreen
         user={user}
         onBack={() => setActiveTab('Profile')}
@@ -1748,6 +1755,7 @@ export default function App() {
       case 'AdminSettings': return <AdminSettingsScreen onBack={() => setActiveTab('AdminMenu')} user={user} profileData={profileData} t={t} />;
       case 'AdminNotifications': return <AdminNotificationsScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} />;
       case 'AdminKYC': return <AdminKYCScreen onBack={() => setActiveTab('AdminMenu')} profileData={profileData} t={t} theme={theme} />;
+      case 'AdminVendorApplications': return <AdminVendorApplicationsScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
       case 'AdminSupportList': return <AdminSupportListScreen onBack={() => setActiveTab('AdminMenu')} onChatPress={(chatId: string, customerName: string) => {
         setSelectedAdminChat({ chatId, customerName });
         setActiveTab('AdminSupportChat');
@@ -1871,6 +1879,15 @@ export default function App() {
         onStartLive={handleStartLive}
         tr={tr}
       />;
+      case 'VendorRegistration': return <VendorRegistrationScreen
+        onBack={() => setActiveTab('Profile')}
+        user={user}
+        profileData={profileData}
+        updateProfile={updateProfile}
+        theme={theme}
+        t={t}
+        language={language}
+      />;
       case 'AdminGifts': return <AdminGiftsScreen onBack={() => setActiveTab('AdminDashboard')} t={t} theme={theme} />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
@@ -1951,13 +1968,21 @@ export default function App() {
             <OnboardingScreen onFinish={() => setAppState('Auth')} t={t as any} />
           ) : appState === 'Auth' ? (
             <AuthScreen isLogin={isLogin} toggleAuth={() => setIsLogin(!isLogin)} onComplete={() => setAppState('Main')} t={t} language={language} />
+          ) : appState === 'VendorRegistration' ? (
+            <VendorRegistrationScreen 
+              onBack={handleBackToMain} 
+              user={user} 
+              profileData={profileData} 
+              updateProfile={updateProfileData} 
+              theme={theme} 
+              t={t} 
+              language={language} 
+            />
+          ) : appState === 'SizeGuide' ? (
+            <SizeGuideScreen onBack={handleBackToMain} t={t} language={language} />
           ) : (
             <View style={[styles.mainContainer, { backgroundColor: theme === 'dark' ? Theme.dark.colors.background : Theme.light.colors.background }]}>
-              {appState === 'SizeGuide' ? (
-                <SizeGuideScreen onBack={handleBackToMain} t={t} language={language} />
-              ) : (
-                <>
-                  {renderMainContent()}
+              {renderMainContent()}
 
                   {/* USER BADGE MODAL */}
                   <Modal
@@ -2039,8 +2064,6 @@ export default function App() {
                       </View>
                     </View>
                   )}
-                </>
-              )}
 
               {/* GLOBAL COMMENTS BOTTOM SHEET */}
               <Modal
@@ -2498,8 +2521,9 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor }: any) {
   const { colors } = useAppTheme();
+  const accent = '#6C63FF'; // App's primary accent color
   const insets = useSafeAreaInsets();
 
   const isOwnProfile = !isPublicProfile && (user?.uid === profileData?.uid || user?.uid === profileData?.id || (profileData?.email && user?.email === profileData?.email));
@@ -3724,6 +3748,25 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                         <ChevronRight size={18} color={colors.textMuted} />
                       </TouchableOpacity>
                     )}
+                    {/* Become a Vendor Button - Show for all users (TEMPORARILY UNRESTRICTED FOR TESTING) */}
+                    {true && (
+                      <TouchableOpacity 
+                        style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border}]} 
+                        onPress={() => {
+                          console.log('Become Vendor pressed, user role:', profileData?.role);
+                          onBecomeVendor();
+                        }}
+                      >
+                        <View style={[styles.menuRowLeft ]}>
+                          <View style={[styles.iconCircle , { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
+                            <Store size={20} color={colors.purple} />
+                          </View>
+                          <Text style={[styles.menuRowText, { color: colors.purple, fontWeight: '600' }]}>{t('becomeVendor')}</Text>
+                        </View>
+                        <ChevronRight size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => setActiveTab('Orders')}>
                       <View style={styles.menuRowLeft}>
                         <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}>
@@ -9086,7 +9129,7 @@ const styles = StyleSheet.create({
   menuSectionLabel: { fontSize: 9, fontWeight: '900', color: Colors.textMuted, letterSpacing: 2, marginBottom: 20 },
   menuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
   menuRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 15 },
-  iconCircle: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center' },
+  iconCircle: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' , color:"#F2F2F7" },
   menuRowText: { fontSize: 11.5, fontWeight: '700', color: Colors.foreground, letterSpacing: 0.5, textTransform: 'uppercase' },
   socialCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EEE' },
 

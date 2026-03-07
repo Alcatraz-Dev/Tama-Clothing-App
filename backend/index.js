@@ -10,6 +10,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Import payment routes
+const paymentRoutes = require('./payment-routes');
+
 // Cloudinary Config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -51,6 +54,9 @@ try {
 app.get('/', (req, res) => {
   res.send('Tama Clothing API is running...');
 });
+
+// Payment Routes
+app.use('/api/payment', paymentRoutes);
 
 // Upload Endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
