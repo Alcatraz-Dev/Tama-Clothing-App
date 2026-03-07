@@ -446,7 +446,7 @@ export default function AudienceLiveScreen(props: Props) {
                     icon: gift.icon,
                     count: 1,
                     senderId: userId,
-                    senderAvatar: finalAvatar,
+                    ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
                     isHost: false,
                     isBig: gift.points >= 500
                 }];
@@ -532,7 +532,7 @@ export default function AudienceLiveScreen(props: Props) {
                     points: gift.points || 1,
                     senderName: userName || 'Viewer',
                     senderId: userId,
-                    senderAvatar: finalAvatar,
+                    ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
                     targetName: 'Host',
                     combo: newCount
                 }).catch(e => console.error('Gift Broadcast Error:', e));

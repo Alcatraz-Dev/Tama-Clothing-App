@@ -279,8 +279,7 @@ export const LiveSessionService = {
     },
 
     // Activate a coupon for the session
-    // Activate a coupon for the session
-    activateCoupon: async (channelId: string, coupon: { code: string; discount: number; type: 'percentage' | 'fixed'; endTime?: number; expiryMinutes?: number }) => {
+    activateCoupon: async (channelId: string, coupon: { code: string; discount: number; type: 'percentage' | 'fixed' | 'free_shipping'; endTime?: number; expiryMinutes?: number }) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         await updateDoc(sessionRef, {
             activeCoupon: coupon
@@ -733,11 +732,15 @@ export const LiveSessionService = {
     // Broadcast Gift for Real-time Animation Sync
     broadcastGift: async (channelId: string, gift: { giftName: string; icon: string; points: number; senderName: string; senderId?: string; senderAvatar?: string; targetName?: string; combo?: number; }) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
-        await setDoc(sessionRef, {
-            lastGift: {
+        // Filter out undefined values to prevent Firebase errors
+        const cleanGift = Object.fromEntries(
+            Object.entries({
                 ...gift,
                 timestamp: Date.now()
-            }
+            }).filter(([_, value]) => value !== undefined)
+        );
+        await setDoc(sessionRef, {
+            lastGift: cleanGift
         }, { merge: true });
     },
 

@@ -89,6 +89,21 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
     const handleCreate = async () => {
         if (!code) { Alert.alert(t('error'), t('codeRequired')); return; }
 
+        // Validate discount value based on type
+        if (type === 'percentage') {
+            const percentage = parseFloat(value);
+            if (!value || isNaN(percentage) || percentage <= 0 || percentage > 100) {
+                Alert.alert(t('error'), t('percentageError') || 'Please enter a valid percentage between 1-100');
+                return;
+            }
+        } else if (type === 'fixed') {
+            const fixedAmount = parseFloat(value);
+            if (!value || isNaN(fixedAmount) || fixedAmount <= 0) {
+                Alert.alert(t('error'), t('fixedAmountError') || 'Please enter a valid discount amount');
+                return;
+            }
+        }
+
         let couponData: any = {
             code: code.trim().toUpperCase(),
             type,
@@ -257,15 +272,31 @@ export default function AdminCouponsScreen({ onBack, t, profileData }: any) {
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        type !== 'free_shipping' && (
-                            <AdminInput
-                                label={type === 'percentage' ? t('percentage') || "PERCENTAGE (%)" : t('value') || "VALUE"}
-                                placeholder={type === 'percentage' ? (t('percentagePlaceholder') || "e.g. 20") : (t('valuePlaceholder') || "e.g. 10")}
-                                value={value}
-                                onChangeText={setValue}
-                                keyboardType="numeric"
-                            />
-                        )
+                        <View>
+                            {type !== 'free_shipping' && (
+                                <>
+                                    <AdminInput
+                                        label={type === 'percentage' ? t('percentage') || "PERCENTAGE (%)" : t('value') || "VALUE"}
+                                        placeholder={type === 'percentage' ? (t('percentagePlaceholder') || "e.g. 20") : (t('valuePlaceholder') || "e.g. 10")}
+                                        value={value}
+                                        onChangeText={setValue}
+                                        keyboardType="numeric"
+                                    />
+                                    {/* Discount Preview */}
+                                    {value && parseFloat(value) > 0 && (
+                                        <View style={[sc.previewBox, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}>
+                                            <Text style={[sc.previewLabel, { color: colors.textMuted }]}>{t('preview') || 'PREVIEW'}</Text>
+                                            <Text style={[sc.previewText, { color: colors.foreground }]}>
+                                                {type === 'percentage' 
+                                                    ? `${value}% OFF = ${(100 * parseFloat(value || '0') / 100).toFixed(2)} TND discount per 100 TND`
+                                                    : `${value} TND OFF applied directly to order`
+                                                }
+                                            </Text>
+                                        </View>
+                                    )}
+                                </>
+                            )}
+                        </View>
                     )}
 
                     <AdminInput
@@ -433,4 +464,22 @@ const sc = StyleSheet.create({
     },
     validityRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     validityText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+    
+    // Discount Preview Styles
+    previewBox: {
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    previewLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    previewText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
 });

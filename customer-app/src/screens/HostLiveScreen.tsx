@@ -201,6 +201,7 @@ export default function HostLiveScreen(props: Props) {
     // Coupon State
     const [showCouponModal, setShowCouponModal] = useState(false);
     const [couponCode, setCouponCode] = useState('');
+    const [couponType, setCouponType] = useState<'percentage' | 'fixed' | 'free_shipping'>('percentage');
     const [discountAmount, setDiscountAmount] = useState('');
     const [couponExpiry, setCouponExpiry] = useState('5'); // Default 5 minutes
     const [activeCoupon, setActiveCoupon] = useState<any>(null);
@@ -791,41 +792,63 @@ export default function HostLiveScreen(props: Props) {
     };
 
     // 🎫 Coupon Logic
+    // 🎫 Coupon Logic
     const dropCoupon = async () => {
-        if (!couponCode || !discountAmount) {
-            Alert.alert(t('error') || 'Error', t('invalidCoupon') || 'Invalid coupon details');
+        // Validate coupon code
+        if (!couponCode || !couponCode.trim()) {
+            Alert.alert(t('error') || 'Error', t('enterCouponCode') || 'Please enter a coupon code');
             return;
         }
 
-        // Parse discount: supports '30%' (percentage) or '10TND' / '10' (fixed amount)
-        const rawDiscount = discountAmount.trim();
-        const isPercentage = rawDiscount.includes('%');
-        const numericValue = parseInt(rawDiscount.replace(/[^0-9]/g, ''));
-
-        if (isNaN(numericValue) || numericValue <= 0) {
-            Alert.alert(t('error') || 'Error', t('invalidCoupon') || 'Enter a valid discount like 30% or 10TND');
-            return;
+        // Validate discount amount based on type
+        if (couponType === 'percentage') {
+            const percentage = parseFloat(discountAmount);
+            if (!discountAmount || isNaN(percentage) || percentage <= 0 || percentage > 100) {
+                Alert.alert(t('error') || 'Error', t('percentageError') || 'Please enter a valid percentage between 1-100');
+                return;
+            }
+        } else if (couponType === 'fixed') {
+            const fixedAmount = parseFloat(discountAmount);
+            if (!discountAmount || isNaN(fixedAmount) || fixedAmount <= 0) {
+                Alert.alert(t('error') || 'Error', t('fixedAmountError') || 'Please enter a valid discount amount');
+                return;
+            }
+        } else if (couponType === 'free_shipping') {
+            // Free shipping doesn't need discount amount - it's automatically 0
+            // No validation needed
         }
 
-        const discountLabel = isPercentage ? `${numericValue}%` : `${numericValue}TND`;
-        const expirySecs = parseInt(couponExpiry) * 60;
-        const couponData = {
-            type: 'coupon_drop',
-            code: couponCode.toUpperCase(),
-            discount: discountLabel,
-            discountNumeric: numericValue,
-            discountType: isPercentage ? 'percentage' : 'fixed',
-            expiryMinutes: parseInt(couponExpiry),
-            endTime: Date.now() + (expirySecs * 1000),
-            hostName: userName,
-        };
+        // Validate expiry
+        const expiryMins = parseInt(couponExpiry);
+        if (!couponExpiry || isNaN(expiryMins) || expiryMins <= 0 || expiryMins > 1440) {
+            Alert.alert(t('error') || 'Error', t('expiryError') || 'Please enter a valid expiry time (1-1440 minutes)');
+            return;
+        }
 
         try {
+            const numericValue = couponType === 'free_shipping' ? 0 : parseFloat(discountAmount);
+            const discountLabel = couponType === 'percentage' 
+                ? `${numericValue}%` 
+                : couponType === 'free_shipping' 
+                    ? 'FREE SHIPPING' 
+                    : `${numericValue}TND`;
+            const expirySecs = expiryMins * 60;
+            const couponData = {
+                type: 'coupon_drop',
+                code: couponCode.toUpperCase().trim(),
+                discount: discountLabel,
+                discountNumeric: numericValue,
+                discountType: couponType,
+                expiryMinutes: expiryMins,
+                endTime: Date.now() + (expirySecs * 1000),
+                hostName: userName,
+            };
+
             // 1. Update Firestore session doc
             await LiveSessionService.activateCoupon(channelId, {
                 code: couponData.code,
                 discount: numericValue,
-                type: isPercentage ? 'percentage' : 'fixed',
+                type: couponType,
                 endTime: couponData.endTime,
                 expiryMinutes: couponData.expiryMinutes
             });
@@ -836,6 +859,11 @@ export default function HostLiveScreen(props: Props) {
             setActiveCoupon(couponData);
             setCouponTimeRemaining(expirySecs);
             setShowCouponModal(false);
+            // Reset form
+            setCouponCode('');
+            setDiscountAmount('');
+            setCouponExpiry('5');
+            setCouponType('percentage');
             Alert.alert(t('success') || 'Success', `${t('couponDropped') || 'Coupon dropped!'} (${discountLabel})`);
 
         } catch (error) {
@@ -898,7 +926,7 @@ export default function HostLiveScreen(props: Props) {
             giftName: gift.name,
             points: gift.points || 0,
             icon: gift.icon,
-            senderAvatar: finalAvatar,
+            ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
             targetName: targetName,
             isHost: true,
             combo: newCount
@@ -953,7 +981,7 @@ export default function HostLiveScreen(props: Props) {
                 ZegoUIKit.getSignalingPlugin().sendInRoomCommandMessage(JSON.stringify({
                     type: 'gift',
                     senderId: userId,
-                    senderAvatar: finalAvatar,
+                    ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
                     userName: userName || 'Host',
                     giftName: gift.name,
                     points: gift.points,
@@ -976,7 +1004,7 @@ export default function HostLiveScreen(props: Props) {
                     points: gift.points || 1,
                     senderName: userName || 'Host',
                     senderId: userId,
-                    senderAvatar: finalAvatar,
+                    ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
                     targetName: targetName,
                     combo: newCount // ✅ Pass Combo
                 }).catch(e => console.error('Gift Broadcast Error:', e));
@@ -3324,27 +3352,130 @@ export default function HostLiveScreen(props: Props) {
                                 />
                             </View>
 
+                            {/* Discount Type Selector */}
                             <View>
                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
-                                    {t('discountAmount').toUpperCase()}
+                                    {t('discountType').toUpperCase() || 'DISCOUNT TYPE'}
                                 </Text>
-                                <TextInput
-                                    placeholder="30% or 10TND"
-                                    placeholderTextColor="#555"
-                                    value={discountAmount}
-                                    onChangeText={setDiscountAmount}
-                                    style={{
-                                        backgroundColor: '#0F0F16',
-                                        borderRadius: 12,
-                                        padding: 14,
-                                        color: '#fff',
-                                        fontSize: 14,
-                                        fontWeight: 'bold',
-                                        borderWidth: 1,
-                                        borderColor: '#333'
-                                    }}
-                                />
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity
+                                        onPress={() => setCouponType('percentage')}
+                                        style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 12,
+                                            borderRadius: 10,
+                                            backgroundColor: couponType === 'percentage' ? '#F59E0B' : '#0F0F16',
+                                            borderWidth: 1,
+                                            borderColor: couponType === 'percentage' ? '#F59E0B' : '#333',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        <Text style={{ color: couponType === 'percentage' ? '#000' : '#fff', fontWeight: '700', fontSize: 12 }}>
+                                            %
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => setCouponType('fixed')}
+                                        style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 12,
+                                            borderRadius: 10,
+                                            backgroundColor: couponType === 'fixed' ? '#F59E0B' : '#0F0F16',
+                                            borderWidth: 1,
+                                            borderColor: couponType === 'fixed' ? '#F59E0B' : '#333',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        <Text style={{ color: couponType === 'fixed' ? '#000' : '#fff', fontWeight: '700', fontSize: 12 }}>
+                                            TND
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => setCouponType('free_shipping')}
+                                        style={{
+                                            flex: 1,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 12,
+                                            borderRadius: 10,
+                                            backgroundColor: couponType === 'free_shipping' ? '#F59E0B' : '#0F0F16',
+                                            borderWidth: 1,
+                                            borderColor: couponType === 'free_shipping' ? '#F59E0B' : '#333',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        <Text style={{ color: couponType === 'free_shipping' ? '#000' : '#fff', fontWeight: '700', fontSize: 12 }}>
+                                            🚚
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
+
+                            {/* Discount Amount */}
+                            {couponType !== 'free_shipping' && (
+                                <View>
+                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
+                                        {t('discountAmount').toUpperCase()}
+                                    </Text>
+                                    <View style={{ position: 'relative' }}>
+                                        <TextInput
+                                            placeholder={couponType === 'percentage' ? "30" : "10"}
+                                            placeholderTextColor="#555"
+                                            value={discountAmount}
+                                            onChangeText={setDiscountAmount}
+                                            keyboardType="numeric"
+                                            style={{
+                                                backgroundColor: '#0F0F16',
+                                                borderRadius: 12,
+                                                padding: 14,
+                                                paddingRight: 50,
+                                                color: '#fff',
+                                                fontSize: 16,
+                                                fontWeight: 'bold',
+                                                borderWidth: 1,
+                                                borderColor: '#333'
+                                            }}
+                                        />
+                                        <View style={{
+                                            position: 'absolute',
+                                            right: 14,
+                                            top: 0,
+                                            bottom: 0,
+                                            justifyContent: 'center'
+                                        }}>
+                                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '700' }}>
+                                                {couponType === 'percentage' ? '%' : 'TND'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Discount Preview */}
+                            {couponType !== 'free_shipping' && discountAmount && (
+                                <View style={{
+                                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                    borderRadius: 12,
+                                    padding: 12,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(245, 158, 11, 0.3)'
+                                }}>
+                                    <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>
+                                        {t('preview').toUpperCase() || 'PREVIEW'}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>
+                                            {t('discount').toUpperCase() || 'DISCOUNT'}
+                                        </Text>
+                                        <Text style={{ color: '#F59E0B', fontSize: 18, fontWeight: '900' }}>
+                                            {couponType === 'percentage' 
+                                                ? `${discountAmount}% OFF` 
+                                                : `${discountAmount}TND OFF`}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
 
                             <View>
                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8, fontWeight: '700' }}>
