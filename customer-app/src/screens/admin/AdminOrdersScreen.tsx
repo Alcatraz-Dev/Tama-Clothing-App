@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, Image, Modal, ScrollView,
-    Alert, ActivityIndicator, StyleSheet, Animated,
+    Alert, ActivityIndicator, StyleSheet, Animated, FlatList,
 } from 'react-native';
-import { BlurView, BlurTargetView } from 'expo-blur';
+
+// Try to import optional native modules with fallbacks
+let BlurView: any = View;
+let BlurTargetView: any = View;
+
+try {
+    const blur = require('expo-blur');
+    if (blur && blur.BlurView) {
+        BlurView = blur.BlurView;
+        BlurTargetView = blur.BlurTargetView;
+    }
+} catch (e) {
+    console.log('expo-blur not available, using fallback');
+}
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
     ChevronLeft, X, Search, MapPin, Phone, Mail, User, ShoppingBag, PackageOpen,
+    Clock, CheckCircle, Truck, AlertCircle, Filter, MoreVertical,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminSearchBar, EmptyState, adminStyles, DS, AdminHeader } from '../../components/admin/AdminUI';
@@ -33,6 +48,13 @@ const sc = StyleSheet.create({
     headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
     iconBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
+    // Filter Tabs
+    filterContainer: { paddingHorizontal: 18, marginBottom: 12 },
+    filterScroll: { flexDirection: 'row', gap: 8 },
+    filterTab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    filterTabText: { fontSize: 12, fontWeight: '700' },
+    filterCount: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+
     // Search
     searchWrap: { paddingHorizontal: 18, marginBottom: 6, marginTop: 10 },
     searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, height: 46, borderWidth: 1, gap: 10 },
@@ -40,25 +62,43 @@ const sc = StyleSheet.create({
 
     // List
     listContent: { padding: 20, paddingBottom: 120 },
-    orderCard: { borderRadius: 24, borderWidth: 1, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
-    orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    orderId: { fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
+    
+    // Modern Order Card
+    orderCard: { 
+        borderRadius: 20, 
+        borderWidth: 1, 
+        padding: 16, 
+        marginBottom: 14,
+        shadowColor: '#000', 
+        shadowOpacity: 0.06, 
+        shadowRadius: 20, 
+        shadowOffset: { width: 0, height: 8 }, 
+        elevation: 4,
+        overflow: 'hidden',
+    },
+    orderCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    orderIdBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    orderId: { fontSize: 14, fontWeight: '900', letterSpacing: 0.3 },
     orderDate: { fontSize: 11, fontWeight: '600' },
-    customerName: { fontSize: 16, fontWeight: '800', marginBottom: 12, letterSpacing: -0.2 },
-    orderCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    orderMeta: { fontSize: 12, fontWeight: '700' },
-    // Product Preview Styles
+    
+    // Customer Section
+    customerSection: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+    customerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    customerName: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
+    customerMeta: { fontSize: 11, fontWeight: '600' },
+
+    // Product Preview
     productPreview: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 10,
-        borderRadius: 12,
-        marginVertical: 8,
+        padding: 12,
+        borderRadius: 16,
+        marginBottom: 14,
     },
     productPreviewImage: {
-        width: 44,
-        height: 44,
-        borderRadius: 10,
+        width: 56,
+        height: 56,
+        borderRadius: 14,
     },
     productPlaceholder: {
         alignItems: 'center',
@@ -66,37 +106,29 @@ const sc = StyleSheet.create({
     },
     productPreviewInfo: {
         flex: 1,
-        marginLeft: 12,
+        marginLeft: 14,
     },
     productPreviewName: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '800',
-        marginBottom: 2,
+        marginBottom: 4,
     },
     productPreviewMeta: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 8,
     },
-    metaTagTextSmall: {
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    metaValueSmall: {
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    moreItemsBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    moreItemsText: {
-        fontSize: 11,
-        fontWeight: '800',
-    },
+    metaTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    metaTagText: { fontSize: 10, fontWeight: '800' },
+    metaValue: { fontSize: 11, fontWeight: '600' },
+    moreItemsBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
 
-    statusBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
-    statusText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+    // Card Footer
+    orderCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1 },
+    orderTotal: { fontSize: 16, fontWeight: '900' },
+    
+    statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
     empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
     emptyIconBox: { width: 90, height: 90, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
@@ -138,10 +170,9 @@ const sc = StyleSheet.create({
     itemThumb: { width: 56, height: 70, borderRadius: 12 },
     itemName: { fontSize: 13, fontWeight: '800', lineHeight: 17, marginBottom: 6 },
     itemMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 },
-    metaTag: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
-    metaTagText: { fontSize: 9, fontWeight: '800' },
+    itemMetaTag: { fontSize: 10, fontWeight: '800' },
     metaDot: { fontSize: 14 },
-    metaValue: { fontSize: 11, fontWeight: '600' },
+    itemMetaValue: { fontSize: 11, fontWeight: '600' },
     itemPrice: { fontSize: 14, fontWeight: '900' },
 
     // Totals
@@ -161,13 +192,44 @@ function getName(val: any): string {
     return val.fr || val.en || val['ar-tn'] || Object.values(val)[0] || '';
 }
 
-function getStatusColor(status: string): string {
+function getStatusConfig(status: string, isDark: boolean) {
     switch ((status || '').toLowerCase()) {
-        case 'delivered': return '#10B981';
-        case 'shipped': return '#3B82F6';
-        case 'processing': return '#F59E0B';
-        case 'cancelled': return '#EF4444';
-        default: return '#8B5CF6';
+        case 'delivered':
+            return { 
+                color: '#10B981', 
+                bgColor: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                icon: <CheckCircle size={12} color="#10B981" />,
+                label: 'Livré'
+            };
+        case 'shipped':
+            return { 
+                color: '#3B82F6', 
+                bgColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+                icon: <Truck size={12} color="#3B82F6" />,
+                label: 'Expédié'
+            };
+        case 'processing':
+            return { 
+                color: '#F59E0B', 
+                bgColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+                icon: <PackageOpen size={12} color="#F59E0B" />,
+                label: 'En cours'
+            };
+        case 'cancelled':
+            return { 
+                color: '#EF4444', 
+                bgColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.15)',
+                icon: <X size={12} color="#EF4444" />,
+                label: 'Annulé'
+            };
+        case 'pending':
+        default:
+            return { 
+                color: '#8B5CF6', 
+                bgColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.15)',
+                icon: <Clock size={12} color="#8B5CF6" />,
+                label: 'En attente'
+            };
     }
 }
 
@@ -186,6 +248,49 @@ function CustomerRow({ icon: Icon, label, value, colors, theme }: any) {
     );
 }
 
+// ─── Filter Tab Component ─────────────────────────────────────────────────────
+function FilterTab({ label, count, isActive, onPress, statusColor, isDark, colors }: any) {
+    return (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+            <View style={[
+                sc.filterTab,
+                { 
+                    backgroundColor: isActive 
+                        ? (statusColor || colors.primary) + '20'
+                        : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'),
+                    borderColor: isActive 
+                        ? (statusColor || colors.primary) + '40'
+                        : 'transparent',
+                    borderWidth: 1,
+                }
+            ]}>
+                <Text style={[
+                    sc.filterTabText,
+                    { color: isActive ? (statusColor || colors.primary) : colors.textMuted }
+                ]}>
+                    {label}
+                </Text>
+                <View style={[
+                    sc.filterCount,
+                    { 
+                        backgroundColor: isActive 
+                            ? (statusColor || colors.primary)
+                            : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+                    }
+                ]}>
+                    <Text style={{ 
+                        color: isActive ? '#FFFFFF' : colors.textMuted,
+                        fontSize: 10,
+                        fontWeight: '800'
+                    }}>
+                        {count}
+                    </Text>
+                </View>
+            </View>
+        </TouchableOpacity>
+    );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AdminOrdersScreen({ onBack, t, user: currentUser, profileData, language }: any) {
     const { colors, theme } = useAppTheme();
@@ -195,6 +300,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeFilter, setActiveFilter] = useState<string>('all');
 
     const scrollY = useRef(new Animated.Value(0)).current;
     const blurTargetRef = useRef(null);
@@ -219,6 +325,25 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     }
+
+    // Calculate filter counts
+    const filterCounts = {
+        all: orders.length,
+        pending: orders.filter(o => o.status === 'pending').length,
+        processing: orders.filter(o => o.status === 'processing').length,
+        shipped: orders.filter(o => o.status === 'shipped').length,
+        delivered: orders.filter(o => o.status === 'delivered').length,
+        cancelled: orders.filter(o => o.status === 'cancelled').length,
+    };
+
+    // Filter orders
+    const filteredOrders = orders.filter(o => {
+        const q = searchQuery.toLowerCase();
+        const c = getCustomer(o);
+        const matchesSearch = o.id.toLowerCase().includes(q) || c.fullName.toLowerCase().includes(q) || c.phone.includes(q);
+        const matchesFilter = activeFilter === 'all' || o.status === activeFilter;
+        return matchesSearch && matchesFilter;
+    });
 
     function getStatusLabel(status: string): string {
         switch ((status || '').toLowerCase()) {
@@ -326,11 +451,15 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
         }
     }
 
-    const filteredOrders = orders.filter(o => {
-        const q = searchQuery.toLowerCase();
-        const c = getCustomer(o);
-        return o.id.toLowerCase().includes(q) || c.fullName.toLowerCase().includes(q) || c.phone.includes(q);
-    });
+    // Filter tabs configuration
+    const filterTabs = [
+        { key: 'all', label: 'Tout', color: colors.primary },
+        { key: 'pending', label: 'En attente', color: '#8B5CF6' },
+        { key: 'processing', label: 'En cours', color: '#F59E0B' },
+        { key: 'shipped', label: 'Expédié', color: '#3B82F6' },
+        { key: 'delivered', label: 'Livré', color: '#10B981' },
+        { key: 'cancelled', label: 'Annulé', color: '#EF4444' },
+    ];
 
     // ── Render ──────────────────────────────────────────────────────────────────────
     return (
@@ -345,120 +474,188 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                 style={{ marginTop: insets.top + 58, marginHorizontal: 20, marginBottom: 10 }}
             />
 
+            {/* Filter Tabs */}
+            <View style={sc.filterContainer}>
+                <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={filterTabs}
+                    keyExtractor={item => item.key}
+                    contentContainerStyle={sc.filterScroll}
+                    renderItem={({ item }) => (
+                        <FilterTab
+                            label={item.label}
+                            count={filterCounts[item.key as keyof typeof filterCounts]}
+                            isActive={activeFilter === item.key}
+                            onPress={() => setActiveFilter(item.key)}
+                            statusColor={item.color}
+                            isDark={isDark}
+                            colors={colors}
+                        />
+                    )}
+                />
+            </View>
+
             {/* Orders list */}
             {loading ? (
                 <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 60 }} />
             ) : (
-                <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-                    <Animated.FlatList
-                        data={filteredOrders}
-                        keyExtractor={item => item.id}
-                        contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
-                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
-                        scrollEventThrottle={16}
-                        ListEmptyComponent={
-                            <EmptyState
-                                message={t('noOrdersFound') || 'No orders found'}
-                                subtitle={searchQuery ? 'Try a different search' : 'Orders will appear here'}
-                                icon={<PackageOpen size={36} color={colors.textMuted} strokeWidth={1.5} />}
-                            />
-                        }
-                        renderItem={({ item }) => {
-                            const customer = getCustomer(item);
-                            const statusColor = getStatusColor(item.status || 'pending');
-                            // Get first product info for preview
-                            const firstItem = item.items?.[0];
-                            const productName = firstItem ? getName(firstItem.name) : '';
-                            const productSize = firstItem?.selectedSize || '';
-                            const productColor = firstItem?.selectedColor || '';
-                            const productImage = firstItem?.mainImage || firstItem?.image || '';
-
-                            return (
-                                <TouchableOpacity
-                                    onPress={() => setSelectedOrder(item)}
-                                    style={[sc.orderCard, { backgroundColor: theme === 'dark' ? '#111118' : '#FFFFFF', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
-                                    activeOpacity={0.75}
-                                >
-                                    <View style={sc.orderCardTop}>
-                                        <Text style={[sc.orderId, { color: colors.foreground }]}>#{item.id.slice(0, 8).toUpperCase()}</Text>
-                                        <Text style={[sc.orderDate, { color: colors.textMuted }]}>
-                                            {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : ''}
-                                        </Text>
-                                    </View>
-
-                                    {/* Product Preview - Show first product with image, name, size, color */}
-                                    {firstItem && (
-                                        <View style={[sc.productPreview, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F8F8FA' }]}>
-                                            {productImage ? (
-                                                <Image
-                                                    source={{ uri: productImage }}
-                                                    style={[sc.productPreviewImage, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}
-                                                />
-                                            ) : (
-                                                <View style={[sc.productPreviewImage, sc.productPlaceholder, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}>
-                                                    <PackageOpen size={20} color={colors.textMuted} />
-                                                </View>
-                                            )}
-                                            <View style={sc.productPreviewInfo}>
-                                                <Text style={[sc.productPreviewName, { color: colors.foreground }]} numberOfLines={1}>
-                                                    {productName.toUpperCase()}
-                                                </Text>
-                                                <View style={sc.productPreviewMeta}>
-                                                    {productSize ? (
-                                                        <View style={[sc.metaTag, { backgroundColor: theme === 'dark' ? '#2A2A35' : '#E8E8EC' }]}>
-                                                            <Text style={[sc.metaTagTextSmall, { color: colors.textMuted }]}>{productSize}</Text>
-                                                        </View>
-                                                    ) : null}
-                                                    {productColor ? (
-                                                        <>
-                                                            <Text style={[sc.metaDot, { color: colors.border }]}>·</Text>
-                                                            <Text style={[sc.metaValueSmall, { color: colors.textMuted }]}>{productColor}</Text>
-                                                        </>
-                                                    ) : null}
-                                                </View>
-                                            </View>
-                                            {item.items?.length > 1 && (
-                                                <View style={[sc.moreItemsBadge, { backgroundColor: colors.accent + '20' }]}>
-                                                    <Text style={[sc.moreItemsText, { color: colors.accent }]}>+{item.items.length - 1}</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                    )}
-
-                                    <View style={sc.orderCardBottom}>
-                                        <Text style={[sc.orderMeta, { color: colors.textMuted }]}>
-                                            {customer.fullName} • {item.total} TND
-                                        </Text>
-                                        <View style={[sc.statusBadge, { backgroundColor: statusColor + '20' }]}>
-                                            <Text style={[sc.statusText, { color: statusColor }]}>
-                                                {getStatusLabel(item.status || 'pending').toUpperCase()}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        }}
-                    />
-                </BlurTargetView>
+                BlurTargetView && BlurTargetView !== View ? (
+                    <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+                        {renderOrdersList()}
+                    </BlurTargetView>
+                ) : (
+                    <View style={{ flex: 1 }}>
+                        {renderOrdersList()}
+                    </View>
+                )
             )}
 
             {/* Order Detail Modal */}
+            {selectedOrder && renderOrderModal()}
+        </View>
+    );
+
+    function renderOrdersList() {
+        return (
+            <Animated.FlatList
+                data={filteredOrders}
+                keyExtractor={item => item.id}
+                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 160 }]}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+                scrollEventThrottle={16}
+                ListEmptyComponent={
+                    <EmptyState
+                        message={t('noOrdersFound') || 'No orders found'}
+                        subtitle={searchQuery || activeFilter !== 'all' ? 'Try different filters or search' : 'Orders will appear here'}
+                        icon={<PackageOpen size={36} color={colors.textMuted} strokeWidth={1.5} />}
+                    />
+                }
+                renderItem={({ item, index }) => {
+                    const customer = getCustomer(item);
+                    const statusConfig = getStatusConfig(item.status || 'pending', isDark);
+                    const firstItem = item.items?.[0];
+                    const productName = firstItem ? getName(firstItem.name) : '';
+                    const productSize = firstItem?.selectedSize || '';
+                    const productColor = firstItem?.selectedColor || '';
+                    const productImage = firstItem?.mainImage || firstItem?.image || '';
+
+                    return (
+                        <View key={item.id}>
+                            <TouchableOpacity
+                                onPress={() => setSelectedOrder(item)}
+                                style={[sc.orderCard, { 
+                                    backgroundColor: isDark ? '#12121A' : '#FFFFFF', 
+                                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' 
+                                }]}
+                                activeOpacity={0.75}
+                            >
+                                {/* Header with ID and Date */}
+                                <View style={sc.orderCardHeader}>
+                                    <View style={sc.orderIdBadge}>
+                                        <Text style={[sc.orderId, { color: colors.foreground }]}>
+                                            #{item.id.slice(0, 8).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                    <Text style={[sc.orderDate, { color: colors.textMuted }]}>
+                                        {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString(language === 'ar' ? 'ar-TN' : 'fr-FR') : ''}
+                                    </Text>
+                                </View>
+
+                                {/* Customer Info */}
+                                <View style={sc.customerSection}>
+                                    <View style={[sc.customerAvatar, { backgroundColor: colors.primary + '20' }]}>
+                                        <User size={18} color={colors.primary} />
+                                    </View>
+                                    <View>
+                                        <Text style={[sc.customerName, { color: colors.foreground }]} numberOfLines={1}>
+                                            {customer.fullName}
+                                        </Text>
+                                        <Text style={[sc.customerMeta, { color: colors.textMuted }]}>
+                                            {customer.phone}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Product Preview */}
+                                {firstItem && (
+                                    <View style={[sc.productPreview, { backgroundColor: isDark ? '#1A1A24' : '#F8F8FA' }]}>
+                                        {productImage ? (
+                                            <Image
+                                                source={{ uri: productImage }}
+                                                style={[sc.productPreviewImage, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC' }]}
+                                            />
+                                        ) : (
+                                            <View style={[sc.productPreviewImage, sc.productPlaceholder, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC' }]}>
+                                                <PackageOpen size={22} color={colors.textMuted} />
+                                            </View>
+                                        )}
+                                        <View style={sc.productPreviewInfo}>
+                                            <Text style={[sc.productPreviewName, { color: colors.foreground }]} numberOfLines={1}>
+                                                {productName.toUpperCase()}
+                                            </Text>
+                                            <View style={sc.productPreviewMeta}>
+                                                {productSize ? (
+                                                    <View style={[sc.metaTag, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC' }]}>
+                                                        <Text style={[sc.itemMetaTag, { color: colors.textMuted }]}>{productSize}</Text>
+                                                    </View>
+                                                ) : null}
+                                                {productColor ? (
+                                                    <>
+                                                        <Text style={{ color: colors.textMuted }}>•</Text>
+                                                        <Text style={[sc.itemMetaValue, { color: colors.textMuted }]}>{productColor}</Text>
+                                                    </>
+                                                ) : null}
+                                            </View>
+                                        </View>
+                                        {item.items?.length > 1 && (
+                                            <View style={[sc.moreItemsBadge, { backgroundColor: colors.primary + '15' }]}>
+                                                <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>+{item.items.length - 1}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
+                                {/* Footer with Total and Status */}
+                                <View style={[sc.orderCardFooter, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
+                                    <Text style={[sc.orderTotal, { color: colors.foreground }]}>
+                                        {item.total?.toFixed(3)} TND
+                                    </Text>
+                                    <View style={[sc.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                                        {statusConfig.icon}
+                                        <Text style={[sc.statusText, { color: statusConfig.color }]}>
+                                            {statusConfig.label.toUpperCase()}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    );
+                }}
+            />
+        );
+    }
+
+    function renderOrderModal() {
+        return (
             <Modal visible={!!selectedOrder} animationType="slide" presentationStyle="pageSheet">
-                <View style={[sc.modalRoot, { backgroundColor: theme === 'dark' ? '#0A0A0F' : '#F5F5F9' }]}>
+                <View style={[sc.modalRoot, { backgroundColor: isDark ? '#0A0A0F' : '#F5F5F9' }]}>
                     {/* Modal nav */}
                     <Animated.View style={[sc.header, {
                         backgroundColor: colors.background,
                         borderBottomWidth: modalHeaderOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-                        borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                        borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
                     }]}>
                         <Animated.View style={[StyleSheet.absoluteFill, { opacity: modalHeaderOpacity }]}>
-                            <BlurView
-                                intensity={80}
-                                style={StyleSheet.absoluteFill}
-                                tint={theme === 'dark' ? 'dark' : 'light'}
-                                blurTarget={modalBlurTargetRef}
-                                blurMethod="dimezisBlurView"
-                            />
+                            {BlurView ? (
+                                <BlurView
+                                    intensity={80}
+                                    style={StyleSheet.absoluteFill}
+                                    tint={isDark ? 'dark' : 'light'}
+                                    blurTarget={modalBlurTargetRef}
+                                    blurMethod="dimezisBlurView"
+                                />
+                            ) : null}
                             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background + 'B3' }]} />
                         </Animated.View>
 
@@ -473,127 +670,144 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                         <View style={{ width: 42 }} />
                     </Animated.View>
 
-                    <BlurTargetView ref={modalBlurTargetRef} style={{ flex: 1 }}>
-                        <Animated.ScrollView
-                            contentContainerStyle={sc.detailContent}
-                            showsVerticalScrollIndicator={false}
-                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: modalScrollY } } }], { useNativeDriver: false })}
-                            scrollEventThrottle={16}
-                        >
-                            {selectedOrder && (() => {
-                                const customer = getCustomer(selectedOrder);
-                                return (
-                                    <>
-                                        {/* Order ID + Print */}
-                                        <View style={sc.detailIdRow}>
-                                            <View>
-                                                <Text style={[sc.detailIdLabel, { color: colors.textMuted }]}>{t('orderNumber')}</Text>
-                                                <Text style={[sc.detailId, { color: colors.foreground }]}>#{selectedOrder.id.slice(0, 8).toUpperCase()}</Text>
-                                            </View>
-                                            <TouchableOpacity onPress={printOrderLabel} style={[sc.printBtn, { backgroundColor: colors.foreground }]}>
-                                                <Text style={[sc.printBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>PRINT LABEL</Text>
-                                            </TouchableOpacity>
-                                        </View>
-
-                                        {/* Status */}
-                                        <View style={[sc.section, { backgroundColor: theme === 'dark' ? '#121218' : '#FFF', borderColor: colors.border }]}>
-                                            <View style={sc.sectionHeader}>
-                                                <Text style={[sc.sectionTitle, { color: colors.foreground }]}>{t('status').toUpperCase()}</Text>
-                                                <View style={[sc.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) + '20' }]}>
-                                                    <Text style={[sc.statusText, { color: getStatusColor(selectedOrder.status) }]}>
-                                                        {getStatusLabel(selectedOrder.status).toUpperCase()}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            <Text style={[sc.subLabel, { color: colors.textMuted }]}>{t('updateStatus').toUpperCase()}</Text>
-                                            <View style={sc.statusChipsWrap}>
-                                                {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(s => {
-                                                    const isActive = selectedOrder.status === s;
-                                                    const sColor = getStatusColor(s);
-                                                    return (
-                                                        <TouchableOpacity
-                                                            key={s}
-                                                            onPress={() => updateStatus(selectedOrder.id, s)}
-                                                            style={[sc.statusChip, {
-                                                                backgroundColor: isActive ? sColor : (theme === 'dark' ? '#1C1C26' : '#F2F2F7'),
-                                                                borderColor: isActive ? sColor : colors.border,
-                                                            }]}
-                                                        >
-                                                            <Text style={[sc.statusChipText, { color: isActive ? '#FFF' : colors.foreground }]}>
-                                                                {t('status' + s.charAt(0).toUpperCase() + s.slice(1)).toUpperCase()}
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    );
-                                                })}
-                                            </View>
-                                        </View>
-
-                                        {/* Customer */}
-                                        <View style={[sc.section, { backgroundColor: theme === 'dark' ? '#121218' : '#FFF', borderColor: colors.border }]}>
-                                            <Text style={[sc.sectionTitle, { color: colors.foreground, marginBottom: 16 }]}>{t('clientInfo').toUpperCase()}</Text>
-                                            <CustomerRow icon={User} label={t('fullName').toUpperCase()} value={customer.fullName} colors={colors} theme={theme} />
-                                            <CustomerRow icon={Phone} label={t('phone').toUpperCase()} value={customer.phone} colors={colors} theme={theme} />
-                                            <CustomerRow icon={MapPin} label={t('deliveryAddress').toUpperCase()} value={customer.address} colors={colors} theme={theme} />
-                                            <CustomerRow icon={Mail} label={t('email').toUpperCase()} value={customer.email} colors={colors} theme={theme} />
-                                        </View>
-
-                                        {/* Items */}
-                                        <View style={[sc.section, { backgroundColor: theme === 'dark' ? '#121218' : '#FFF', borderColor: colors.border }]}>
-                                            <View style={sc.sectionHeaderRow}>
-                                                <ShoppingBag size={16} color={colors.foreground} />
-                                                <Text style={[sc.sectionTitle, { color: colors.foreground }]}>
-                                                    {t('orderItems').toUpperCase()} ({selectedOrder.items?.length || 0})
-                                                </Text>
-                                            </View>
-                                            {(selectedOrder.items || []).map((prod: any, i: number) => (
-                                                <View key={i} style={[sc.itemRow, {
-                                                    borderBottomColor: colors.border,
-                                                    borderBottomWidth: i === (selectedOrder.items?.length - 1) ? 0 : 1,
-                                                }]}>
-                                                    <Image source={{ uri: prod.mainImage || prod.image }} style={[sc.itemThumb, { backgroundColor: theme === 'dark' ? '#17171F' : '#F2F2F7' }]} />
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={[sc.itemName, { color: colors.foreground }]} numberOfLines={2}>
-                                                            {String(getName(prod.name)).toUpperCase()}
-                                                        </Text>
-                                                        <View style={sc.itemMeta}>
-                                                            <View style={[sc.metaTag, { backgroundColor: theme === 'dark' ? '#1C1C26' : '#F2F2F7' }]}>
-                                                                <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{prod.selectedSize}</Text>
-                                                            </View>
-                                                            <Text style={[sc.metaDot, { color: colors.border }]}>·</Text>
-                                                            <Text style={[sc.metaValue, { color: colors.textMuted }]}>{prod.selectedColor}</Text>
-                                                            <Text style={[sc.metaDot, { color: colors.border }]}>·</Text>
-                                                            <Text style={[sc.metaValue, { color: colors.textMuted }]}>{t('qty')}: {prod.quantity || 1}</Text>
-                                                        </View>
-                                                        <Text style={[sc.itemPrice, { color: colors.foreground }]}>{prod.price?.toFixed(2)} TND</Text>
-                                                    </View>
-                                                </View>
-                                            ))}
-
-                                            {/* Totals */}
-                                            <View style={[sc.totalBlock, { borderTopColor: colors.border }]}>
-                                                <View style={sc.totalRow}>
-                                                    <Text style={[sc.totalLabel, { color: colors.textMuted }]}>{t('subtotal')}</Text>
-                                                    <Text style={[sc.totalValue, { color: colors.foreground }]}>{(selectedOrder.total - 7).toFixed(2)} TND</Text>
-                                                </View>
-                                                <View style={sc.totalRow}>
-                                                    <Text style={[sc.totalLabel, { color: colors.textMuted }]}>{t('delivery')}</Text>
-                                                    <Text style={[sc.totalValue, { color: colors.foreground }]}>7.00 TND</Text>
-                                                </View>
-                                                <View style={[sc.totalRow, sc.grandTotalRow]}>
-                                                    <Text style={[sc.grandLabel, { color: colors.foreground }]}>{t('orderTotal').toUpperCase()}</Text>
-                                                    <Text style={[sc.grandValue, { color: colors.foreground }]}>{selectedOrder.total?.toFixed(2)} TND</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                    </>
-                                );
-                            })()}
-                        </Animated.ScrollView>
-                    </BlurTargetView>
+                    {BlurTargetView && BlurTargetView !== View ? (
+                        <BlurTargetView ref={modalBlurTargetRef} style={{ flex: 1 }}>
+                            {renderModalContent()}
+                        </BlurTargetView>
+                    ) : (
+                        <View style={{ flex: 1 }}>
+                            {renderModalContent()}
+                        </View>
+                    )}
                 </View>
             </Modal>
-        </View>
-    );
+        );
+    }
+
+    function renderModalContent() {
+        if (!selectedOrder) return null;
+        
+        const customer = getCustomer(selectedOrder);
+        const statusConfig = getStatusConfig(selectedOrder.status || 'pending', isDark);
+        
+        return (
+            <Animated.ScrollView
+                contentContainerStyle={sc.detailContent}
+                showsVerticalScrollIndicator={false}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: modalScrollY } } }], { useNativeDriver: false })}
+                scrollEventThrottle={16}
+            >
+                {/* Order ID + Print */}
+                <View style={sc.detailIdRow}>
+                    <View>
+                        <Text style={[sc.detailIdLabel, { color: colors.textMuted }]}>{t('orderNumber')}</Text>
+                        <Text style={[sc.detailId, { color: colors.foreground }]}>#{selectedOrder.id.slice(0, 8).toUpperCase()}</Text>
+                    </View>
+                    <TouchableOpacity onPress={printOrderLabel} style={[sc.printBtn, { backgroundColor: colors.foreground }]}>
+                        <Text style={[sc.printBtnText, { color: isDark ? '#000' : '#FFF' }]}>PRINT LABEL</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Status */}
+                <View style={[sc.section, { backgroundColor: isDark ? '#121218' : '#FFF', borderColor: colors.border }]}>
+                    <View style={sc.sectionHeader}>
+                        <Text style={[sc.sectionTitle, { color: colors.textMuted }]}>STATUT</Text>
+                    </View>
+                    <View style={[sc.statusBadge, { backgroundColor: statusConfig.bgColor, alignSelf: 'flex-start' }]}>
+                        {statusConfig.icon}
+                        <Text style={[sc.statusText, { color: statusConfig.color }]}>
+                            {statusConfig.label.toUpperCase()}
+                        </Text>
+                    </View>
+
+                    {/* Status Update Chips */}
+                    <View style={[sc.statusChipsWrap, { marginTop: 16 }]}>
+                        {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map(s => {
+                            const cfg = getStatusConfig(s, isDark);
+                            const isActive = selectedOrder.status === s;
+                            return (
+                                <TouchableOpacity 
+                                    key={s} 
+                                    onPress={() => updateStatus(selectedOrder.id, s)}
+                                    style={[
+                                        sc.statusChip, 
+                                        { 
+                                            backgroundColor: isActive ? cfg.bgColor : 'transparent',
+                                            borderColor: cfg.color + '40'
+                                        }
+                                    ]}
+                                >
+                                    <Text style={[sc.statusChipText, { color: cfg.color }]}>
+                                        {cfg.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </View>
+
+                {/* Customer Info */}
+                <View style={[sc.section, { backgroundColor: isDark ? '#121218' : '#FFF', borderColor: colors.border }]}>
+                    <Text style={[sc.sectionTitle, { color: colors.textMuted, marginBottom: 16 }]}>CLIENT</Text>
+                    <CustomerRow icon={User} label="Nom" value={customer.fullName} colors={colors} theme={theme} />
+                    <CustomerRow icon={Phone} label="Téléphone" value={customer.phone} colors={colors} theme={theme} />
+                    <CustomerRow icon={MapPin} label="Adresse" value={customer.address} colors={colors} theme={theme} />
+                </View>
+
+                {/* Items */}
+                <View style={[sc.section, { backgroundColor: isDark ? '#121218' : '#FFF', borderColor: colors.border }]}>
+                    <Text style={[sc.sectionTitle, { color: colors.textMuted, marginBottom: 16 }]}>
+                        ARTICLES ({selectedOrder.items?.length || 0})
+                    </Text>
+                    {selectedOrder.items?.map((item: any, idx: number) => (
+                        <View key={idx} style={[sc.itemRow, { borderBottomWidth: idx < (selectedOrder.items?.length || 0) - 1 ? 1 : 0, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
+                            {item.mainImage || item.image ? (
+                                <Image source={{ uri: item.mainImage || item.image }} style={sc.itemThumb} />
+                            ) : (
+                                <View style={[sc.itemThumb, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC', alignItems: 'center', justifyContent: 'center' }]}>
+                                    <PackageOpen size={20} color={colors.textMuted} />
+                                </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                                <Text style={[sc.itemName, { color: colors.foreground }]} numberOfLines={2}>
+                                    {getName(item.name)}
+                                </Text>
+                                <View style={sc.itemMeta}>
+                                    {item.selectedSize && (
+                                        <View style={[sc.metaTag, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC' }]}>
+                                            <Text style={[sc.itemMetaTag, { color: colors.textMuted }]}>{item.selectedSize}</Text>
+                                        </View>
+                                    )}
+                                    {item.selectedColor && (
+                                        <View style={[sc.metaTag, { backgroundColor: isDark ? '#2A2A35' : '#E8E8EC' }]}>
+                                            <Text style={[sc.itemMetaTag, { color: colors.textMuted }]}>{item.selectedColor}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={[sc.itemMetaValue, { color: colors.textMuted }]}>×{item.quantity || 1}</Text>
+                                </View>
+                            </View>
+                            <Text style={[sc.itemPrice, { color: colors.foreground }]}>
+                                {(item.price || 0).toFixed(3)} TND
+                            </Text>
+                        </View>
+                    ))}
+                    
+                    <View style={[sc.totalBlock, { borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
+                        <View style={sc.totalRow}>
+                            <Text style={[sc.totalLabel, { color: colors.textMuted }]}>Sous-total</Text>
+                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(selectedOrder.subtotal || selectedOrder.total || 0).toFixed(3)} TND</Text>
+                        </View>
+                        <View style={sc.totalRow}>
+                            <Text style={[sc.totalLabel, { color: colors.textMuted }]}>Livraison</Text>
+                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(selectedOrder.shipping || 7).toFixed(3)} TND</Text>
+                        </View>
+                        <View style={[sc.grandTotalRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
+                            <Text style={[sc.grandLabel, { color: colors.foreground }]}>TOTAL</Text>
+                            <Text style={[sc.grandValue, { color: colors.primary }]}>{selectedOrder.total?.toFixed(3)} TND</Text>
+                        </View>
+                    </View>
+                </View>
+            </Animated.ScrollView>
+        );
+    }
 }
-
-

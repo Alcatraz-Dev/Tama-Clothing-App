@@ -64,6 +64,13 @@ const STATUS_STEPS = [
     { key: 'delivered', label: 'delivered', icon: CheckCircle },
 ];
 
+// Helper function to get name from multi-language object or string
+function getItemName(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    return val.fr || val.en || val['ar-tn'] || Object.values(val)[0] || '';
+}
+
 export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     const { colors, theme } = useAppTheme();
     const mapRef = useRef<MapView>(null);
@@ -106,15 +113,39 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
     useEffect(() => {
         let unsubscribeLocation: (() => void) | null = null;
 
-        // First try to find by trackingId
+        // First try to find shipment by trackingId
         const q = query(
             collection(db, 'shipments'),
             where('trackingId', '==', trackingId)
         );
 
-        const unsubscribeFs = onSnapshot(q, (snap) => {
+        const unsubscribeFs = onSnapshot(q, async (snap) => {
             if (!snap.empty) {
-                const data: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                let data: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                
+                // If shipment has orderId, fetch order details for items
+                if (data.orderId) {
+                    try {
+                        const orderDoc = await getDoc(doc(db, 'orders', data.orderId));
+                        if (orderDoc.exists()) {
+                            const orderData = orderDoc.data();
+                            // Merge order items into shipment data
+                            if (orderData.items && orderData.items.length > 0) {
+                                data.items = orderData.items;
+                                data.orderData = orderData;
+                            }
+                            // Also get customer info from order if not in shipment
+                            if (!data.receiverName && orderData.customer) {
+                                data.receiverName = orderData.customer.fullName || orderData.customer.name;
+                                data.receiverPhone = orderData.customer.phone;
+                                data.deliveryAddress = orderData.customer.address || orderData.shippingAddress?.address;
+                            }
+                        }
+                    } catch (err) {
+                        console.log('Error fetching order for items:', err);
+                    }
+                }
+                
                 setShipment(data);
                 // Setup location listener with the delivery location from the shipment data
                 setupLocationListener(data.trackingId || data.id, data.deliveryLocation);
@@ -124,11 +155,58 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                     collection(db, 'shipments'),
                     where('orderId', '==', trackingId)
                 );
-                onSnapshot(q2, (snap2) => {
+                onSnapshot(q2, async (snap2) => {
                     if (!snap2.empty) {
-                        const data: any = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+                        let data: any = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+                        
+                        // If shipment has orderId, fetch order details
+                        if (data.orderId) {
+                            try {
+                                const orderDoc = await getDoc(doc(db, 'orders', data.orderId));
+                                if (orderDoc.exists()) {
+                                    const orderData = orderDoc.data();
+                                    if (orderData.items && orderData.items.length > 0) {
+                                        data.items = orderData.items;
+                                        data.orderData = orderData;
+                                    }
+                                    if (!data.receiverName && orderData.customer) {
+                                        data.receiverName = orderData.customer.fullName || orderData.customer.name;
+                                        data.receiverPhone = orderData.customer.phone;
+                                        data.deliveryAddress = orderData.customer.address || orderData.shippingAddress?.address;
+                                    }
+                                }
+                            } catch (err) {
+                                console.log('Error fetching order for items:', err);
+                            }
+                        }
+                        
                         setShipment(data);
                         setupLocationListener(data.trackingId || data.id, data.deliveryLocation);
+                    } else {
+                        // No shipment found - try to find order directly by ID
+                        try {
+                            const orderDoc = await getDoc(doc(db, 'orders', trackingId));
+                            if (orderDoc.exists()) {
+                                const orderData = orderDoc.data();
+                                // Create a synthetic shipment object from order data
+                                const orderShipment: any = {
+                                    id: orderDoc.id,
+                                    trackingId: orderData.trackingId || orderDoc.id,
+                                    orderId: orderDoc.id,
+                                    status: orderData.status || 'pending',
+                                    receiverName: orderData.customer?.fullName || orderData.customer?.name || 'Customer',
+                                    receiverPhone: orderData.customer?.phone || '—',
+                                    deliveryAddress: orderData.customer?.address || orderData.shippingAddress?.address || '—',
+                                    items: orderData.items || [],
+                                    orderData: orderData,
+                                    createdAt: orderData.createdAt,
+                                    totalPrice: orderData.total,
+                                };
+                                setShipment(orderShipment);
+                            }
+                        } catch (err) {
+                            console.log('Error fetching order directly:', err);
+                        }
                     }
                     setLoading(false);
                 });
@@ -704,22 +782,34 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         </View>
 
                         {/* Items Card - check multiple possible field names */}
-                        {shipment.items || shipment.products || shipment.orderItems || shipment.articles ? (
+                        {shipment.items || shipment.products || shipment.orderItems || shipment.articles || (shipment.order && shipment.order.items) || (shipment.orderData && shipment.orderData.items) ? (
                             <View style={[styles.itemsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                                 <Text style={[styles.itemsTitle, { color: colors.foreground }]}>
-                                    {translate('items')} ({(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).length})
+                                    {translate('items')} ({(shipment.items || shipment.products || shipment.orderItems || shipment.articles || shipment.order?.items || shipment.orderData?.items || []).length})
                                 </Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
-                                    {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || []).map((item: any, index: number) => (
+                                <View style={styles.itemsList}>
+                                    {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || shipment.order?.items || shipment.orderData?.items || []).map((item: any, index: number) => {
+                                        // Handle both object items and string items
+                                        const isStringItem = typeof item === 'string';
+                                        const itemName = isStringItem ? item : getItemName(item.name || item.title || item.productName || item.product?.name);
+                                        const itemImage = isStringItem ? null : (item.image || item.mainImage || item.productImage || item.thumbnail || item.img);
+                                        const itemColor = isStringItem ? null : getItemName(item.selectedColor || item.color);
+                                        const itemSize = isStringItem ? null : getItemName(item.selectedSize || item.size);
+                                        const itemQty = isStringItem ? 1 : (item.quantity || 1);
+                                        const itemPrice = isStringItem ? null : (item.discountPrice || item.salePrice || item.discountedPrice || item.price || item.itemPrice);
+                                        const itemOriginalPrice = isStringItem ? null : (item.price || item.itemPrice);
+                                        const hasDiscount = itemPrice && itemOriginalPrice && itemPrice !== itemOriginalPrice;
+                                        
+                                        return (
                                         <TouchableOpacity
-                                            key={index}
-                                            style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.border }]}
+                                            key={item.id || item.productId || index}
+                                            style={[styles.itemRow, { backgroundColor: colors.background, borderColor: colors.border }]}
                                             onPress={() => setSelectedItem(item)}
                                             activeOpacity={0.7}
                                         >
-                                            {(item.image || item.mainImage || item.productImage || item.thumbnail) ? (
+                                            {itemImage ? (
                                                 <Image
-                                                    source={{ uri: item.image || item.mainImage || item.productImage || item.thumbnail }}
+                                                    source={{ uri: itemImage }}
                                                     style={styles.itemImage}
                                                     resizeMode="cover"
                                                 />
@@ -728,29 +818,41 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                                     <Package size={24} color={colors.accent} />
                                                 </View>
                                             )}
-                                            <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={2}>
-                                                {item.name || item.title || item.productName || item.product?.name || 'Item'}
-                                            </Text>
-                                            <View style={styles.itemMetaRow}>
-                                                {(item.selectedColor || item.color) && (
-                                                    <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                                                        {item.selectedColor || item.color}
-                                                    </Text>
-                                                )}
-                                                {(item.selectedSize || item.size) && (
-                                                    <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                                                        {item.selectedSize || item.size}
-                                                    </Text>
-                                                )}
-                                                {item.quantity && (
+                                            <View style={styles.itemInfo}>
+                                                <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={2}>
+                                                    {itemName || 'Unknown Item'}
+                                                </Text>
+                                                <View style={styles.itemMetaRow}>
+                                                    {itemColor && (
+                                                        <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                            {itemColor}
+                                                        </Text>
+                                                    )}
+                                                    {itemSize && (
+                                                        <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                                                            {itemSize}
+                                                        </Text>
+                                                    )}
                                                     <Text style={[styles.itemQty, { color: colors.textMuted }]}>
-                                                        x{item.quantity}
+                                                        x{itemQty}
                                                     </Text>
+                                                </View>
+                                                {itemPrice !== undefined && itemPrice !== null && (
+                                                    <View style={styles.itemPriceRow}>
+                                                        <Text style={[styles.itemPrice, { color: colors.foreground }]}>
+                                                            {typeof itemPrice === 'number' ? itemPrice.toFixed(2) : itemPrice} TND
+                                                        </Text>
+                                                        {hasDiscount && (
+                                                            <Text style={[styles.itemOriginalPrice, { color: colors.textMuted }]}>
+                                                                {typeof itemOriginalPrice === 'number' ? itemOriginalPrice.toFixed(2) : itemOriginalPrice} TND
+                                                            </Text>
+                                                        )}
+                                                    </View>
                                                 )}
                                             </View>
                                         </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                                        );})}
+                                </View>
                             </View>
                         ) : null}
 
@@ -998,10 +1100,10 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                         <ScrollView style={styles.modalScroll}>
                             {selectedItem && (
                                 <>
-                                    {/* Item Image */}
-                                    {(selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail) ? (
+                                    {/* Item Image - only show for object items */}
+                                    {typeof selectedItem !== 'string' && ((selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail || selectedItem.img) ? (
                                         <Image
-                                            source={{ uri: selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail }}
+                                            source={{ uri: selectedItem.image || selectedItem.mainImage || selectedItem.productImage || selectedItem.thumbnail || selectedItem.img }}
                                             style={styles.itemDetailImage}
                                             resizeMode="contain"
                                         />
@@ -1009,14 +1111,16 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                         <View style={[styles.itemDetailImagePlaceholder, { backgroundColor: colors.accent + '20' }]}>
                                             <Package size={64} color={colors.accent} />
                                         </View>
-                                    )}
+                                    ))}
 
                                     {/* Item Name */}
                                     <Text style={[styles.itemDetailName, { color: colors.foreground }]}>
-                                        {selectedItem.name || selectedItem.title || selectedItem.productName || selectedItem.product?.name || 'Item'}
+                                        {typeof selectedItem === 'string' ? selectedItem : getItemName(selectedItem.name || selectedItem.title || selectedItem.productName || selectedItem.product?.name) || 'Item'}
                                     </Text>
 
-                                    {/* Item Details */}
+                                    {/* Item Details - only show for object items */}
+                                    {typeof selectedItem !== 'string' && (
+                                    <>
                                     {selectedItem.quantity && (
                                         <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
                                             <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('quantity') || 'Quantity'}</Text>
@@ -1024,11 +1128,43 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                         </View>
                                     )}
 
-                                    {selectedItem.price !== undefined && (
-                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                    {/* Price - shows discount price prominently if available */}
+                                    {(selectedItem.price !== undefined || selectedItem.discountPrice !== undefined || selectedItem.salePrice !== undefined || selectedItem.discountedPrice !== undefined) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border, flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
                                             <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('price') || 'Price'}</Text>
-                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>
-                                                {typeof selectedItem.price === 'number' ? selectedItem.price.toFixed(2) : selectedItem.price} TND
+                                            <View style={styles.priceContainer}>
+                                                {(selectedItem.discountPrice || selectedItem.salePrice || selectedItem.discountedPrice) ? (
+                                                    <>
+                                                        <Text style={[styles.discountPrice, { color: colors.foreground }]}>
+                                                            {(typeof (selectedItem.discountPrice || selectedItem.salePrice || selectedItem.discountedPrice) === 'number' 
+                                                                ? (selectedItem.discountPrice || selectedItem.salePrice || selectedItem.discountedPrice).toFixed(2) 
+                                                                : selectedItem.discountPrice || selectedItem.salePrice || selectedItem.discountedPrice)} TND
+                                                        </Text>
+                                                        {selectedItem.price && (
+                                                            <Text style={[styles.originalPrice, { color: colors.textMuted }]}>
+                                                                {(typeof selectedItem.price === 'number' ? selectedItem.price.toFixed(2) : selectedItem.price)} TND
+                                                            </Text>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <Text style={[styles.detailValue, { color: colors.foreground, fontSize: 16 }]}>
+                                                        {typeof selectedItem.price === 'number' ? selectedItem.price.toFixed(2) : selectedItem.price} TND
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* Total Price (quantity × price) */}
+                                    {selectedItem.quantity && (selectedItem.price !== undefined || selectedItem.discountPrice !== undefined) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('total') || 'Total'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground, fontWeight: '700', fontSize: 16 }]}>
+                                                {(
+                                                    (typeof (selectedItem.discountPrice || selectedItem.price) === 'number' 
+                                                        ? (selectedItem.discountPrice || selectedItem.price) 
+                                                        : parseFloat(selectedItem.discountPrice || selectedItem.price) || 0
+                                                ) * selectedItem.quantity).toFixed(2)} TND
                                             </Text>
                                         </View>
                                     )}
@@ -1036,22 +1172,48 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                     {(selectedItem.selectedColor || selectedItem.color) && (
                                         <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
                                             <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('color') || 'Color'}</Text>
-                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.selectedColor || selectedItem.color}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{getItemName(selectedItem.selectedColor || selectedItem.color)}</Text>
                                         </View>
                                     )}
 
                                     {selectedItem.selectedSize && (
                                         <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
                                             <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('size') || 'Size'}</Text>
-                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.selectedSize}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{getItemName(selectedItem.selectedSize)}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Brand */}
+                                    {(selectedItem.brandName || selectedItem.brand) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('brand') || 'Brand'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{getItemName(selectedItem.brandName || selectedItem.brand)}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Category */}
+                                    {(selectedItem.category || selectedItem.categoryName) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('category') || 'Category'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{getItemName(selectedItem.category || selectedItem.categoryName)}</Text>
+                                        </View>
+                                    )}
+
+                                    {/* Product ID */}
+                                    {(selectedItem.productId || selectedItem.id || selectedItem.itemId) && (
+                                        <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
+                                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('product_id') || 'Product ID'}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.productId || selectedItem.id || selectedItem.itemId}</Text>
                                         </View>
                                     )}
 
                                     {selectedItem.description && (
                                         <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
                                             <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{translate('description') || 'Description'}</Text>
-                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{selectedItem.description}</Text>
+                                            <Text style={[styles.detailValue, { color: colors.foreground }]}>{getItemName(selectedItem.description)}</Text>
                                         </View>
+                                    )}
+                                    </>
                                     )}
                                 </>
                             )}
@@ -1303,8 +1465,11 @@ const styles = StyleSheet.create({
     detailRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 15,
-        marginBottom: 20,
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 10,
+        marginBottom: 16,
+        paddingVertical: 8,
     },
     // Items Display Styles
     itemsCard: {
@@ -1321,6 +1486,20 @@ const styles = StyleSheet.create({
     itemsScroll: {
         marginHorizontal: -4,
     },
+    itemsList: {
+        gap: 10,
+    },
+    itemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    itemInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
     itemCard: {
         width: 80,
         marginRight: 10,
@@ -1329,23 +1508,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     itemImage: {
-        width: 64,
-        height: 64,
-        borderRadius: 8,
-        marginBottom: 6,
+        width: 70,
+        height: 70,
+        borderRadius: 10,
     },
     itemImagePlaceholder: {
-        width: 64,
-        height: 64,
-        borderRadius: 8,
-        marginBottom: 6,
+        width: 70,
+        height: 70,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
     },
     itemName: {
-        fontSize: 10,
-        fontWeight: '600',
-        lineHeight: 12,
+        fontSize: 13,
+        fontWeight: '700',
+        lineHeight: 16,
     },
     itemQty: {
         fontSize: 10,
@@ -1362,6 +1539,36 @@ const styles = StyleSheet.create({
     itemMeta: {
         fontSize: 10,
         fontWeight: '500',
+    },
+    itemPrice: {
+        fontSize: 12,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    itemPriceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    itemOriginalPrice: {
+        fontSize: 10,
+        textDecorationLine: 'line-through',
+    },
+    // Price display styles
+    priceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    discountPrice: {
+        fontSize: 18,
+        fontWeight: '800',
+    },
+    originalPrice: {
+        fontSize: 14,
+        fontWeight: '500',
+        textDecorationLine: 'line-through',
     },
     // Item Detail Modal Styles
     itemDetailImage: {
@@ -1538,10 +1745,12 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        maxHeight: '80%',
+        width: '100%',
+        maxHeight: '85%',
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         padding: 20,
+        paddingBottom: 40,
         borderWidth: 1,
     },
     modalHeader: {
@@ -1558,6 +1767,6 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
     modalScroll: {
-        maxHeight: 500,
+        maxHeight: Dimensions.get('window').height * 0.6,
     },
 });

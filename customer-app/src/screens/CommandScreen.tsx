@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
     View,
     StyleSheet,
@@ -11,711 +11,803 @@ import {
     Dimensions,
     Platform,
     StatusBar,
+    ScrollView,
 } from 'react-native';
 import {
     ArrowLeft,
     Search,
-    Eye,
-    EyeOff,
     Pin,
-    PinOff,
     CheckCircle,
     Circle,
-    Command,
     Clock,
     X,
     Palette,
     Box,
     ShoppingBag,
-    Filter,
     ChevronRight,
     TrendingUp,
+    Package,
+    Truck,
+    MapPin,
+    Calendar,
+    ArrowUpRight,
+    MoreHorizontal,
+    Star,
+    AlertCircle,
+    ShoppingBasket,
+    Filter,
+    Copy,
 } from 'lucide-react-native';
-import { BlurView, BlurTargetView } from 'expo-blur';
-import { useRef } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Animatable from 'react-native-animatable';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../context/ThemeContext';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getName, colorNameToHex, translateColor } from '../utils/translationHelpers';
+import * as Animatable from 'react-native-animatable';
+
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../api/firebase';
+import { updateProductRating } from '../utils/productUtils';
+import { Clipboard, Alert, Modal, ActivityIndicator } from 'react-native';
+
 
 // BNA UI Components
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-interface ProductCommand {
-    id: string;
-    productName: string;
-    productImage: string;
-    color: string;
-    size: string;
-    price: number;
-    quantity: number;
-    category: string;
-    isPinned: boolean;
-    isCompleted: boolean;
-    isHidden: boolean;
-    lastUsed?: Date;
-    usageCount: number;
-    createdAt: Date;
-    orderId?: string;
-}
+type CommandStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
 interface CommandScreenProps {
     onBack: () => void;
+    onTrack: (trackingId: string) => void;
     t: (key: string) => string;
+    language?: string;
 }
 
-// Sample product command data
-const SAMPLE_COMMANDS: ProductCommand[] = [
-    {
-        id: '1',
-        productName: 'Premium Cotton T-Shirt',
-        productImage: 'https://picsum.photos/200/200?random=1',
-        color: 'Black',
-        size: 'L',
-        price: 29.99,
-        quantity: 2,
-        category: 'Clothing',
-        isPinned: true,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 15,
-        createdAt: new Date('2024-01-15'),
-        orderId: 'ORD-001',
-    },
-    {
-        id: '2',
-        productName: 'Denim Jacket Classic',
-        productImage: 'https://picsum.photos/200/200?random=2',
-        color: 'Blue',
-        size: 'M',
-        price: 89.99,
-        quantity: 1,
-        category: 'Clothing',
-        isPinned: true,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 8,
-        createdAt: new Date('2024-02-01'),
-        orderId: 'ORD-002',
-    },
-    {
-        id: '3',
-        productName: 'Leather Sneakers',
-        productImage: 'https://picsum.photos/200/200?random=3',
-        color: 'White',
-        size: '42',
-        price: 120.00,
-        quantity: 1,
-        category: 'Footwear',
-        isPinned: false,
-        isCompleted: true,
-        isHidden: false,
-        usageCount: 25,
-        createdAt: new Date('2024-01-10'),
-        orderId: 'ORD-003',
-    },
-    {
-        id: '4',
-        productName: 'Wool Sweater',
-        productImage: 'https://picsum.photos/200/200?random=4',
-        color: 'Gray',
-        size: 'XL',
-        price: 65.00,
-        quantity: 3,
-        category: 'Clothing',
-        isPinned: false,
-        isCompleted: true,
-        isHidden: false,
-        usageCount: 12,
-        createdAt: new Date('2024-01-20'),
-        orderId: 'ORD-004',
-    },
-    {
-        id: '5',
-        productName: 'Silk Scarf',
-        productImage: 'https://picsum.photos/200/200?random=5',
-        color: 'Red',
-        size: 'One Size',
-        price: 45.00,
-        quantity: 1,
-        category: 'Accessories',
-        isPinned: false,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 5,
-        createdAt: new Date('2024-02-05'),
-        orderId: 'ORD-005',
-    },
-    {
-        id: '6',
-        productName: 'Canvas Backpack',
-        productImage: 'https://picsum.photos/200/200?random=6',
-        color: 'Navy',
-        size: 'Medium',
-        price: 55.00,
-        quantity: 1,
-        category: 'Bags',
-        isPinned: false,
-        isCompleted: false,
-        isHidden: false,
-        usageCount: 3,
-        createdAt: new Date('2024-02-10'),
-        orderId: 'ORD-006',
-    },
-];
+type FilterType = 'all' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
-type FilterType = 'all' | 'pinned' | 'completed' | 'hidden';
-
-export default function CommandScreen({ onBack, t }: CommandScreenProps) {
+export default function CommandScreen({ onBack, onTrack, t, language }: CommandScreenProps) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
 
-    const [commands, setCommands] = useState<ProductCommand[]>(SAMPLE_COMMANDS);
+    const [commands, setCommands] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-    const [showSearch, setShowSearch] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const blurTargetRef = useRef<View>(null);
+    const scrollY = useRef(new RNAnimated.Value(0)).current;
+
+    const [reviewingItem, setReviewingItem] = useState<any>(null);
+    const [rating, setRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState('');
 
     const translate = t || ((k: string) => k);
 
+    const fetchOrders = async () => {
+        try {
+            const q = query(
+                collection(db, 'orders'),
+                where('customer.uid', '==', auth.currentUser?.uid)
+            );
+            const snap = await getDocs(q);
+            const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+            list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            // Map the Firebase orders to the CommandScreen expected format
+            const mappedOrders = list.map(order => {
+                const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+                return {
+                    id: order.id,
+                    orderId: order.trackingId || order.id.slice(-6).toUpperCase(),
+                    originalOrder: order,
+                    productName: firstItem ? getName(firstItem.name, language || 'fr') : 'Commande',
+                    productImage: firstItem ? firstItem.mainImage : '',
+                    color: firstItem ? firstItem.selectedColor : '',
+                    size: firstItem ? firstItem.selectedSize : '',
+                    price: order.total,
+                    quantity: order.items ? order.items.length : 1, // Number of items
+                    category: 'General',
+                    isPinned: false,
+                    status: order.status || 'pending',
+                    isHidden: false,
+                    usageCount: 0,
+                    createdAt: order.createdAt?.toDate ? order.createdAt.toDate() : new Date(),
+                    shopName: 'TAMA CLOTHING',
+                    items: order.items || []
+                };
+            });
+
+            setCommands(mappedOrders);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchOrders();
+    }, []);
+
+    const submitReview = async () => {
+        if (!reviewingItem) return;
+        try {
+            const productId = reviewingItem.item.id || reviewingItem.item.productId;
+            const reviewData = {
+                productId: productId,
+                orderId: reviewingItem.orderId,
+                userId: auth.currentUser?.uid,
+                userName: auth.currentUser?.displayName || translate('customer'),
+                rating,
+                comment: reviewComment,
+                createdAt: serverTimestamp()
+            };
+
+            await addDoc(collection(db, 'reviews'), reviewData);
+
+            const orderRef = doc(db, 'orders', reviewingItem.orderId);
+            const orderSnap = await getDoc(orderRef);
+            if (orderSnap.exists()) {
+                const orderData = orderSnap.data();
+                const updatedItems = orderData.items.map((item: any) => {
+                    if ((item.id || item.productId) === productId) {
+                        return { ...item, reviewed: true };
+                    }
+                    return item;
+                });
+                await updateDoc(orderRef, { items: updatedItems });
+            }
+
+            await updateProductRating(productId);
+
+            Alert.alert(translate('featured'), translate('reviewSubmitted'));
+            setReviewingItem(null);
+            setReviewComment('');
+            setRating(5);
+            fetchOrders();
+        } catch (e) {
+            console.error('Review submission error:', e);
+            Alert.alert(translate('cancel'), translate('reviewFailed'));
+        }
+    };
+
+
+    const _t = (k: string, fb: string) => {
+        const val = translate(k);
+        if (!val || val === k) return fb;
+        return val;
+    }
+
+    const statusConfig: Record<CommandStatus, {
+        label: string;
+        color: string;
+        gradient: readonly [string, string, ...string[]];
+        icon: any;
+    }> = {
+        pending: {
+            label: _t('statusPending', _t('pending', 'En attente')),
+            color: '#FBBF24',
+            gradient: ['#FBBF24', '#F59E0B'],
+            icon: Clock,
+        },
+        processing: {
+            label: _t('statusProcessing', _t('processing', 'En cours')),
+            color: '#3B82F6',
+            gradient: ['#3B82F6', '#2563EB'],
+            icon: Package,
+        },
+        shipped: {
+            label: _t('statusShipped', _t('shipped', 'Expédié')),
+            color: '#A855F7',
+            gradient: ['#A855F7', '#8B5CF6'],
+            icon: Truck,
+        },
+        delivered: {
+            label: _t('statusDelivered', _t('delivered', 'Livré')),
+            color: '#10B981',
+            gradient: ['#10B981', '#059669'],
+            icon: CheckCircle,
+        },
+        cancelled: {
+            label: _t('statusCancelled', _t('cancelled', 'Annulé')),
+            color: '#EF4444',
+            gradient: ['#EF4444', '#DC2626'],
+            icon: X,
+        },
+    };
+
     const filteredCommands = useMemo(() => {
-        let result = [...commands];
+        let result = commands.filter(cmd => !cmd.isHidden);
 
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             result = result.filter(
                 cmd =>
                     cmd.productName.toLowerCase().includes(query) ||
-                    cmd.color.toLowerCase().includes(query) ||
-                    cmd.size.toLowerCase().includes(query) ||
-                    cmd.category.toLowerCase().includes(query) ||
-                    (cmd.orderId && cmd.orderId.toLowerCase().includes(query))
+                    cmd.orderId?.toLowerCase().includes(query) ||
+                    cmd.shopName?.toLowerCase().includes(query)
             );
         }
 
-        switch (activeFilter) {
-            case 'pinned':
-                result = result.filter(cmd => cmd.isPinned && !cmd.isHidden);
-                break;
-            case 'completed':
-                result = result.filter(cmd => cmd.isCompleted && !cmd.isHidden);
-                break;
-            case 'hidden':
-                result = result.filter(cmd => cmd.isHidden);
-                break;
-            case 'all':
-            default:
-                result = result.filter(cmd => !cmd.isHidden);
-                break;
+        if (activeFilter !== 'all') {
+            result = result.filter(cmd => cmd.status === activeFilter);
         }
 
-        result.sort((a, b) => {
+        return result.sort((a, b) => {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
-            return b.usageCount - a.usageCount;
+            return b.createdAt.getTime() - a.createdAt.getTime();
         });
-
-        return result;
     }, [commands, searchQuery, activeFilter]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        setTimeout(() => setRefreshing(false), 1000);
+        fetchOrders();
     };
 
-    const togglePin = (id: string) => {
-        setCommands(prev => prev.map(cmd =>
-            cmd.id === id ? { ...cmd, isPinned: !cmd.isPinned } : cmd
-        ));
-    };
+    const headerTranslateY = scrollY.interpolate({
+        inputRange: [0, 100],
+        outputRange: [0, -60],
+        extrapolate: 'clamp',
+    });
 
-    const toggleCompleted = (id: string) => {
-        setCommands(prev => prev.map(cmd =>
-            cmd.id === id ? { ...cmd, isCompleted: !cmd.isCompleted } : cmd
-        ));
-    };
+    const headerBlurOpacity = scrollY.interpolate({
+        inputRange: [0, 50],
+        outputRange: [0, 1],
+        extrapolate: 'clamp',
+    });
 
-    const toggleHidden = (id: string) => {
-        setCommands(prev => prev.map(cmd =>
-            cmd.id === id ? { ...cmd, isHidden: !cmd.isHidden } : cmd
-        ));
-    };
+    const renderHeader = () => (
+        <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
+            <RNAnimated.View style={[StyleSheet.absoluteFill, { opacity: headerBlurOpacity, zIndex: -1 }]}>
+                <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            </RNAnimated.View>
 
-    const getCategoryColor = (category: string) => {
-        const catMap: Record<string, string> = {
-            'Clothing': '#4361EE',
-            'Footwear': '#F72585',
-            'Accessories': '#7209B7',
-            'Bags': '#FF9F1C',
-        };
-        return catMap[category] || colors.primary;
-    };
+            <View style={styles.headerTop}>
+                <TouchableOpacity onPress={onBack} style={[styles.blurBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
+                    <ArrowLeft size={22} color={isDark ? '#FFF' : '#000'} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>{translate('MES COMMANDES') || 'Commandes'}</Text>
+                <TouchableOpacity style={[styles.blurBtn, { backgroundColor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.05)' }]}>
+                    <ShoppingBasket size={22} color="#FBBF24" />
+                </TouchableOpacity>
+            </View>
 
-    const counts = useMemo(() => ({
-        pinned: commands.filter(c => c.isPinned && !c.isHidden).length,
-        completed: commands.filter(c => c.isCompleted && !c.isHidden).length,
-        hidden: commands.filter(c => c.isHidden).length,
-        all: commands.filter(c => !c.isHidden).length,
-    }), [commands]);
+            <View style={[styles.headerBottom]}>
+                <View style={[styles.searchBox, { backgroundColor: isDark ? '#151515' : '#F1F1F1' }]}>
+                    <Search size={18} color={isDark ? '#555' : '#999'} />
+                    <TextInput
+                        placeholder={translate('searchCommands') || 'Rechercher produits, couleurs, tailles...'}
+                        placeholderTextColor={isDark ? '#444' : '#AAA'}
+                        style={[styles.searchInput, { color: isDark ? '#FFF' : '#000' }]}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    <TouchableOpacity style={styles.filterBtn}>
+                        <Filter size={18} color={isDark ? '#FFF' : '#000'} />
+                    </TouchableOpacity>
+                </View>
 
-    const renderCommand = ({ item, index }: { item: ProductCommand; index: number }) => {
-        const catColor = getCategoryColor(item.category);
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.tabsContainer}
+                >
+                    {(['all', 'pending', 'processing', 'shipped', 'delivered'] as FilterType[]).map((filter) => {
+                        const isActive = activeFilter === filter;
+                        return (
+                            <TouchableOpacity
+                                key={filter}
+                                onPress={() => setActiveFilter(filter)}
+                                style={[
+                                    styles.tabItem,
+                                    isActive && { backgroundColor: isDark ? '#FFF' : '#000' }
+                                ]}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    isActive && { color: isDark ? '#000' : '#FFF', fontWeight: '800' }
+                                ]}>
+                                    {filter === 'all' ? (translate('all') || 'Toutes') : statusConfig[filter].label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            </View>
+        </View>
+    );
+
+    const renderCard = ({ item, index }: { item: any; index: number }) => {
+        const status: CommandStatus = item.status as CommandStatus || 'pending';
+        const config = statusConfig[status] || statusConfig['pending'];
+        const StatusIcon = config.icon;
 
         return (
             <Animatable.View
                 animation="fadeInUp"
-                duration={400}
+                duration={600}
                 delay={index * 80}
                 useNativeDriver
                 style={styles.cardContainer}
             >
-                <Card style={StyleSheet.flatten([styles.card, { backgroundColor: colors.card }])}>
-                    <CardContent style={styles.cardContent}>
-                        <View style={styles.cardHeader}>
-                            <View style={styles.imageWrapper}>
-                                <Image source={{ uri: item.productImage }} style={styles.productImage} />
-                                {item.isPinned && (
-                                    <View style={[styles.miniPinned, { backgroundColor: '#FF9F1C' }]}>
-                                        <Pin size={10} color="#FFF" fill="#FFF" />
-                                    </View>
-                                )}
+                <TouchableOpacity activeOpacity={0.95} style={[styles.card, { backgroundColor: isDark ? '#111' : '#FFF' }]}>
+                    <View style={styles.cardTop}>
+                        <View style={styles.shopBadge}>
+                            <View style={styles.shopAvatar}>
+                                <Text style={styles.shopAvatarText}>{item.shopName?.charAt(0)}</Text>
                             </View>
+                            <Text style={[styles.shopName, { color: isDark ? '#EEE' : '#333' }]}>{item.shopName}</Text>
+                        </View>
+                        <LinearGradient
+                            colors={config.gradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.statusChip}
+                        >
+                            <StatusIcon size={12} color="#FFF" />
+                            <Text style={styles.statusChipText}>{config.label}</Text>
+                        </LinearGradient>
+                    </View>
 
-                            <View style={styles.mainInfo}>
-                                <Text variant="subtitle" numberOfLines={1} style={styles.productName}>{item.productName}</Text>
-                                <Text variant="caption" style={{ color: colors.textMuted, fontSize: 12 }}>{item.orderId || `ID#${item.id}`}</Text>
-                                <View style={styles.badgeRow}>
-                                    <Badge 
-                                        label={item.category} 
-                                        variant="secondary" 
-                                        style={StyleSheet.flatten([styles.catBadge, { backgroundColor: catColor + '15' }])} 
-                                        textStyle={{ color: catColor, fontSize: 10, fontWeight: '600' }} 
-                                    />
-                                    {item.isCompleted && <Badge label="LIVRÉ" variant="success" style={styles.statusBadge} />}
+                    <View style={styles.cardBody}>
+                        <View style={styles.imageOverlayContainer}>
+                            <Image source={{ uri: item.productImage }} style={styles.mainImage} />
+                            {item.isPinned && (
+                                <View style={styles.pinBadge}>
+                                    <Pin size={12} color="#FFF" />
                                 </View>
-                            </View>
-
-                            <View style={styles.actions}>
-                                <TouchableOpacity 
-                                    onPress={() => togglePin(item.id)} 
-                                    activeOpacity={0.7}
-                                    style={styles.actionIcon}
-                                >
-                                    <Pin size={20} color={item.isPinned ? '#FF9F1C' : colors.textMuted} fill={item.isPinned ? '#FF9F1C' : 'transparent'} />
-                                </TouchableOpacity>
-                            </View>
+                            )}
                         </View>
 
-                        <Separator style={styles.cardSep} />
-
-                        <View style={styles.detailsGrid}>
-                            <View style={styles.detailCol}>
-                                <View style={styles.detailItem}>
-                                    <Palette size={14} color={colors.textMuted} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text variant="caption" style={styles.detailLabel}>COULEUR</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.color}</Text>
-                                    </View>
+                        <View style={styles.infoSection}>
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={[styles.orderId, { color: isDark ? '#444' : '#CCC' }]}>#{item.orderId}</Text>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            Clipboard.setString(item.orderId);
+                                            Alert.alert(translate('copied') || 'Copié', translate('commandCopied') || 'Numéro de commande a été copié.');
+                                        }}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Copy size={12} color={isDark ? '#444' : '#A1A1AA'} />
+                                    </TouchableOpacity>
                                 </View>
-                                <View style={[styles.detailItem, { marginTop: 8 }]}>
-                                    <ShoppingBag size={14} color={colors.textMuted} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text variant="caption" style={styles.detailLabel}>QUANTITÉ</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.quantity} pcs</Text>
-                                    </View>
+                                <Text style={[styles.pName, { color: isDark ? '#FFF' : '#000' }]} numberOfLines={1}>{item.productName}</Text>
+                            </View>
+
+                            <View style={styles.detailsRow}>
+                                <View style={styles.detailItem}>
+                                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: colorNameToHex(item.color), borderWidth: 1, borderColor: isDark ? '#333' : '#E5E5EA' }} />
+                                    <Text style={styles.detailText}>{translateColor(item.color, language || 'fr')}</Text>
+                                </View>
+                                <View style={styles.detailItem}>
+                                    <Box size={12} color="#8E8E93" />
+                                    <Text style={styles.detailText}>{_t('size', 'Taille')} {item.size}</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.detailCol}>
-                                <View style={styles.detailItem}>
-                                    <Box size={14} color={colors.textMuted} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text variant="caption" style={styles.detailLabel}>TAILLE</Text>
-                                        <Text variant="body" style={{ fontWeight: '700', fontSize: 13 }}>{item.size}</Text>
-                                    </View>
-                                </View>
-                                <View style={[styles.detailItem, { marginTop: 8 }]}>
-                                    <TrendingUp size={14} color={colors.textMuted} />
-                                    <View style={styles.detailTextContainer}>
-                                        <Text variant="caption" style={styles.detailLabel}>PRIX TOTAL</Text>
-                                        <Text variant="body" style={{ fontWeight: '800', fontSize: 13, color: colors.primary }}>{(item.price * item.quantity).toFixed(2)} TND</Text>
-                                    </View>
-                                </View>
+                            <View style={[styles.priceTag, { backgroundColor: isDark ? '#1A1A1A' : '#F9F9F9' }]}>
+                                <Text style={[styles.priceValue, { color: isDark ? '#FFF' : '#000' }]}>{item.price} TND</Text>
+                                <Text style={styles.qtyText}>{item.quantity > 1 ? `+${item.quantity - 1} ${_t('items', 'articles')}` : `1 ${_t('item', 'article')}`}</Text>
                             </View>
                         </View>
+                    </View>
 
-                        <View style={styles.cardFooter}>
-                            <View style={styles.footerLeft}>
-                                <Clock size={12} color={colors.textMuted} />
-                                <Text variant="caption" style={{ color: colors.textMuted, marginLeft: 4, fontSize: 12 }}>
-                                    Utilisé {item.usageCount} fois
-                                </Text>
+                    {item.status === 'shipped' && (
+                        <View style={styles.trackingBar}>
+                            <View style={styles.trackingInfo}>
+                                <Truck size={16} color="#3B82F6" />
+                                <Text style={styles.trackingMsg}>{translate('shippedOn') || 'Expédié le'} {item.createdAt.toLocaleDateString()}</Text>
                             </View>
+                            <ChevronRight size={16} color="#3B82F6" />
+                        </View>
+                    )}
 
+                    <View style={styles.cardFooter}>
+                        <Text style={styles.timeText}>{_t('orderedOn', 'Passée le')} {item.createdAt.toLocaleDateString()}</Text>
+                        <View style={styles.buttonGroup}>
                             <TouchableOpacity
-                                onPress={() => toggleCompleted(item.id)}
-                                style={StyleSheet.flatten([styles.completeToggle, { backgroundColor: item.isCompleted ? colors.primary + '10' : 'transparent' }])}
+                                style={[styles.btnSmall, { backgroundColor: isDark ? '#FFF' : '#000' }]}
+                                onPress={() => onTrack(item.id)}
                             >
-                                {item.isCompleted ? (
-                                    <CheckCircle size={18} color={colors.primary} />
-                                ) : (
-                                    <Circle size={18} color={colors.textMuted} />
-                                )}
-                                <Text variant="body" style={{ color: item.isCompleted ? colors.primary : colors.textMuted, marginLeft: 6, fontWeight: '700', fontSize: 12 }}>
-                                    {item.isCompleted ? 'Terminé' : 'En cours'}
+                                <Text style={[styles.btnSmallText, { color: isDark ? '#000' : '#FFF' }]}>
+                                    {_t('trackOrder', 'Suivre')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
-                    </CardContent>
-                </Card>
+                    </View>
+
+                    {item.status === 'delivered' && item.items && item.items.length > 0 && (
+                        <View style={{ marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: isDark ? '#222' : '#EEE' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '900', color: isDark ? '#888' : '#888', marginBottom: 10 }}>{translate('leaveReview')}</Text>
+                            {item.items.map((prodItem: any, idx: number) => {
+                                const isReviewed = prodItem.reviewed === true;
+                                return (
+                                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <Image source={{ uri: prodItem.mainImage }} style={{ width: 30, height: 30, borderRadius: 5, backgroundColor: isDark ? '#000' : '#eee' }} />
+                                            <Text style={{ fontSize: 12, fontWeight: '700', maxWidth: 150, color: isDark ? '#FFF' : '#000' }} numberOfLines={1}>{getName(prodItem.name, language || 'fr')}</Text>
+                                        </View>
+                                        {isReviewed ? (
+                                            <View style={{ paddingHorizontal: 15, paddingVertical: 6, backgroundColor: '#10B981', borderRadius: 15 }}>
+                                                <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>{translate('reviewed')}</Text>
+                                            </View>
+                                        ) : (
+                                            <TouchableOpacity onPress={() => setReviewingItem({ orderId: item.id, item: prodItem })} style={{ paddingHorizontal: 15, paddingVertical: 6, backgroundColor: isDark ? '#FFF' : '#000', borderRadius: 15 }}>
+                                                <Text style={{ color: isDark ? '#000' : '#FFF', fontSize: 10, fontWeight: '800' }}>{translate('rate')}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    )}
+                </TouchableOpacity>
             </Animatable.View>
         );
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: isDark ? '#050505' : '#F8F9FA' }]}>
+        <View style={[styles.main, { backgroundColor: isDark ? '#080808' : '#F5F5F7' }]}>
+            {reviewingItem && (
+                <Modal visible={true} transparent animationType="fade">
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 25, zIndex: 9999 }}>
+                        <View style={{ backgroundColor: isDark ? '#111' : '#FFF', borderRadius: 25, padding: 25 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', marginBottom: 5, color: isDark ? '#FFF' : '#000' }}>{translate('rateProduct')}</Text>
+                            <Text style={{ fontSize: 13, color: isDark ? '#888' : '#666', marginBottom: 20 }}>{getName(reviewingItem.item.name, language || 'fr')}</Text>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 25 }}>
+                                {[1, 2, 3, 4, 5].map(s => (
+                                    <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                                        <Star size={32} color={s <= rating ? "#FFD700" : "#EEE"} fill={s <= rating ? "#FFD700" : (isDark ? "#222" : "#EEE")} />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <TextInput
+                                style={{
+                                    height: 100,
+                                    textAlignVertical: 'top',
+                                    backgroundColor: isDark ? '#222' : '#F5F5F7',
+                                    borderRadius: 15,
+                                    padding: 15,
+                                    color: isDark ? '#FFF' : '#000',
+                                    fontWeight: '600'
+                                }}
+                                placeholder={translate('writeReview')}
+                                placeholderTextColor={isDark ? '#666' : '#999'}
+                                multiline
+                                value={reviewComment}
+                                onChangeText={setReviewComment}
+                            />
+
+                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+                                <TouchableOpacity onPress={() => setReviewingItem(null)} style={{ flex: 1, padding: 15, backgroundColor: isDark ? '#333' : '#F2F2F7', borderRadius: 15, alignItems: 'center' }}>
+                                    <Text style={{ fontWeight: '800', color: isDark ? '#FFF' : '#000' }}>{translate('cancel')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={submitReview} style={{ flex: 1, padding: 15, backgroundColor: isDark ? '#FFF' : '#000', borderRadius: 15, alignItems: 'center' }}>
+                                    <Text style={{ fontWeight: '800', color: isDark ? '#000' : '#FFF' }}>{translate('submit')}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+            )}
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-            {/* Premium Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                <BlurView
-                    blurTarget={blurTargetRef}
-                    intensity={Platform.OS === 'ios' ? 80 : 100}
-                    tint={isDark ? 'dark' : 'light'}
-                    style={StyleSheet.absoluteFill}
-                    blurMethod="dimezisBlurView"
-                />
-                <View style={styles.headerContent}>
-                    <TouchableOpacity 
-                        onPress={onBack} 
-                        activeOpacity={0.7}
-                        style={[styles.iconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 12 }]}
-                    >
-                        <ArrowLeft size={22} color={colors.foreground} />
-                    </TouchableOpacity>
-                    <View style={styles.titleContainer}>
-                        <Text variant="title" style={[styles.headerTitle, { fontWeight: '800', fontSize: 24, letterSpacing: -0.5, color: colors.foreground }]}>
-                            {translate('commands') || 'Mes Commandes'}
-                        </Text>
-                        <Text variant="caption" style={{ color: colors.textMuted, fontSize: 13, opacity: 0.7 }}>
-                            {filteredCommands.length} {translate('articles') || 'articles'}
-                        </Text>
-                    </View>
-                    <TouchableOpacity 
-                        onPress={() => setShowSearch(!showSearch)} 
-                        activeOpacity={0.7}
-                        style={[styles.iconBtn, { backgroundColor: showSearch ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'), borderRadius: 12 }]}
-                    >
-                        <Search size={20} color={showSearch ? '#FFF' : colors.foreground} />
-                    </TouchableOpacity>
+            {/* Background decorative elements */}
+            <View style={[styles.glow, { top: 100, right: -100, backgroundColor: 'rgba(59, 130, 246, 0.08)' }]} />
+            <View style={[styles.glow, { bottom: 100, left: -100, backgroundColor: 'rgba(168, 85, 247, 0.08)' }]} />
+
+            {renderHeader()}
+
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
-
-                {showSearch && (
-                    <Animatable.View animation="fadeInDown" duration={300} style={styles.searchWrapper}>
-                        <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFF', borderColor: 'transparent', borderRadius: 14, height: 48 }]}>
-                            <Search size={18} color={colors.textMuted} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.foreground, fontSize: 15 }]}
-                                placeholder="Rechercher une commande..."
-                                placeholderTextColor={colors.textMuted}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-                                    <X size={18} color={colors.textMuted} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </Animatable.View>
-                )}
-
-                {/* Filter Tabs */}
-                <View style={[styles.tabsBar, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
-                    <TouchableOpacity 
-                        onPress={() => setActiveFilter('all')} 
-                        activeOpacity={0.7}
-                        style={[styles.tab, activeFilter === 'all' && styles.activeTab]}
-                    >
-                        <Text style={[styles.tabText, activeFilter === 'all' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>TOUT</Text>
-                        {activeFilter === 'all' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={() => setActiveFilter('pinned')} 
-                        activeOpacity={0.7}
-                        style={[styles.tab, activeFilter === 'pinned' && styles.activeTab]}
-                    >
-                        <Text style={[styles.tabText, activeFilter === 'pinned' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>IMPORTANTS</Text>
-                        {activeFilter === 'pinned' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={() => setActiveFilter('completed')} 
-                        activeOpacity={0.7}
-                        style={[styles.tab, activeFilter === 'completed' && styles.activeTab]}
-                    >
-                        <Text style={[styles.tabText, activeFilter === 'completed' ? { color: colors.primary, fontWeight: '700' } : { color: colors.textMuted }]}>TERMINÉS</Text>
-                        {activeFilter === 'completed' && <View style={[styles.indicator, { backgroundColor: colors.primary }]} />}
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
-                <FlatList
+            ) : (
+                <RNAnimated.FlatList
                     data={filteredCommands}
-                    renderItem={renderCommand}
+                    renderItem={renderCard}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={[styles.list, { paddingTop: insets.top + (showSearch ? 190 : 140) }]}
+                    contentContainerStyle={[
+                        styles.content,
+                        { paddingTop: 190 + insets.top, paddingBottom: insets.bottom + 40 }
+                    ]}
                     showsVerticalScrollIndicator={false}
+                    onScroll={RNAnimated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: true }
+                    )}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />
                     }
                     ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <LinearGradient colors={[colors.primary + '15', 'transparent']} style={styles.emptyGradient} />
-                            <View style={{
-                                width: 100, height: 100,
-                                borderRadius: 50,
-                                backgroundColor: colors.primary + '15',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: 20
-                            }}>
-                                <Command size={50} color={colors.primary} strokeWidth={1.5} />
+                        <View style={styles.empty}>
+                            <View style={styles.emptyCircle}>
+                                <Package size={40} color={isDark ? '#222' : '#E0E0E0'} />
                             </View>
-                            <Text variant="heading" style={{ marginTop: 16, fontWeight: '700', fontSize: 18, color: colors.foreground }}>
-                                {translate('noCommands') || 'Aucune commande'}
-                            </Text>
-                            <Text variant="body" style={{ marginTop: 8, color: colors.textMuted, fontSize: 14, opacity: 0.7, textAlign: 'center' }}>
-                                {translate('noCommandsDesc') || 'Vos commandes apparaîtront ici'}
-                            </Text>
-                            <Text variant="body" style={{ color: colors.textMuted, textAlign: 'center', marginTop: 10 }}>
-                                {searchQuery ? "Nous n'avons trouvé aucun résultat pour votre recherche." : "Vous n'avez pas encore de commandes dans cette catégorie."}
-                            </Text>
-                            <Button onPress={() => { setSearchQuery(''); setActiveFilter('all'); }} style={{ marginTop: 30 }}>
-                                <Text style={{ color: '#FFF', fontWeight: '800' }}>RAZ FILTRES</Text>
-                            </Button>
+                            <Text style={[styles.emptyTitle, { color: isDark ? '#FFF' : '#000' }]}>{translate('noOrders') || 'Aucune commande'}</Text>
+                            <Text style={styles.emptySubTitle}>{translate('noOrdersDesc') || 'Vos commandes apparaîtront ici dès que vous en passerez une.'}</Text>
                         </View>
                     }
                 />
-            </BlurTargetView>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: {
+    main: { flex: 1 },
+    glow: {
         position: 'absolute',
-        top: 0, left: 0, right: 0,
-        zIndex: 100,
+        width: 400,
+        height: 400,
+        borderRadius: 200,
+        filter: 'blur(80px)',
+        zIndex: -1,
     },
-    headerContent: {
+    headerWrapper: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        paddingHorizontal: 20,
+    },
+    headerTop: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        height: 60,
     },
-    iconBtn: {
+    blurBtn: {
         width: 44,
         height: 44,
-        borderRadius: 14,
-        alignItems: 'center',
+        borderRadius: 22,
         justifyContent: 'center',
-    },
-    titleContainer: { 
-        flex: 1, 
         alignItems: 'center',
-        paddingHorizontal: 10 
     },
-    headerTitle: { 
-        fontSize: 20, 
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '900',
         letterSpacing: -0.5,
     },
-    searchWrapper: { 
-        paddingHorizontal: 20, 
-        paddingBottom: 12,
+    headerBottom: {
+        marginTop: 15,
+        gap: 15,
     },
-    searchBar: {
+    searchBox: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        height: 50,
-        borderRadius: 16,
-        borderWidth: 0,
+        height: 52,
+        borderRadius: 18,
         gap: 12,
     },
-    searchInput: { 
-        flex: 1, 
-        fontSize: 15, 
-        fontWeight: '500',
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '600',
     },
-    tabsBar: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        marginTop: 4,
+    filterBtn: {
+        marginLeft: 10,
     },
-    tab: {
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        alignItems: 'center',
-        marginRight: 4,
+    tabsContainer: {
+        paddingBottom: 20,
+        gap: 8,
     },
-    activeTab: {},
-    tabText: { 
-        fontSize: 12, 
-        fontWeight: '600', 
-        letterSpacing: 0.5,
+    tabItem: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 14,
+        backgroundColor: 'rgba(128,128,128,0.1)',
     },
-    indicator: {
-        position: 'absolute',
-        bottom: 0,
-        width: 24,
-        height: 3,
-        borderRadius: 2,
+    tabText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#888',
     },
-    list: { 
-        paddingHorizontal: 16, 
-        paddingBottom: 100,
-        paddingTop: 8,
+    content: {
+        paddingHorizontal: 20,
     },
-    cardContainer: { 
+    cardContainer: {
         marginBottom: 16,
     },
     card: {
-        borderRadius: 20,
-        borderWidth: 0,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-        elevation: 3,
-    },
-    cardContent: { 
+        borderRadius: 28,
         padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(128,128,128,0.05)',
     },
-    cardHeader: { 
-        flexDirection: 'row', 
-        alignItems: 'center' 
-    },
-    imageWrapper: { 
-        width: 72, 
-        height: 72, 
-        position: 'relative' 
-    },
-    productImage: { 
-        width: 72, 
-        height: 72, 
-        borderRadius: 18 
-    },
-    miniPinned: {
-        position: 'absolute', 
-        top: -4, 
-        right: -4,
-        width: 22, 
-        height: 22, 
-        borderRadius: 11,
-        alignItems: 'center', 
-        justifyContent: 'center',
-        borderWidth: 2, 
-        borderColor: '#FFF',
-    },
-    mainInfo: { 
-        flex: 1, 
-        marginLeft: 16 
-    },
-    productName: { 
-        marginBottom: 4, 
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    badgeRow: { 
-        flexDirection: 'row', 
-        marginTop: 8, 
-        gap: 8 
-    },
-    catBadge: { 
-        height: 22, 
-        paddingHorizontal: 10, 
-        borderWidth: 0 
-    },
-    statusBadge: { 
-        height: 22, 
-        paddingHorizontal: 10 
-    },
-    actions: { 
-        alignSelf: 'flex-start' 
-    },
-    actionIcon: { 
-        padding: 8 
-    },
-    cardSep: { 
-        marginVertical: 16, 
-        opacity: 0.08 
-    },
-    detailsGrid: { 
-        flexDirection: 'row', 
-        gap: 24 
-    },
-    detailCol: { 
-        flex: 1 
-    },
-    detailItem: { 
-        flexDirection: 'row', 
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    detailTextContainer: { 
-        marginLeft: 10, 
-        flex: 1 
-    },
-    detailLabel: { 
-        fontSize: 9, 
-        opacity: 0.5, 
-        marginBottom: 2, 
-        fontWeight: '700' 
-    },
-    cardFooter: {
+    cardTop: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 16,
-        paddingTop: 14,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.04)',
+        marginBottom: 16,
     },
-    footerLeft: { 
-        flexDirection: 'row', 
-        alignItems: 'center' 
-    },
-    completeToggle: {
+    shopBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 14,
+        gap: 8,
+    },
+    shopAvatar: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#eee',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    shopAvatarText: { fontSize: 12, fontWeight: 'bold', color: '#000' },
+    shopName: { fontSize: 13, fontWeight: '800' },
+    statusChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        gap: 4,
+    },
+    statusChipText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    cardBody: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+    imageOverlayContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 20,
+        overflow: 'hidden',
+        backgroundColor: '#f0f0f0',
+    },
+    mainImage: {
+        width: '100%',
+        height: '100%',
+    },
+    pinBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: '#3B82F6',
+        padding: 4,
+        borderRadius: 8,
+    },
+    infoSection: {
+        flex: 1,
+        justifyContent: 'space-between',
+        paddingVertical: 2,
+    },
+    orderId: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    pName: {
+        fontSize: 17,
+        fontWeight: '800',
+    },
+    detailsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 4,
+    },
+    detailItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    detailText: {
+        fontSize: 12,
+        color: '#8E8E93',
+        fontWeight: '600',
+    },
+    priceTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        marginTop: 8,
+    },
+    priceValue: {
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    qtyText: {
+        fontSize: 12,
+        color: '#8E8E93',
+        fontWeight: '700',
+    },
+    trackingBar: {
+        marginTop: 16,
+        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+        padding: 12,
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    trackingInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    trackingMsg: {
+        color: '#3B82F6',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    cardFooter: {
+        marginTop: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(128,128,128,0.05)',
+    },
+    timeText: {
+        fontSize: 11,
+        color: '#8E8E93',
+        fontWeight: '600',
+    },
+    buttonGroup: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    btnSmall: {
+        paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 12,
     },
-    emptyState: { 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        paddingVertical: 80, 
-        paddingHorizontal: 40 
+    btnSmallText: {
+        fontSize: 12,
+        fontWeight: '800',
     },
-    emptyGradient: { 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        height: 200 
+    empty: {
+        paddingTop: 80,
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    emptyCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(128,128,128,0.05)',
+        marginBottom: 20,
+    },
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        marginBottom: 8,
+    },
+    emptySubTitle: {
+        fontSize: 14,
+        color: '#8E8E93',
+        textAlign: 'center',
+        lineHeight: 20,
     },
 });
-
-
