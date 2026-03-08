@@ -102,13 +102,51 @@ const MemberAvatar = ({ userId, userName, defaultAvatar }: { userId: string, use
 };
 
 export default function AudienceLiveScreen(props: Props) {
-    const t = props.t || ((key: string) => key);
+    const t = typeof props.t === 'function' ? props.t : ((key: string) => key);
+    // Translation helper: tr(en, fr, ar)
+    const tr = (en: string, fr: string, ar: string) => {
+        return language === 'ar' ? ar : (language === 'fr' ? fr : en);
+    };
+  
     const { channelId, userId, userName, userAvatar, onClose, language, profileData } = props;
 
-    const getLocalizedName = (name: any) => {
-        if (typeof name === 'string') return name;
+    const getLocalizedName = (name: any): string => {
+        // Handle undefined/null
         if (!name) return '';
-        return name[language === 'ar' ? 'ar-tn' : 'fr'] || name.fr || name.en || name.ar || Object.values(name)[0] || '';
+        
+        // Already a string
+        if (typeof name === 'string') return name;
+        
+        // It's an object with translations - handle safely
+        if (typeof name === 'object') {
+            try {
+                const lang = language || 'fr'; // Default to French if undefined
+                const langKey = lang === 'ar' ? 'ar-tn' : lang;
+                
+                // Try to get the right language
+                if (name[langKey] && typeof name[langKey] === 'string') return name[langKey];
+                if (name.fr && typeof name.fr === 'string') return name.fr;
+                if (name.en && typeof name.en === 'string') return name.en;
+                if (name.ar && typeof name.ar === 'string') return name.ar;
+                
+                // Try any available value
+                const values = Object.values(name);
+                for (const v of values) {
+                    if (typeof v === 'string' && v.trim()) {
+                        return v;
+                    }
+                }
+                
+                // Last resort - return empty string
+                return '';
+            } catch (e) {
+                // If anything fails, return empty string
+                return '';
+            }
+        }
+        
+        // Fallback for any other type
+        return String(name) || '';
     };
     const prebuiltRef = useRef<any>(null);
     const mediaViewRef = useRef<any>(null);
@@ -696,17 +734,35 @@ export default function AudienceLiveScreen(props: Props) {
 
             // Sync Pinned Product
             if (session.pinnedProduct) {
+                const pinnedProductId = session.pinnedProduct.productId;
                 setPinEndTime(session.pinnedProduct.endTime || null);
-                if (!pinnedProduct || pinnedProduct.id !== session.pinnedProduct.productId) {
-                    getDoc(doc(db, 'products', session.pinnedProduct.productId)).then((snap: any) => {
-                        if (snap.exists()) setPinnedProduct({ id: snap.id, ...snap.data() });
+                if (!pinnedProduct || pinnedProduct.id !== pinnedProductId) {
+                    getDoc(doc(db, 'products', pinnedProductId)).then((snap: any) => {
+                        if (snap.exists()) {
+                            setPinnedProduct({ id: snap.id, ...snap.data() });
+                        } else {
+                            console.warn('Pinned product not found in database:', pinnedProductId);
+                            setPinnedProduct(null);
+                        }
+                    }).catch((error: any) => {
+                        console.error('Error fetching pinned product:', error);
+                        setPinnedProduct(null);
                     });
                 }
             } else if (session.currentProductId) {
                 // Fallback for sessions using old structure
-                if (!pinnedProduct || pinnedProduct.id !== session.currentProductId) {
-                    getDoc(doc(db, 'products', session.currentProductId)).then((snap: any) => {
-                        if (snap.exists()) setPinnedProduct({ id: snap.id, ...snap.data() });
+                const currentProductId = session.currentProductId;
+                if (!pinnedProduct || pinnedProduct.id !== currentProductId) {
+                    getDoc(doc(db, 'products', currentProductId)).then((snap: any) => {
+                        if (snap.exists()) {
+                            setPinnedProduct({ id: snap.id, ...snap.data() });
+                        } else {
+                            console.warn('Current product not found in database:', currentProductId);
+                            setPinnedProduct(null);
+                        }
+                    }).catch((error: any) => {
+                        console.error('Error fetching current product:', error);
+                        setPinnedProduct(null);
                     });
                 }
             } else {
@@ -1430,7 +1486,7 @@ export default function AudienceLiveScreen(props: Props) {
                                 }}>
                                     <View style={{ alignItems: 'center', flex: 1 }}>
                                         <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 6, fontWeight: '700', letterSpacing: 1 }}>
-                                            {pkHostName?.toUpperCase() || t('hostLabel').toUpperCase()}
+                                            {pkHostName?.toUpperCase() || (t('hostLabel') || 'HOST').toUpperCase()}
                                         </Text>
                                         <Text style={{
                                             color: '#FF0055',
@@ -2051,11 +2107,49 @@ export default function AudienceLiveScreen(props: Props) {
 
                             {selectedProduct && (
                                 <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
-                                    {/* Product Info */}
-                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 24, backgroundColor: 'rgba(42, 42, 53, 0.6)', padding: 12, borderRadius: 16 }}>
-                                        <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 90, height: 90, borderRadius: 14, backgroundColor: '#333' }} />
+                                    {/* Product Image & Info Card */}
+                                    <View style={{ 
+                                        flexDirection: 'row', 
+                                        alignItems: 'flex-start', 
+                                        marginBottom: 20, 
+                                        backgroundColor: 'rgba(42, 42, 53, 0.8)', 
+                                        padding: 12, 
+                                        borderRadius: 18,
+                                        borderWidth: 1,
+                                        borderColor: 'rgba(255,255,255,0.1)'
+                                    }}>
+                                        {/* Product Image with Badge */}
+                                        <View style={{ position: 'relative' }}>
+                                            <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 95, height: 95, borderRadius: 14, backgroundColor: '#333' }} />
+                                            {selectedProduct.discountPrice && (
+                                                <View style={{ 
+                                                    position: 'absolute', 
+                                                    top: -6, 
+                                                    left: -6, 
+                                                    backgroundColor: '#EF4444', 
+                                                    paddingHorizontal: 8, 
+                                                    paddingVertical: 3,
+                                                    borderRadius: 8 
+                                                }}>
+                                                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
+                                                        -{Math.round((1 - selectedProduct.discountPrice / selectedProduct.price) * 100)}%
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        
                                         <View style={{ marginLeft: 14, flex: 1 }}>
-                                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 17, marginBottom: 6 }} numberOfLines={2}>{getLocalizedName(selectedProduct.name)}</Text>
+                                            {/* Product Name */}
+                                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 17, marginBottom: 6, lineHeight: 22 }} numberOfLines={2}>
+                                                {getLocalizedName(selectedProduct.name)}
+                                            </Text>
+                                            
+                                            {/* Short Description */}
+                                            {selectedProduct.description && (
+                                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 8 }} numberOfLines={2}>
+                                                    {selectedProduct.description}
+                                                </Text>
+                                            )}
 
                                             {/* Price Section with Coupon logic */}
                                             {(() => {
@@ -2067,7 +2161,6 @@ export default function AudienceLiveScreen(props: Props) {
                                                 if (isActiveCoupon) {
                                                     const couponType = activeCoupon.discountType || activeCoupon.type;
                                                     if (couponType === 'free_shipping') {
-                                                        // Free shipping - price stays the but shipping is free
                                                         finalPrice = basePrice;
                                                     } else if (couponType === 'percentage') {
                                                         finalPrice = basePrice * (1 - activeCoupon.discount / 100);
@@ -2078,26 +2171,43 @@ export default function AudienceLiveScreen(props: Props) {
 
                                                 return (
                                                     <View>
-                                                        {/* Show original price if product has discount */}
-                                                        {selectedProduct.discountPrice && !isActiveCoupon && (
-                                                            <Text style={{ color: '#888', fontSize: 14, textDecorationLine: 'line-through', marginBottom: 4 }}>{selectedProduct.price} TND</Text>
-                                                        )}
-
+                                                        {/* Price Display */}
                                                         {isActiveCoupon ? (
                                                             <View>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                    <Text style={{ color: '#888', fontSize: 15, textDecorationLine: 'line-through', marginRight: 8 }}>{basePrice} TND</Text>
-                                                                    <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{finalPrice.toFixed(2)} TND</Text>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                                                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textDecorationLine: 'line-through' }}>{basePrice} TND</Text>
+                                                                    <Text style={{ color: '#22C55E', fontSize: 22, fontWeight: '900' }}>{finalPrice.toFixed(2)} TND</Text>
                                                                 </View>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                                                    <Ticket size={12} color="#10B981" />
-                                                                    <Text style={{ color: '#10B981', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }}>
-                                                                        {t('couponApplied') || 'Coupon Applied!'}
+                                                                {/* Coupon Applied Badge */}
+                                                                <View style={{ 
+                                                                    flexDirection: 'row', 
+                                                                    alignItems: 'center', 
+                                                                    marginTop: 6,
+                                                                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                                                                    paddingHorizontal: 10,
+                                                                    paddingVertical: 4,
+                                                                    borderRadius: 6,
+                                                                    alignSelf: 'flex-start'
+                                                                }}>
+                                                                    <Ticket size={12} color="#22C55E" />
+                                                                    <Text style={{ color: '#22C55E', fontSize: 11, fontWeight: 'bold', marginLeft: 4 }}>
+                                                                        {activeCoupon.discountType === 'free_shipping' 
+                                                                            ? 'LIVRAISON Gratuite' 
+                                                                            : `-${activeCoupon.discountType === 'percentage' ? activeCoupon.discount + '%' : activeCoupon.discount + 'TND'}`}
                                                                     </Text>
                                                                 </View>
                                                             </View>
                                                         ) : (
-                                                            <Text style={{ color: '#F59E0B', fontSize: 20, fontWeight: '900' }}>{basePrice} TND</Text>
+                                                            <View>
+                                                                {selectedProduct.discountPrice ? (
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                                        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, textDecorationLine: 'line-through' }}>{selectedProduct.price} TND</Text>
+                                                                        <Text style={{ color: '#F59E0B', fontSize: 22, fontWeight: '900' }}>{basePrice} TND</Text>
+                                                                    </View>
+                                                                ) : (
+                                                                    <Text style={{ color: '#F59E0B', fontSize: 22, fontWeight: '900' }}>{basePrice} TND</Text>
+                                                                )}
+                                                            </View>
                                                         )}
                                                     </View>
                                                 );
@@ -2836,6 +2946,20 @@ export default function AudienceLiveScreen(props: Props) {
                             zIndex: 3000
                         }}
                     >
+                        {/* Blur Effect Background */}
+                        <BlurView 
+                            intensity={85} 
+                            tint="dark" 
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                borderRadius: 12,
+                                overflow: 'hidden'
+                            }} 
+                        />
                         <LinearGradient
                             colors={['#F59E0B', '#B45309']}
                             style={{
@@ -2844,7 +2968,7 @@ export default function AudienceLiveScreen(props: Props) {
                             }}
                         >
                             <View style={{
-                                backgroundColor: '#121218',
+                                backgroundColor: 'rgba(18, 18, 24, 0.95)',
                                 borderRadius: 9,
                                 flexDirection: 'row',
                                 height: 75,
@@ -2857,11 +2981,19 @@ export default function AudienceLiveScreen(props: Props) {
                                 <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
                                     <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer')?.toUpperCase() || 'OFFRE LIMITÉE'}</Text>
                                     <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>
-                                        {activeCoupon.discountType === 'free_shipping' 
-                                            ? 'FREE SHIPPING' 
-                                            : activeCoupon.discountType === 'percentage' 
-                                                ? `${activeCoupon.discount}% OFF` 
-                                                : `${activeCoupon.discount}TND OFF`}
+                                        {(() => {
+                                            // Support both discountType and legacy type field
+                                            const couponType = activeCoupon.discountType || activeCoupon.type;
+                                            if (couponType === 'free_shipping') {
+                                                return 'FREE SHIPPING';
+                                            } else if (couponType === 'percentage') {
+                                                return `${activeCoupon.discountNumeric}% OFF`;
+                                            } else {
+                                                // Fixed amount or legacy format
+                                                const value = activeCoupon.discountNumeric !== undefined ? activeCoupon.discountNumeric : activeCoupon.discount;
+                                                return `${value}TND OFF`;
+                                            }
+                                        })()}
                                     </Text>
 
                                     {couponTimeRemaining > 0 && (
@@ -2879,17 +3011,17 @@ export default function AudienceLiveScreen(props: Props) {
                                 <View style={{ flex: 1, padding: 8, paddingLeft: 12, justifyContent: 'center', alignItems: 'center' }}>
                                     <View style={{
                                         backgroundColor: 'rgba(255,255,255,0.05)',
-                                        paddingVertical: 3,
-                                        paddingHorizontal: 6,
-                                        borderRadius: 4,
+                                        paddingVertical: 6,
+                                        paddingHorizontal: 8,
+                                        borderRadius: 6,
                                         borderStyle: 'dashed',
                                         borderWidth: 1,
                                         borderColor: 'rgba(245, 158, 11, 0.4)',
-                                        marginBottom: 6,
                                         width: '100%',
                                         alignItems: 'center'
                                     }}>
-                                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 8, fontWeight: '700', marginBottom: 2 }}>CODE</Text>
+                                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
                                     </View>
 
                                     <TouchableOpacity

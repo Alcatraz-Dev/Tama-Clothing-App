@@ -148,6 +148,7 @@ import {
   Copy,
   CreditCard,
   UserPlus,
+  UserCheck,
 } from 'lucide-react-native';
 import UserBadge from './src/components/UserBadge';
 import QRScanner from './src/components/QRScanner';
@@ -369,14 +370,17 @@ export default function App() {
   const handleScan = async (data: string) => {
     setShowScanner(false);
 
-    if (data.startsWith('bey3a://user/')) {
-      const userId = data.replace('bey3a://user/', '');
+    // Normalize the URL scheme (bey3a-app:// and bey3a:// should both work)
+    const normalizedData = data.replace('bey3a-app://', 'bey3a://');
+
+    if (normalizedData.startsWith('bey3a://user/')) {
+      const userId = normalizedData.replace('bey3a://user/', '');
       if (user) await processScanReward(user.uid, userId, 'user');
       setTargetUid(userId);
       setPreviousTab(activeTab);
       setActiveTab('PublicProfile');
-    } else if (data.startsWith('bey3a://collab/')) {
-      const collabId = data.replace('bey3a://collab/', '');
+    } else if (normalizedData.startsWith('bey3a://collab/')) {
+      const collabId = normalizedData.replace('bey3a://collab/', '');
       if (user) await processScanReward(user.uid, collabId, 'collab');
       try {
         const collabSnap = await getDoc(doc(db, 'collaborations', collabId));
@@ -1640,8 +1644,8 @@ export default function App() {
       );
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} onBecomeVendor={navigateToVendorRegistration} />;
-      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} onBecomeVendor={navigateToVendorRegistration} onAddFriend={handleAddFriend} />;
+      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} onAddFriend={handleAddFriend} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <CommandScreen onBack={() => setActiveTab('Profile')} onTrack={(tid: string) => { setActiveTrackingId(tid); setActiveTab('ShipmentTracking'); }} t={t} language={language} onNavigate={(tab: string | any) => setActiveTab(tab)} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -2522,7 +2526,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor, onAddFriend }: any) {
   const { colors } = useAppTheme();
   const accent = '#6C63FF'; // App's primary accent color
   const insets = useSafeAreaInsets();
@@ -3392,6 +3396,49 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Action Buttons for Public Profiles */}
+          {!isOwnProfile && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 15, marginBottom: 5 }}>
+              {/* Friend Button */}
+              {currentUserProfileData?.friends?.includes(profileData?.uid || profileData?.id) ? (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: colors.border }}
+                >
+                  <UserCheck size={16} color={colors.accent} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>{tr('AMI', 'صديق', 'FRIEND')}</Text>
+                </TouchableOpacity>
+              ) : currentUserProfileData?.pendingFriendRequests?.includes(profileData?.uid || profileData?.id) ? (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: colors.border }}
+                  disabled
+                >
+                  <Clock size={16} color={colors.textMuted} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{tr('PENDING', 'قيد الانتظار', 'PENDING')}</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => onAddFriend(profileData?.uid || profileData?.id)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: colors.accent }}
+                >
+                  <UserPlus size={16} color="#FFF" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{tr('AMI', 'إضافة صديق', 'ADD FRIEND')}</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Message Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedChatUser(profileData);
+                  setActiveTab('DirectMessage');
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: theme === 'dark' ? '#FFF' : '#000' }}
+              >
+                <MessageCircle size={16} color={theme === 'dark' ? '#000' : '#FFF'} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme === 'dark' ? '#000' : '#FFF' }}>{tr('MESSAGE', 'رسالة', 'MESSAGE')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </Animatable.View>
 
         {/* Sticky Tab Switcher (Child Index 2) */}
@@ -3454,7 +3501,16 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setActiveTab('Messages')}
+              onPress={() => {
+                if (isOwnProfile) {
+                  // Own profile - go to messages list
+                  setActiveTab('Messages');
+                } else {
+                  // Public profile - open direct message with this user
+                  setSelectedChatUser(profileData);
+                  setActiveTab('DirectMessage');
+                }
+              }}
               style={{
                 flex: 1,
                 flexDirection: 'row',

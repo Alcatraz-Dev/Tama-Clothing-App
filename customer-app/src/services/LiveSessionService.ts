@@ -115,9 +115,18 @@ export const LiveSessionService = {
     // Update the list of featured products for the session
     updateFeaturedProducts: async (channelId: string, productIds: string[]) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        const sessionSnap = await getDoc(sessionRef);
+        
+        if (!sessionSnap.exists()) {
+            console.error('Session not found:', channelId);
+            throw new Error('Live session not found. Please start the live stream first.');
+        }
+        
         await updateDoc(sessionRef, {
             featuredProductIds: productIds
         });
+        
+        console.log('✅ Featured products updated:', productIds.length, 'products');
     },
 
     // Broadcast a purchase event for animation
@@ -252,30 +261,44 @@ export const LiveSessionService = {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
         const sessionSnap = await getDoc(sessionRef);
         
-        if (sessionSnap.exists()) {
-            const data = sessionSnap.data();
-            const startedAt = data.startedAt?.toDate?.() || new Date();
-            const now = new Date();
-            const offset = (now.getTime() - startedAt.getTime()) / 1000; // Offset in seconds
-
-            await updateDoc(sessionRef, {
-                currentProductId: productId,
-                pinnedTimeline: [...(data.pinnedTimeline || []), { productId, timestamp: offset }],
-                pinnedProduct: {
-                    productId,
-                    endTime: duration ? Date.now() + (duration * 60 * 1000) : null
-                }
-            });
+        if (!sessionSnap.exists()) {
+            console.error('Session not found:', channelId);
+            throw new Error('Live session not found. Please start the live stream first.');
         }
+        
+        const data = sessionSnap.data();
+        const startedAt = data.startedAt?.toDate?.() || new Date();
+        const now = new Date();
+        const offset = (now.getTime() - startedAt.getTime()) / 1000; // Offset in seconds
+
+        await updateDoc(sessionRef, {
+            currentProductId: productId,
+            pinnedTimeline: [...(data.pinnedTimeline || []), { productId, timestamp: offset }],
+            pinnedProduct: {
+                productId,
+                endTime: duration ? Date.now() + (duration * 60 * 1000) : null
+            }
+        });
+        
+        console.log('✅ Product pinned successfully:', productId, 'for duration:', duration, 'minutes');
     },
 
     // Unpin current product
     unpinProduct: async (channelId: string) => {
         const sessionRef = doc(db, SESSIONS_COLLECTION, channelId);
+        const sessionSnap = await getDoc(sessionRef);
+        
+        if (!sessionSnap.exists()) {
+            console.error('Session not found:', channelId);
+            throw new Error('Live session not found.');
+        }
+        
         await updateDoc(sessionRef, {
             currentProductId: null,
             pinnedProduct: null
         });
+        
+        console.log('✅ Product unpinned successfully');
     },
 
     // Activate a coupon for the session

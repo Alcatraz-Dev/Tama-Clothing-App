@@ -142,10 +142,43 @@ export default function HostLiveScreen(props: Props) {
     const t = typeof props.t === 'function' ? props.t : (key: string) => key;
     const { channelId, userId, userName, brandId, collabId, hostAvatar, onClose, language } = props;
 
-    const getLocalizedName = (name: any) => {
-        if (typeof name === 'string') return name;
+    const getLocalizedName = (name: any): string => {
+        // Handle undefined/null
         if (!name) return '';
-        return name[language === 'ar' ? 'ar-tn' : 'fr'] || name.fr || name.en || name.ar || Object.values(name)[0] || '';
+        
+        // Already a string
+        if (typeof name === 'string') return name;
+        
+        // It's an object with translations - handle safely
+        if (typeof name === 'object') {
+            try {
+                const lang = language || 'fr'; // Default to French if undefined
+                const langKey = lang === 'ar' ? 'ar-tn' : lang;
+                
+                // Try to get the right language
+                if (name[langKey] && typeof name[langKey] === 'string') return name[langKey];
+                if (name.fr && typeof name.fr === 'string') return name.fr;
+                if (name.en && typeof name.en === 'string') return name.en;
+                if (name.ar && typeof name.ar === 'string') return name.ar;
+                
+                // Try any available value
+                const values = Object.values(name);
+                for (const v of values) {
+                    if (typeof v === 'string' && v.trim()) {
+                        return v;
+                    }
+                }
+                
+                // Last resort - return empty string
+                return '';
+            } catch (e) {
+                // If anything fails, return empty string
+                return '';
+            }
+        }
+        
+        // Fallback for any other type
+        return String(name) || '';
     };
     const prebuiltRef = useRef<any>(null);
     const mediaViewRef = useRef<any>(null);
@@ -384,30 +417,62 @@ export default function HostLiveScreen(props: Props) {
     };
 
     const handleUpdateBag = async () => {
-        await LiveSessionService.updateFeaturedProducts(channelId, selectedProductIds);
-        Alert.alert('Success', 'Shopping bag updated!');
-        setShowProductModal(false);
+        try {
+            await LiveSessionService.updateFeaturedProducts(channelId, selectedProductIds);
+            Alert.alert('Success', 'Shopping bag updated!');
+            setShowProductModal(false);
+        } catch (error) {
+            console.error('Error updating featured products:', error);
+            Alert.alert(t('error') || 'Error', t('failedToUpdateBag') || 'Failed to update shopping bag. Please try again.');
+        }
     };
 
     const handlePinProduct = async (id: string) => {
         const duration = parseInt(pinDuration);
-        setPinnedProductId(id);
-        setPinEndTime(duration ? Date.now() + (duration * 60 * 1000) : null);
-
-        await LiveSessionService.pinProduct(channelId, id, duration);
-
-        // Also ensure it's in the bag if pinned
-        if (!selectedProductIds.includes(id)) {
-            const newIds = [...selectedProductIds, id];
-            setSelectedProductIds(newIds);
-            await LiveSessionService.updateFeaturedProducts(channelId, newIds);
+        
+        // First, ensure session exists before pinning product
+        const sessionCheck = await LiveSessionService.getSession(channelId);
+        if (!sessionCheck) {
+            Alert.alert(t('error') || 'Error', 'Live session not found. Please start the live stream first.');
+            return;
         }
+        
+        try {
+            // Update local state first
+            setPinnedProductId(id);
+            setPinEndTime(duration ? Date.now() + (duration * 60 * 1000) : null);
 
-        // Fetch full product object for local UI immediately
-        const prod = products.find(p => p.id === id);
-        if (prod) setPinnedProduct(prod);
+            // Pin product in Firestore - this syncs to audience
+            await LiveSessionService.pinProduct(channelId, id, duration);
 
-        Alert.alert(t('pinned') || 'Pinned', t('productPinned') || 'Product is now featured directly on screen!');
+            // Also ensure it's in the bag if pinned
+            if (!selectedProductIds.includes(id)) {
+                const newIds = [...selectedProductIds, id];
+                setSelectedProductIds(newIds);
+                await LiveSessionService.updateFeaturedProducts(channelId, newIds);
+            }
+
+            // Fetch full product object for local UI immediately
+            const prod = products.find(p => p.id === id);
+            if (prod) {
+                setPinnedProduct(prod);
+            } else {
+                // If product not in local state, fetch from Firestore
+                const productSnap = await getDoc(doc(db, 'products', id));
+                if (productSnap.exists()) {
+                    setPinnedProduct({ id: productSnap.id, ...productSnap.data() });
+                }
+            }
+
+            Alert.alert(t('pinned') || 'Pinned', t('productPinned') || 'Product is now featured directly on screen!');
+        } catch (error) {
+            console.error('Error pinning product:', error);
+            // Reset local state on error
+            setPinnedProductId(null);
+            setPinnedProduct(null);
+            setPinEndTime(null);
+            Alert.alert(t('error') || 'Error', t('failedToPin') || 'Failed to pin product. Please try again.');
+        }
     };
 
     // Pin Timer Countdown for Host
@@ -433,10 +498,16 @@ export default function HostLiveScreen(props: Props) {
     }, [pinEndTime]);
 
     const handleUnpin = async () => {
-        setPinnedProductId(null);
-        setPinnedProduct(null);
-        setPinEndTime(null);
-        await LiveSessionService.unpinProduct(channelId);
+        try {
+            setPinnedProductId(null);
+            setPinnedProduct(null);
+            setPinEndTime(null);
+            await LiveSessionService.unpinProduct(channelId);
+            console.log('✅ Product unpinned successfully');
+        } catch (error) {
+            console.error('Error unpinning product:', error);
+            Alert.alert(t('error') || 'Error', t('failedToUnpin') || 'Failed to unpin product. Please try again.');
+        }
     };
 
 
@@ -3114,59 +3185,86 @@ export default function HostLiveScreen(props: Props) {
                                     <View key={p.id} style={{
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                        borderRadius: 16,
-                                        padding: 12,
-                                        marginBottom: 12,
-                                        borderWidth: isPinned ? 1.5 : 1,
-                                        borderColor: isPinned ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)'
+                                        backgroundColor: isPinned ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: 18,
+                                        padding: 14,
+                                        marginBottom: 14,
+                                        borderWidth: isPinned ? 2 : 1,
+                                        borderColor: isPinned ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
+                                        shadowColor: isPinned ? '#F59E0B' : 'transparent',
+                                        shadowOpacity: isPinned ? 0.3 : 0,
+                                        shadowRadius: 8,
+                                        elevation: isPinned ? 4 : 0
                                     }}>
-                                        <Image source={{ uri: p.images?.[0] }} style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: '#333' }} />
+                                        {/* Product Image with Discount Badge */}
+                                        <View style={{ position: 'relative' }}>
+                                            <Image source={{ uri: p.images?.[0] }} style={{ width: 70, height: 70, borderRadius: 14, backgroundColor: '#333' }} />
+                                            {p.discountPrice && (
+                                                <View style={{ 
+                                                    position: 'absolute', 
+                                                    top: -6, 
+                                                    left: -6, 
+                                                    backgroundColor: '#EF4444', 
+                                                    paddingHorizontal: 6, 
+                                                    paddingVertical: 2,
+                                                    borderRadius: 6 
+                                                }}>
+                                                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>
+                                                        -{Math.round((1 - p.discountPrice / p.price) * 100)}%
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        
                                         <View style={{ flex: 1, marginLeft: 15 }}>
-                                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
+                                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 4 }} numberOfLines={1}>{getLocalizedName(p.name)}</Text>
+                                            
+                                            {/* Price Display */}
                                             {p.discountPrice ? (
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textDecorationLine: 'line-through' }}>{p.price} TND</Text>
-                                                    <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '800' }}>{p.discountPrice} TND</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textDecorationLine: 'line-through' }}>{p.price} TND</Text>
+                                                    <Text style={{ color: '#F59E0B', fontSize: 16, fontWeight: '800' }}>{p.discountPrice} TND</Text>
                                                 </View>
                                             ) : (
-                                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 4, fontWeight: '600' }}>{p.price} TND</Text>
+                                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '600' }}>{p.price} TND</Text>
                                             )}
                                         </View>
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                            {/* Pin Button */}
                                             <TouchableOpacity
                                                 onPress={() => handlePinProduct(p.id)}
                                                 style={{
                                                     backgroundColor: isPinned ? '#F59E0B' : 'transparent',
-                                                    paddingHorizontal: 14,
-                                                    paddingVertical: 8,
-                                                    borderRadius: 10,
+                                                    paddingHorizontal: 16,
+                                                    paddingVertical: 10,
+                                                    borderRadius: 12,
                                                     borderWidth: isPinned ? 0 : 1,
                                                     borderColor: 'rgba(255, 255, 255, 0.2)',
-                                                    minWidth: 70,
+                                                    minWidth: 75,
                                                     alignItems: 'center'
                                                 }}
                                             >
                                                 <Text style={{ color: isPinned ? '#000' : '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>
-                                                    {isPinned ? (t('pinned') || 'PINNED') : (t('pin') || 'PIN')}
+                                                    {isPinned ? '📌 ÉPINGLÉ' : '📌 ÉPINGLER'}
                                                 </Text>
                                             </TouchableOpacity>
 
+                                            {/* Selection Checkbox */}
                                             <TouchableOpacity
                                                 onPress={() => toggleProductSelection(p.id)}
                                                 style={{
-                                                    width: 28,
-                                                    height: 28,
-                                                    borderRadius: 14,
-                                                    borderWidth: 2,
+                                                    width: 32,
+                                                    height: 32,
+                                                    borderRadius: 16,
+                                                    borderWidth: 2.5,
                                                     borderColor: isSelected ? '#3B82F6' : 'rgba(255,255,255,0.3)',
                                                     backgroundColor: isSelected ? '#3B82F6' : 'transparent',
                                                     alignItems: 'center',
                                                     justifyContent: 'center'
                                                 }}
                                             >
-                                                {isSelected && <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
+                                                {isSelected && <Text style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -3214,6 +3312,20 @@ export default function HostLiveScreen(props: Props) {
                             zIndex: 3000
                         }}
                     >
+                        {/* Blur Effect Background */}
+                        <BlurView 
+                            intensity={85} 
+                            tint="dark" 
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                borderRadius: 12,
+                                overflow: 'hidden'
+                            }} 
+                        />
                         <LinearGradient
                             colors={['#F59E0B', '#B45309']}
                             style={{
@@ -3222,7 +3334,7 @@ export default function HostLiveScreen(props: Props) {
                             }}
                         >
                             <View style={{
-                                backgroundColor: '#121218',
+                                backgroundColor: 'rgba(18, 18, 24, 0.95)',
                                 borderRadius: 9,
                                 flexDirection: 'row',
                                 height: 75,
@@ -3238,11 +3350,19 @@ export default function HostLiveScreen(props: Props) {
                                 <View style={{ flex: 1, padding: 8, justifyContent: 'center' }}>
                                     <Text style={{ color: '#F59E0B', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>{t('limitedTimeOffer').toUpperCase()}</Text>
                                     <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>
-                                        {activeCoupon.discountType === 'free_shipping' 
-                                            ? 'FREE SHIPPING' 
-                                            : activeCoupon.discountType === 'percentage' 
-                                                ? `${activeCoupon.discountNumeric}% OFF` 
-                                                : `${activeCoupon.discountNumeric}TND OFF`}
+                                        {(() => {
+                                            // Support both discountType and legacy type field
+                                            const couponType = activeCoupon.discountType || activeCoupon.type;
+                                            if (couponType === 'free_shipping') {
+                                                return 'FREE SHIPPING';
+                                            } else if (couponType === 'percentage') {
+                                                return `${activeCoupon.discountNumeric}% OFF`;
+                                            } else {
+                                                // Fixed amount or legacy format
+                                                const value = activeCoupon.discountNumeric !== undefined ? activeCoupon.discountNumeric : activeCoupon.discount;
+                                                return `${value}TND OFF`;
+                                            }
+                                        })()}
                                     </Text>
 
                                     {couponTimeRemaining > 0 && (
