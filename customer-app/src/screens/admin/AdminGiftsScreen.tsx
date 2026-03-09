@@ -319,8 +319,8 @@ export default function AdminGiftsScreen({ onBack, t }: any) {
 const s = StyleSheet.create({
     root: { flex: 1 },
     content: { flex: 1, padding: 20, paddingTop: 110 },
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 , marginTop:20 },
+    sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 , marginTop: 20},
     addBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, gap: 4 },
     addBtnText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
     list: { paddingBottom: 40 },

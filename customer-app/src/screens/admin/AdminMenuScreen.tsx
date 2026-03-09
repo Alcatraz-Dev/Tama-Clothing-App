@@ -28,6 +28,7 @@ import {
     Settings,
     ChevronLeft,
     Store,
+    Trophy,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminUI';
@@ -71,6 +72,7 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
         { label: t('adsCampaigns'), icon: Megaphone, route: 'AdminAds', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF3B30' },
         { label: t('coupons'), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55' },
         { label: t('flashSale'), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FFCC00' },
+        { label: t('treasureHunt'), icon: Trophy, route: 'AdminTreasureHunt', roles: ['admin'], color: '#FF6B6B' },
         { label: t('promoBanners'), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#EC4899' },
         { label: t('ourSelection'), icon: ListTree, route: 'AdminNotreSelection', roles: ['admin', 'nor_kam', 'editor'], color: '#10B981' },
         { label: t('support'), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },

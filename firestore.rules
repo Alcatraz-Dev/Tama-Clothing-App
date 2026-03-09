@@ -359,5 +359,40 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    // ── Treasure Hunt ───────────────────────────────────────────────────────────
+    // Treasure Campaigns - Admin only for write, public for read
+    match /treasure_campaigns/{campaignId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Treasure Locations - Public read, admin write
+    match /treasure_locations/{locationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Treasure Participations - User can read/write own, admin can read all
+    match /treasure_participations/{participationId} {
+      allow read: if isAdmin() || 
+        (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isAdmin() || 
+        (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // Treasure Scans - Admin read, user create
+    match /treasure_scans/{scanId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    // Treasure Rewards - User can read own
+    match /treasure_rewards/{rewardId} {
+      allow read: if isAdmin() || 
+        (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+    }
   }
 }

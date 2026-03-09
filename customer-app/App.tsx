@@ -26,6 +26,7 @@ import AdminBannersScreen from './src/screens/admin/AdminBannersScreen';
 import AdminCouponsScreen from './src/screens/admin/AdminCouponsScreen';
 import AdminUsersScreen from './src/screens/admin/AdminUsersScreen';
 import AdminFlashSaleScreen from './src/screens/admin/AdminFlashSaleScreen';
+import AdminTreasureHuntScreen from './src/screens/admin/AdminTreasureHuntScreen';
 import AdminPromoBannersScreen from './src/screens/admin/AdminPromoBannersScreen';
 import AdminNotificationsScreen from './src/screens/admin/AdminNotificationsScreen';
 import AdminSettingsScreen from './src/screens/admin/AdminSettingsScreen';
@@ -149,6 +150,7 @@ import {
   CreditCard,
   UserPlus,
   UserCheck,
+  Trophy,
 } from 'lucide-react-native';
 import UserBadge from './src/components/UserBadge';
 import QRScanner from './src/components/QRScanner';
@@ -183,6 +185,13 @@ import FidelityScreen from './src/screens/FidelityScreen';
 import DriverDeliveryScreen from './src/screens/delivery/DriverDeliveryScreen';
 import OrderTrackingScreen from './src/screens/delivery/OrderTrackingScreen';
 import ScratchAndWinScreen from './src/screens/ScratchAndWinScreen';
+import { 
+  TreasureHuntHomeScreen, 
+  TreasureMapScreen, 
+  TreasureScannerScreen, 
+  TreasureRewardsScreen,
+  TreasureCampaignScreen 
+} from './src/screens/treasure-hunt';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
@@ -271,6 +280,9 @@ export default function App() {
   const [selectedCollab, setSelectedCollab] = useState<any>(null);
   const [activeLiveChannel, setActiveLiveChannel] = useState<string>('bey3a-clothing');
   const [isLiveHost, setIsLiveHost] = useState(false);
+  // Treasure Hunt State
+  const [treasureHuntState, setTreasureHuntState] = useState<'home' | 'campaign' | 'map' | 'scanner' | 'rewards'>('home');
+  const [selectedTreasureCampaign, setSelectedTreasureCampaign] = useState<any>(null);
   const [isLiveReplay, setIsLiveReplay] = useState(false);
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
@@ -1644,8 +1656,8 @@ export default function App() {
       );
       case 'Shop': return <ShopScreen onProductPress={navigateToProduct} initialCategory={filterCategory} initialBrand={filterBrand} setInitialBrand={setFilterBrand} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} onBack={() => setActiveTab('Home')} t={t} theme={theme} language={language} />;
       case 'Cart': return <CartScreen cart={cart} onRemove={removeFromCart} onUpdateQuantity={updateCartQuantity} onComplete={() => setCart([])} profileData={profileData} updateProfile={updateProfileData} onBack={() => setActiveTab('Shop')} t={t} />;
-      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} onBecomeVendor={navigateToVendorRegistration} onAddFriend={handleAddFriend} />;
-      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} onAddFriend={handleAddFriend} />;
+      case 'Profile': return <ProfileScreen user={user} onBack={() => setActiveTab('Home')} onLogout={handleLogout} profileData={profileData} updateProfile={updateProfileData} onNavigate={handleTabChange} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} setPreviousTab={setPreviousTab} targetUid={targetUid} isPublicProfile={false} currentUserProfileData={profileData} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} setTrackingModalVisible={setTrackingModalVisible} onStartLive={handleStartLive} onBecomeVendor={navigateToVendorRegistration} onAddFriend={handleAddFriend} />;
+      case 'PublicProfile': return <ProfileScreen key={`public-profile-${targetUid}`} user={user} onBack={() => setActiveTab(previousTab)} onLogout={handleLogout} profileData={targetUserProfile} currentUserProfileData={profileData} updateProfile={updateProfileData} onNavigate={(tab: string | any) => setActiveTab(tab)} socialLinks={socialLinks} t={t} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} setPreviousTab={setPreviousTab} onStartLive={handleStartLive} totalUnread={totalUnread} setTotalUnread={setTotalUnread} works={works} setWorks={setWorks} uploadingWork={uploadingWork} setUploadingWork={setUploadingWork} selectedWork={selectedWork} setSelectedWork={setSelectedWork} targetUid={targetUid} setTargetUid={setTargetUid} selectedChatUser={selectedChatUser} setSelectedChatUser={setSelectedChatUser} comments={comments} setComments={setComments} commentText={commentText} setCommentText={setCommentText} replyingTo={replyingTo} setReplyingTo={setReplyingTo} editingComment={editingComment} setEditingComment={setEditingComment} loadingComments={loadingComments} setLoadingComments={setLoadingComments} expandedReplies={expandedReplies} setExpandedReplies={setExpandedReplies} isPublicProfile={true} onShowBadge={() => setShowBadge(true)} onShowScanner={() => setShowScanner(true)} setActiveTrackingId={setActiveTrackingId} onAddFriend={handleAddFriend} />;
       case 'FollowManagement': return <FollowManagementScreen onBack={() => setActiveTab('Profile')} followedCollabs={followedCollabs} toggleFollowCollab={toggleFollowCollab} setSelectedCollab={setSelectedCollab} setActiveTab={setActiveTab} t={t} language={language} theme={theme} />;
       case 'Orders': return <CommandScreen onBack={() => setActiveTab('Profile')} onTrack={(tid: string) => { setActiveTrackingId(tid); setActiveTab('ShipmentTracking'); }} t={t} language={language} onNavigate={(tab: string | any) => setActiveTab(tab)} />;
       case 'Wishlist': return <WishlistScreen onBack={() => setActiveTab('Profile')} onProductPress={navigateToProduct} wishlist={wishlist} toggleWishlist={toggleWishlist} addToCart={(p: any) => setQuickAddProduct(p)} t={t} theme={theme} language={language} />;
@@ -1699,6 +1711,74 @@ export default function App() {
       case 'Fidelity': return <FidelityScreen onBack={() => setActiveTab('Profile')} onNavigate={(screen) => setActiveTab(screen)} user={user} t={t} theme={theme} />;
       case 'ScratchAndWin': return <ScratchAndWinScreen onBack={() => setActiveTab('Fidelity')} user={user} t={t} theme={theme} language={language} />;
       case 'DriverDelivery': return <DriverDeliveryScreen onBack={() => setActiveTab('Profile')} user={user} profileData={profileData} theme={theme} t={t} language={language} />;
+      case 'TreasureHunt': return (
+        <>
+          {treasureHuntState === 'home' && (
+            <TreasureHuntHomeScreen
+              t={t}
+              isDark={theme === 'dark'}
+              onBack={previousTab === 'Profile' ? () => setActiveTab('Profile') : undefined}
+              onCampaignSelect={(campaign) => {
+                setSelectedTreasureCampaign(campaign);
+                setTreasureHuntState('campaign');
+              }}
+            />
+          )}
+          {treasureHuntState === 'campaign' && selectedTreasureCampaign && (
+            <TreasureCampaignScreen
+              campaign={selectedTreasureCampaign}
+              userId={user?.uid || ''}
+              t={t}
+              isDark={theme === 'dark'}
+              onBack={() => setTreasureHuntState('home')}
+              onStartGame={() => setTreasureHuntState('map')}
+              onViewMap={() => setTreasureHuntState('map')}
+              onClaimReward={() => setTreasureHuntState('rewards')}
+            />
+          )}
+          {treasureHuntState === 'map' && selectedTreasureCampaign && (
+            <TreasureMapScreen
+              campaign={selectedTreasureCampaign}
+              userId={user?.uid || ''}
+              t={t}
+              isDark={theme === 'dark'}
+              onBack={() => setTreasureHuntState('campaign')}
+              onScan={() => setTreasureHuntState('scanner')}
+              onRewardClaim={() => setTreasureHuntState('rewards')}
+            />
+          )}
+          {treasureHuntState === 'scanner' && selectedTreasureCampaign && (
+            <TreasureScannerScreen
+              campaignId={selectedTreasureCampaign.id}
+              userId={user?.uid || ''}
+              t={t}
+              isDark={theme === 'dark'}
+              onBack={() => setTreasureHuntState('map')}
+              onSuccess={() => {
+                // Refresh data and go back to map
+                setTreasureHuntState('map');
+              }}
+              onError={(message) => {
+                console.log('Scan error:', message);
+              }}
+            />
+          )}
+          {treasureHuntState === 'rewards' && (
+            <TreasureRewardsScreen
+              userId={user?.uid || ''}
+              t={t}
+              isDark={theme === 'dark'}
+              onBack={() => {
+                if (selectedTreasureCampaign) {
+                  setTreasureHuntState('campaign');
+                } else {
+                  setTreasureHuntState('home');
+                }
+              }}
+            />
+          )}
+        </>
+      );
       case 'OrderTracking': return <OrderTrackingScreen orderId={activeTabParams?.orderId || ''} onBack={() => setActiveTab('Orders')} user={user} theme={theme} t={t} language={language} />;
       case 'Friends': return <FriendsScreen
         onBack={() => setActiveTab('Profile')}
@@ -1895,6 +1975,7 @@ export default function App() {
       />;
       case 'AdminGifts': return <AdminGiftsScreen onBack={() => setActiveTab('AdminDashboard')} t={t} theme={theme} />;
       case 'AdminCollaboration': return <AdminCollaborationScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
+      case 'AdminTreasureHunt': return <AdminTreasureHuntScreen onBack={() => setActiveTab('AdminMenu')} t={t} theme={theme} />;
 
       case 'Detail':
         if (!selectedProduct) return null;
@@ -2032,7 +2113,7 @@ export default function App() {
                     />
                   </Modal>
 
-                  {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && activeTab !== 'ShipmentTracking' && activeTab !== 'ReelsDetail' && activeTab !== 'StoryCreate' && activeTab !== 'VendorRegistrationScreen' && (
+                  {!activeTab.startsWith('Admin') && activeTab !== 'Detail' && activeTab !== 'CampaignDetail' && activeTab !== 'LiveStream' && activeTab !== 'Camera' && activeTab !== 'DirectMessage' && activeTab !== 'ProofOfDelivery' && activeTab !== 'ShipmentTracking' && activeTab !== 'ReelsDetail' && activeTab !== 'StoryCreate' && activeTab !== 'VendorRegistrationScreen' && activeTab !== 'TreasureHunt' && (
                     <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
                       <View style={[styles.glassTabBar, theme === 'dark' && { backgroundColor: 'rgba(20,20,25,0.8)', borderColor: '#2F2F3D' }]}>
                         <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
@@ -2526,7 +2607,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor, onAddFriend }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, setPreviousTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor, onAddFriend }: any) {
   const { colors } = useAppTheme();
   const accent = '#6C63FF'; // App's primary accent color
   const insets = useSafeAreaInsets();
@@ -3999,6 +4080,16 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                     <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Gift size={20} color={colors.foreground} strokeWidth={2} /></View>
                     <Text style={[styles.menuRowText, { color: colors.foreground }]}>
                       {t('fidelityProgram')}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.menuRow, { paddingVertical: 18, borderBottomColor: colors.border }]} onPress={() => { setPreviousTab('Profile'); setActiveTab('TreasureHunt'); }}>
+                  <View style={styles.menuRowLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme === 'dark' ? '#17171F' : '#F9F9FB' }]}><Trophy size={20} color={colors.foreground} strokeWidth={2} /></View>
+                    <Text style={[styles.menuRowText, { color: colors.foreground }]}>
+                      {t('treasureHunt')}
                     </Text>
                   </View>
                   <ChevronRight size={18} color={colors.textMuted} />

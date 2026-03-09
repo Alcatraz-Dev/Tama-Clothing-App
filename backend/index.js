@@ -13,6 +13,9 @@ const PORT = process.env.PORT || 5001;
 // Import payment routes
 const paymentRoutes = require('./payment-routes');
 
+// Import treasure hunt routes
+const treasureRoutes = require('./treasure-routes');
+
 // Cloudinary Config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -57,6 +60,9 @@ app.get('/', (req, res) => {
 
 // Payment Routes
 app.use('/api/payment', paymentRoutes);
+
+// Treasure Hunt Routes
+app.use('/api/treasure', treasureRoutes);
 
 // Upload Endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
