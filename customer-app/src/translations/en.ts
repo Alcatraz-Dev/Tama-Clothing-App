@@ -1088,6 +1088,8 @@ export const en = {
   vendorApplications: 'Vendor Applications',
   noVendorApplications: 'No vendor applications',
   close: 'Close',
+  print: 'Print',
+  printFailed: 'Failed to print. Please try again.',
 
   // ── Payment & Delivery Tracking ───────────────────────────────────────────────
   payment_info: 'Payment Information',
@@ -1137,6 +1139,10 @@ export const en = {
   treasureHuntStep3Desc: 'Claim your rewards!',
   treasureHuntPoints: 'Points',
   treasureHuntDiscount: 'Discount',
+  treasureHuntFreeProduct: 'Free Product',
+  treasureHuntCoupon: 'Coupon Code',
+  treasureHuntMysteryReward: 'Mystery Reward',
+  treasureHuntRewardNote: '💡 Rewards are defined at the campaign level and apply to all locations.',
   treasureHuntReward: 'Reward',
   treasureHuntFound: 'Found',
   treasureHuntComplete: 'Complete',
@@ -1272,6 +1278,13 @@ export const en = {
   treasureHuntTop10Bonus: 'Bonus for Top 10',
   treasureHuntSelectOnMap: 'Select on Map',
   treasureHuntSelectLocation: 'Select Location on Map',
+  treasureHuntSelected: 'Selected',
   treasureHuntTapToSelect: 'Tap on the map to select a location',
+  treasureHuntTimeRemaining: 'remaining',
+  treasureHuntComingSoon: 'Coming Soon',
+  treasureHuntClaimReward: 'Claim Reward',
+  treasureHuntCouponHint: 'Enter an existing coupon code or tap + to generate a new one',
+  treasureHuntShareMessage: 'Join the treasure hunt: {{campaign}}!',
+  treasureHuntInvalidCoordinates: 'Please select valid coordinates',
   treasureHuntLocation: 'Location',
 };

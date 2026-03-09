@@ -882,6 +882,8 @@ export const fr = {
   vendorViewDetails: 'Voir les détails',
   vendorPending: 'En attente',
   vendorClose: 'Fermer',
+  print: 'Imprimer',
+  printFailed: 'Échec de l\'impression. Veuillez réessayer.',
 
   // ── Payment & Delivery Tracking ───────────────────────────────────────────────
   payment_info: 'Informations de paiement',
@@ -930,6 +932,10 @@ export const fr = {
   treasureHuntStep3Desc: 'Réclamez vos récompenses!',
   treasureHuntPoints: 'Points',
   treasureHuntDiscount: 'Réduction',
+  treasureHuntFreeProduct: 'Produit Gratuit',
+  treasureHuntCoupon: 'Code Coupon',
+  treasureHuntMysteryReward: 'Récompense Mystère',
+  treasureHuntRewardNote: '💡 Les récompenses sont définies au niveau de la campagne et s\'appliquent à tous les emplacements.',
   treasureHuntReward: 'Récompense',
   treasureHuntFound: 'Trouvés',
   treasureHuntComplete: 'Complet',
@@ -1065,6 +1071,13 @@ export const fr = {
   treasureHuntTop10Bonus: 'Bonus Top 10',
   treasureHuntSelectOnMap: 'Sélectionner sur la carte',
   treasureHuntSelectLocation: 'Sélectionner un lieu',
+  treasureHuntSelected: 'Sélectionné',
   treasureHuntTapToSelect: 'Appuyez sur la carte pour sélectionner',
   treasureHuntLocation: 'Lieu',
+  treasureHuntTimeRemaining: 'restant',
+  treasureHuntComingSoon: 'Bientôt Disponible',
+  treasureHuntClaimReward: 'Réclamer la Récompense',
+  treasureHuntCouponHint: 'Entrez un code coupon existant ou appuyez sur + pour en générer un nouveau',
+  treasureHuntShareMessage: 'Rejoignez la chasse au trésor: {{campaign}}!',
+  treasureHuntInvalidCoordinates: 'Veuillez sélectionner des coordonnées valides',
 };

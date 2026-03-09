@@ -891,6 +891,8 @@ export const ar = {
   vendorViewDetails: 'عرض التفاصيل',
   vendorPending: 'قيد الانتظار',
   vendorClose: 'إغلاق',
+  print: 'طباعة',
+  printFailed: 'فشلت الطباعة. يرجى المحاولة مرة أخرى.',
 
   // ── Payment & Delivery Tracking ───────────────────────────────────────────────
   payment_info: 'معلومات الدفع',
@@ -939,6 +941,10 @@ export const ar = {
   treasureHuntStep3Desc: ' reclam جوائزك!',
   treasureHuntPoints: 'نقاط',
   treasureHuntDiscount: 'خصم',
+  treasureHuntFreeProduct: 'منتج مجاني',
+  treasureHuntCoupon: 'كود الخصم',
+  treasureHuntMysteryReward: 'جائزة غامضة',
+  treasureHuntRewardNote: '💡 يتم تحديد الجوائز على مستوى الحملة وتنطبق على جميع المواقع.',
   treasureHuntReward: 'جائزة',
   treasureHuntFound: 'تم العثور',
   treasureHuntComplete: 'مكتمل',
@@ -1030,7 +1036,7 @@ export const ar = {
   treasureHuntLatitude: 'خط العرض',
   treasureHuntLongitude: 'خط الطول',
   treasureHuntOrder: 'الترتيب',
-  treasureHuntRadius: 'الم半径',
+  treasureHuntRadius: 'نصف القطر',
   treasureHuntStartDate: 'تاريخ البدء',
   treasureHuntEndDate: 'تاريخ الانتهاء',
   treasureHuntRewardType: 'نوع المكافأة',
@@ -1074,8 +1080,15 @@ export const ar = {
   treasureHuntTop10Bonus: 'مكافأة أفضل 10',
   treasureHuntSelectOnMap: 'اختر من الخريطة',
   treasureHuntSelectLocation: 'اختر الموقع',
+  treasureHuntSelected: 'تم الاختيار',
   treasureHuntTapToSelect: 'انقر على الخريطة للاختيار',
   treasureHuntLocation: 'الموقع',
+  treasureHuntTimeRemaining: 'متبقي',
+  treasureHuntComingSoon: 'قريباً',
+  treasureHuntClaimReward: 'استلام الجائزة',
+  treasureHuntCouponHint: 'أدخل كود خصم موجود أو انقر + لإنشاء كود جديد',
+  treasureHuntShareMessage: 'انضم لصيد الكنوز: {{campaign}}!',
+  treasureHuntInvalidCoordinates: 'الرجاء تحديد إحداثيات صالحة',
 };
 
 

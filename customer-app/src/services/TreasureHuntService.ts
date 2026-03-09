@@ -40,19 +40,16 @@ export interface TreasureLocation {
   campaignId: string;
   name: { fr: string; 'ar-tn': string };
   hint?: { fr: string; 'ar-tn': string };
+  note?: { fr: string; 'ar-tn': string };
   coordinates: {
     latitude: number;
     longitude: number;
   };
   qrCode: string;
-  rewardType: string;
-  rewardValue: any;
   order: number;
   radius: number;
   isActive: boolean;
   isDiscoverable: boolean;
-  startDate?: Timestamp;
-  endDate?: Timestamp;
   discoveryOrder?: 'sequential' | 'any';
   specialReward?: 'none' | 'first_finder' | 'top3' | 'top10';
   bonusRewardValue?: number;
@@ -71,6 +68,13 @@ export interface Participation {
     discoveredLocationIds: string[];
     currentLocationId: string | null;
   };
+  rewards?: {
+    locationId: string;
+    type: string;
+    value: any;
+    code?: string;
+    timestamp: any;
+  }[];
   claimedRewards: any[];
   finalReward: any;
   enrolledAt: Timestamp;
@@ -78,6 +82,71 @@ export interface Participation {
 }
 
 class TreasureHuntService {
+  // Get all products for reward selection
+  async getAllProducts(): Promise<{ id: string; name: any; price: number; image?: string }[]> {
+    try {
+      const snap = await getDocs(collection(db, 'products'));
+      return snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name || data.nameFr || data.name['fr'] || 'Unnamed Product',
+          price: data.price || 0,
+          image: data.image || data.images?.[0] || null
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
+  }
+
+  // Check for duplicate campaign name
+  async checkDuplicateCampaignName(name: string, excludeId?: string): Promise<boolean> {
+    try {
+      const q = query(collection(db, 'treasure_campaigns'), where('name.fr', '==', name));
+      const snap = await getDocs(q);
+      if (snap.empty) return false;
+      // If excludeId provided, check if the duplicate is the same document
+      if (excludeId) {
+        return snap.docs.some(d => d.id !== excludeId);
+      }
+      return snap.size > 0;
+    } catch (error) {
+      console.error('Error checking duplicate campaign:', error);
+      return false;
+    }
+  }
+
+  // Check for duplicate QR code
+  async checkDuplicateQRCode(qrCode: string, excludeId?: string): Promise<boolean> {
+    try {
+      const q = query(collection(db, 'treasure_locations'), where('qrCode', '==', qrCode));
+      const snap = await getDocs(q);
+      if (snap.empty) return false;
+      if (excludeId) {
+        return snap.docs.some(d => d.id !== excludeId);
+      }
+      return snap.size > 0;
+    } catch (error) {
+      console.error('Error checking duplicate QR code:', error);
+      return false;
+    }
+  }
+
+  // Generate unique QR code
+  async generateUniqueQRCode(): Promise<string> {
+    let qrCode = `TH_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    let isDuplicate = await this.checkDuplicateQRCode(qrCode);
+    let attempts = 0;
+    while (isDuplicate && attempts < 10) {
+      qrCode = `TH_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      isDuplicate = await this.checkDuplicateQRCode(qrCode);
+      attempts++;
+    }
+    return qrCode;
+  }
+
   // Get all active public campaigns
   async getActiveCampaigns(): Promise<Campaign[]> {
     try {
@@ -319,6 +388,11 @@ class TreasureHuntService {
     isWithinRadius?: boolean;
     isAlreadyDiscovered?: boolean;
     isCompleted?: boolean;
+    reward?: {
+      type: string;
+      value: any;
+      code?: string;
+    };
     progress?: {
       discovered: number;
       total: number;
@@ -389,10 +463,35 @@ class TreasureHuntService {
       const locations = await this.getLocations(location.campaignId);
       const nextLocation = locations.find(loc => loc.order === (location.order || 0) + 1);
 
+      // Get campaign rewards (unified model - rewards come from campaign, not location)
+      const campaign = await this.getCampaign(location.campaignId);
+      const campaignRewardType = campaign?.rewardType || 'points';
+      const campaignRewardValue = campaign?.rewardValue || 10;
+
+      // Calculate and add reward points
+      let rewardPoints = 0;
+      let rewardDetails: any = null;
+      
+      if (campaignRewardType === 'points') {
+        rewardPoints = parseInt(String(campaignRewardValue)) || 10;
+        rewardDetails = { type: 'points', value: rewardPoints };
+        // Add points to user's wallet
+        await this.addPointsToUser(userId, rewardPoints, location.campaignId, location.id);
+      } else if (campaignRewardType === 'discount') {
+        rewardDetails = { type: 'discount', value: campaignRewardValue, code: `DISCOUNT_${location.id.slice(0, 8)}` };
+        // Create discount coupon for user
+        await this.createDiscountCoupon(userId, campaignRewardValue, location.campaignId, location.id);
+      } else if (campaignRewardType === 'coupon') {
+        rewardDetails = { type: 'coupon', code: campaignRewardValue };
+        // Apply coupon directly or notify user
+        await this.applyCouponReward(userId, campaignRewardValue, location.campaignId, location.id);
+      }
+
       await updateDoc(doc(db, 'treasure_participations', participation.id), {
         'progress.discoveredLocationIds': newDiscoveredIds,
         'progress.discoveredLocations': newDiscoveredIds.length,
         'progress.currentLocationId': nextLocation?.id || null,
+        'rewards': [...(participation.rewards || []), { locationId: location.id, ...rewardDetails, timestamp: serverTimestamp() }],
         updatedAt: serverTimestamp()
       });
 
@@ -403,6 +502,7 @@ class TreasureHuntService {
         isNewDiscovery: true,
         location,
         isCompleted,
+        reward: rewardDetails,
         progress: {
           discovered: newDiscoveredIds.length,
           total: participation.progress.totalLocations
@@ -595,8 +695,6 @@ class TreasureHuntService {
         hint: locationData.hint || { fr: '', 'ar-tn': '' },
         coordinates: locationData.coordinates || { latitude: 0, longitude: 0 },
         qrCode: locationData.qrCode || `TH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        rewardType: locationData.rewardType || 'points',
-        rewardValue: locationData.rewardValue || 10,
         order: locationData.order || 1,
         radius: locationData.radius || 50,
         isActive: locationData.isActive !== false,
@@ -655,6 +753,86 @@ class TreasureHuntService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;
+  }
+
+  // Add points to user's wallet
+  private async addPointsToUser(userId: string, points: number, campaignId: string, locationId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const currentPoints = userData.points || 0;
+        await updateDoc(userRef, {
+          points: currentPoints + points
+        });
+      }
+      
+      // Log the reward
+      await addDoc(collection(db, 'point_transactions'), {
+        userId,
+        amount: points,
+        type: 'treasure_hunt_reward',
+        campaignId,
+        locationId,
+        description: 'Treasure Hunt Discovery Reward',
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error adding points to user:', error);
+    }
+  }
+
+  // Create discount coupon for user
+  private async createDiscountCoupon(userId: string, discountValue: number, campaignId: string, locationId: string): Promise<string> {
+    try {
+      const couponCode = `TH_${Date.now()}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      
+      await addDoc(collection(db, 'user_coupons'), {
+        userId,
+        code: couponCode,
+        discountType: 'percentage',
+        discountValue: discountValue,
+        minOrderAmount: 0,
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        isUsed: false,
+        source: 'treasure_hunt',
+        campaignId,
+        locationId,
+        createdAt: serverTimestamp()
+      });
+      
+      return couponCode;
+    } catch (error) {
+      console.error('Error creating discount coupon:', error);
+      return '';
+    }
+  }
+
+  // Apply coupon reward directly
+  private async applyCouponReward(userId: string, couponCode: string, campaignId: string, locationId: string): Promise<void> {
+    try {
+      // Check if it's an existing coupon code
+      const couponsRef = collection(db, 'coupons');
+      const couponSnap = await getDocs(query(couponsRef, where('code', '==', couponCode)));
+      
+      if (!couponSnap.empty) {
+        // Link existing coupon to user
+        const couponId = couponSnap.docs[0].id;
+        await addDoc(collection(db, 'user_coupons'), {
+          userId,
+          couponId,
+          code: couponCode,
+          source: 'treasure_hunt',
+          campaignId,
+          locationId,
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error('Error applying coupon reward:', error);
+    }
   }
 }
 

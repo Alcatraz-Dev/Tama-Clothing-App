@@ -21,6 +21,7 @@ import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
 import { db } from '../api/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { uploadToBunny } from '@/utils/bunny';
+import * as FileSystem from 'expo-file-system';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -90,8 +91,28 @@ export default function StoryCreateScreen({
         setUploading(true);
         
         try {
+            let uploadUri = selectedMedia.uri;
+            
+            // Check if file is HEIC/HEIF and convert to JPEG
+            const fileExtension = uploadUri.split('.').pop()?.toLowerCase() || '';
+            if (['heic', 'heif'].includes(fileExtension)) {
+                try {
+                    const cacheDir = FileSystem.cacheDirectory;
+                    const jpegUri = `${cacheDir}story_${Date.now()}.jpg`;
+                    
+                    // Copy HEIC to JPEG (Bunny will handle it better)
+                    await FileSystem.copyAsync({
+                        from: uploadUri,
+                        to: jpegUri,
+                    });
+                    uploadUri = jpegUri;
+                } catch (heicError) {
+                    console.log('HEIC conversion failed, trying original:', heicError);
+                }
+            }
+
             // Upload to Bunny
-            const bunnyUrl = await uploadToBunny(selectedMedia.uri);
+            const bunnyUrl = await uploadToBunny(uploadUri);
             
             const now = new Date();
             const expiryDate = new Date(now.getTime() + selectedDuration * 60 * 60 * 1000);
@@ -114,9 +135,10 @@ export default function StoryCreateScreen({
             await setDoc(doc(db, 'global_reels', storyData.id), storyData);
             
             onPublish(storyData);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error publishing story:', error);
-            Alert.alert('Error', 'Failed to publish story. Please try again.');
+            const errorMessage = error?.message || 'Failed to publish story. Please try again.';
+            Alert.alert('Error', errorMessage);
         } finally {
             setUploading(false);
         }

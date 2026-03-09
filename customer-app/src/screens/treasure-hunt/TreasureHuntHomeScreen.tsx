@@ -67,6 +67,7 @@ const TreasureHuntHomeScreen: React.FC<TreasureHuntHomeScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [countdown, setCountdown] = useState<{ [key: string]: number }>({});
+  const [endCountdown, setEndCountdown] = useState<{ [key: string]: number }>({});
   const { colors, theme } = useAppTheme();
 
   const fetchCampaigns = async () => {
@@ -92,7 +93,7 @@ const TreasureHuntHomeScreen: React.FC<TreasureHuntHomeScreenProps> = ({
     }
   };
 
-  // Countdown timer effect
+  // Countdown timer effect for upcoming campaigns (start date)
   useEffect(() => {
     const calculateCountdowns = () => {
       const now = Timestamp.now();
@@ -114,6 +115,29 @@ const TreasureHuntHomeScreen: React.FC<TreasureHuntHomeScreenProps> = ({
     const interval = setInterval(calculateCountdowns, 1000);
     return () => clearInterval(interval);
   }, [upcomingCampaigns]);
+
+  // Countdown timer effect for active campaigns (end date)
+  useEffect(() => {
+    const calculateEndCountdowns = () => {
+      const now = Timestamp.now();
+      const newEndCountdown: { [key: string]: number } = {};
+      
+      campaigns.forEach(campaign => {
+        const endDate = campaign.endDate as Timestamp | undefined;
+        if (endDate) {
+          const diff = endDate.seconds - now.seconds;
+          if (diff > 0) {
+            newEndCountdown[campaign.id] = diff;
+          }
+        }
+      });
+      setEndCountdown(newEndCountdown);
+    };
+
+    calculateEndCountdowns();
+    const interval = setInterval(calculateEndCountdowns, 1000);
+    return () => clearInterval(interval);
+  }, [campaigns]);
 
   const formatCountdown = (seconds: number): string => {
     const days = Math.floor(seconds / 86400);
@@ -188,6 +212,15 @@ const [gradientColors] = useState(getRandomGeneralGradientColors);
               </Text>
             </View>
           </View>
+          {/* Countdown Timer */}
+          {endCountdown[campaign.id] && (
+            <View style={[styles.countdownBadge, { backgroundColor: 'rgba(255, 255, 255, 0.2)', marginTop: 8 }]}>
+              <Clock size={14} color="#FFF" />
+              <Text style={styles.countdownText}>
+                {formatCountdown(endCountdown[campaign.id])} {t('treasureHuntTimeRemaining')}
+              </Text>
+            </View>
+          )}
           <Text style={styles.campaignTitle}>
             {campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}
           </Text>

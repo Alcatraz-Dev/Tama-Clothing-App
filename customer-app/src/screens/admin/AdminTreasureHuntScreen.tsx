@@ -11,7 +11,10 @@ import {
     Animated,
     ActivityIndicator,
     Modal,
+    Share,
 } from 'react-native';
+import * as Print from 'expo-print';
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     ChevronLeft,
@@ -32,9 +35,10 @@ import {
     Target,
     Award,
     Clock,
+    Printer,
 } from 'lucide-react-native';
 import { Timestamp } from 'firebase/firestore';
-
+import { APP_ICON, LOGO } from '@/src/constants/layout';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import {
@@ -77,6 +81,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
     const [locations, setLocations] = useState<TreasureLocation[]>([]);
+    const [products, setProducts] = useState<{ id: string; name: any; price: number; image?: string }[]>([]);
     const [activeTab, setActiveTab] = useState<TabType>('campaigns');
     const [showHistory, setShowHistory] = useState(false);
     const [activeCampaignLocations, setActiveCampaignLocations] = useState(0);
@@ -85,7 +90,9 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     const [showCampaignModal, setShowCampaignModal] = useState(false);
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [showQRModal, setShowQRModal] = useState(false);
+    // Don't use separate map picker - integrate into location modal
     const [showMapPicker, setShowMapPicker] = useState(false);
+    const [locationModalView, setLocationModalView] = useState<'form' | 'map'>('form');
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [editingLocation, setEditingLocation] = useState<TreasureLocation | null>(null);
     
@@ -110,12 +117,254 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     const [locationNameAr, setLocationNameAr] = useState('');
     const [locationHintFr, setLocationHintFr] = useState('');
     const [locationHintAr, setLocationHintAr] = useState('');
+    const [locationNoteFr, setLocationNoteFr] = useState('');
+    const [locationNoteAr, setLocationNoteAr] = useState('');
     const [latitude, setLatitude] = useState('');
     const [longitude, setLongitude] = useState('');
+    const mapRef = useRef<MapView>(null);
+    const [mapRegion, setMapRegion] = useState<Region>({
+        latitude: 36.8065,
+        longitude: 10.1815,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+    });
+
+    // Handle map press to set location
+    const handleMapPress = (event: any) => {
+        try {
+            // Handle both standard React Native Maps and expo-maps events
+            let coordinate = null;
+            
+            if (event.nativeEvent?.coordinate) {
+                // Standard react-native-maps format
+                coordinate = event.nativeEvent.coordinate;
+            } else if (event.nativeEvent?.location?.latLng) {
+                // Expo maps format
+                coordinate = {
+                    latitude: event.nativeEvent.location.latLng.latitude,
+                    longitude: event.nativeEvent.location.latLng.longitude
+                };
+            } else if (event.coordinate) {
+                // Alternative format
+                coordinate = event.coordinate;
+            }
+            
+            if (coordinate && coordinate.latitude && coordinate.longitude) {
+                const lat = coordinate.latitude.toFixed(6);
+                const lng = coordinate.longitude.toFixed(6);
+                setLatitude(lat);
+                setLongitude(lng);
+                setMapPickerCoords({ latitude: parseFloat(lat), longitude: parseFloat(lng) });
+            }
+        } catch (error) {
+            console.error('Error selecting location:', error);
+        }
+    };
+
+    // Open map picker with correct initial coordinates
+    const openMapPicker = () => {
+        // Set initial coordinates from existing values or default to Tunis
+        const initialLat = latitude ? parseFloat(latitude) : 36.8065;
+        const initialLng = longitude ? parseFloat(longitude) : 10.1815;
+        
+        setMapRegion({
+            latitude: initialLat,
+            longitude: initialLng,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+        });
+        
+        // Set the map picker coordinates if we have existing coordinates
+        if (latitude && longitude) {
+            setMapPickerCoords({ latitude: initialLat, longitude: initialLng });
+        } else {
+            setMapPickerCoords(null);
+        }
+        
+        setShowMapPicker(true);
+    };
+
+    // Handle confirm location from map picker
+    const handleConfirmLocation = () => {
+        // Update form state with map picker coordinates if selected
+        if (mapPickerCoords) {
+            setLatitude(mapPickerCoords.latitude.toFixed(6));
+            setLongitude(mapPickerCoords.longitude.toFixed(6));
+        }
+        setShowMapPicker(false);
+    };
+
+    // Handle print QR code
+    const handlePrintQRCode = async () => {
+        if (!editingLocation) return;
+
+        const qrCode = editingLocation.qrCode || '';
+        const locationName = typeof editingLocation.name === 'object' 
+            ? editingLocation.name.fr || editingLocation.name['ar-tn'] || ''
+            : editingLocation.name || '';
+        const campaignName = selectedCampaign 
+            ? (typeof selectedCampaign.name === 'object' 
+                ? selectedCampaign.name.fr || selectedCampaign.name['ar-tn'] || ''
+                : selectedCampaign.name)
+            : '';
+
+        // Multi-language instructions
+        const instructions = {
+            en: '📱 Scan this QR code to discover this treasure location!',
+            fr: '📱 Scannez ce code QR pour découvrir ce lieu au trésor !',
+            ar: '📱 ! امسح رمز  QR هذا لاكتشاف موقع الكنز هذا',
+            darija: '📱 ! سكان هاد الريال QR باش تكتشف هاد المكان'
+        };
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Treasure Hunt QR Code</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                        padding: 20px;
+                        text-align: center;
+                        background: #ffffff;
+                        min-height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .logo {
+                        width: 80px;
+                        height: 80px;
+                        margin-bottom: 15px;
+                        object-fit: contain;
+                    }
+                    .app-name {
+                        font-size: 16px;
+                        color: #333333;
+                        margin-bottom: 20px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                        letter-spacing: 2px;
+                    }
+                    .container {
+                        max-width: 450px;
+                        width: 100%;
+                        margin: 0 auto;
+                        padding: 30px;
+                        border: 4px solid #1a1a1a;
+                        border-radius: 24px;
+                        background: #fafafa;
+                    }
+                    .qr-code {
+                        width: 320px;
+                        height: 320px;
+                        margin: 20px auto;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #fff;
+                        padding: 10px;
+                        border-radius: 12px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    }
+                    .qr-code img {
+                        width: 100%;
+                        height: 100%;
+                    }
+                    .location-name {
+                        font-size: 32px;
+                        font-weight: bold;
+                        margin-bottom: 10px;
+                        color: #1a1a1a;
+                        line-height: 1.2;
+                    }
+                    .campaign-name {
+                        font-size: 20px;
+                        color: #666666;
+                        margin-bottom: 20px;
+                        font-weight: 500;
+                    }
+                    .instructions {
+                        font-size: 15px;
+                        color: #333333;
+                        margin-top: 25px;
+                        padding-top: 20px;
+                        border-top: 2px dashed #cccccc;
+                        line-height: 1.8;
+                    }
+                    .footer {
+                        margin-top: 30px;
+                        font-size: 14px;
+                        color: #999999;
+                        font-weight: 500;
+                    }
+                    @media print {
+                        body {
+                            padding: 10px;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .container {
+                            border-width: 3px;
+                            box-shadow: none;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <img class="logo" src=${LOGO} alt="Bey3a Logo" onerror="this.style.display='none'" />
+                <div class="app-name">Bey3a</div>
+                <div class="container">
+                    <div class="location-name">${locationName}</div>
+                    <div class="campaign-name">${campaignName}</div>
+                    <div class="qr-code">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}" alt="QR Code" />
+                    </div>
+                    <div class="instructions">
+                        ${instructions.en}<br/>
+                        ${instructions.fr}<br/>
+                        ${instructions.ar}<br/>
+                    </div>
+                    <div class="footer">
+                        🏆🏴 Bey3a Treasure Hunt
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        try {
+            await Print.printAsync({
+                html,
+            });
+        } catch (error) {
+            console.error('Print error:', error);
+            // Try alternative approach - share as message
+            try {
+                await Share.share({
+                    message: `🏆 Treasure Hunt - ${locationName}\n\n📍 ${campaignName}\n\n📱 Scan QR Code to discover this location!\n\n🔗 ${qrCode}`,
+                    title: 'Treasure Hunt QR Code',
+                });
+            } catch (shareError) {
+                console.error('Share error:', shareError);
+                Alert.alert(t('error') || 'Error', t('printFailed') || 'Failed to print QR code. Please try again.');
+            }
+        }
+    };
     const [locationOrder, setLocationOrder] = useState('1');
     const [locationRadius, setLocationRadius] = useState('50');
     const [locationRewardType, setLocationRewardType] = useState('points');
     const [locationRewardValue, setLocationRewardValue] = useState('10');
+    const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+    const [campaignSelectedProductId, setCampaignSelectedProductId] = useState<string | null>(null);
     const [locationStartDate, setLocationStartDate] = useState<Date | undefined>(new Date());
     const [locationEndDate, setLocationEndDate] = useState<Date | undefined>(undefined);
     const [locationDiscoveryOrder, setLocationDiscoveryOrder] = useState<'sequential' | 'any'>('any');
@@ -124,11 +373,19 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     const [locationBonusReward2, setLocationBonusReward2] = useState('30');
     const [locationBonusReward3, setLocationBonusReward3] = useState('20');
 
+    // Map picker state
+    const [mapPickerCoords, setMapPickerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         fetchCampaigns();
     }, []);
+
+    // Debug: Log showMapPicker changes
+    useEffect(() => {
+        console.log('showMapPicker changed to:', showMapPicker);
+    }, [showMapPicker]);
 
     useEffect(() => {
         if (selectedCampaign) {
@@ -139,8 +396,12 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     const fetchCampaigns = async () => {
         setLoading(true);
         try {
-            const data = await treasureHuntService.getAllCampaigns();
+            const [data, productsData] = await Promise.all([
+                treasureHuntService.getAllCampaigns(),
+                treasureHuntService.getAllProducts()
+            ]);
             setCampaigns(data);
+            setProducts(productsData);
             if (data.length > 0 && !selectedCampaign) {
                 setSelectedCampaign(data[0]);
             }
@@ -226,6 +487,14 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
         setCampaignDescAr(campaign.description?.['ar-tn'] || '');
         setRewardType(campaign.rewardType || 'points');
         setRewardValue(String(campaign.rewardValue || 100));
+        
+        // Set product ID if reward type is free_product
+        if (campaign.rewardType === 'free_product') {
+            setCampaignSelectedProductId(String(campaign.rewardValue || ''));
+        } else {
+            setCampaignSelectedProductId(null);
+        }
+        
         setMaxParticipants(String(campaign.maxParticipants || 1000));
         setIsPublic(campaign.isPublic || false);
         
@@ -358,6 +627,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
             Alert.alert(t('error'), t('treasureHuntSelectCampaignFirst'));
             return;
         }
+        setEditingLocation(null);
         resetLocationForm();
         setShowLocationModal(true);
     };
@@ -367,12 +637,13 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
         setLocationNameAr('');
         setLocationHintFr('');
         setLocationHintAr('');
+        setLocationNoteFr('');
+        setLocationNoteAr('');
         setLatitude('');
         setLongitude('');
+        setMapPickerCoords(null);
         setLocationOrder(String(locations.length + 1));
         setLocationRadius('50');
-        setLocationRewardType('points');
-        setLocationRewardValue('10');
         setLocationStartDate(new Date());
         setLocationEndDate(undefined);
         setLocationDiscoveryOrder('any');
@@ -380,7 +651,6 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
         setLocationBonusReward1('50');
         setLocationBonusReward2('30');
         setLocationBonusReward3('20');
-        setShowLocationModal(true);
     };
 
     const handleEditLocation = (location: TreasureLocation) => {
@@ -389,30 +659,16 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
         setLocationNameAr(location.name['ar-tn'] || '');
         setLocationHintFr(location.hint?.fr || '');
         setLocationHintAr(location.hint?.['ar-tn'] || '');
+        setLocationNoteFr(location.note?.fr || '');
+        setLocationNoteAr(location.note?.['ar-tn'] || '');
         setLatitude(String(location.coordinates.latitude));
         setLongitude(String(location.coordinates.longitude));
         setLocationOrder(String(location.order || 1));
         setLocationRadius(String(location.radius || 50));
-        setLocationRewardType(location.rewardType || 'points');
-        setLocationRewardValue(String(location.rewardValue || 10));
         
-        if (location.startDate) {
-            const start = location.startDate instanceof Timestamp 
-                ? location.startDate.toDate() 
-                : new Date(location.startDate as any);
-            setLocationStartDate(start);
-        } else {
-            setLocationStartDate(new Date());
-        }
-        
-        if (location.endDate) {
-            const end = location.endDate instanceof Timestamp 
-                ? location.endDate.toDate() 
-                : new Date(location.endDate as any);
-            setLocationEndDate(end);
-        } else {
-            setLocationEndDate(undefined);
-        }
+        // Note: Rewards are now managed at campaign level, not location level
+        setLocationStartDate(new Date());
+        setLocationEndDate(undefined);
         
         setLocationDiscoveryOrder(location.discoveryOrder || 'any');
         setLocationSpecialReward(location.specialReward || 'none');
@@ -423,37 +679,57 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
     };
 
     const handleSaveLocation = async () => {
-        if (!locationNameFr.trim() || !latitude || !longitude) {
-            Alert.alert(t('error'), t('treasureHuntFillRequired'));
+        if (!locationNameFr.trim()) {
+            Alert.alert(t('error'), t('treasureHuntEnterName'));
+            return;
+        }
+
+        if (!latitude || !longitude) {
+            Alert.alert(t('error'), t('treasureHuntSelectLocation') || 'Please select a location on the map');
+            return;
+        }
+
+        // Validate coordinates
+        const lat = parseFloat(latitude);
+        const lng = parseFloat(longitude);
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
+            Alert.alert(t('error'), t('treasureHuntInvalidCoordinates') || 'Please select valid coordinates');
             return;
         }
 
         setSaving(true);
         try {
+            // Generate QR code for new locations
+            const qrCode = editingLocation?.qrCode || `TREASURE_${Date.now().toString(36).toUpperCase()}`;
+            
+            // Build location data object - only include defined values
             const locationData: Partial<TreasureLocation> = {
                 campaignId: selectedCampaign!.id,
                 name: { fr: locationNameFr, 'ar-tn': locationNameAr },
-                hint: { fr: locationHintFr, 'ar-tn': locationHintAr },
                 coordinates: {
-                    latitude: parseFloat(latitude) || 0,
-                    longitude: parseFloat(longitude) || 0,
+                    latitude: lat,
+                    longitude: lng,
                 },
+                qrCode: qrCode,
                 order: parseInt(locationOrder) || 1,
                 radius: parseInt(locationRadius) || 50,
-                rewardType: locationRewardType,
-                rewardValue: parseInt(locationRewardValue) || 10,
-                discoveryOrder: locationDiscoveryOrder,
-                specialReward: locationSpecialReward,
+                isActive: true,
+                isDiscoverable: true,
+                discoveryOrder: locationDiscoveryOrder as 'sequential' | 'any',
+                specialReward: locationSpecialReward as 'none' | 'first_finder' | 'top3' | 'top10',
                 bonusRewardValue: parseInt(locationBonusReward1) || 50,
                 bonusRewardValue2: parseInt(locationBonusReward2) || 30,
                 bonusRewardValue3: parseInt(locationBonusReward3) || 20,
             };
 
-            if (locationStartDate) {
-                locationData.startDate = Timestamp.fromDate(locationStartDate);
+            // Only add hint if it has values
+            if (locationHintFr.trim() || locationHintAr.trim()) {
+                locationData.hint = { fr: locationHintFr, 'ar-tn': locationHintAr };
             }
-            if (locationEndDate) {
-                locationData.endDate = Timestamp.fromDate(locationEndDate);
+
+            // Only add note if it has values
+            if (locationNoteFr.trim() || locationNoteAr.trim()) {
+                locationData.note = { fr: locationNoteFr, 'ar-tn': locationNoteAr };
             }
 
             if (editingLocation) {
@@ -664,13 +940,24 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                 </Text>
             )}
 
+            {location.note?.fr && (
+                <Text style={[styles.noteText, { color: colors.primary }]} numberOfLines={2}>
+                    📝 {location.note.fr}
+                </Text>
+            )}
+
             <View style={styles.locationCardRewards}>
                 <Gift size={14} color={colors.primary} />
                 <Text style={[styles.rewardText, { color: colors.primary }]}>
-                    {location.rewardType === 'points'
-                        ? `${location.rewardValue} ${t('treasureHuntPoints')}`
-                        : location.rewardType === 'discount'
-                        ? `${location.rewardValue}% ${t('treasureHuntDiscount')}`
+                    {/* Show campaign-level rewards since location rewards are now unified */}
+                    {selectedCampaign?.rewardType === 'points'
+                        ? `${selectedCampaign.rewardValue} ${t('treasureHuntPoints')}`
+                        : selectedCampaign?.rewardType === 'discount'
+                        ? `${selectedCampaign.rewardValue}% ${t('treasureHuntDiscount')}`
+                        : selectedCampaign?.rewardType === 'coupon'
+                        ? t('treasureHuntCoupon')
+                        : selectedCampaign?.rewardType === 'free_product'
+                        ? t('treasureHuntFreeProduct')
                         : t('treasureHuntSpecialReward')
                     }
                 </Text>
@@ -729,7 +1016,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
 
             {/* Active Campaign Info Section */}
             {activeCampaign && (
-                <View style={[styles.activeCampaignInfo, { backgroundColor: colors.card, borderColor: colors.border, margin: 16, marginTop: 24}]}>
+                <View style={[styles.activeCampaignInfo, { backgroundColor: colors.card, borderColor: colors.border, margin: 16, marginTop: 150}]}>
                     <View style={styles.activeCampaignHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Trophy size={18} color={colors.primary} style={{ marginRight: 8 }} />
@@ -911,82 +1198,66 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                 </ScrollView>
             </View>
 
-            {/* Tabs */}
-            <View style={[styles.tabs, { borderBottomColor: colors.border , marginTop:20 }]}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'campaigns' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
-                    onPress={() => setActiveTab('campaigns')}
-                >
-                    <Text style={[styles.tabText, { color: activeTab === 'campaigns' ? colors.primary : colors.textMuted }]}>
-                        {t('treasureHuntCampaigns')}
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'locations' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
-                    onPress={() => setActiveTab('locations')}
-                >
-                    <Text style={[styles.tabText, { color: activeTab === 'locations' ? colors.primary : colors.textMuted }]}>
-                        {t('treasureHuntLocations')} ({locations.length})
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
             {loading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
                 </View>
-            ) : (
+            ) : selectedCampaign ? (
                 <ScrollView style={[styles.content, { marginTop: 20 }]} showsVerticalScrollIndicator={false}>
-                    {activeTab === 'campaigns' ? (
-                        <View style={styles.campaignsList}>
-                            {campaigns.length === 0 ? (
-                                <View style={styles.emptyState}>
-                                    <Gift size={48} color={colors.textMuted} />
-                                    <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                                        {t('treasureHuntNoCampaigns')}
-                                    </Text>
-                                    <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                                        {t('treasureHuntCreateFirst')}
-                                    </Text>
-                                </View>
-                            ) : (
-                                campaigns.map(renderCampaignCard)
-                            )}
-                        </View>
-                    ) : selectedCampaign ? (
-                        <View style={styles.locationsList}>
+                    {/* Campaign Details */}
+                    <View style={styles.campaignsList}>
+                        {renderCampaignCard(selectedCampaign)}
+                    </View>
+
+                    {/* Locations Section */}
+                    <View style={styles.locationsList}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 20 }}>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                                {t('treasureHuntLocations')} ({locations.length})
+                            </Text>
                             <TouchableOpacity
-                                style={[styles.addLocationButton, { backgroundColor: colors.primary }]}
+                                style={[styles.createButton, { backgroundColor: colors.primary }]}
                                 onPress={handleCreateLocation}
                             >
-                                <Plus size={20} color="#FFF" />
-                                <Text style={styles.addLocationButtonText}>
+                                <Plus size={16} color="#FFF" />
+                                <Text style={styles.createButtonText}>
                                     {t('treasureHuntAddLocation')}
                                 </Text>
                             </TouchableOpacity>
+                        </View>
 
-                            {locations.length === 0 ? (
-                                <View style={styles.emptyState}>
-                                    <MapPin size={48} color={colors.textMuted} />
-                                    <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                                        {t('treasureHuntNoLocations')}
-                                    </Text>
-                                    <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                                        {t('treasureHuntAddFirstLocation')}
-                                    </Text>
-                                </View>
-                            ) : (
-                                locations.map(renderLocationCard)
-                            )}
-                        </View>
-                    ) : (
-                        <View style={styles.emptyState}>
-                            <Gift size={48} color={colors.textMuted} />
-                            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                                {t('treasureHuntSelectCampaign')}
-                            </Text>
-                        </View>
-                    )}
+                        {locations.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <MapPin size={48} color={colors.textMuted} />
+                                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                                    {t('treasureHuntNoLocations')}
+                                </Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+                                    {t('treasureHuntAddFirstLocation')}
+                                </Text>
+                            </View>
+                        ) : (
+                            locations.map(renderLocationCard)
+                        )}
+                    </View>
+                </ScrollView>
+            ) : (
+                <ScrollView style={[styles.content, { marginTop: 20 }]} showsVerticalScrollIndicator={false}>
+                    <View style={styles.campaignsList}>
+                        {campaigns.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Gift size={48} color={colors.textMuted} />
+                                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                                    {t('treasureHuntNoCampaigns')}
+                                </Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+                                    {t('treasureHuntCreateFirst')}
+                                </Text>
+                            </View>
+                        ) : (
+                            campaigns.map(renderCampaignCard)
+                        )}
+                    </View>
                 </ScrollView>
             )}
 
@@ -1049,6 +1320,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                         value={startDate}
                                         onChange={setStartDate}
                                         placeholder={t('selectDate')}
+                                        style={{ minHeight: 48 }}
                                     />
                                     <AdminInput
                                         value={startTime}
@@ -1063,6 +1335,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                         value={endDate}
                                         onChange={setEndDate}
                                         placeholder={t('selectDate')}
+                                        style={{ minHeight: 48 }}
                                     />
                                     <AdminInput
                                         value={endTime}
@@ -1078,25 +1351,88 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                     <InputLabel text={t('treasureHuntRewardType')} />
                                     <Picker
                                         value={rewardType}
-                                        onValueChange={(value) => setRewardType(value)}
+                                        onValueChange={(value) => { setRewardType(value); if (value !== 'free_product') setCampaignSelectedProductId(null); if (value !== 'coupon') setRewardValue(''); }}
                                         options={[
                                             { label: tr('treasureHuntPoints', 'Points'), value: 'points' },
                                             { label: tr('treasureHuntDiscount', 'Discount %'), value: 'discount' },
                                             { label: tr('treasureHuntFreeProduct', 'Free Product'), value: 'free_product' },
                                             { label: tr('treasureHuntCoupon', 'Coupon Code'), value: 'coupon' },
                                         ]}
-                                        
+                                        style={{ minHeight: 48 }}
                                     />
                                 </View>
-                                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                                    <InputLabel text={t('treasureHuntRewardValue')} />
+                            </View>
+
+                            {/* Dynamic Reward Input based on reward type */}
+                            {rewardType === 'free_product' ? (
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={t('selectProduct') || 'Select Product'} />
+                                    <Picker
+                                        value={campaignSelectedProductId || ''}
+                                        onValueChange={(value) => { setCampaignSelectedProductId(value); setRewardValue(value); }}
+                                        options={[
+                                            { label: t('selectProduct') || 'Select a product', value: '' },
+                                            ...products.map((product) => ({
+                                                label: typeof product.name === 'object' ? product.name.fr || product.name['ar-tn'] || 'Product' : product.name,
+                                                value: product.id
+                                            }))
+                                        ]}
+                                        style={{ minHeight: 48 }}
+                                    />
+                                    {campaignSelectedProductId && (
+                                        <Text style={{ marginTop: 8, color: colors.primary, fontSize: 12 }}>
+                                            {products.find(p => p.id === campaignSelectedProductId)?.price} TND
+                                        </Text>
+                                    )}
+                                </View>
+                            ) : rewardType === 'coupon' ? (
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={t('couponCode') || 'Coupon Code'} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <AdminInput
+                                            value={rewardValue}
+                                            onChangeText={setRewardValue}
+                                            placeholder="CODE50"
+                                        />
+                                        <TouchableOpacity
+                                            style={{ marginLeft: 8, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 }}
+                                            onPress={() => {
+                                                // Generate a new coupon code
+                                                const newCode = `TH_${Date.now().toString(36).toUpperCase()}`;
+                                                setRewardValue(newCode);
+                                            }}
+                                        >
+                                            <Plus size={18} color="#FFF" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <Text style={{ marginTop: 8, color: colors.textMuted, fontSize: 12 }}>
+                                        {t('treasureHuntCouponHint') || 'Enter an existing coupon code or tap + to generate a new one'}
+                                    </Text>
+                                </View>
+                            ) : rewardType === 'discount' ? (
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={t('treasureHuntDiscount') || 'Discount %'} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <AdminInput
+                                            value={rewardValue}
+                                            onChangeText={setRewardValue}
+                                            keyboardType="numeric"
+                                            placeholder="20"
+                                        />
+                                        <Text style={{ marginLeft: 8, color: colors.foreground, fontWeight: '600' }}>%</Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={t('treasureHuntPoints') || 'Points'} />
                                     <AdminInput
                                         value={rewardValue}
                                         onChangeText={setRewardValue}
                                         keyboardType="numeric"
+                                        placeholder="100"
                                     />
                                 </View>
-                            </View>
+                            )}
 
                             <View style={styles.formGroup}>
                                 <InputLabel text={t('treasureHuntMaxParticipants')} />
@@ -1143,84 +1479,167 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                                {editingLocation ? t('treasureHuntEditLocation') : t('treasureHuntNewLocation')}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-                                <X size={24} color={colors.foreground} />
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    if (locationModalView === 'map') {
+                                        setLocationModalView('form');
+                                    } else {
+                                        setShowLocationModal(false);
+                                    }
+                                }}
+                            >
+                                <ChevronLeft size={24} color={colors.foreground} />
                             </TouchableOpacity>
+                            <Text style={[styles.modalTitle, { color: colors.foreground, flex: 1, textAlign: 'center', marginRight: 24 }]}>
+                                {locationModalView === 'map' 
+                                    ? '📍 Select Location' 
+                                    : (editingLocation ? t('treasureHuntEditLocation') : t('treasureHuntNewLocation'))
+                                }
+                            </Text>
+                            <View style={{width: 24}} />
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <View style={styles.formGroup}>
-                                <InputLabel text={`${t('name')} (FR) *`} />
-                                <AdminInput
-                                    value={locationNameFr}
-                                    onChangeText={setLocationNameFr}
-                                    placeholder={t('treasureHuntLocationNameFrPlaceholder')}
-                                />
-                            </View>
+                        {/* Conditional: Map View or Form View */}
+                        {locationModalView === 'map' ? (
+                            <View style={{flex: 1}}>
+                                {/* Inline Map */}
+                                <View style={{height: 450, width: '100%', borderRadius: 15, overflow: 'hidden', marginBottom: 15}}>
+                                    <MapView
+                                        style={{flex: 1, width: '100%', height: '100%'}}
+                                        initialRegion={{
+                                            latitude: mapPickerCoords?.latitude || (latitude ? parseFloat(latitude) : 36.8065),
+                                            longitude: mapPickerCoords?.longitude || (longitude ? parseFloat(longitude) : 10.1815),
+                                            latitudeDelta: 0.015,
+                                            longitudeDelta: 0.015,
+                                        }}
+                                        onPress={handleMapPress}
+                                        showsUserLocation={true}
+                                        showsMyLocationButton={true}
+                                    >
+                                        {mapPickerCoords && (
+                                            <Marker
+                                                coordinate={mapPickerCoords}
+                                                pinColor="#FF6B6B"
+                                            />
+                                        )}
+                                    </MapView>
+                                </View>
 
-                            <View style={styles.formGroup}>
-                                <InputLabel text={`${t('name')} (AR)`} />
-                                <AdminInput
-                                    value={locationNameAr}
-                                    onChangeText={setLocationNameAr}
-                                    placeholder={t('treasureHuntLocationNameArPlaceholder')}
-                                />
-                            </View>
+                                {/* Selected Coordinates Display */}
+                                <View style={{marginBottom: 15, padding: 12, backgroundColor: colors.card, borderRadius: 10}}>
+                                    <Text style={{color: colors.foreground, textAlign: 'center', fontWeight: '600', fontSize: 15}}>
+                                        {mapPickerCoords 
+                                            ? `✅ Selected: ${mapPickerCoords.latitude.toFixed(6)}, ${mapPickerCoords.longitude.toFixed(6)}`
+                                            : '👆 Tap on the map to select a location'
+                                        }
+                                    </Text>
+                                </View>
 
-                            <View style={styles.formGroup}>
-                                <InputLabel text={`${t('treasureHuntHint')} (FR)`} />
-                                <AdminInput
-                                    value={locationHintFr}
-                                    onChangeText={setLocationHintFr}
-                                    placeholder={t('treasureHuntHintFrPlaceholder')}
-                                    multiline
-                                />
+                                {/* Action Buttons */}
+                                <View style={{flexDirection: 'row', gap: 10}}>
+                                    <TouchableOpacity
+                                        style={{flex: 1, backgroundColor: colors.background, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border}}
+                                        onPress={() => setLocationModalView('form')}
+                                    >
+                                        <Text style={{color: colors.foreground, textAlign: 'center', fontWeight: '600'}}>← Back to Form</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={{flex: 1, backgroundColor: colors.primary, padding: 14, borderRadius: 10}}
+                                        onPress={() => {
+                                            if (mapPickerCoords) {
+                                                setLatitude(mapPickerCoords.latitude.toFixed(6));
+                                                setLongitude(mapPickerCoords.longitude.toFixed(6));
+                                            }
+                                            setLocationModalView('form');
+                                        }}
+                                    >
+                                        <Text style={{color: '#FFF', textAlign: 'center', fontWeight: 'bold', fontSize: 15}}>✓ Confirm Location</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
+                        ) : (
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={`${t('name')} (FR) *`} />
+                                    <AdminInput
+                                        value={locationNameFr}
+                                        onChangeText={setLocationNameFr}
+                                        placeholder={t('treasureHuntLocationNameFrPlaceholder')}
+                                    />
+                                </View>
 
-                            <View style={styles.formGroup}>
-                                <InputLabel text={`${t('treasureHuntHint')} (AR)`} />
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={`${t('name')} (AR)`} />
+                                    <AdminInput
+                                        value={locationNameAr}
+                                        onChangeText={setLocationNameAr}
+                                        placeholder={t('treasureHuntLocationNameArPlaceholder')}
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={`${t('treasureHuntHint')} (FR)`} />
+                                    <AdminInput
+                                        value={locationHintFr}
+                                        onChangeText={setLocationHintFr}
+                                        placeholder={t('treasureHuntHintFrPlaceholder')}
+                                        multiline
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={`${t('treasureHuntHint')} (AR)`} />
+                                    <AdminInput
+                                        value={locationHintAr}
+                                        onChangeText={setLocationHintAr}
+                                        placeholder={t('treasureHuntHintArPlaceholder')}
+                                        multiline
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={tr('treasureHuntNote', 'Note') + ' (FR)'} />
+                                    <AdminInput
+                                        value={locationNoteFr}
+                                        onChangeText={setLocationNoteFr}
+                                        placeholder={tr('treasureHuntNoteFrPlaceholder', 'Optional note in French')}
+                                        multiline
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <InputLabel text={tr('treasureHuntNote', 'Note') + ' (AR)'} />
                                 <AdminInput
-                                    value={locationHintAr}
-                                    onChangeText={setLocationHintAr}
-                                    placeholder={t('treasureHuntHintArPlaceholder')}
+                                    value={locationNoteAr}
+                                    onChangeText={setLocationNoteAr}
+                                    placeholder={tr('treasureHuntNoteArPlaceholder', 'ملاحظة اختيارية بالعربية')}
                                     multiline
                                 />
                             </View>
 
                             <View style={styles.formGroup}>
                                 <InputLabel text={tr('treasureHuntCoordinates', 'Coordinates') + ' *'} />
-                                <View style={styles.locationInputRow}>
-                                    <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                                        <InputLabel text={tr('treasureHuntLatitude', 'Latitude')} />
-                                        <AdminInput
-                                            value={latitude}
-                                            onChangeText={setLatitude}
-                                            placeholder="36.8065"
-                                            keyboardType="numeric"
-                                        />
-                                    </View>
-                                    <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                                        <InputLabel text={tr('treasureHuntLongitude', 'Longitude')} />
-                                        <AdminInput
-                                            value={longitude}
-                                            onChangeText={setLongitude}
-                                            placeholder="10.1815"
-                                            keyboardType="numeric"
-                                        />
-                                    </View>
+                                <View style={{flexDirection: 'row', gap: 10}}>
+                                    <TouchableOpacity 
+                                        style={[styles.mapSelectButton, { backgroundColor: colors.primary, minHeight: 48, flex: 1 }]}
+                                        onPress={() => {
+                                            // Close location modal, open map picker
+                                            setShowLocationModal(false);
+                                            setTimeout(() => {
+                                                setShowMapPicker(true);
+                                            }, 300);
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <MapPin size={18} color="#FFF" />
+                                        <Text style={styles.mapSelectButtonText}>
+                                            {latitude && longitude 
+                                                ? `${tr('treasureHuntSelected', 'Selected')}: ${latitude}, ${longitude}`
+                                                : tr('treasureHuntSelectOnMap', 'Select on Map')
+                                            }
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
-                                <TouchableOpacity 
-                                    style={[styles.mapSelectButton, { backgroundColor: colors.primary }]}
-                                    onPress={() => setShowMapPicker(true)}
-                                >
-                                    <MapPin size={18} color="#FFF" />
-                                    <Text style={styles.mapSelectButtonText}>
-                                        {tr('treasureHuntSelectOnMap', 'Select on Map')}
-                                    </Text>
-                                </TouchableOpacity>
                             </View>
 
                             <View style={styles.formRow}>
@@ -1242,42 +1661,11 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                 </View>
                             </View>
 
-                            <View style={styles.formRow}>
-                                <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                                    <InputLabel text={t('treasureHuntRewardType')} />
-                                    <View style={styles.rewardTypeSelector}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.rewardTypeOption,
-                                                { backgroundColor: locationRewardType === 'points' ? colors.primary : colors.card, borderColor: colors.border },
-                                            ]}
-                                            onPress={() => setLocationRewardType('points')}
-                                        >
-                                            <Text style={{ color: locationRewardType === 'points' ? '#FFF' : colors.foreground }}>
-                                                {t('treasureHuntPoints')}
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.rewardTypeOption,
-                                                { backgroundColor: locationRewardType === 'discount' ? colors.primary : colors.card, borderColor: colors.border },
-                                            ]}
-                                            onPress={() => setLocationRewardType('discount')}
-                                        >
-                                            <Text style={{ color: locationRewardType === 'discount' ? '#FFF' : colors.foreground }}>
-                                                {t('treasureHuntDiscount')}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                                    <InputLabel text={t('treasureHuntRewardValue')} />
-                                    <AdminInput
-                                        value={locationRewardValue}
-                                        onChangeText={setLocationRewardValue}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
+                            {/* Note: Rewards are now managed at the campaign level */}
+                            <View style={[styles.formGroup, { backgroundColor: colors.card, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border }]}>
+                                <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                                    {t('treasureHuntRewardNote') || '💡 Rewards are defined at the campaign level and apply to all locations.'}
+                                </Text>
                             </View>
 
                             <View style={styles.formGroup}>
@@ -1286,6 +1674,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                     value={locationStartDate}
                                     onChange={setLocationStartDate}
                                     mode="date"
+                                    style={{ minHeight: 48 }}
                                 />
                             </View>
 
@@ -1295,6 +1684,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                     value={locationEndDate}
                                     onChange={setLocationEndDate}
                                     mode="date"
+                                    style={{ minHeight: 48 }}
                                 />
                             </View>
 
@@ -1307,6 +1697,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                         { label: t('treasureHuntDiscoveryAny') || 'Any Order', value: 'any' },
                                         { label: t('treasureHuntDiscoverySequential') || 'Sequential', value: 'sequential' },
                                     ]}
+                                    style={{ minHeight: 48 }}
                                 />
                             </View>
 
@@ -1321,6 +1712,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                         { label: t('treasureHuntSpecialTop3') || 'Top 3 Finders', value: 'top3' },
                                         { label: t('treasureHuntSpecialTop10') || 'Top 10 Finders', value: 'top10' },
                                     ]}
+                                    style={{ minHeight: 48 }}
                                 />
                             </View>
 
@@ -1401,6 +1793,7 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                                 )}
                             </TouchableOpacity>
                         </ScrollView>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -1428,55 +1821,122 @@ export default function AdminTreasureHuntScreen({ onBack, t, theme }: AdminTreas
                             <Text style={[styles.qrCodeHint, { color: colors.textMuted }]}>
                                 {t('treasureHuntScanToDiscover')}
                             </Text>
+                            {editingLocation?.name && (
+                                <Text style={[styles.qrCodeLocationName, { color: colors.foreground }]}>
+                                    {typeof editingLocation.name === 'object' 
+                                        ? editingLocation.name.fr || editingLocation.name['ar-tn'] || ''
+                                        : editingLocation.name}
+                                </Text>
+                            )}
+                            {selectedCampaign && (
+                                <Text style={[styles.qrCodeCampaignName, { color: colors.primary }]}>
+                                    {typeof selectedCampaign.name === 'object' 
+                                        ? selectedCampaign.name.fr || selectedCampaign.name['ar-tn'] || ''
+                                        : selectedCampaign.name}
+                                </Text>
+                            )}
                         </View>
 
-                        <TouchableOpacity
-                            style={[styles.closeButton, { backgroundColor: colors.primary }]}
-                            onPress={() => setShowQRModal(false)}
-                        >
-                            <Text style={styles.closeButtonText}>{t('close')}</Text>
-                        </TouchableOpacity>
+                        <View style={styles.qrButtonRow}>
+                            <TouchableOpacity
+                                style={[styles.printButton, { backgroundColor: colors.primary }]}
+                                onPress={handlePrintQRCode}
+                            >
+                                <Printer size={20} color="#FFF" />
+                                <Text style={styles.printButtonText}>{t('print') || 'Print'}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.closeButton, { backgroundColor: colors.background }]}
+                                onPress={() => setShowQRModal(false)}
+                            >
+                                <Text style={[styles.closeButtonText, { color: colors.foreground }]}>{t('close')}</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
 
             {/* Map Picker Modal */}
             <Modal visible={showMapPicker} animationType="slide" transparent>
-                <View style={styles.mapPickerOverlay}>
-                    <View style={[styles.mapPickerContent, { backgroundColor: colors.background }]}>
-                        <View style={styles.mapPickerHeader}>
-                            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                                {t('treasureHuntSelectLocation') || 'Select Location on Map'}
+                <View style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    justifyContent: 'center',
+                    padding: 20,
+                }}>
+                    <View style={{
+                        backgroundColor: colors.background,
+                        borderRadius: 20,
+                        padding: 20,
+                        width: '100%',
+                        maxHeight: '90%',
+                    }}>
+                        <Text style={{color: colors.foreground, fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center'}}>
+                            {t('treasureHuntSelectLocation') || 'Select Location'}
+                        </Text>
+                        
+                        {/* Map */}
+                        <View style={{height: 450, width: '100%', borderRadius: 15, overflow: 'hidden', marginBottom: 15}}>
+                            <MapView
+                                style={{flex: 1, width: '100%', height: '100%'}}
+                                initialRegion={{
+                                    latitude: mapPickerCoords?.latitude || (latitude ? parseFloat(latitude) : 36.8065),
+                                    longitude: mapPickerCoords?.longitude || (longitude ? parseFloat(longitude) : 10.1815),
+                                    latitudeDelta: 0.015,
+                                    longitudeDelta: 0.015,
+                                }}
+                                onPress={handleMapPress}
+                                showsUserLocation={true}
+                                showsMyLocationButton={true}
+                            >
+                                {mapPickerCoords && (
+                                    <Marker
+                                        coordinate={mapPickerCoords}
+                                        pinColor="#FF6B6B"
+                                    />
+                                )}
+                            </MapView>
+                        </View>
+
+                        {/* Selected Coordinates */}
+                        <View style={{marginBottom: 15, padding: 12, backgroundColor: colors.card, borderRadius: 10}}>
+                            <Text style={{color: colors.foreground, textAlign: 'center', fontWeight: '600', fontSize: 15}}>
+                                {mapPickerCoords 
+                                    ? `${t('treasureHuntSelected') || 'Selected'}: ${mapPickerCoords.latitude.toFixed(6)}, ${mapPickerCoords.longitude.toFixed(6)}`
+                                    : t('treasureHuntTapToSelect') || 'Tap on the map to select a location'
+                                }
                             </Text>
-                            <TouchableOpacity onPress={() => setShowMapPicker(false)}>
-                                <X size={24} color={colors.foreground} />
+                        </View>
+
+                        {/* Buttons */}
+                        <View style={{flexDirection: 'row', gap: 10}}>
+                            <TouchableOpacity
+                                style={{flex: 1, backgroundColor: colors.background, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border}}
+                                onPress={() => {
+                                    setShowMapPicker(false);
+                                    setShowLocationModal(true);
+                                }}
+                            >
+                                <Text style={{color: colors.foreground, textAlign: 'center', fontWeight: '600'}}>{t('cancel') || 'Cancel'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={{flex: 1, backgroundColor: colors.primary, padding: 14, borderRadius: 10}}
+                                onPress={() => {
+                                    // Save coordinates and re-open location modal
+                                    if (mapPickerCoords) {
+                                        setLatitude(mapPickerCoords.latitude.toFixed(6));
+                                        setLongitude(mapPickerCoords.longitude.toFixed(6));
+                                    }
+                                    setShowMapPicker(false);
+                                    setTimeout(() => {
+                                        setShowLocationModal(true);
+                                    }, 300);
+                                }}
+                            >
+                                <Text style={{color: '#FFF', textAlign: 'center', fontWeight: 'bold', fontSize: 15}}>{t('confirm') || 'Confirm'}</Text>
                             </TouchableOpacity>
                         </View>
-                        
-                        <View style={styles.mapPickerInstructions}>
-                            <Text style={[styles.mapPickerText, { color: colors.textMuted }]}>
-                                {t('treasureHuntTapToSelect') || 'Tap on the map to select a location'}
-                            </Text>
-                        </View>
-
-                        <View style={styles.mapPickerCoords}>
-                            <Text style={[styles.pickerCoordText, { color: colors.foreground }]}>
-                                Lat: {latitude || '36.8065'}
-                            </Text>
-                            <Text style={[styles.pickerCoordText, { color: colors.foreground }]}>
-                                Lng: {longitude || '10.1815'}
-                            </Text>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.confirmLocationButton, { backgroundColor: colors.primary }]}
-                            onPress={() => setShowMapPicker(false)}
-                        >
-                            <Check size={20} color="#FFF" />
-                            <Text style={styles.confirmLocationText}>
-                                {t('confirm') || 'Confirm'}
-                            </Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -1714,6 +2174,11 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         color: '#888',
     },
+    noteText: {
+        fontSize: 13,
+        marginBottom: 10,
+        fontWeight: '500',
+    },
     locationCardRewards: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1866,6 +2331,39 @@ const styles = StyleSheet.create({
         fontSize: 12,
         textAlign: 'center',
     },
+    qrCodeLocationName: {
+        fontSize: 16,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginTop: 8,
+    },
+    qrCodeCampaignName: {
+        fontSize: 14,
+        fontWeight: '500',
+        textAlign: 'center',
+        marginTop: 4,
+    },
+    qrButtonRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        marginTop: 16,
+        gap: 12,
+    },
+    printButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 8,
+        gap: 8,
+    },
+    printButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
     closeButton: {
         paddingHorizontal: 32,
         paddingVertical: 12,
@@ -2005,10 +2503,19 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     mapPickerContent: {
-        height: '40%',
+        height: '75%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        padding: 24,
+        padding: 20,
+    },
+    mapContainer: {
+        height: 250,
+        borderRadius: 16,
+        overflow: 'hidden',
+        marginBottom: 16,
+    },
+    map: {
+        flex: 1,
     },
     mapPickerHeader: {
         flexDirection: 'row',
@@ -2047,5 +2554,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         marginLeft: 8,
+    },
+    productSelectCard: {
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 2,
+        marginRight: 10,
+        minWidth: 120,
+        alignItems: 'center',
+    },
+    productSelectName: {
+        fontSize: 12,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    productSelectPrice: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginTop: 4,
     },
 });

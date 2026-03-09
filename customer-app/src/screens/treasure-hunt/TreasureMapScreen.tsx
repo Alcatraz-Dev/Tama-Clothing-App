@@ -68,6 +68,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isNearTreasure, setIsNearTreasure] = useState(false);
   const [nearbyDistance, setNearbyDistance] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
   const mapRef = useRef<MapView>(null);
   const { colors, theme } = useAppTheme();
 
@@ -162,6 +163,44 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
   useEffect(() => {
     fetchData();
   }, [campaign.id, userId]);
+
+  // Countdown timer for campaign end
+  useEffect(() => {
+    if (!campaign.endDate) return;
+    
+    const calculateTimeRemaining = () => {
+      // Handle Firestore Timestamp
+      let endDate: Date;
+      const endDateAny = campaign.endDate as any;
+      if (endDateAny && typeof endDateAny === 'object' && 'toDate' in endDateAny) {
+        endDate = endDateAny.toDate();
+      } else if (endDateAny instanceof Date) {
+        endDate = endDateAny;
+      } else {
+        endDate = new Date(endDateAny);
+      }
+      
+      const now = new Date();
+      const diff = endDate.getTime() - now.getTime();
+      
+      if (diff <= 0) {
+        setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setTimeRemaining({ days, hours, minutes, seconds });
+    };
+    
+    calculateTimeRemaining();
+    const interval = setInterval(calculateTimeRemaining, 1000);
+    
+    return () => clearInterval(interval);
+  }, [campaign.endDate]);
 
   // Live location tracking for proximity updates
   useEffect(() => {
@@ -338,6 +377,22 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
           </TouchableOpacity>
         </View>
         
+        {/* Countdown Timer */}
+        {timeRemaining && (timeRemaining.days > 0 || timeRemaining.hours > 0 || timeRemaining.minutes > 0) && (
+          <View style={[styles.countdownContainer, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)' }]}>
+            <Clock size={16} color={colors.primary} />
+            <Text style={[styles.countdownText, { color: colors.foreground }]}>
+              {timeRemaining.days > 0 && `${timeRemaining.days}d `}
+              {String(timeRemaining.hours).padStart(2, '0')}:
+              {String(timeRemaining.minutes).padStart(2, '0')}:
+              {String(timeRemaining.seconds).padStart(2, '0')}
+            </Text>
+            <Text style={[styles.countdownLabel, { color: colors.textMuted }]}>
+              {t('treasureHuntTimeRemaining') || 'remaining'}
+            </Text>
+          </View>
+        )}
+        
         {/* Progress Bar - Inside Header */}
         <View style={[styles.progressContainer, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)' }]}>
           <View style={styles.progressBar}>
@@ -489,10 +544,15 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                 <View style={styles.rewardContainer}>
                   <Gift size={20} color="#4ECDC4" />
                   <Text style={[styles.rewardText, { color: colors.foreground }]}>
-                    {selectedLocation.rewardType === 'points' 
-                      ? `${selectedLocation.rewardValue} ${t('treasureHuntPoints')}`
-                      : selectedLocation.rewardType === 'discount'
-                      ? `${selectedLocation.rewardValue}% ${t('treasureHuntDiscount')}`
+                    {/* Rewards are now campaign-level */}
+                    {campaign.rewardType === 'points' 
+                      ? `${campaign.rewardValue} ${t('treasureHuntPoints')}`
+                      : campaign.rewardType === 'discount'
+                      ? `${campaign.rewardValue}% ${t('treasureHuntDiscount')}`
+                      : campaign.rewardType === 'coupon'
+                      ? t('treasureHuntCoupon')
+                      : campaign.rewardType === 'free_product'
+                      ? t('treasureHuntFreeProduct')
                       : t('treasureHuntMysteryReward')
                     }
                   </Text>
@@ -568,6 +628,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+  },
+  countdownText: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  countdownLabel: {
+    fontSize: 12,
+    marginLeft: 4,
   },
   backButton: {
     padding: 8,

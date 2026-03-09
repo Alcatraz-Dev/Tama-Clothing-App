@@ -1,54 +1,171 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Directory } from 'expo-file-system';
 import { BUNNY_CONFIG } from '../config/api';
+
+/**
+ * Uploads a file using XMLHttpRequest
+ */
+const uploadWithXHR = (uri: string, uploadUrl: string, contentType: string): Promise<{ status: number; body: string }> => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Use the new File API from expo-file-system
+            const file = new File(uri);
+            const base64Content = await file.base64();
+            
+            // Convert base64 to binary
+            const binaryString = atob(base64Content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl, true);
+            xhr.setRequestHeader('AccessKey', BUNNY_CONFIG.storageAccessKey);
+            xhr.setRequestHeader('Content-Type', contentType);
+
+            xhr.onload = () => {
+                resolve({
+                    status: xhr.status,
+                    body: xhr.responseText || '',
+                });
+            };
+
+            xhr.onerror = () => {
+                reject(new Error(`Upload failed: ${xhr.statusText}`));
+            };
+
+            xhr.send(bytes);
+        } catch (error) {
+            reject(error);
+        }
+    });
+};
+
+/**
+ * Copy file to cache directory for persistence
+ */
+const persistFileBeforeUpload = async (uri: string): Promise<string> => {
+    const cacheDir = new Directory();
+    if (!cacheDir.exists) return uri;
+    
+    const fileName = `upload-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
+    const destUri = `${cacheDir.uri}${fileName}.${fileExtension}`;
+
+    try {
+        const sourceFile = new File(uri);
+        await sourceFile.copy(destUri as any);
+        return destUri;
+    } catch (error) {
+        console.log('File copy failed, using original:', error);
+        return uri;
+    }
+};
+
+/**
+ * Get content type based on file extension
+ */
+const getContentType = (extension: string): string => {
+    const types: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'heic': 'image/jpeg',
+        'heif': 'image/jpeg',
+        'mp4': 'video/mp4',
+        'mov': 'video/quicktime',
+        'avi': 'video/x-msvideo',
+        'mkv': 'video/x-matroska',
+        'webm': 'video/webm',
+    };
+    return types[extension.toLowerCase()] || 'application/octet-stream';
+};
 
 /**
  * Uploads a file (image or video) to Bunny.net Storage
  */
 const uploadFileToBunnyStorage = async (uri: string) => {
-    // Extract file extension and name
-    const fileExtension = uri.split('.').pop()?.toLowerCase() || 'bin';
+    // Step 1: Ensure file is in a persistent location
+    const persistedUri = await persistFileBeforeUpload(uri);
+
+    // Step 2: Get file info
+    const fileExtension = persistedUri.split('.').pop()?.toLowerCase() || 'bin';
+    
+    // Step 3: Convert HEIC/HEIF to JPG if needed
+    let finalUri = persistedUri;
+    if (['heic', 'heif'].includes(fileExtension)) {
+        const cacheDir = new Directory();
+        if (cacheDir.exists) {
+            const jpegUri = `${cacheDir.uri}upload-${Date.now()}.jpg`;
+            try {
+                const sourceFile = new File(persistedUri);
+                await sourceFile.copy(jpegUri as any);
+                finalUri = jpegUri;
+            } catch (error) {
+                console.log('HEIC copy failed, trying original:', error);
+                finalUri = persistedUri;
+            }
+        }
+    }
+
     const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(fileExtension);
     const folder = isVideo ? 'videos' : 'images';
-    const fileName = `upload-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+    
+    const uploadExtension = finalUri.endsWith('.jpg') ? 'jpg' : fileExtension;
+    const fileName = `upload-${Date.now()}-${Math.random().toString(36).substring(7)}.${uploadExtension}`;
 
-    // Bunny.net Storage API URL format: https://storage.bunnycdn.com/storageZoneName/path/fileName
-    // We add the folder name to organize files
     const uploadUrl = `${BUNNY_CONFIG.storageEndpoint}/${BUNNY_CONFIG.storageZoneName}/${folder}/${fileName}`;
 
-    const response = await FileSystem.uploadAsync(uploadUrl, uri, {
-        httpMethod: 'PUT',
-        headers: {
-            'AccessKey': BUNNY_CONFIG.storageAccessKey,
-            'Content-Type': 'application/octet-stream',
-        },
-    });
-
-    if (response.status === 201 || response.status === 200) {
-        // Return the public CDN URL from the Pull Zone including the folder path
-        const baseUrl = BUNNY_CONFIG.pullZoneUrl.endsWith('/')
-            ? BUNNY_CONFIG.pullZoneUrl.slice(0, -1)
-            : BUNNY_CONFIG.pullZoneUrl;
-        return `${baseUrl}/${folder}/${fileName}`;
-    }
-
-    let errorMessage = 'Bunny.net Storage upload failed';
     try {
-        const data = JSON.parse(response.body);
-        errorMessage = data.Message || data.message || errorMessage;
-    } catch (e) {
-        errorMessage = response.body || errorMessage;
-    }
+        const response = await uploadWithXHR(finalUri, uploadUrl, getContentType(uploadExtension));
 
-    throw new Error(`${errorMessage} (Status: ${response.status})`);
+        if (response.status === 201 || response.status === 200) {
+            const baseUrl = BUNNY_CONFIG.pullZoneUrl.endsWith('/')
+                ? BUNNY_CONFIG.pullZoneUrl.slice(0, -1)
+                : BUNNY_CONFIG.pullZoneUrl;
+            return `${baseUrl}/${folder}/${fileName}`;
+        }
+
+        let errorMessage = 'Bunny.net Storage upload failed';
+        try {
+            const data = JSON.parse(response.body);
+            errorMessage = data.Message || data.message || errorMessage;
+        } catch (e) {
+            errorMessage = response.body || errorMessage;
+        }
+
+        throw new Error(`${errorMessage} (Status: ${response.status})`);
+    } catch (error: any) {
+        if (!error.message?.includes('Status:')) {
+            console.log('First upload attempt failed, retrying:', error);
+            
+            const retryUri = await persistFileBeforeUpload(uri);
+            const retryExtension = retryUri.split('.').pop()?.toLowerCase() || 'jpg';
+            const retryFileName = `upload-${Date.now()}-retry.${retryExtension}`;
+            const retryUrl = `${BUNNY_CONFIG.storageEndpoint}/${BUNNY_CONFIG.storageZoneName}/${folder}/${retryFileName}`;
+
+            const retryResponse = await uploadWithXHR(retryUri, retryUrl, getContentType(retryExtension));
+
+            if (retryResponse.status === 201 || retryResponse.status === 200) {
+                const baseUrl = BUNNY_CONFIG.pullZoneUrl.endsWith('/')
+                    ? BUNNY_CONFIG.pullZoneUrl.slice(0, -1)
+                    : BUNNY_CONFIG.pullZoneUrl;
+                return `${baseUrl}/${folder}/${retryFileName}`;
+            }
+        }
+        throw error;
+    }
 };
 
 /**
- * Uploads a video specifically to Bunny.net Stream (for HLS/Adaptive streaming)
- * Note: Use this only if you want transcoding and adaptive bitrate.
+ * Uploads a video to Bunny.net Stream
  */
 const uploadVideoToBunnyStream = async (uri: string) => {
+    const persistedUri = await persistFileBeforeUpload(uri);
+    
     try {
-        // 1. Create a video entry
         const createResponse = await fetch(`https://video.bunnycdn.com/library/${BUNNY_CONFIG.videoLibraryId}/videos`, {
             method: 'POST',
             headers: {
@@ -67,10 +184,8 @@ const uploadVideoToBunnyStream = async (uri: string) => {
         const videoId = videoData.guid;
         const uploadUrl = `https://video.bunnycdn.com/library/${BUNNY_CONFIG.videoLibraryId}/videos/${videoId}`;
 
-        const uploadResponse = await FileSystem.uploadAsync(uploadUrl, uri, {
-            httpMethod: 'PUT',
-            headers: { 'AccessKey': BUNNY_CONFIG.videoApiKey },
-        });
+        const fileExtension = uri.split('.').pop()?.toLowerCase() || 'mp4';
+        const uploadResponse = await uploadWithXHR(persistedUri, uploadUrl, getContentType(fileExtension));
 
         if (uploadResponse.status === 200 || uploadResponse.status === 201) {
             return `https://${BUNNY_CONFIG.videoCdnHostname}/${videoId}/playlist.m3u8`;
@@ -85,15 +200,16 @@ const uploadVideoToBunnyStream = async (uri: string) => {
 
 /**
  * Main dispatcher for Bunny.net uploads.
- * Now defaults to Storage for both images and videos as requested.
  */
 export const uploadToBunny = async (uri: string) => {
     if (!uri || uri.startsWith('http')) return uri;
 
-    // By default, we now use Storage for everything (same as images)
-    // This provides a direct file URL which is easier to manage.
-    return await uploadFileToBunnyStorage(uri);
+    try {
+        return await uploadFileToBunnyStorage(uri);
+    } catch (error) {
+        console.error('Bunny upload error:', error);
+        throw error;
+    }
 };
 
 export { uploadFileToBunnyStorage as uploadImageToBunny, uploadVideoToBunnyStream as uploadVideoToBunny };
-

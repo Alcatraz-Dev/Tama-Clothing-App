@@ -66,6 +66,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { Theme } from './src/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import {uploadToBunny} from './src/utils/bunny';
 import {
   Home,
   ShoppingBag,
@@ -5958,7 +5959,7 @@ function SettingsScreen({ onBack, profileData, updateProfile, onNavigate, t, use
   const uploadAvatar = async (uri: string) => {
     try {
       setUploading(true);
-      const downloadUrl = await uploadImageToCloudinary(uri);
+      const downloadUrl = await uploadToBunny(uri);
 
       if (downloadUrl) {
         setAvatar(downloadUrl);
