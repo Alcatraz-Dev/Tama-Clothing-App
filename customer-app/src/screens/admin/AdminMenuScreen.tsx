@@ -6,8 +6,10 @@ import {
     StyleSheet,
     Animated,
     Dimensions,
+    Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
     LayoutDashboard,
@@ -29,6 +31,7 @@ import {
     ChevronLeft,
     Store,
     Trophy,
+    Play,
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminUI';
@@ -57,6 +60,22 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
     const scrollY = useRef(new Animated.Value(0)).current;
     const isDark = theme === 'dark';
     const role = profileData?.role || 'admin';
+
+    const resetOnboarding = async () => {
+        try {
+            // Clear the onboarding flag
+            await AsyncStorage.removeItem('bey3a_onboarding_seen');
+            await AsyncStorage.clear(); // Clear all storage for testing purposes
+            
+            Alert.alert(
+                'Onboarding Reset!',
+                'Storage cleared. Please restart the app to see the onboarding screens.',
+                [{ text: 'OK' }]
+            );
+        } catch (error) {
+            console.error('Error resetting onboarding:', error);
+        }
+    };
 
     const menuItems: MenuItem[] = [
         { label: t('dashboard'), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support', 'brand_owner', 'nor_kam', 'partner'], color: '#5856D6' },
@@ -139,6 +158,17 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
                     })}
                 </View>
             </Animated.ScrollView>
+
+            {/* Testing Button - Reset Onboarding */}
+            <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+                <TouchableOpacity
+                    style={[sc.testButton, { backgroundColor: '#FF6B6B' }]}
+                    onPress={resetOnboarding}
+                >
+                    <Play size={18} color="#FFF" />
+                    <Text style={sc.testButtonText}>TEST: Reset Onboarding</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -238,5 +268,20 @@ const sc = StyleSheet.create({
         height: 6,
         borderRadius: 3,
         opacity: 0.7,
+    },
+    // Test button styles
+    testButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        gap: 8,
+    },
+    testButtonText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

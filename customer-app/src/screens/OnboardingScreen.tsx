@@ -7,9 +7,11 @@ import { ArrowRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { APP_ICON, width, height } from '../constants/layout';
 import { useAppTheme } from '../context/ThemeContext';
+import CategoryOnboardingScreen from './CategoryOnboardingScreen';
 
 export default function OnboardingScreen({ onFinish, t }: any) {
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [showCategories, setShowCategories] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const { colors, theme } = useAppTheme();
 
@@ -38,7 +40,8 @@ export default function OnboardingScreen({ onFinish, t }: any) {
         if (currentIndex < slides.length - 1) {
             flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
         } else {
-            handleFinish();
+            // Show category onboarding after initial slides
+            setShowCategories(true);
         }
     };
 
@@ -46,6 +49,22 @@ export default function OnboardingScreen({ onFinish, t }: any) {
         AsyncStorage.setItem('bey3a_onboarding_seen', 'true');
         onFinish();
     };
+
+    const handleCategorySelect = (category: string) => {
+        // Navigate to specific category (can be extended)
+        console.log('Selected category:', category);
+    };
+
+    // Show category onboarding screen
+    if (showCategories) {
+        return (
+            <CategoryOnboardingScreen 
+                onFinish={handleFinish}
+                onCategorySelect={handleCategorySelect}
+                t={t}
+            />
+        );
+    }
 
     const renderSlide = ({ item, index }: any) => (
         <View style={{ width, height }}>
@@ -97,7 +116,7 @@ export default function OnboardingScreen({ onFinish, t }: any) {
 
             {/* Skip Button */}
             <TouchableOpacity
-                onPress={handleFinish}
+                onPress={() => setShowCategories(true)}
                 style={{ position: 'absolute', top: 60, right: 30, zIndex: 10 }}
             >
                 <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700', letterSpacing: 1, opacity: 0.7 }}>
