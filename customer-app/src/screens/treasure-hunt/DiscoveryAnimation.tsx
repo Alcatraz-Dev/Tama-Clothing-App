@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions, Platform, Text } from 'react-native';
 import * as Animatable from 'react-native-animatable';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Trophy, Star, Sparkles } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -10,24 +12,38 @@ interface ConfettiPiece {
   delay: number;
   color: string;
   size: number;
+  rotateDir: number;
 }
 
 interface DiscoveryAnimationProps {
-  visible: boolean;
+  visible?: boolean;
   onComplete?: () => void;
+  title?: string;
+  subtitle?: string;
+  isDark?: boolean;
+  t?: (key: string) => string;
 }
 
-const COLORS = ['#FF6B6B', '#4ECDC4', '#FFD700', '#9B59B6', '#FF8E53', '#3498DB'];
-const CONFETTI_COUNT = 50;
+const COLORS = ['#FF3366', '#FF8E53', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6'];
+const CONFETTI_COUNT = 60;
 
-const DiscoveryAnimation: React.FC<DiscoveryAnimationProps> = ({ visible, onComplete }) => {
+const DiscoveryAnimation: React.FC<DiscoveryAnimationProps> = ({ 
+  visible = true, 
+  onComplete,
+  title,
+  subtitle,
+  t
+}) => {
+  const displayTitle = title || (t ? t('treasureHuntScanSuccess') : "TREASURE FOUND!");
+  const displaySubtitle = subtitle || (t ? t('treasureHuntScanReward') : "Achievement Unlocked");
   const confettiPieces = useRef<ConfettiPiece[]>(
     Array.from({ length: CONFETTI_COUNT }, (_, i) => ({
       id: i,
       x: Math.random() * width,
-      delay: Math.random() * 500,
+      delay: Math.random() * 800,
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      size: Math.random() * 8 + 6,
+      size: Math.random() * 10 + 6,
+      rotateDir: Math.random() > 0.5 ? 1 : -1,
     }))
   );
 
@@ -35,7 +51,7 @@ const DiscoveryAnimation: React.FC<DiscoveryAnimationProps> = ({ visible, onComp
     if (visible && onComplete) {
       const timer = setTimeout(() => {
         onComplete();
-      }, 3000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
   }, [visible, onComplete]);
@@ -44,36 +60,59 @@ const DiscoveryAnimation: React.FC<DiscoveryAnimationProps> = ({ visible, onComp
 
   return (
     <View style={styles.container} pointerEvents="none">
-      {/* Central Sparkle */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      {/* Central Announcement */}
       <View style={styles.centerContainer}>
         <Animatable.View
           animation="zoomIn"
-          duration={400}
-          style={styles.sparkleContainer}
+          duration={600}
+          easing="ease-out-back"
+          style={styles.mainBox}
         >
-          <View style={styles.sparkleCircle}>
-            <Animatable.Text 
-              animation="pulse" 
-              iterationCount="infinite"
-              duration={1000}
-              style={styles.sparkleEmoji}
-            >
-              ✨
-            </Animatable.Text>
-          </View>
+          <LinearGradient
+            colors={['#FF3366', '#FF8E53']}
+            style={styles.iconCircle}
+          >
+            <Trophy size={48} color="#FFF" />
+          </LinearGradient>
+
+          <Animatable.View 
+             animation="fadeInUp" 
+             delay={400} 
+             style={styles.textContainer}
+          >
+            <Text style={styles.foundText}>{displayTitle}</Text>
+            <View style={styles.subtitleRow}>
+               <Sparkles size={14} color="#F59E0B" fill="#F59E0B" />
+               <Text style={styles.subtitleText}>{displaySubtitle}</Text>
+               <Sparkles size={14} color="#F59E0B" fill="#F59E0B" />
+            </View>
+          </Animatable.View>
         </Animatable.View>
 
-        <Animatable.Text 
-          animation="bounceIn"
-          delay={300}
-          duration={500}
-          style={styles.foundText}
+        {/* Decorative Stars */}
+        <Animatable.View 
+           animation="pulse" 
+           iterationCount="infinite" 
+           style={styles.sparkleOne}
         >
-          TREASURE FOUND!
-        </Animatable.Text>
+           <Star size={24} color="#FFD700" fill="#FFD700" />
+        </Animatable.View>
+        <Animatable.View 
+           animation="pulse" 
+           iterationCount="infinite" 
+           delay={500}
+           style={styles.sparkleTwo}
+        >
+           <Star size={32} color="#FFD700" fill="#FFD700" />
+        </Animatable.View>
       </View>
 
-      {/* Confetti Pieces */}
+      {/* Confetti Cannon */}
       {confettiPieces.current.map((piece) => (
         <ConfettiPieceComponent 
           key={piece.id} 
@@ -85,50 +124,43 @@ const DiscoveryAnimation: React.FC<DiscoveryAnimationProps> = ({ visible, onComp
 };
 
 const ConfettiPieceComponent: React.FC<{ piece: ConfettiPiece }> = ({ piece }) => {
-  const translateY = useRef(new Animated.Value(-50)).current;
+  const translateY = useRef(new Animated.Value(-100)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const rotate = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Fall animation
-    const fallAnimation = Animated.parallel([
+    Animated.parallel([
       Animated.timing(translateY, {
         toValue: height + 100,
-        duration: 2500,
+        duration: 3000,
         delay: piece.delay,
         useNativeDriver: true,
       }),
       Animated.timing(translateX, {
-        toValue: piece.x + (Math.random() - 0.5) * 200,
-        duration: 2500,
+        toValue: (Math.random() - 0.5) * 300,
+        duration: 3000,
         delay: piece.delay,
         useNativeDriver: true,
       }),
       Animated.timing(rotate, {
-        toValue: Math.random() * 10 - 5,
-        duration: 2500,
+        toValue: 1,
+        duration: 3000,
         delay: piece.delay,
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 2500,
-        delay: piece.delay + 1500,
+        duration: 1000,
+        delay: piece.delay + 2000,
         useNativeDriver: true,
       }),
-    ]);
-
-    fallAnimation.start();
-
-    return () => {
-      fallAnimation.stop();
-    };
+    ]).start();
   }, []);
 
   const rotateInterpolate = rotate.interpolate({
-    inputRange: [-5, 5],
-    outputRange: ['-360deg', '360deg'],
+    inputRange: [0, 1],
+    outputRange: ['0deg', `${360 * 3 * piece.rotateDir}deg`],
   });
 
   return (
@@ -138,7 +170,7 @@ const ConfettiPieceComponent: React.FC<{ piece: ConfettiPiece }> = ({ piece }) =
         {
           backgroundColor: piece.color,
           width: piece.size,
-          height: piece.size * 1.5,
+          height: piece.size * (Math.random() > 0.5 ? 1 : 1.5),
           transform: [
             { translateY },
             { translateX },
@@ -155,55 +187,75 @@ const ConfettiPieceComponent: React.FC<{ piece: ConfettiPiece }> = ({ piece }) =
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
+    zIndex: 99999,
     overflow: 'hidden',
   },
   centerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sparkleContainer: {
-    marginBottom: 20,
+  mainBox: {
+    alignItems: 'center',
+    padding: 30,
+    borderRadius: 40,
   },
-  sparkleCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(78, 205, 196, 0.2)',
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#4ECDC4',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 30,
-      },
-      android: {
-        elevation: 20,
-      },
-    }),
+    marginBottom: 24,
+    shadowColor: '#FF3366',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  sparkleEmoji: {
-    fontSize: 60,
+  textContainer: {
+    alignItems: 'center',
   },
   foundText: {
     color: '#FFF',
-    fontSize: 28,
-    fontWeight: '800',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
+    fontSize: 34,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 10,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  subtitleText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+    marginHorizontal: 8,
+    textTransform: 'uppercase',
   },
   confettiPiece: {
     position: 'absolute',
     top: -20,
-    borderRadius: 2,
+    borderRadius: 3,
+  },
+  sparkleOne: {
+     position: 'absolute',
+     top: '30%',
+     left: '15%',
+  },
+  sparkleTwo: {
+     position: 'absolute',
+     top: '25%',
+     right: '20%',
   },
 });
 

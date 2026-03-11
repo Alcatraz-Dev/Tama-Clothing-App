@@ -11,7 +11,9 @@ import {
   where, 
   orderBy,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  onSnapshot,
+  limit
 } from 'firebase/firestore';
 
 // Types
@@ -55,6 +57,16 @@ export interface TreasureLocation {
   bonusRewardValue?: number;
   bonusRewardValue2?: number;
   bonusRewardValue3?: number;
+}
+
+export interface Bomb {
+  id: string;
+  campaignId: string;
+  treasureId: string; // The treasure it's guarding
+  latitude: number;
+  longitude: number;
+  type?: 'static' | 'moving';
+  difficulty?: number;
 }
 
 export interface Participation {
@@ -252,15 +264,16 @@ class TreasureHuntService {
       const q = query(
         collection(db, 'treasure_locations'),
         where('campaignId', '==', campaignId),
-        where('isActive', '==', true),
-        orderBy('order', 'asc')
+        where('isActive', '==', true)
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const locations = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as TreasureLocation[];
+      
+      return locations.sort((a, b) => (a.order || 0) - (b.order || 0));
     } catch (error) {
       console.error('Error fetching locations:', error);
       return [];
@@ -269,17 +282,26 @@ class TreasureHuntService {
 
   // Get user's participation in a campaign
   async getParticipation(campaignId: string, userId: string): Promise<Participation | null> {
+    if (!campaignId || !userId) {
+      console.warn('getParticipation called with missing campaignId or userId');
+      return null;
+    }
     try {
       const q = query(
         collection(db, 'treasure_participations'),
         where('campaignId', '==', campaignId),
-        where('userId', '==', userId),
-        orderBy('enrolledAt', 'desc')
+        where('userId', '==', userId)
       );
       
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
-        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Participation;
+        const participations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Participation));
+        participations.sort((a, b) => {
+          const timeA = a.enrolledAt?.seconds || 0;
+          const timeB = b.enrolledAt?.seconds || 0;
+          return timeB - timeA;
+        });
+        return participations[0];
       }
       return null;
     } catch (error) {
@@ -290,22 +312,198 @@ class TreasureHuntService {
 
   // Get all user participations
   async getUserParticipations(userId: string): Promise<Participation[]> {
+    if (!userId) return [];
     try {
       const q = query(
         collection(db, 'treasure_participations'),
-        where('userId', '==', userId),
-        orderBy('enrolledAt', 'desc')
+        where('userId', '==', userId)
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const participations = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Participation[];
+      
+      return participations.sort((a, b) => {
+        const timeA = a.enrolledAt?.seconds || 0;
+        const timeB = b.enrolledAt?.seconds || 0;
+        return timeB - timeA;
+      });
     } catch (error) {
       console.error('Error fetching participations:', error);
       return [];
     }
+  }
+
+  // Get combined user stats (XP, Level)
+  async getUserStats(userId: string) {
+    const participations = await this.getUserParticipations(userId);
+    let totalXP = 0;
+    
+    participations.forEach(p => {
+      if (p.rewards) {
+        p.rewards.forEach(r => {
+          if (r.type === 'points') {
+            totalXP += (parseInt(String(r.value)) || 0);
+          }
+        });
+      }
+    });
+
+    const level = Math.floor(totalXP / 1000) + 1;
+    const currentLevelXP = totalXP % 1000;
+    const nextLevelXP = 1000;
+    const progress = (currentLevelXP / nextLevelXP) * 100;
+    const remainingXP = nextLevelXP - currentLevelXP;
+
+    return {
+      totalXP,
+      level,
+      currentLevelXP,
+      nextLevelXP,
+      progress,
+      remainingXP
+    };
+  }
+
+  // Create a demo location at current coordinates for testing
+  async createDemoLocation(userId: string, latitude: number, longitude: number) {
+    try {
+      // Find an active campaign to attach to
+      const campaigns = await this.getActiveCampaigns();
+      if (campaigns.length === 0) {
+        // Fallback: search for any campaign if no active one
+        const allCampaigns = await this.getAllCampaigns();
+        if (allCampaigns.length === 0) {
+          throw new Error('No campaigns found to add demo location');
+        }
+        var campaignId = allCampaigns[0].id;
+      } else {
+        var campaignId = campaigns[0].id;
+      }
+      
+      const qrCode = await this.generateUniqueQRCode();
+      
+      const locationData = {
+        campaignId,
+        name: { fr: 'Demo Treasure', 'ar-tn': 'كنز تجريبي' },
+        hint: { fr: 'Test capture here!', 'ar-tn': 'اختبار الالتقاط هنا!' },
+        coordinates: { latitude, longitude },
+        qrCode,
+        radius: 100, 
+        isActive: true,
+        isDiscoverable: true,
+        isDemo: true, // Tag it as demo
+        order: 99,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, 'treasure_locations'), locationData);
+      
+      // Auto-enroll user if not enrolled
+      const participation = await this.getParticipation(campaignId, userId);
+      if (!participation) {
+        await this.enrollInCampaign(campaignId, userId);
+      } else {
+        // Update participation total locations if we added one
+        const locations = await this.getLocations(campaignId);
+        await updateDoc(doc(db, 'treasure_participations', participation.id), {
+          'progress.totalLocations': locations.length
+        });
+      }
+      
+      return { id: docRef.id, ...locationData };
+    } catch (error) {
+      console.error('Error creating demo location:', error);
+      throw error;
+    }
+  }
+
+  // Delete all demo locations
+  async deleteDemoLocations() {
+    try {
+      const q = query(collection(db, 'treasure_locations'), where('isDemo', '==', true));
+      const snap = await getDocs(q);
+      
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'treasure_locations', d.id)));
+      await Promise.all(deletions);
+      return snap.size;
+    } catch (error) {
+      console.error('Error deleting demo locations:', error);
+      return 0;
+    }
+  }
+
+  // Create a demo bomb at user location
+  async createDemoBomb(userId: string, latitude: number, longitude: number) {
+    try {
+      // Find a campaign to link it to
+      const q = query(collection(db, 'treasure_campaigns'), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) throw new Error('No campaign found to add bomb to');
+      
+      const campaignId = snap.docs[0].id;
+      
+      const bombData = {
+        campaignId,
+        treasureId: 'demo_treasure',
+        latitude: latitude + (Math.random() - 0.5) * 0.0005, // Offset slightly
+        longitude: longitude + (Math.random() - 0.5) * 0.0005,
+        type: 'static',
+        difficulty: 1,
+        isDemo: true,
+        createdAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, 'treasure_bombs'), bombData);
+      return { id: docRef.id, ...bombData };
+    } catch (error) {
+      console.error('Error creating demo bomb:', error);
+      throw error;
+    }
+  }
+
+  // Delete all demo bombs
+  async deleteDemoBombs() {
+    try {
+      const q = query(collection(db, 'treasure_bombs'), where('isDemo', '==', true));
+      const snap = await getDocs(q);
+      
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'treasure_bombs', d.id)));
+      await Promise.all(deletions);
+      return snap.size;
+    } catch (error) {
+      console.error('Error deleting demo bombs:', error);
+      return 0;
+    }
+  }
+
+  // Subscribe to all user participations for real-time rewards
+  subscribeToUserParticipations(userId: string, callback: (participations: Participation[]) => void) {
+    if (!userId) return () => {};
+    
+    const q = query(
+      collection(db, 'treasure_participations'),
+      where('userId', '==', userId)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const participations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Participation[];
+      
+      participations.sort((a, b) => {
+        const timeA = a.enrolledAt?.seconds || 0;
+        const timeB = b.enrolledAt?.seconds || 0;
+        return timeB - timeA;
+      });
+      callback(participations);
+    }, (error) => {
+      console.error('Error subscribing to user participations:', error);
+    });
   }
 
   // Enroll in a campaign
@@ -371,6 +569,24 @@ class TreasureHuntService {
     } catch (error: any) {
       console.error('Error enrolling:', error);
       throw error;
+    }
+  }
+
+  // Abandon/"Fail" a participation (e.g. hit a bomb)
+  async abandonCampaign(campaignId: string, userId: string): Promise<boolean> {
+    try {
+      const participation = await this.getParticipation(campaignId, userId);
+      if (!participation) return false;
+
+      // In a real app we might mark as 'failed', but marking it as 'completed'
+      // or deleting it so the user can try again is an option. 
+      // For this game, let's delete the participation so they have to start over
+      await deleteDoc(doc(db, 'treasure_participations', participation.id));
+      
+      return true;
+    } catch (error) {
+       console.error('Error abandoning campaign:', error);
+       return false;
     }
   }
 
@@ -456,52 +672,104 @@ class TreasureHuntService {
         return { success: false, message: 'Not close enough', isWithinRadius: false };
       }
 
-      // Success - update participation
+      return await this.finalizeDiscovery(location, participation, userId);
+    } catch (error) {
+      console.error('Error processing scan:', error);
+      return { success: false, message: 'Error processing scan' };
+    }
+  }
+
+  // Virtual capture (Pokemon Go style)
+  async captureTreasure(
+    locationId: string, 
+    userId: string, 
+    userLatitude: number, 
+    userLongitude: number
+  ): Promise<{
+    success: boolean;
+    location?: TreasureLocation;
+    isNewDiscovery?: boolean;
+    message?: string;
+    reward?: any;
+    progress?: any;
+    nextLocation?: TreasureLocation;
+  }> {
+    try {
+      const locationDoc = await getDoc(doc(db, 'treasure_locations', locationId));
+      if (!locationDoc.exists()) {
+        return { success: false, message: 'Location not found' };
+      }
+      const location = { id: locationDoc.id, ...locationDoc.data() } as TreasureLocation;
+
+      const participation = await this.getParticipation(location.campaignId, userId);
+      if (!participation) {
+        return { success: false, message: 'Not enrolled' };
+      }
+
+      const isAlreadyDiscovered = participation.progress.discoveredLocationIds.includes(location.id);
+      if (isAlreadyDiscovered) {
+        return { success: false, message: 'Already discovered' };
+      }
+
+      const distance = this.calculateDistance(
+        userLatitude, userLongitude,
+        location.coordinates.latitude, location.coordinates.longitude
+      );
+      
+      if (distance > (location.radius || 100)) { // 100m for virtual capture
+        return { success: false, message: 'Too far away' };
+      }
+
+      return await this.finalizeDiscovery(location, participation, userId);
+    } catch (error) {
+       console.error('Capture error:', error);
+       return { success: false, message: 'Capture failed' };
+    }
+  }
+
+  private async finalizeDiscovery(location: TreasureLocation, participation: Participation, userId: string) {
+      // Logic from processScan to update participation and rewards
       const newDiscoveredIds = [...participation.progress.discoveredLocationIds, location.id];
       
-      // Find next location
       const locations = await this.getLocations(location.campaignId);
       const nextLocation = locations.find(loc => loc.order === (location.order || 0) + 1);
 
-      // Get campaign rewards (unified model - rewards come from campaign, not location)
       const campaign = await this.getCampaign(location.campaignId);
       const campaignRewardType = campaign?.rewardType || 'points';
       const campaignRewardValue = campaign?.rewardValue || 10;
 
-      // Calculate and add reward points
-      let rewardPoints = 0;
       let rewardDetails: any = null;
       
       if (campaignRewardType === 'points') {
-        rewardPoints = parseInt(String(campaignRewardValue)) || 10;
-        rewardDetails = { type: 'points', value: rewardPoints };
-        // Add points to user's wallet
-        await this.addPointsToUser(userId, rewardPoints, location.campaignId, location.id);
+        const rewardPoints = parseInt(String(campaignRewardValue)) || 10;
+        rewardDetails = { type: 'points', value: rewardPoints, isRedeemed: false };
       } else if (campaignRewardType === 'discount') {
-        rewardDetails = { type: 'discount', value: campaignRewardValue, code: `DISCOUNT_${location.id.slice(0, 8)}` };
-        // Create discount coupon for user
-        await this.createDiscountCoupon(userId, campaignRewardValue, location.campaignId, location.id);
+        rewardDetails = { type: 'discount', value: campaignRewardValue, code: `DISCOUNT_${location.id.slice(0, 8).toUpperCase()}`, isRedeemed: false };
       } else if (campaignRewardType === 'coupon') {
-        rewardDetails = { type: 'coupon', code: campaignRewardValue };
-        // Apply coupon directly or notify user
-        await this.applyCouponReward(userId, campaignRewardValue, location.campaignId, location.id);
+        rewardDetails = { type: 'coupon', code: campaignRewardValue, isRedeemed: false };
+      } else if (campaignRewardType === 'free_product') {
+        rewardDetails = { type: 'free_product', value: campaignRewardValue, code: `FREE_${location.id.slice(0, 8).toUpperCase()}`, isRedeemed: false };
+      } else {
+        rewardDetails = { type: campaignRewardType, value: campaignRewardValue, isRedeemed: false };
       }
 
       await updateDoc(doc(db, 'treasure_participations', participation.id), {
         'progress.discoveredLocationIds': newDiscoveredIds,
         'progress.discoveredLocations': newDiscoveredIds.length,
         'progress.currentLocationId': nextLocation?.id || null,
-        'rewards': [...(participation.rewards || []), { locationId: location.id, ...rewardDetails, timestamp: serverTimestamp() }],
+        'rewards': [...(participation.rewards || []), { 
+          locationId: location.id, 
+          ...rewardDetails, 
+          timestamp: Timestamp.now() 
+        }],
         updatedAt: serverTimestamp()
       });
-
-      const isCompleted = newDiscoveredIds.length >= participation.progress.totalLocations;
 
       return {
         success: true,
         isNewDiscovery: true,
         location,
-        isCompleted,
+        isCompleted: newDiscoveredIds.length >= participation.progress.totalLocations,
         reward: rewardDetails,
         progress: {
           discovered: newDiscoveredIds.length,
@@ -509,9 +777,54 @@ class TreasureHuntService {
         },
         nextLocation: nextLocation || undefined
       };
-    } catch (error) {
-      console.error('Error processing scan:', error);
-      return { success: false, message: 'Error processing scan' };
+  }
+
+  // Claim a previously discovered reward
+  async claimReward(userId: string, participationId: string, rewardIndex: number): Promise<boolean> {
+    try {
+      const pRef = doc(db, 'treasure_participations', participationId);
+      const pSnap = await getDoc(pRef);
+      if (!pSnap.exists()) return false;
+      const data = pSnap.data();
+      const rewards = data.rewards || [];
+      if (rewardIndex >= rewards.length) return false;
+      
+      const reward = rewards[rewardIndex];
+      if (reward.isRedeemed) return true;
+
+      // Assign to user wallet/coupons
+      if (reward.type === 'points') {
+        await this.addPointsToUser(userId, reward.value, data.campaignId, reward.locationId);
+      } else if (reward.type === 'discount') {
+        await this.createDiscountCoupon(userId, reward.value, data.campaignId, reward.locationId);
+      } else if (reward.type === 'coupon') {
+        await this.applyCouponReward(userId, reward.code, data.campaignId, reward.locationId);
+      } else if (reward.type === 'free_product') {
+        await addDoc(collection(db, 'user_coupons'), {
+          userId,
+          code: reward.code,
+          discountType: 'percentage',
+          discountValue: 100, // 100% off
+          minOrderAmount: 0,
+          validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          isUsed: false,
+          productId: reward.value,
+          source: 'treasure_hunt',
+          campaignId: data.campaignId,
+          locationId: reward.locationId,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      // Mark as redeemed
+      rewards[rewardIndex].isRedeemed = true;
+      rewards[rewardIndex].claimedAt = Timestamp.now();
+
+      await updateDoc(pRef, { rewards });
+      return true;
+    } catch (e) {
+      console.error('Error claiming reward:', e);
+      return false;
     }
   }
 
@@ -728,6 +1041,61 @@ class TreasureHuntService {
     }
   }
 
+  // Get bombs for a campaign
+  async getBombs(campaignId: string): Promise<Bomb[]> {
+    try {
+      const q = query(
+        collection(db, 'treasure_bombs'),
+        where('campaignId', '==', campaignId)
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Bomb[];
+    } catch (error) {
+      console.error('Error fetching bombs:', error);
+      return [];
+    }
+  }
+
+  // Create a bomb (for admin)
+  async createBomb(bombData: Partial<Bomb>): Promise<Bomb | null> {
+    try {
+      const newBomb = {
+        campaignId: bombData.campaignId || '',
+        treasureId: bombData.treasureId || '',
+        latitude: bombData.latitude || 0,
+        longitude: bombData.longitude || 0,
+        type: bombData.type || 'static',
+        difficulty: bombData.difficulty || 1,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'treasure_bombs'), newBomb);
+      return {
+        id: docRef.id,
+        ...newBomb
+      } as Bomb;
+    } catch (error) {
+      console.error('Error creating bomb:', error);
+      return null;
+    }
+  }
+
+  // Delete a bomb
+  async deleteBomb(bombId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'treasure_bombs', bombId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting bomb:', error);
+      return false;
+    }
+  }
+
   // Delete a location
   async deleteLocation(locationId: string): Promise<boolean> {
     try {
@@ -833,6 +1201,54 @@ class TreasureHuntService {
     } catch (error) {
       console.error('Error applying coupon reward:', error);
     }
+  }
+
+  // Subscribe to all active campaigns
+  subscribeToCampaigns(callback: (campaigns: Campaign[]) => void) {
+    const q = query(
+      collection(db, 'treasure_campaigns'),
+      where('status', '==', 'active')
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const campaigns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
+      campaigns.sort((a, b) => {
+          const timeA = a.startDate?.seconds || 0;
+          const timeB = b.startDate?.seconds || 0;
+          return timeB - timeA;
+      });
+      callback(campaigns);
+    }, (error) => {
+      console.error('Campaign subscription error:', error);
+    });
+  }
+
+  // Subscribe to user participation
+  subscribeToParticipation(campaignId: string, userId: string, callback: (participation: Participation | null) => void) {
+    if (!campaignId || !userId) return () => {};
+    
+    const q = query(
+      collection(db, 'treasure_participations'),
+      where('campaignId', '==', campaignId),
+      where('userId', '==', userId)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const participations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Participation));
+        // Sort locally to get latest
+        participations.sort((a, b) => {
+          const timeA = a.enrolledAt?.seconds || 0;
+          const timeB = b.enrolledAt?.seconds || 0;
+          return timeB - timeA;
+        });
+        callback(participations[0]);
+      } else {
+        callback(null);
+      }
+    }, (error) => {
+      console.error('Participation subscription error:', error);
+    });
   }
 }
 

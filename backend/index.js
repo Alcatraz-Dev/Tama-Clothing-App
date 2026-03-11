@@ -139,6 +139,99 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// Get all products
+app.get('/api/products', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin not initialized' });
+  }
+
+  try {
+    const { limit = 50, categoryId, brandId, search } = req.query;
+    let query = db.collection('products');
+    
+    // Filter by active status if exists
+    query = query.where('isActive', '==', true);
+    
+    const snap = await query.get();
+    let products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Client-side filtering for category and brand (Firestore limitations)
+    if (categoryId) {
+      products = products.filter(p => p.categoryId === categoryId);
+    }
+    if (brandId) {
+      products = products.filter(p => p.brandId === brandId);
+    }
+    if (search) {
+      const searchLower = search.toString().toLowerCase();
+      products = products.filter(p => {
+        const name = (p.name?.fr || p.name?.['ar-tn'] || p.name?.en || '').toString().toLowerCase();
+        return name.includes(searchLower);
+      });
+    }
+    
+    // Apply limit
+    products = products.slice(0, parseInt(limit));
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
+// Get single product
+app.get('/api/products/:id', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin not initialized' });
+  }
+
+  try {
+    const doc = await db.collection('products').doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({ error: 'Failed to fetch product' });
+  }
+});
+
+// Get all categories
+app.get('/api/categories', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin not initialized' });
+  }
+
+  try {
+    const snap = await db.collection('categories').get();
+    const categories = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// Get all brands
+app.get('/api/brands', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin not initialized' });
+  }
+
+  try {
+    const snap = await db.collection('brands').get();
+    let brands = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Filter active brands
+    brands = brands.filter(b => b.isActive !== false);
+    res.json(brands);
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    res.status(500).json({ error: 'Failed to fetch brands' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

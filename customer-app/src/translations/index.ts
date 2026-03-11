@@ -1,11 +1,15 @@
+import { en } from './en';
 import { fr } from './fr';
 import { ar } from './ar';
-import { en } from './en';
 
-export const Translations: any = {
-  fr,
-  ar,
+export default {
   en,
+  fr,
+  ar
 };
 
-export default Translations;
+export const translations = {
+  en,
+  fr,
+  ar
+};

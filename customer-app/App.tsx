@@ -191,8 +191,10 @@ import {
   TreasureMapScreen, 
   TreasureScannerScreen, 
   TreasureRewardsScreen,
-  TreasureCampaignScreen 
+  TreasureCampaignScreen,
+  TreasureCaptureScreen
 } from './src/screens/treasure-hunt';
+import { treasureHuntService } from './src/services/TreasureHuntService';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
@@ -282,8 +284,9 @@ export default function App() {
   const [activeLiveChannel, setActiveLiveChannel] = useState<string>('bey3a-clothing');
   const [isLiveHost, setIsLiveHost] = useState(false);
   // Treasure Hunt State
-  const [treasureHuntState, setTreasureHuntState] = useState<'home' | 'campaign' | 'map' | 'scanner' | 'rewards'>('home');
+  const [treasureHuntState, setTreasureHuntState] = useState<'home' | 'campaign' | 'map' | 'scanner' | 'rewards' | 'capture'>('home');
   const [selectedTreasureCampaign, setSelectedTreasureCampaign] = useState<any>(null);
+  const [selectedTreasureLocation, setSelectedTreasureLocation] = useState<any>(null);
   const [isLiveReplay, setIsLiveReplay] = useState(false);
   const [replayUrl, setReplayUrl] = useState('');
   const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
@@ -641,7 +644,7 @@ export default function App() {
   // Sync global legacy Colors with state
   Colors = getAppColors(theme);
 
-  const t = (key: string) => Translations[language][key] || key;
+  const t = (key: string) => (Translations as any)[language][key] || key;
 
   // Fetch Target User Profile when switching to PublicProfile
   useEffect(() => {
@@ -1717,12 +1720,14 @@ export default function App() {
           {treasureHuntState === 'home' && (
             <TreasureHuntHomeScreen
               t={t}
+              userId={user?.uid || ''}
               isDark={theme === 'dark'}
               onBack={previousTab === 'Profile' ? () => setActiveTab('Profile') : undefined}
               onCampaignSelect={(campaign) => {
                 setSelectedTreasureCampaign(campaign);
                 setTreasureHuntState('campaign');
               }}
+              onViewRewards={() => setTreasureHuntState('rewards')}
             />
           )}
           {treasureHuntState === 'campaign' && selectedTreasureCampaign && (
@@ -1739,13 +1744,40 @@ export default function App() {
           )}
           {treasureHuntState === 'map' && selectedTreasureCampaign && (
             <TreasureMapScreen
-              campaign={selectedTreasureCampaign}
+              campaignId={selectedTreasureCampaign.id}
               userId={user?.uid || ''}
               t={t}
               isDark={theme === 'dark'}
               onBack={() => setTreasureHuntState('campaign')}
-              onScan={() => setTreasureHuntState('scanner')}
-              onRewardClaim={() => setTreasureHuntState('rewards')}
+              onViewRewards={() => setTreasureHuntState('rewards')}
+              onViewProfile={() => {
+                setTreasureHuntState('home');
+              }}
+              onScan={(location) => {
+                setSelectedTreasureLocation(location);
+                setTreasureHuntState('capture');
+              }}
+            />
+          )}
+          {treasureHuntState === 'capture' && selectedTreasureLocation && (
+            <TreasureCaptureScreen
+              location={selectedTreasureLocation}
+              isDark={theme === 'dark'}
+              t={t}
+              onCancel={() => setTreasureHuntState('map')}
+              onSuccess={async (data) => {
+                try {
+                  await treasureHuntService.processScan(
+                    selectedTreasureCampaign.id,
+                    user?.uid || '',
+                    data.qrCode // Use the location's QR code
+                  );
+                  setTreasureHuntState('map');
+                } catch (error) {
+                  console.error('Capture error:', error);
+                  setTreasureHuntState('map');
+                }
+              }}
             />
           )}
           {treasureHuntState === 'scanner' && selectedTreasureCampaign && (
@@ -1756,7 +1788,6 @@ export default function App() {
               isDark={theme === 'dark'}
               onBack={() => setTreasureHuntState('map')}
               onSuccess={() => {
-                // Refresh data and go back to map
                 setTreasureHuntState('map');
               }}
               onError={(message) => {
@@ -2052,7 +2083,12 @@ export default function App() {
         <SafeAreaProvider>
           <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} />
           {appState === 'Onboarding' ? (
-            <OnboardingScreen onFinish={() => setAppState('Auth')} t={t as any} />
+            <OnboardingScreen 
+              onFinish={() => setAppState('Auth')} 
+              t={t as any} 
+              language={language} 
+              setLanguage={setLanguage} 
+            />
           ) : appState === 'Auth' ? (
             <AuthScreen isLogin={isLogin} toggleAuth={() => setIsLogin(!isLogin)} onComplete={() => setAppState('Main')} t={t} language={language} />
           ) : appState === 'VendorRegistration' ? (
@@ -2084,7 +2120,12 @@ export default function App() {
                         fullName: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.fullName || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.displayName || 'USER',
                         avatarUrl: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.avatarUrl || '',
                         role: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.role || 'User',
-                        wallet: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.wallet
+                        wallet: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.wallet,
+                        bio: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.bio || '',
+                        followersCount: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.followersCount || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.followers?.length || 0,
+                        followingCount: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.followingCount || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.following?.length || 0,
+                        worksCount: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.worksCount || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.works?.length || 0,
+                        friendsCount: (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.friendsCount || (activeTab === 'PublicProfile' ? targetUserProfile : profileData)?.friends?.length || 0
                       }}
                       isDark={theme === 'dark'}
                       language={language}
@@ -2608,7 +2649,7 @@ function CommentsSectionComponent({
   );
 }
 
-function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, setPreviousTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor, onAddFriend }: any) {
+function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfileData, updateProfile, onNavigate, socialLinks, t, language, setLanguage, theme, setTheme, followedCollabs, toggleFollowCollab, setSelectedCollab, setActiveTab, setPreviousTab, onStartLive, targetUid: targetUidProp, isPublicProfile, onShowBadge, onShowScanner, setActiveTrackingId, setTrackingModalVisible, onBecomeVendor, onAddFriend, selectedChatUser: externalSelectedChatUser, setSelectedChatUser: externalSetSelectedChatUser }: any) {
   const { colors } = useAppTheme();
   const accent = '#6C63FF'; // App's primary accent color
   const insets = useSafeAreaInsets();
@@ -2647,7 +2688,6 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
   const [works, setWorks] = useState<any[]>([]);
   const [uploadingWork, setUploadingWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<any>(null);
-  const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
   const [totalUnread, setTotalUnread] = useState(0);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -3482,13 +3522,13 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
           {/* Action Buttons for Public Profiles */}
           {!isOwnProfile && (
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 15, marginBottom: 5 }}>
-              {/* Friend Button */}
+              {/* Add Friend Button - always shows "ajoute ami" */}
               {currentUserProfileData?.friends?.includes(profileData?.uid || profileData?.id) ? (
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: colors.border }}
                 >
                   <UserCheck size={16} color={colors.accent} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>{tr('AMI', 'صديق', 'FRIEND')}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>{tr('ami', 'صديق', 'ami')}</Text>
                 </TouchableOpacity>
               ) : currentUserProfileData?.pendingFriendRequests?.includes(profileData?.uid || profileData?.id) ? (
                 <TouchableOpacity
@@ -3496,7 +3536,7 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   disabled
                 >
                   <Clock size={16} color={colors.textMuted} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{tr('PENDING', 'قيد الانتظار', 'PENDING')}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{tr('en attente', 'قيد الانتظار', 'en attente')}</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -3504,26 +3544,38 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: colors.accent }}
                 >
                   <UserPlus size={16} color="#FFF" />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{tr('AMI', 'إضافة صديق', 'ADD FRIEND')}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{tr('ajoute ami', 'إضافة صديق', 'ajoute ami')}</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Message Button */}
+              {/* Message Button - checks friend status before opening chat */}
               <TouchableOpacity
                 onPress={() => {
-                  setSelectedChatUser(profileData);
+                  const targetUserId = profileData?.uid || profileData?.id;
+                  const isFriend = currentUserProfileData?.friends?.includes(targetUserId);
+                  if (!isFriend) {
+                    Alert.alert(
+                      tr('Message', 'رسالة', 'Message'),
+                      tr('Le chat est disponible uniquement après acceptation de l\'invitation', 'الدردشة متاحة فقط بعد قبول الدعوة', 'Le chat est disponible uniquement après acceptation de l\'invitation')
+                    );
+                    return;
+                  }
+                  // Use external setSelectedChatUser if available (for public profiles)
+                  if (externalSetSelectedChatUser) {
+                    externalSetSelectedChatUser({ ...profileData, uid: targetUserId });
+                  }
                   setActiveTab('DirectMessage');
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 25, backgroundColor: theme === 'dark' ? '#FFF' : '#000' }}
               >
                 <MessageCircle size={16} color={theme === 'dark' ? '#000' : '#FFF'} />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: theme === 'dark' ? '#000' : '#FFF' }}>{tr('MESSAGE', 'رسالة', 'MESSAGE')}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme === 'dark' ? '#000' : '#FFF' }}>{tr('message', 'رسالة', 'message')}</Text>
               </TouchableOpacity>
             </View>
           )}
         </Animatable.View>
 
-        {/* Sticky Tab Switcher (Child Index 2) */}
+        {/* Sticky Tab Switcher (Child Index 2) - Only show Works/Travaux tab for public profiles */}
         <View style={{ backgroundColor: colors.background }}>
           <View style={{
             flexDirection: 'row',
@@ -3582,56 +3634,52 @@ function ProfileScreen({ user, onBack, onLogout, profileData, currentUserProfile
                 {t('works').toUpperCase()}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                if (isOwnProfile) {
-                  // Own profile - go to messages list
+            {/* Hide Messages tab by default for public profiles - only show for own profile */}
+            {isOwnProfile && (
+              <TouchableOpacity
+                onPress={() => {
                   setActiveTab('Messages');
-                } else {
-                  // Public profile - open direct message with this user
-                  setSelectedChatUser(profileData);
-                  setActiveTab('DirectMessage');
-                }
-              }}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: profileTab === 'Messages' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
-              }}
-            >
-              <MessageCircle size={16} color={profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
-              <Text style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
-                letterSpacing: 0.5
-              }}>
-                {tr('MESSAGES', 'الرسائل', 'MESSAGES')}
-              </Text>
-              {isOwnProfile && totalUnread > 0 && (
-                <View style={{
-                  position: 'absolute',
-                  top: -5,
-                  right: 5,
-                  backgroundColor: '#EF4444',
-                  borderRadius: 10,
-                  minWidth: 20,
-                  height: 20,
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1.5,
-                  borderColor: theme === 'dark' ? '#000' : '#FFF',
-                  paddingHorizontal: 4
+                  gap: 8,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: profileTab === 'Messages' ? (theme === 'dark' ? '#FFF' : '#000') : 'transparent'
+                }}
+              >
+                <MessageCircle size={16} color={profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted} />
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '800',
+                  color: profileTab === 'Messages' ? (theme === 'dark' ? '#000' : '#FFF') : colors.textMuted,
+                  letterSpacing: 0.5
                 }}>
-                  <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                  {tr('MESSAGES', 'الرسائل', 'MESSAGES')}
+                </Text>
+                {isOwnProfile && totalUnread > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -5,
+                    right: 5,
+                    backgroundColor: '#EF4444',
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1.5,
+                    borderColor: theme === 'dark' ? '#000' : '#FFF',
+                    paddingHorizontal: 4
+                  }}>
+                    <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '900' }}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

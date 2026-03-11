@@ -48,7 +48,7 @@ const CARD_WIDTH = (width - 48) / 2;
 
 export default function CategoryOnboardingScreen({ onFinish, onCategorySelect, t }: CategoryOnboardingScreenProps) {
   const { colors, theme } = useAppTheme();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const getCategoryTitle = (id: string) => {
     const titles: any = {
@@ -87,15 +87,10 @@ export default function CategoryOnboardingScreen({ onFinish, onCategorySelect, t
   };
 
   const handleCategoryPress = (categoryId: string) => {
-    setSelectedCategory(categoryId);
-    
-    // Show feedback
-    Alert.alert(
-      getCategoryTitle(categoryId),
-      `Welcome to ${getCategoryTitle(categoryId)}! Explore all ${getCategoryDesc(categoryId).toLowerCase()}.`,
-      [
-        { text: 'Continue', onPress: () => setSelectedCategory(null) }
-      ]
+    setSelectedCategories(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId) 
+        : [...prev, categoryId]
     );
     
     if (onCategorySelect) {
@@ -130,7 +125,7 @@ export default function CategoryOnboardingScreen({ onFinish, onCategorySelect, t
         <View style={styles.grid}>
           {CATEGORIES.map((category, index) => {
             const Icon = category.icon;
-            const isSelected = selectedCategory === category.id;
+            const isSelected = selectedCategories.includes(category.id);
             return (
               <Animatable.View
                 key={category.id}
@@ -186,7 +181,9 @@ export default function CategoryOnboardingScreen({ onFinish, onCategorySelect, t
           style={[styles.continueButton, { backgroundColor: colors.primary }]}
         >
           <Text style={styles.continueButtonText}>
-            {t('browseCategories') || 'BROWSE ALL'}
+            {selectedCategories.length > 0 
+              ? (t('onboardGetStarted') || 'GET STARTED') 
+              : (t('browseCategories') || 'BROWSE ALL')}
           </Text>
           <ArrowRight size={20} color="#FFF" />
         </TouchableOpacity>

@@ -1,302 +1,365 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  Image, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   Dimensions,
-  Modal,
+  Platform,
+  StatusBar,
   Animated,
-  Platform
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Animatable from 'react-native-animatable';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  MapPin, 
-  Clock, 
-  Users, 
-  ChevronRight, 
-  Search,
-  Filter,
+  FlatList,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Animatable from "react-native-animatable";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  MapPin,
+  Clock,
+  Users,
+  ChevronRight,
   Trophy,
   Star,
   Gift,
-  X,
-  CheckCircle2,
-  AlertCircle,
-  ArrowRight,
   Sparkles,
-  Target,
-  Zap,
-  XCircle,
   Scan,
-  ChevronLeft
-} from 'lucide-react-native';
-import { treasureHuntService, Campaign } from '@/services/TreasureHuntService';
-import { useAppTheme } from '@/context/ThemeContext';
-import { Timestamp } from 'firebase/firestore';
-import { ColorValue } from "react-native";
-const { width, height } = Dimensions.get('window');
+  ChevronLeft,
+  Zap,
+  Medal,
+  TrendingUp,
+  Map as MapIcon,
+  ShoppingBag,
+  Bomb,
+  Trash2,
+} from "lucide-react-native";
+import { treasureHuntService, Campaign } from "@/services/TreasureHuntService";
+import { useAppTheme } from "@/context/ThemeContext";
+import { Timestamp } from "firebase/firestore";
+import * as Location from 'expo-location';
 
-const isSmallScreen = width < 375;
-const isTablet = width > 768;
-const scaleFactor = width / 375; // Base scale on iPhone SE width
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = width * 0.82;
+const CARD_MARGIN = 12;
 
-interface TreasureHuntHomeScreenProps {
+const TreasureHuntHomeScreen: React.FC<{
   t: any;
+  userId: string;
   isDark: boolean;
   onCampaignSelect: (campaign: Campaign) => void;
+  onViewRewards: () => void;
   onBack?: () => void;
-}
-
-const TreasureHuntHomeScreen: React.FC<TreasureHuntHomeScreenProps> = ({ 
-  t, 
-  isDark,
-  onCampaignSelect,
-  onBack
-}) => {
+}> = ({ t, userId, isDark, onCampaignSelect, onViewRewards, onBack }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [upcomingCampaigns, setUpcomingCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [addingDemo, setAddingDemo] = useState(false);
   const [countdown, setCountdown] = useState<{ [key: string]: number }>({});
-  const [endCountdown, setEndCountdown] = useState<{ [key: string]: number }>({});
+  const [endCountdown, setEndCountdown] = useState<{ [key: string]: number }>(
+    {},
+  );
   const { colors, theme } = useAppTheme();
 
   const fetchCampaigns = async () => {
     try {
-      const now = Timestamp.now();
-      // Get active campaigns
       const activeCampaigns = await treasureHuntService.getActiveCampaigns();
-      setCampaigns(activeCampaigns);
-
-      // Get all public campaigns to find upcoming ones
       const allCampaigns = await treasureHuntService.getAllPublicCampaigns();
-      const upcoming = allCampaigns.filter(campaign => {
+      
+      if (userId) {
+        const stats = await treasureHuntService.getUserStats(userId);
+        setUserStats(stats);
+      }
+
+      const now = Timestamp.now();
+      const upcoming = allCampaigns.filter((campaign) => {
         const startDate = campaign.startDate as Timestamp | undefined;
-        if (!startDate || !startDate.toDate) return false;
-        return startDate.seconds > now.seconds;
+        return (
+          startDate &&
+          startDate.seconds > now.seconds &&
+          campaign.status === "scheduled"
+        );
       });
       setUpcomingCampaigns(upcoming);
     } catch (error) {
-      console.error('Error fetching campaigns:', error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Countdown timer effect for upcoming campaigns (start date)
+  const handleCreateDemo = async () => {
+    if (!userId) return;
+    try {
+      setAddingDemo(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Permission to access location was denied');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      await treasureHuntService.createDemoLocation(
+        userId, 
+        location.coords.latitude, 
+        location.coords.longitude
+      );
+      alert('Demo Treasure added at your location! Open map to test.');
+      fetchCampaigns();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add demo treasure');
+    } finally {
+      setAddingDemo(false);
+    }
+  };
+
+  const handleDeleteDemos = async () => {
+    try {
+      setAddingDemo(true);
+      const crossout = await treasureHuntService.deleteDemoLocations();
+      const crossoutBombs = await treasureHuntService.deleteDemoBombs();
+      alert(`Deleted ${crossout} treasures and ${crossoutBombs} bombs.`);
+      fetchCampaigns();
+    } catch (err: any) {
+      alert('Failed to delete demos');
+    } finally {
+      setAddingDemo(false);
+    }
+  };
+
+  const handleCreateDemoBomb = async () => {
+    if (!userId) return;
+    try {
+      setAddingDemo(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const location = await Location.getCurrentPositionAsync({});
+      await treasureHuntService.createDemoBomb(
+        userId, 
+        location.coords.latitude, 
+        location.coords.longitude
+      );
+      alert('Demo Bomb added nearby! Open map to test.');
+      fetchCampaigns();
+    } catch (err: any) {
+      alert('Failed to add demo bomb');
+    } finally {
+      setAddingDemo(false);
+    }
+  };
+
   useEffect(() => {
-    const calculateCountdowns = () => {
+    setLoading(true);
+    const unsubscribe = treasureHuntService.subscribeToCampaigns(
+      (activeCampaigns) => {
+        setCampaigns(activeCampaigns);
+        setLoading(false);
+        setRefreshing(false); // Also set refreshing to false here
+      },
+    );
+
+    fetchCampaigns(); // Fetch upcoming campaigns separately
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
       const now = Timestamp.now();
+
       const newCountdown: { [key: string]: number } = {};
-      
-      upcomingCampaigns.forEach(campaign => {
+      upcomingCampaigns.forEach((campaign) => {
         const startDate = campaign.startDate as Timestamp | undefined;
         if (startDate) {
           const diff = startDate.seconds - now.seconds;
-          if (diff > 0) {
-            newCountdown[campaign.id] = diff;
-          }
+          if (diff > 0) newCountdown[campaign.id] = diff;
         }
       });
       setCountdown(newCountdown);
-    };
 
-    calculateCountdowns();
-    const interval = setInterval(calculateCountdowns, 1000);
-    return () => clearInterval(interval);
-  }, [upcomingCampaigns]);
-
-  // Countdown timer effect for active campaigns (end date)
-  useEffect(() => {
-    const calculateEndCountdowns = () => {
-      const now = Timestamp.now();
       const newEndCountdown: { [key: string]: number } = {};
-      
-      campaigns.forEach(campaign => {
+      campaigns.forEach((campaign) => {
         const endDate = campaign.endDate as Timestamp | undefined;
         if (endDate) {
           const diff = endDate.seconds - now.seconds;
-          if (diff > 0) {
-            newEndCountdown[campaign.id] = diff;
-          }
+          if (diff > 0) newEndCountdown[campaign.id] = diff;
         }
       });
       setEndCountdown(newEndCountdown);
-    };
+    }, 1000);
 
-    calculateEndCountdowns();
-    const interval = setInterval(calculateEndCountdowns, 1000);
     return () => clearInterval(interval);
-  }, [campaigns]);
+  }, [upcomingCampaigns, campaigns]);
 
   const formatCountdown = (seconds: number): string => {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    } else {
-      return `${minutes}m ${secs}s`;
-    }
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    return `${minutes}m ${secs}s`;
   };
-const gradients: [ColorValue, ColorValue][] = [
-  ['#FF6B6B', '#FFD93D'],
-  ['#6BCB77', '#4ECDC4'],
-  ['#556270', '#FF6B6B'],
-  ['#C44D58', '#FF6B6B'],
-  ['#4ECDC4', '#556270'],
-  ['#FFD93D', '#C44D58'],
-];
-
-const getRandomGeneralGradientColors = (): [ColorValue, ColorValue] => {
-  return gradients[Math.floor(Math.random() * gradients.length)];
-};
-
-const [gradientColors] = useState(getRandomGeneralGradientColors);
-  useEffect(() => {
-    fetchCampaigns();
-  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchCampaigns();
   };
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString();
-  };
+  const renderActiveCampaign = ({
+    item,
+    index,
+  }: {
+    item: Campaign;
+    index: number;
+  }) => {
+    const isEndingSoon =
+      endCountdown[item.id] && endCountdown[item.id] < 3600 * 24;
 
-
-  const renderCampaignCard = (campaign: Campaign) => (
-    <TouchableOpacity
-      key={campaign.id}
-      onPress={() => onCampaignSelect(campaign)}
-      activeOpacity={0.9}
-    >
-      <Animatable.View 
-        animation="fadeInUp" 
-        duration={500}
-        style={[styles.campaignCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}
+    return (
+      <TouchableOpacity
+        onPress={() => onCampaignSelect(item)}
+        activeOpacity={0.9}
+        style={[
+          styles.activeCard,
+          {
+            marginLeft: index === 0 ? 20 : CARD_MARGIN,
+            marginRight: index === campaigns.length - 1 ? 20 : 0,
+          },
+        ]}
       >
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.campaignGradient}
+        <Animatable.View
+          animation="fadeInRight"
+          delay={index * 100}
+          duration={600}
+          style={styles.cardInner}
         >
-          <View style={styles.campaignHeader}>
-            <View style={styles.campaignBadge}>
-              <Trophy size={14} color="#FFF" />
-              <Text style={styles.campaignBadgeText}>{t('treasureHuntActive')}</Text>
-            </View>
-            <View style={styles.participantsBadge}>
-              <Users size={12} color="#FFF" />
-              <Text style={styles.participantsText}>
-                {campaign.currentParticipants || 0} {t('treasureHuntParticipants')}
-              </Text>
-            </View>
-          </View>
-          {/* Countdown Timer */}
-          {endCountdown[campaign.id] && (
-            <View style={[styles.countdownBadge, { backgroundColor: 'rgba(255, 255, 255, 0.2)', marginTop: 8 }]}>
-              <Clock size={14} color="#FFF" />
-              <Text style={styles.countdownText}>
-                {formatCountdown(endCountdown[campaign.id])} {t('treasureHuntTimeRemaining')}
-              </Text>
-            </View>
-          )}
-          <Text style={styles.campaignTitle}>
-            {campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}
-          </Text>
-          {campaign.description && (
-            <Text style={styles.campaignDescription} numberOfLines={2}>
-              {campaign.description?.fr || campaign.description?.['ar-tn'] || ''}
-            </Text>
-          )}
-        </LinearGradient>
+          <LinearGradient
+            colors={
+              isEndingSoon ? ["#FF3366", "#FF8E53"] : ["#0F172A", "#1E293B"]
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardGradient}
+          >
+            <View
+              style={[
+                styles.cardCircle,
+                { top: -20, right: -20, opacity: 0.1 },
+              ]}
+            />
 
-        <View style={styles.campaignFooter}>
-          <View style={styles.campaignInfo}>
-            <View style={styles.infoItem}>
-              <Clock size={16} color={colors.textMuted} />
-              <Text style={[styles.infoText, { color: colors.textMuted }]}>
-                {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
+            <View style={styles.cardTopRow}>
+              <BlurView intensity={20} tint="light" style={styles.statusBadge}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: isEndingSoon ? "#FFF" : "#10B981" },
+                  ]}
+                />
+                <Text style={styles.statusText}>
+                  {isEndingSoon
+                    ? t("treasureHuntEndingSoon") || "ENDING SOON"
+                    : t("treasureHuntActive") || "LIVE"}
+                </Text>
+              </BlurView>
+
+              <View style={styles.participantCount}>
+                <Users size={12} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.participantText}>
+                  {item.currentParticipants || 0}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.cardContent}>
+              <Text style={styles.campaignName} numberOfLines={1}>
+                {item.name?.fr || item.name?.["ar-tn"] || "Adventure"}
+              </Text>
+              <Text style={styles.campaignDesc} numberOfLines={2}>
+                {item.description?.fr ||
+                  item.description?.["ar-tn"] ||
+                  "Join the hunt and win!"}
               </Text>
             </View>
-            <View style={styles.infoItem}>
-              <Gift size={16} color={colors.textMuted} />
-              <Text style={[styles.infoText, { color: colors.textMuted }]}>
-                {campaign.rewardType === 'points' 
-                  ? `${campaign.rewardValue} ${t('treasureHuntPoints')}`
-                  : campaign.rewardType === 'discount'
-                  ? `${campaign.rewardValue}% ${t('treasureHuntDiscount')}`
-                  : t('treasureHuntReward')
-                }
-              </Text>
+
+            <View style={styles.cardFooter}>
+              {endCountdown[item.id] ? (
+                <View style={styles.timerContainer}>
+                  <Clock size={14} color="#FFF" opacity={0.8} />
+                  <Text style={styles.timerValue}>
+                    {formatCountdown(endCountdown[item.id])}
+                  </Text>
+                </View>
+              ) : (
+                <View />
+              )}
+
+              <View style={styles.rewardPreview}>
+                <Gift size={16} color="#FFF" />
+                <Text style={styles.rewardText}>
+                  {item.rewardValue} {t("treasureHuntExperiencePoints")}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={[styles.joinButton, { backgroundColor: colors.primary }]}>
-            <Text style={styles.joinButtonText}>{t('treasureHuntJoin')}</Text>
-            <ArrowRight size={16} color="#FFF" />
-          </View>
-        </View>
-      </Animatable.View>
-    </TouchableOpacity>
-  );
+          </LinearGradient>
+        </Animatable.View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-            {t('treasureHuntLoading')}
-          </Text>
-        </View>
-      </SafeAreaView>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.background, justifyContent: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}
+    >
+      <StatusBar
+        barStyle={theme === "dark" ? "light-content" : "dark-content"}
+      />
+
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={styles.headerLeft}>
           {onBack && (
-            <TouchableOpacity
-              onPress={onBack}
-              style={[styles.backButton, { backgroundColor: colors.primary + '20' }]}
-            >
-              <ChevronLeft size={24} color={colors.primary} />
+            <TouchableOpacity onPress={onBack} style={styles.iconButton}>
+              <ChevronLeft size={24} color={colors.foreground} />
             </TouchableOpacity>
           )}
           <View>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-              {t('treasureHunt')}
+            <Text style={[styles.greeting, { color: colors.textMuted }]}>
+              {t("welcomeBack") || "Hello Explorer,"}
             </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {t('treasureHuntFind')}
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              {t("treasureHuntTitle") || "Treasure Hunt"}
             </Text>
           </View>
         </View>
-        <View style={[styles.headerIcon, { backgroundColor: colors.primary + '20' }]}>
-          <Trophy size={24} color={colors.primary} />
-        </View>
+        <TouchableOpacity onPress={onViewRewards} style={styles.rewardButton}>
+          <LinearGradient
+            colors={["#FF3366", "#FF8E53"]}
+            style={styles.rewardGradient}
+          >
+            <Medal size={20} color="#FFF" />
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -310,311 +373,729 @@ const [gradientColors] = useState(getRandomGeneralGradientColors);
           />
         }
       >
-        {/* Upcoming Campaigns Section */}
+        <Animatable.View
+          animation="fadeInUp"
+          duration={800}
+          style={styles.xpCard}
+        >
+          <LinearGradient
+            colors={["#4F46E5", "#7C3AED"]}
+            style={styles.xpGradient}
+          >
+            <View style={styles.xpHeader}>
+              <View>
+                <Text style={styles.xpLabel}>
+                  {t("treasureHuntLevel") || "Current Level"}
+                </Text>
+                <Text style={styles.levelValue}>{userStats?.level || 1}</Text>
+              </View>
+              <View style={styles.xpIconContainer}>
+                <Zap size={24} color="#FFF" />
+              </View>
+            </View>
+
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${userStats?.progress || 0}%` }]} />
+              </View>
+              <View style={styles.progressLabels}>
+                <Text style={styles.progressText}>{userStats?.currentLevelXP?.toLocaleString() || 0} XP</Text>
+                <Text style={styles.progressText}>{userStats?.nextLevelXP?.toLocaleString() || 1000} XP</Text>
+              </View>
+            </View>
+
+            <View style={styles.xpFooter}>
+              <TrendingUp size={14} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.xpFooterText}>
+                {userStats?.remainingXP} {t("treasureHuntNextLevel") || "XP to next level"}
+              </Text>
+            </View>
+          </LinearGradient>
+        </Animatable.View>
+
+        {/* Testing Demo Section */}
+        <Animatable.View animation="fadeInUp" delay={200} style={styles.demoSection}>
+          <TouchableOpacity 
+            onPress={handleCreateDemo} 
+            disabled={addingDemo}
+            style={[styles.demoButton, { borderColor: colors.primary, flex: 1, marginRight: 8 }]}
+          >
+            {addingDemo ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <MapPin size={18} color={colors.primary} />
+                <Text style={[styles.demoButtonText, { color: colors.primary }]}>
+                  {t("treasureHuntAddDemo") || "Add Test"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleCreateDemoBomb} 
+            disabled={addingDemo}
+            style={[styles.demoButton, { borderColor: '#FFA500', flex: 1, marginRight: 8, backgroundColor: 'rgba(255, 165, 0, 0.05)' }]}
+          >
+            {addingDemo ? (
+              <ActivityIndicator size="small" color="#FFA500" />
+            ) : (
+              <>
+                <Bomb size={18} color="#FFA500" />
+                <Text style={[styles.demoButtonText, { color: '#FFA500' }]}>
+                  {t("treasureHuntAddBomb") || "Add Bomb"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleDeleteDemos} 
+            disabled={addingDemo}
+            style={[styles.demoButton, { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', paddingHorizontal: 10 }]}
+          >
+            <Trash2 size={16} color="#EF4444" />
+          </TouchableOpacity>
+        </Animatable.View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            {t("activeCampaigns") || "Live Adventures"}
+          </Text>
+          <TouchableOpacity style={styles.seeAll}>
+            <Text style={{ color: colors.primary, fontWeight: "600" }}>
+              {t("seeAll") || "See All"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {campaigns.length > 0 ? (
+          <FlatList
+            data={campaigns}
+            renderItem={renderActiveCampaign}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_WIDTH + CARD_MARGIN}
+            decelerationRate="fast"
+            contentContainerStyle={styles.horizontalList}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <View
+              style={[
+                styles.emptyIconCircle,
+                { backgroundColor: theme === "dark" ? "#1E293B" : "#F1F5F9" },
+              ]}
+            >
+              <MapPin size={32} color={colors.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              {t("noActiveCampaigns") || "No hunts active now"}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+              {t("checkUpcoming") || "Check the upcoming hunts below!"}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: colors.card }]}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: "#FFEDED" }]}>
+              <MapIcon size={22} color="#FF3366" />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>
+              {t("openMap") || "Open Map"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: colors.card }]}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
+              <Scan size={22} color="#10B981" />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>
+              {t("scanQR") || "Scan QR"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: colors.card }]}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
+              <ShoppingBag size={22} color="#3B82F6" />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>
+              {t("shop") || "Shop"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {upcomingCampaigns.length > 0 && (
           <View style={styles.upcomingSection}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              {t('treasureHuntComingSoon') || 'Coming Soon'}
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.foreground, marginBottom: 16 },
+              ]}
+            >
+              {t("treasureHuntUpcoming") || "Upcoming Hunts"}
             </Text>
-            {upcomingCampaigns.map((campaign) => (
-              <View key={campaign.id} style={[styles.upcomingCard, { backgroundColor: colors.card }]}>
-                <View style={styles.upcomingContent}>
-                  <Text style={[styles.upcomingTitle, { color: colors.foreground }]}>
-                    {campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}
-                  </Text>
-                  {countdown[campaign.id] && (
-                    <View style={[styles.countdownBadge, { backgroundColor: colors.primary }]}>
-                      <Clock size={14} color="#FFF" />
-                      <Text style={styles.countdownText}>
-                        {formatCountdown(countdown[campaign.id])}
-                      </Text>
-                    </View>
-                  )}
+            {upcomingCampaigns.map((campaign, idx) => (
+              <Animatable.View
+                key={campaign.id}
+                animation="fadeInUp"
+                delay={idx * 100}
+                style={[styles.upcomingItem, { backgroundColor: colors.card }]}
+              >
+                <View style={styles.upcomingTop}>
+                  <View style={styles.tierBadge}>
+                    <Star size={12} color="#F59E0B" fill="#F59E0B" />
+                    <Text style={styles.tierText}>
+                      {t("treasureHuntTierEpic") || "EPIC"}
+                    </Text>
+                  </View>
+                  <View style={styles.upcomingTime}>
+                    <Clock size={12} color={colors.textMuted} />
+                    <Text
+                      style={[styles.timeText, { color: colors.textMuted }]}
+                    >
+                      {countdown[campaign.id]
+                        ? formatCountdown(countdown[campaign.id])
+                        : "Soon"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
+
+                <View style={styles.upcomingBottom}>
+                  <View style={styles.upcomingInfo}>
+                    <Text
+                      style={[
+                        styles.upcomingName,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      {campaign.name?.fr || campaign.name?.["ar-tn"]}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.upcomingReward,
+                        { color: colors.textMuted },
+                      ]}
+                    >
+                      {campaign.rewardValue} XP •{" "}
+                      {t("limitedEdition") || "Limited"}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.notifyButton,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.notifyButtonText,
+                        { color: colors.primary },
+                      ]}
+                    >
+                      {t("notifyMe") || "Remind"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Animatable.View>
             ))}
           </View>
         )}
 
-        {campaigns.length === 0 && upcomingCampaigns.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Sparkles size={64} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              {t('treasureHuntNoCampaigns')}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              {t('treasureHuntCheckBack')}
-            </Text>
-          </View>
-        ) : (
-          campaigns.map(renderCampaignCard)
-        )}
-
-        {campaigns.length > 0 && (
-          <View style={styles.howItWorks}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              {t('treasureHuntHowItWorks')}
-            </Text>
-            <View style={styles.stepsContainer}>
-              <View style={styles.step}>
-                <View style={[styles.stepIcon, { backgroundColor: '#FF6B6B20' }]}>
-                  <MapPin size={20} color="#FF6B6B" />
-                </View>
-                <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                  {t('treasureHuntStep1Title')}
-                </Text>
-                <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                  {t('treasureHuntStep1Desc')}
-                </Text>
-              </View>
-              <View style={styles.step}>
-                <View style={[styles.stepIcon, { backgroundColor: '#FF8E5320' }]}>
-                  <Scan size={20} color="#FF8E53" />
-                </View>
-                <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                  {t('treasureHuntStep2Title')}
-                </Text>
-                <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                  {t('treasureHuntStep2Desc')}
-                </Text>
-              </View>
-              <View style={styles.step}>
-                <View style={[styles.stepIcon, { backgroundColor: '#4ECDC420' }]}>
-                  <Gift size={20} color="#4ECDC4" />
-                </View>
-                <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                  {t('treasureHuntStep3Title')}
-                </Text>
-                <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                  {t('treasureHuntStep3Desc')}
-                </Text>
-              </View>
+        <BlurView
+          intensity={theme === "dark" ? 10 : 30}
+          tint={theme === "dark" ? "dark" : "light"}
+          style={styles.howItWorks}
+        >
+          <View style={styles.guideStep}>
+            <View style={styles.guideNumber}>
+              <Text style={styles.guideNumberText}>1</Text>
             </View>
+            <Text style={[styles.guideText, { color: colors.foreground }]}>
+              {t("guideFind") || "Find gems"}
+            </Text>
           </View>
-        )}
+          <View style={styles.guideDivider} />
+          <View style={styles.guideStep}>
+            <View style={styles.guideNumber}>
+              <Text style={styles.guideNumberText}>2</Text>
+            </View>
+            <Text style={[styles.guideText, { color: colors.foreground }]}>
+              {t("guideScan") || "Scan QR"}
+            </Text>
+          </View>
+          <View style={styles.guideDivider} />
+          <View style={styles.guideStep}>
+            <View style={styles.guideNumber}>
+              <Text style={styles.guideNumberText}>3</Text>
+            </View>
+            <Text style={[styles.guideText, { color: colors.foreground }]}>
+              {t("guideWin") || "Win big"}
+            </Text>
+          </View>
+        </BlurView>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: width * 0.05,
-    paddingTop: 10,
-    paddingBottom: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+    backgroundColor: "rgba(0,0,0,0.03)",
+  },
+  greeting: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: Math.min(28, width * 0.07),
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    fontSize: Math.min(14, width * 0.035),
-    marginTop: 4,
+  rewardButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#FF3366",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  headerIcon: {
-    width: Math.min(48, width * 0.12),
-    height: Math.min(48, width * 0.12),
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+  rewardGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   scrollContent: {
-    paddingHorizontal: width * 0.05,
-    paddingTop: 20, // Increased padding to avoid header overlap
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
-  // Upcoming campaigns section
-  upcomingSection: {
-    marginBottom: 24,
+  xpCard: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 25,
+    borderRadius: 24,
+    overflow: "hidden",
+    elevation: 8,
+    shadowColor: "#4F46E5",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
   },
-  upcomingCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+  xpGradient: {
+    padding: 20,
   },
-  upcomingContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  xpHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
   },
-  upcomingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
+  xpLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  countdownBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  levelValue: {
+    color: "#FFF",
+    fontSize: 32,
+    fontWeight: "900",
+  },
+  xpIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  progressContainer: {
+    marginBottom: 15,
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 4,
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#FFF",
+    borderRadius: 4,
+  },
+  progressLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  progressText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  xpFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.1)",
+    alignSelf: "flex-start",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    gap: 6,
   },
-  countdownText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+  xpFooterText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11,
+    fontWeight: "600",
+    marginLeft: 6,
   },
-  campaignCard: {
-    borderRadius: Math.min(20, width * 0.05),
-    marginBottom: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  campaignGradient: {
-    padding: Math.min(20, width * 0.05),
-  },
-  campaignHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  campaignBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: Math.min(10, width * 0.025),
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  campaignBadgeText: {
-    color: '#FFF',
-    fontSize: Math.min(11, width * 0.028),
-    fontWeight: '700',
-    marginLeft: 4,
-  },
-  participantsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: Math.min(10, width * 0.025),
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  participantsText: {
-    color: '#FFF',
-    fontSize: Math.min(11, width * 0.028),
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  campaignTitle: {
-    color: '#FFF',
-    fontSize: Math.min(22, width * 0.055),
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  campaignDescription: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: Math.min(14, width * 0.035),
-    lineHeight: Math.min(20, width * 0.05),
-  },
-  campaignFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Math.min(16, width * 0.04),
-  },
-  campaignInfo: {
-    flex: 1,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  infoText: {
-    fontSize: Math.min(12, width * 0.03),
-    marginLeft: 8,
-  },
-  joinButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Math.min(16, width * 0.04),
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  joinButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-    marginRight: 6,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  howItWorks: {
-    marginTop: 30,
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 15,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  seeAll: {
+    padding: 4,
+  },
+  horizontalList: {
+    paddingBottom: 20,
+  },
+  activeCard: {
+    width: CARD_WIDTH,
+    height: 200,
+    borderRadius: 28,
+  },
+  cardInner: {
+    flex: 1,
+    borderRadius: 28,
+    overflow: "hidden",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+  },
+  cardGradient: {
+    flex: 1,
+    padding: 24,
+    position: "relative",
+  },
+  cardCircle: {
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "#FFF",
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
-  stepsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    overflow: "hidden",
   },
-  step: {
-    flex: 1,
-    alignItems: 'center',
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  statusText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  participantCount: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  stepIcon: {
+  participantText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  campaignName: {
+    color: "#FFF",
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  campaignDesc: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  timerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  timerValue: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+    marginLeft: 6,
+  },
+  rewardPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  rewardText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+    marginLeft: 6,
+  },
+  quickActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 30,
+    gap: 12,
+  },
+  actionCard: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 16,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  actionIcon: {
     width: 48,
     height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  actionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  upcomingSection: {
+    paddingHorizontal: 20,
+  },
+  upcomingItem: {
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+  },
+  upcomingTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-  stepTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 6,
-    textAlign: 'center',
+  tierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  stepDescription: {
+  tierText: {
+    color: "#D97706",
+    fontSize: 10,
+    fontWeight: "800",
+    marginLeft: 4,
+  },
+  upcomingTime: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  timeText: {
     fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 16,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+  upcomingBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  upcomingInfo: {
+    flex: 1,
+  },
+  upcomingName: {
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  upcomingReward: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  notifyButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  notifyButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+    marginHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  howItWorks: {
+    marginHorizontal: 20,
+    marginTop: 30,
+    marginBottom: 20,
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  guideStep: {
+    alignItems: "center",
+    flex: 1,
+  },
+  guideNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FF3366",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  guideNumberText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  guideText: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  guideDivider: {
+    width: 1,
+    height: 15,
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  demoSection: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  demoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(79, 70, 229, 0.05)',
+  },
+  demoButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginLeft: 8,
   },
 });
 

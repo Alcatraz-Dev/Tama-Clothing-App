@@ -1,20 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
   Dimensions,
-  Linking,
-  Share
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Animatable from 'react-native-animatable';
-import { LinearGradient } from 'expo-linear-gradient';
-import { 
+  Share,
+  Platform,
+  StatusBar,
+  ImageBackground,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Animatable from "react-native-animatable";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import {
   ChevronLeft,
   Clock,
   Users,
@@ -22,22 +25,24 @@ import {
   MapPin,
   Trophy,
   CheckCircle2,
-  Circle,
   Play,
   Share2,
   Star,
   Target,
-  Sparkles
-} from 'lucide-react-native';
-import { treasureHuntService, Campaign, Participation } from '@/services/TreasureHuntService';
-import { useAppTheme } from '@/context/ThemeContext';
-import { get } from 'firebase/database';
-import { ColorValue } from "react-native";
-const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 375;
-const isTablet = width > 768;
+  Sparkles,
+  Zap,
+  Info,
+} from "lucide-react-native";
+import {
+  treasureHuntService,
+  Campaign,
+  Participation,
+} from "@/services/TreasureHuntService";
+import { useAppTheme } from "@/context/ThemeContext";
 
-interface TreasureCampaignScreenProps {
+const { width } = Dimensions.get("window");
+
+const TreasureCampaignScreen: React.FC<{
   campaign: Campaign;
   userId: string;
   t: any;
@@ -46,9 +51,7 @@ interface TreasureCampaignScreenProps {
   onStartGame: (campaign: Campaign) => void;
   onViewMap: (campaign: Campaign) => void;
   onClaimReward: () => void;
-}
-
-const TreasureCampaignScreen: React.FC<TreasureCampaignScreenProps> = ({
+}> = ({
   campaign,
   userId,
   t,
@@ -56,28 +59,14 @@ const TreasureCampaignScreen: React.FC<TreasureCampaignScreenProps> = ({
   onBack,
   onStartGame,
   onViewMap,
-  onClaimReward
+  onClaimReward,
 }) => {
-  const [participation, setParticipation] = useState<Participation | null>(null);
+  const [participation, setParticipation] = useState<Participation | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const { colors, theme } = useAppTheme();
-
-
-const gradients: [ColorValue, ColorValue][] = [
-  ['#FF6B6B', '#FFD93D'],
-  ['#6BCB77', '#4ECDC4'],
-  ['#556270', '#FF6B6B'],
-  ['#C44D58', '#FF6B6B'],
-  ['#4ECDC4', '#556270'],
-  ['#FFD93D', '#C44D58'],
-];
-
-const getRandomGeneralGradientColors = (): [ColorValue, ColorValue] => {
-  return gradients[Math.floor(Math.random() * gradients.length)];
-};
-
-const [gradientColors] = useState(getRandomGeneralGradientColors);
 
   useEffect(() => {
     fetchParticipation();
@@ -85,10 +74,13 @@ const [gradientColors] = useState(getRandomGeneralGradientColors);
 
   const fetchParticipation = async () => {
     try {
-      const data = await treasureHuntService.getParticipation(campaign.id, userId);
+      const data = await treasureHuntService.getParticipation(
+        campaign.id,
+        userId,
+      );
       setParticipation(data);
     } catch (error) {
-      console.error('Error fetching participation:', error);
+      console.error("Error fetching participation:", error);
     } finally {
       setLoading(false);
     }
@@ -97,279 +89,382 @@ const [gradientColors] = useState(getRandomGeneralGradientColors);
   const handleEnroll = async () => {
     try {
       setEnrolling(true);
-      await treasureHuntService.enrollInCampaign(campaign?.id || '', userId);
+      await treasureHuntService.enrollInCampaign(campaign?.id || "", userId);
       await fetchParticipation();
-      Alert.alert(t('treasureHuntSuccess'), t('treasureHuntEnrolledSuccess'));
     } catch (error: any) {
-      console.error('Enrollment error:', error);
-      Alert.alert(t('treasureHuntError'), error.message || t('treasureHuntEnrollError'));
+      console.error("Enrollment error:", error);
+      Alert.alert(
+        t("treasureHuntError"),
+        error.message || t("treasureHuntEnrollError"),
+      );
     } finally {
       setEnrolling(false);
     }
   };
 
   const formatDate = (timestamp: any) => {
-    if (!timestamp) return '';
+    if (!timestamp) return "";
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString();
+    return date.toLocaleDateString(Platform.OS === "ios" ? "fr-FR" : "fr");
   };
 
-  const progress = participation ? {
-    discovered: participation.progress.discoveredLocations,
-    total: participation.progress.totalLocations,
-    percentage: Math.round((participation.progress.discoveredLocations / participation.progress.totalLocations) * 100)
-  } : { discovered: 0, total: 0, percentage: 0 };
+  const progress = participation
+    ? {
+        discovered: Math.min(
+          participation.progress.discoveredLocations || 0,
+          participation.progress.totalLocations || 1,
+        ),
+        total: participation.progress.totalLocations || 1,
+        percentage: Math.min(
+          100,
+          Math.round(
+            (Math.min(
+              participation.progress.discoveredLocations || 0,
+              participation.progress.totalLocations || 1,
+            ) /
+              Math.max(participation.progress.totalLocations || 1, 1)) *
+              100,
+          ),
+        ),
+      }
+    : { discovered: 0, total: 0, percentage: 0 };
 
-  const isCompleted = progress.discovered === progress.total && progress.total > 0;
+  const isCompleted =
+    progress.discovered === progress.total && progress.total > 0;
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <StatusBar barStyle="light-content" />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Hero Section */}
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroSection}
-        >
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ChevronLeft size={24} color="#FFF" />
-          </TouchableOpacity>
-
-          <View style={styles.heroContent}>
-            <View style={styles.campaignBadge}>
-              <Trophy size={14} color="#FFF" />
-              <Text style={styles.campaignBadgeText}>{t('treasureHunt')}</Text>
-            </View>
-            
-            <Text style={styles.campaignTitle}>
-              {campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}
-            </Text>
-            
-            {campaign.description && (
-              <Text style={styles.campaignDescription}>
-                {campaign.description?.fr || campaign.description?.['ar-tn']}
-              </Text>
-            )}
-
-            <View style={styles.heroStats}>
-              <View style={styles.heroStat}>
-                <Clock size={18} color="#FFF" />
-                <Text style={styles.heroStatValue}>{formatDate(campaign.endDate)}</Text>
-                <Text style={styles.heroStatLabel}>{t('treasureHuntEnds')}</Text>
-              </View>
-              <View style={styles.heroDivider} />
-              <View style={styles.heroStat}>
-                <Users size={18} color="#FFF" />
-                <Text style={styles.heroStatValue}>{campaign.currentParticipants || 0}</Text>
-                <Text style={styles.heroStatLabel}>{t('treasureHuntParticipants')}</Text>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* Progress Section (if enrolled) */}
-        {participation && (
-          <View style={styles.progressSection}>
-            <View style={[styles.progressCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-              <View style={styles.progressHeader}>
-                <Target size={24} color={colors.primary} />
-                <Text style={[styles.progressTitle, { color: colors.foreground }]}>
-                  {t('treasureHuntYourProgress')}
-                </Text>
-                {isCompleted && (
-                  <View style={[styles.completedBadge, { backgroundColor: '#4ECDC420' }]}>
-                    <Sparkles size={16} color="#4ECDC4" />
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        backgroundColor: isCompleted ? '#4ECDC4' : colors.primary,
-                        width: `${progress.percentage}%` 
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={[styles.progressPercentage, { color: colors.foreground }]}>
-                  {progress.percentage}%
-                </Text>
-              </View>
-
-              <Text style={[styles.progressText, { color: colors.textMuted }]}>
-                {progress.discovered} / {progress.total} {t('treasureHuntTreasuresFound')}
-              </Text>
-
-              {isCompleted && (
-                <TouchableOpacity 
-                  onPress={onClaimReward}
-                  style={[styles.claimRewardButton, { backgroundColor: '#4ECDC4' }]}
-                >
-                  <Gift size={20} color="#FFF" />
-                  <Text style={styles.claimRewardText}>{t('treasureHuntClaimReward')}</Text>
+        <View style={styles.heroWrapper}>
+          <LinearGradient
+            colors={["#FF3366", "#FF8E53"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroGradient}
+          >
+            <SafeAreaView edges={["top"]} style={styles.safeHero}>
+              <View style={styles.headerNav}>
+                <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
+                  <ChevronLeft size={24} color="#FFF" />
                 </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
+                <TouchableOpacity
+                  onPress={async () => {
+                    await Share.share({
+                      message: `Rejoignez-moi pour la chasse au trésor ${campaign.name?.fr || "Bey3a"}!`,
+                    });
+                  }}
+                  style={styles.iconBtn}
+                >
+                  <Share2 size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
 
-        {/* Rewards Section */}
-        <View style={styles.rewardsSection}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            {t('treasureHuntRewards')}
-          </Text>
-          
-          <View style={[styles.rewardCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            <View style={[styles.rewardIcon, { backgroundColor: colors.primary + '20' }]}>
-              <Gift size={28} color={colors.primary} />
-            </View>
-            <View style={styles.rewardInfo}>
-              <Text style={[styles.rewardValue, { color: colors.foreground }]}>
-                {campaign.rewardType === 'points' 
-                  ? `${campaign.rewardValue} ${t('treasureHuntPoints') || 'Points'}`
-                  : campaign.rewardType === 'discount'
-                  ? `${campaign.rewardValue}% ${t('treasureHuntDiscount') || 'Discount'}`
-                  : campaign.rewardType === 'free_product'
-                  ? t('treasureHuntFreeProduct') || 'Free Product'
-                  : campaign.rewardType === 'coupon'
-                  ? t('treasureHuntCoupon') || 'Coupon'
-                  : t('treasureHuntSpecialReward') || 'Special Reward'
-                }
-              </Text>
-              <Text style={[styles.rewardDescription, { color: colors.textMuted }]}>
-                {t('treasureHuntCompleteAll')}
-              </Text>
-            </View>
-          </View>
-        </View>
+              <Animatable.View
+                animation="fadeInUp"
+                duration={800}
+                style={styles.heroMain}
+              >
+                <View style={styles.typeBadge}>
+                  <Sparkles size={12} color="#FFF" fill="#FFF" />
+                  <Text style={styles.typeBadgeText}>PREMIUM EVENT</Text>
+                </View>
 
-        {/* How to Play */}
-        <View style={styles.howToPlaySection}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            {t('treasureHuntHowToPlay')}
-          </Text>
+                <Text style={styles.heroTitle}>
+                  {campaign.name?.fr || campaign.name?.["ar-tn"] || "Adventure"}
+                </Text>
 
-          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>1</Text>
-            </View>
-            <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                {t('treasureHuntExploreMap')}
-              </Text>
-              <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                {t('treasureHuntExploreMapDesc')}
-              </Text>
-            </View>
-          </View>
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Clock size={16} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.statValue}>
+                      {formatDate(campaign.endDate)}
+                    </Text>
+                    <Text style={styles.statLabel}>
+                      {t("treasureHuntEndDate") || "Ends"}
+                    </Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Users size={16} color="rgba(255,255,255,0.7)" />
+                    <Text style={[styles.statValue, { color: "#FFF" }]}>
+                      {campaign.currentParticipants || 0}
+                    </Text>
+                    <Text style={styles.statLabel}>
+                      {t("treasureHuntParticipants") || "Players"}
+                    </Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Trophy size={16} color="rgba(255,255,255,0.7)" />
+                    <Text style={[styles.statValue, { color: "#FFF" }]}>
+                      {campaign.rewardValue} XP
+                    </Text>
+                    <Text style={styles.statLabel}>
+                      {t("treasureHuntRewardValue") || "Reward"}
+                    </Text>
+                  </View>
+                </View>
+              </Animatable.View>
+            </SafeAreaView>
+          </LinearGradient>
 
-          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                {t('treasureHuntFindTreasures')}
-              </Text>
-              <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                {t('treasureHuntFindTreasuresDesc')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, { color: colors.foreground }]}>
-                {t('treasureHuntWinRewards')}
-              </Text>
-              <Text style={[styles.stepDescription, { color: colors.textMuted }]}>
-                {t('treasureHuntWinRewardsDesc')}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          {!participation ? (
-            <TouchableOpacity 
-              onPress={handleEnroll}
-              disabled={enrolling}
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+          <Animatable.View
+            animation="zoomIn"
+            delay={500}
+            style={styles.floatingIcon}
+          >
+            <LinearGradient
+              colors={["#FFF", "#F1F5F9"]}
+              style={styles.iconCircle}
             >
-              {enrolling ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Play size={20} color="#FFF" />
-                  <Text style={styles.primaryButtonText}>{t('treasureHuntStartAdventure')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <Trophy size={40} color="#FF3366" />
+            </LinearGradient>
+          </Animatable.View>
+        </View>
+
+        <View style={styles.mainContent}>
+          {/* Participation Card */}
+          {participation ? (
+            <Animatable.View
+              animation="fadeInUp"
+              delay={200}
+              style={styles.cardContainer}
+            >
+              <BlurView
+                intensity={theme === "dark" ? 15 : 40}
+                tint={theme === "dark" ? "dark" : "light"}
+                style={styles.glassCard}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <Target size={20} color={colors.primary} />
+                    <Text
+                      style={[styles.cardTitle, { color: colors.foreground }]}
+                    >
+                      {t("treasureHuntYourProgress") || "Mission Progress"}
+                    </Text>
+                  </View>
+                  {isCompleted && <CheckCircle2 size={20} color="#10B981" />}
+                </View>
+
+                <View style={styles.progressSection}>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressBg,
+                        { backgroundColor: colors.background },
+                      ]}
+                    />
+                    <LinearGradient
+                      colors={
+                        isCompleted
+                          ? ["#10B981", "#34D399"]
+                          : ["#FF3366", "#FF8E53"]
+                      }
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[
+                        styles.progressFill,
+                        { width: `${progress.percentage}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.percentageText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {progress.percentage}%
+                  </Text>
+                </View>
+
+                <Text style={[styles.countText, { color: colors.textMuted }]}>
+                  {progress.discovered} / {progress.total}{" "}
+                  {t("treasureHuntDiscoveries") || "Treasures Found"}
+                </Text>
+
+                {isCompleted && (
+                  <TouchableOpacity
+                    onPress={onClaimReward}
+                    style={styles.claimBtn}
+                  >
+                    <LinearGradient
+                      colors={["#10B981", "#059669"]}
+                      style={styles.btnGradient}
+                    >
+                      <Gift size={20} color="#FFF" />
+                      <Text style={styles.btnLabel}>
+                        {t("treasureHuntClaimReward") || "Collect Reward"}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </BlurView>
+            </Animatable.View>
           ) : (
-            <TouchableOpacity 
-              onPress={() => {
-                if (onViewMap) {
-                  onViewMap(campaign);
-                }
-              }}
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+            <Animatable.View
+              animation="fadeInUp"
+              delay={200}
+              style={styles.joinCard}
             >
-              <MapPin size={20} color="#FFF" />
-              <Text style={styles.primaryButtonText}>{t('treasureHuntOpenMap')}</Text>
-            </TouchableOpacity>
+              <View style={styles.joinIconBox}>
+                <Zap size={24} color="#FFF" fill="#FFF" />
+              </View>
+              <View style={styles.joinContent}>
+                <Text style={[styles.joinTitle, { color: colors.foreground }]}>
+                  Ready to start?
+                </Text>
+                <Text style={[styles.joinDesc, { color: colors.textMuted }]}>
+                  Enroll now to start discovering treasures nearby.
+                </Text>
+              </View>
+            </Animatable.View>
           )}
 
-          <TouchableOpacity 
-            style={[styles.secondaryButton, { borderColor: colors.primary }]}
-            onPress={async () => {
-              try {
-                // Generate share message with campaign details
-                const shareMessage = t('treasureHuntShareMessage') 
-                  ? t('treasureHuntShareMessage')
-                  : `Join the treasure hunt: ${campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}!`;
-                
-                // Use React Native Share API
-                const result = await Share.share({
-                  message: shareMessage,
-                  title: t('treasureHuntShare') || 'Share Treasure Hunt',
-                });
+          {/* Description */}
+          <View style={styles.infoSection}>
+            <View style={styles.sectionTitleRow}>
+              <Info size={18} color={colors.primary} />
+              <Text
+                style={[styles.sectionHeading, { color: colors.foreground }]}
+              >
+                {t("description") || "About Hunt"}
+              </Text>
+            </View>
+            <View style={[styles.descCard, { backgroundColor: colors.card }]}>
+              <Text style={[styles.descText, { color: colors.textMuted }]}>
+                {campaign.description?.fr || campaign.description?.["ar-tn"]}
+              </Text>
+            </View>
+          </View>
 
-                if (result.action === Share.sharedAction) {
-                  // Successfully shared
-                  console.log('Shared successfully');
-                }
-              } catch (error: any) {
-                console.error('Error sharing:', error);
-                Alert.alert(t('error') || 'Error', error?.message || t('shareFailed') || 'Failed to share. Please try again.');
-              }
-            }}
-          >
-            <Share2 size={20} color={colors.primary} />
-            <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>
-              {t('treasureHuntShare')}
+          {/* Rules / Steps */}
+          <View style={styles.infoSection}>
+            <Text
+              style={[
+                styles.sectionHeading,
+                { color: colors.foreground, marginLeft: 0 },
+              ]}
+            >
+              {t("treasureHuntHowToPlay") || "How to win"}
             </Text>
-          </TouchableOpacity>
+            <View style={styles.ruleList}>
+              {[
+                {
+                  icon: MapPin,
+                  title: t("treasureHuntExploreMap"),
+                  desc: t("treasureHuntExploreMapDesc"),
+                  color: "#FF3366",
+                  bg: "#FFF1F2",
+                },
+                {
+                  icon: Target,
+                  title: t("treasureHuntFindTreasures"),
+                  desc: t("treasureHuntFindTreasuresDesc"),
+                  color: "#F59E0B",
+                  bg: "#FFFBEB",
+                },
+                {
+                  icon: Trophy,
+                  title: t("treasureHuntWinRewards"),
+                  desc: t("treasureHuntWinRewardsDesc"),
+                  color: "#10B981",
+                  bg: "#ECFDF5",
+                },
+              ].map((item, idx) => (
+                <View
+                  key={idx}
+                  style={[styles.ruleCard, { backgroundColor: colors.card }]}
+                >
+                  <View style={[styles.ruleIcon, { backgroundColor: item.bg }]}>
+                    <item.icon size={20} color={item.color} />
+                  </View>
+                  <View style={styles.ruleBody}>
+                    <Text
+                      style={[styles.ruleTitle, { color: colors.foreground }]}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[styles.ruleDesc, { color: colors.textMuted }]}
+                    >
+                      {item.desc}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       </ScrollView>
+
+      {/* Primary Action Button */}
+      <SafeAreaView edges={["bottom"]} style={styles.footerActions}>
+        {!participation ? (
+          <TouchableOpacity
+            onPress={handleEnroll}
+            disabled={enrolling}
+            style={styles.actionBtn}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={["#FF3366", "#FF8E53"]}
+              style={styles.actionGradient}
+            >
+              {enrolling ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Play size={22} color="#FFF" fill="#FFF" />
+                  <Text style={styles.actionText}>
+                    {t("treasureHuntStartAdventure") || "Join Adventure"}
+                  </Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => onViewMap(campaign)}
+            style={styles.actionBtn}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={["#4F46E5", "#7C3AED"]}
+              style={styles.actionGradient}
+            >
+              <MapPin size={22} color="#FFF" />
+              <Text style={styles.actionText}>
+                {t("treasureHuntOpenMap") || "Open Map"}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+      </SafeAreaView>
     </View>
   );
 };
@@ -378,262 +473,304 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
+  scrollContent: {
+    paddingBottom: 150,
+  },
+  heroWrapper: {
+    height: 380,
+    position: "relative",
+  },
+  heroGradient: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
-  heroSection: {
-    paddingTop: 50,
-    paddingBottom: 30,
-    paddingHorizontal: width * 0.05,
-    borderBottomLeftRadius: Math.min(30, width * 0.075),
-    borderBottomRightRadius: Math.min(30, width * 0.075),
+  safeHero: {
+    flex: 1,
+    paddingHorizontal: 20,
   },
-  backButton: {
-    width: Math.min(40, width * 0.1),
-    height: Math.min(40, width * 0.1),
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+  headerNav: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 15,
   },
-  heroContent: {
-    alignItems: 'center',
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  campaignBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: Math.min(14, width * 0.035),
+  heroMain: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 40,
+  },
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  campaignBadgeText: {
-    color: '#FFF',
-    fontSize: Math.min(12, width * 0.03),
-    fontWeight: '700',
+  typeBadgeText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
     marginLeft: 6,
   },
-  campaignTitle: {
-    color: '#FFF',
-    fontSize: Math.min(32, width * 0.08),
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 12,
+  heroTitle: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FFF",
+    textAlign: "center",
+    letterSpacing: -1,
+    marginBottom: 25,
   },
-  campaignDescription: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: Math.min(14, width * 0.035),
-    textAlign: 'center',
-    lineHeight: Math.min(22, width * 0.055),
-    marginBottom: 24,
-    paddingHorizontal: width * 0.05,
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderRadius: 24,
+    padding: 16,
+    width: "100%",
   },
-  heroStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: Math.min(16, width * 0.04),
-    padding: Math.min(16, width * 0.04),
-    width: '100%',
-  },
-  heroStat: {
+  statItem: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  heroStatValue: {
-    color: '#FFF',
-    fontSize: Math.min(18, width * 0.045),
-    fontWeight: '800',
+  statValue: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "800",
     marginTop: 6,
   },
-  heroStatLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: Math.min(11, width * 0.028),
+  statLabel: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
     marginTop: 2,
+    textAlign: "center",
+    justifyContent: "center",
   },
-  heroDivider: {
+  statDivider: {
     width: 1,
-    height: 50,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 30,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  floatingIcon: {
+    position: "absolute",
+    bottom: -35,
+    alignSelf: "center",
+    zIndex: 20,
+    shadowColor: "#FF3366",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mainContent: {
+    paddingHorizontal: 20,
+    paddingTop: 50,
+  },
+  cardContainer: {
+    marginBottom: 30,
+  },
+  glassCard: {
+    padding: 24,
+    borderRadius: 30,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginLeft: 10,
   },
   progressSection: {
-    paddingHorizontal: width * 0.05,
-    marginTop: -20,
-  },
-  progressCard: {
-    padding: Math.min(20, width * 0.05),
-    borderRadius: Math.min(20, width * 0.05),
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  progressTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 12,
-  },
-  completedBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
   },
   progressBar: {
     flex: 1,
     height: 10,
+    position: "relative",
+    marginRight: 15,
+  },
+  progressBg: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 5,
-    overflow: 'hidden',
-    marginRight: 12,
+    opacity: 0.5,
   },
   progressFill: {
-    height: '100%',
+    height: "100%",
     borderRadius: 5,
   },
-  progressPercentage: {
-    fontSize: 16,
-    fontWeight: '700',
-    width: 50,
-    textAlign: 'right',
-  },
-  progressText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  claimRewardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  claimRewardText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  rewardsSection: {
-    paddingHorizontal: 20,
-    marginTop: 30,
-  },
-  sectionTitle: {
+  percentageText: {
     fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 16,
+    fontWeight: "900",
   },
-  rewardCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+  countText: {
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
   },
-  rewardIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  claimBtn: {
+    marginTop: 20,
+    borderRadius: 15,
+    overflow: "hidden",
   },
-  rewardInfo: {
+  btnGradient: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  btnLabel: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "800",
+    marginLeft: 10,
+  },
+  joinCard: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 51, 102, 0.05)",
+    padding: 20,
+    borderRadius: 24,
+    alignItems: "center",
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: "rgba(255, 51, 102, 0.1)",
+  },
+  joinIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: "#FF3366",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  joinContent: {
     flex: 1,
-    marginLeft: 16,
   },
-  rewardValue: {
+  joinTitle: {
     fontSize: 18,
-    fontWeight: '700',
-  },
-  rewardDescription: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  howToPlaySection: {
-    paddingHorizontal: 20,
-    marginTop: 30,
-  },
-  stepCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  stepNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FF6B6B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepNumberText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  stepContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "800",
     marginBottom: 4,
   },
-  stepDescription: {
+  joinDesc: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  infoSection: {
+    marginBottom: 35,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  sectionHeading: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginLeft: 10,
+  },
+  descCard: {
+    padding: 20,
+    borderRadius: 24,
+  },
+  descText: {
+    fontSize: 15,
+    lineHeight: 24,
+    fontWeight: "500",
+  },
+  ruleList: {
+    gap: 12,
+  },
+  ruleCard: {
+    flexDirection: "row",
+    padding: 16,
+    borderRadius: 20,
+    alignItems: "center",
+  },
+  ruleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  ruleBody: {
+    flex: 1,
+  },
+  ruleTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  ruleDesc: {
     fontSize: 13,
     lineHeight: 18,
   },
-  actionButtons: {
+  footerActions: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "transparent",
     paddingHorizontal: 20,
-    paddingVertical: 30,
-    paddingBottom: 100,
+    paddingBottom: 25,
   },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
+  actionBtn: {
+    height: 64,
+    borderRadius: 22,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
   },
-  primaryButtonText: {
-    color: '#FFF',
+  actionGradient: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionText: {
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 10,
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 2,
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 10,
+    fontWeight: "900",
+    marginLeft: 12,
   },
 });
 
 export default TreasureCampaignScreen;
-

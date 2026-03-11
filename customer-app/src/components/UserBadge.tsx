@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { APP_ICON_2 } from '../constants/layout';
 import { Share } from 'react-native';
-import { Star, ShieldCheck, Users, Share2 } from 'lucide-react-native';
+import { Star, ShieldCheck, Users, Share2, ShoppingBag } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -26,6 +26,11 @@ interface UserProfile {
         coins: number;
         diamonds: number;
     };
+    bio?: string;
+    followersCount?: number;
+    followingCount?: number;
+    worksCount?: number;
+    friendsCount?: number;
 }
 
 interface UserBadgeProps {
@@ -41,9 +46,20 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
     const [isFlipped, setIsFlipped] = useState(false);
     const flipAnim = useSharedValue(0);
 
+    const getName = (field: any, fallback = '') => {
+        if (!field) return fallback;
+        if (typeof field === 'string') return field;
+        return field[language] || field['en'] || field['fr'] || fallback;
+    };
+
     const getThemeColor = () => {
         if (userProfile.role === 'admin') return '#EF4444'; // Red for admin
         return '#00FF9D'; // Matrix Green for users
+    };
+
+    const isVendorOrCollab = () => {
+        const role = userProfile.role?.toLowerCase() || '';
+        return role === 'vendor' || role === 'brand_owner' || role === 'partner' || role === 'collab' || role === 'brand' || role === 'company';
     };
 
     const themeColor = getThemeColor();
@@ -216,16 +232,16 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                                     numberOfLines={1}
                                                     adjustsFontSizeToFit
                                                 >
-                                                    {t('memberCard')}
+                                                    {t('insights') || 'Insights'}
                                                 </Text>
                                             </View>
-                                            <Text style={[styles.serialNumberBack, { color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }]}>ID: {userProfile.id.toUpperCase() || '---'}</Text>
+                                            <Text style={[styles.serialNumberBack, { color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }]}>#{userProfile.id.substring(0, 12).toUpperCase()}</Text>
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
                                             <Image source={APP_ICON_2} style={styles.cornerLogoSmall} />
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                                 <ShieldCheck size={12} color={themeColor} />
-                                                <Text style={{ fontSize: 8, color: themeColor, fontWeight: 'bold' }}>{t('verified')}</Text>
+                                                <Text style={{ fontSize: 8, color: themeColor, fontWeight: 'bold' }}>{t('verified') || 'VERIFIED'}</Text>
                                             </View>
                                         </View>
                                     </View>
@@ -236,32 +252,60 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                 <View style={styles.detailsSection}>
                                     <View style={{ maxHeight: 100 }}>
                                         <Text style={[styles.description, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]} numberOfLines={4}>
-                                            {tr('Membre de la communauté Bey3a. Passionné par la mode et l\'élégance.', 'عضو في مجتمع بيعة. شغوف بالأزياء والأناقة.', 'Bey3a community member. Passionate about fashion and elegance.')}
+                                            {getName(userProfile.bio) || t('noDescription') || 'No description available for this user.'}
                                         </Text>
                                     </View>
 
-                                    <View style={[styles.statsGrid, { justifyContent: 'center' }]}>
-                                        <LinearGradient
-                                            colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
-                                            style={styles.statBox}
-                                        >
-                                            <Users size={20} color={isDark ? '#FFF' : '#000'} />
-                                            <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
-                                                {userProfile.wallet?.coins || 0}
-                                            </Text>
-                                            <Text style={styles.statLabel}>{t('coins')}</Text>
-                                        </LinearGradient>
+                                    <View style={[styles.statsGrid, isVendorOrCollab() && { justifyContent: 'center' }]}>
+                                        {isVendorOrCollab() ? (
+                                            <>
+                                                <LinearGradient
+                                                    colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                                                    style={styles.statBox}
+                                                >
+                                                    <Users size={20} color={isDark ? '#FFF' : '#000'} />
+                                                    <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
+                                                        {userProfile.followersCount ? userProfile.followersCount.toLocaleString() : '0'}
+                                                    </Text>
+                                                    <Text style={styles.statLabel}>{t('followers') || 'FOLLOWERS'}</Text>
+                                                </LinearGradient>
 
-                                        <LinearGradient
-                                            colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
-                                            style={styles.statBox}
-                                        >
-                                            <Star size={20} color={isDark ? '#FFF' : '#000'} />
-                                            <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
-                                                {userProfile.wallet?.diamonds || 0}
-                                            </Text>
-                                            <Text style={styles.statLabel}>{t('diamonds')}</Text>
-                                        </LinearGradient>
+                                                <LinearGradient
+                                                    colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                                                    style={styles.statBox}
+                                                >
+                                                    <ShoppingBag size={20} color={isDark ? '#FFF' : '#000'} />
+                                                    <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
+                                                        {userProfile.worksCount ? userProfile.worksCount.toLocaleString() : '0'}
+                                                    </Text>
+                                                    <Text style={styles.statLabel}>{t('products') || 'PRODUCTS'}</Text>
+                                                </LinearGradient>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <LinearGradient
+                                                    colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                                                    style={styles.statBox}
+                                                >
+                                                    <Users size={20} color={isDark ? '#FFF' : '#000'} />
+                                                    <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
+                                                        {userProfile.friendsCount ? userProfile.friendsCount.toLocaleString() : '0'}
+                                                    </Text>
+                                                    <Text style={styles.statLabel}>{t('friends') || 'FRIENDS'}</Text>
+                                                </LinearGradient>
+
+                                                <LinearGradient
+                                                    colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                                                    style={styles.statBox}
+                                                >
+                                                    <Star size={20} color={isDark ? '#FFF' : '#000'} />
+                                                    <Text style={[styles.statValue, { color: isDark ? '#FFF' : '#000' }]}>
+                                                        {userProfile.followingCount ? userProfile.followingCount.toLocaleString() : '0'}
+                                                    </Text>
+                                                    <Text style={styles.statLabel}>{t('following') || 'FOLLOWING'}</Text>
+                                                </LinearGradient>
+                                            </>
+                                        )}
                                     </View>
                                 </View>
 
@@ -279,7 +323,7 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                             numberOfLines={1}
                                             adjustsFontSizeToFit
                                         >
-                                            {t('viewDetails').toUpperCase()}
+                                            {t('profile') || 'Profile'}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -291,7 +335,7 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
 
                             <View style={styles.watermarkContainer} pointerEvents="none">
                                 <Text style={[styles.watermarkText, { color: themeColor + (isDark ? '15' : '10') }]}>
-                                    {t('officialUserBadge')}
+                                    AUTHENTIC USER
                                 </Text>
                             </View>
                         </Animated.View>

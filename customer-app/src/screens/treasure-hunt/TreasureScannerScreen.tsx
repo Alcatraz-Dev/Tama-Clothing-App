@@ -7,7 +7,8 @@ import {
   Dimensions,
   Platform,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
@@ -36,42 +37,49 @@ import {
   Trophy,
   MapPin,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Zap,
+  Target
 } from 'lucide-react-native';
 import { treasureHuntService, TreasureLocation } from '@/services/TreasureHuntService';
 import { useAppTheme } from '@/context/ThemeContext';
 
-const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 375;
+const { width } = Dimensions.get('window');
 
 const ScanLineAnimation = ({ color }: { color: string }) => {
   const translateY = useSharedValue(0);
-  
-  // Calculate dimensions to stay inside scanFrame
   const scanFrameSize = width * 0.7;
-  const paddingFromEdge = 20; // Stay away from corners
+  const paddingFromEdge = 20;
   const animationRange = scanFrameSize - paddingFromEdge * 2;
 
   useEffect(() => {
     translateY.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: 2400, easing: Easing.bezier(0.4, 0, 0.2, 1) }),
       -1,
       true
     );
   }, [translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(translateY.value, [0, 1.3], [paddingFromEdge, animationRange + paddingFromEdge]) }],
+    transform: [{ translateY: interpolate(translateY.value, [0, 1], [0, animationRange]) }],
+    opacity: interpolate(translateY.value, [0, 0.5, 1], [0.3, 1, 0.3]),
   }));
 
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: 15, right: 15, height: 3, borderRadius: 2, top: paddingFromEdge },
-        { backgroundColor: color },
+        styles.scannerLine,
+        { backgroundColor: color, shadowColor: color },
         animatedStyle,
       ]}
-    />
+    >
+       <LinearGradient
+         colors={['transparent', color, 'transparent']}
+         start={{ x: 0, y: 0 }}
+         end={{ x: 1, y: 0 }}
+         style={StyleSheet.absoluteFill}
+       />
+    </Animated.View>
   );
 };
 
@@ -165,7 +173,7 @@ const TreasureScannerScreen: React.FC<TreasureScannerScreenProps> = ({
 
   if (!permission) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: '#000', justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -173,26 +181,22 @@ const TreasureScannerScreen: React.FC<TreasureScannerScreenProps> = ({
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
         <View style={styles.permissionContainer}>
-          <Camera size={64} color={colors.primary} />
-          <Text style={[styles.permissionTitle, { color: colors.foreground }]}>
-            {t('treasureHuntCameraPermission')}
-          </Text>
-          <Text style={[styles.permissionText, { color: colors.textMuted }]}>
-            {t('treasureHuntCameraPermissionDesc')}
-          </Text>
-          <TouchableOpacity 
-            onPress={requestPermission}
-            style={[styles.permissionButton, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.permissionButtonText}>{t('treasureHuntGrantPermission')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onBack} style={styles.backLink}>
-            <Text style={[styles.backLinkText, { color: colors.textMuted }]}>
-              {t('treasureHuntGoBack')}
-            </Text>
-          </TouchableOpacity>
+           <BlurView intensity={20} tint="dark" style={styles.permissionBlur}>
+              <Camera size={64} color={colors.primary} />
+              <Text style={styles.permissionTitle}>{t('treasureHuntCameraPermission')}</Text>
+              <Text style={styles.permissionText}>{t('treasureHuntCameraPermissionDesc')}</Text>
+              <TouchableOpacity 
+                onPress={requestPermission}
+                style={[styles.permissionButton, { backgroundColor: colors.primary }]}
+              >
+                <Text style={styles.permissionButtonText}>{t('treasureHuntGrantPermission')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onBack} style={styles.backLink}>
+                <Text style={styles.backLinkText}>{t('treasureHuntGoBack')}</Text>
+              </TouchableOpacity>
+           </BlurView>
         </View>
       </SafeAreaView>
     );
@@ -200,156 +204,159 @@ const TreasureScannerScreen: React.FC<TreasureScannerScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <CameraView
         ref={cameraRef}
         style={styles.camera}
         facing="back"
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         enableTorch={flashOn}
       >
         <LinearGradient
-          colors={['rgba(0,0,0,0.7)', 'transparent', 'transparent', 'rgba(0,0,0,0.7)']}
+          colors={['rgba(0,0,0,0.8)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
           style={styles.gradient}
         >
           <SafeAreaView style={styles.header}>
             <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-              <X size={24} color="#FFF" />
+               <BlurView intensity={30} tint="dark" style={styles.buttonBlur}>
+                  <X size={24} color="#FFF" />
+               </BlurView>
             </TouchableOpacity>
-            <Text style={styles.headerTitleText}>{t('treasureHuntScanQR')}</Text>
-            <TouchableOpacity 
-              onPress={() => setFlashOn(!flashOn)} 
-              style={[styles.headerButton, flashOn && { backgroundColor: colors.primary }]}
-            >
-              <Flashlight size={24} color="#FFF" />
+            <View style={styles.headerLabel}>
+               <BlurView intensity={30} tint="dark" style={styles.labelBlur}>
+                  <Scan size={18} color={colors.primary} />
+                  <Text style={styles.headerTitleText}>{t('treasureHuntScanQR')}</Text>
+               </BlurView>
+            </View>
+            <TouchableOpacity onPress={() => setFlashOn(!flashOn)} style={styles.headerButton}>
+               <BlurView intensity={30} tint={flashOn ? 'default' : 'dark'} style={[styles.buttonBlur, flashOn && { backgroundColor: colors.primary }]}>
+                  <Flashlight size={24} color="#FFF" />
+               </BlurView>
             </TouchableOpacity>
           </SafeAreaView>
 
           <View style={styles.scanArea}>
-            <View style={[styles.scanFrame, { borderColor: colors.primary }]}>
-              <View style={[styles.corner, styles.topLeft, { backgroundColor: colors.primary }]} />
-              <View style={[styles.corner, styles.topRight, { backgroundColor: colors.primary }]} />
-              <View style={[styles.corner, styles.bottomLeft, { backgroundColor: colors.primary }]} />
-              <View style={[styles.corner, styles.bottomRight, { backgroundColor: colors.primary }]} />
-              
-              {!scanned && (
-                <ScanLineAnimation color={colors.primary} />
-              )}
+            <View style={styles.scannerInterface}>
+               <View style={[styles.scanFrame, { borderColor: colors.primary + '30' }]}>
+                  {/* Modern Animated Corners */}
+                  <View style={[styles.cornerBox, styles.topLeftCorner]}>
+                     <View style={[styles.cornerH, { backgroundColor: colors.primary }]} />
+                     <View style={[styles.cornerV, { backgroundColor: colors.primary }]} />
+                  </View>
+                  <View style={[styles.cornerBox, styles.topRightCorner]}>
+                     <View style={[styles.cornerH, { backgroundColor: colors.primary }]} />
+                     <View style={[styles.cornerV, { backgroundColor: colors.primary }]} />
+                  </View>
+                  <View style={[styles.cornerBox, styles.bottomLeftCorner]}>
+                     <View style={[styles.cornerH, { backgroundColor: colors.primary }]} />
+                     <View style={[styles.cornerV, { backgroundColor: colors.primary }]} />
+                  </View>
+                  <View style={[styles.cornerBox, styles.bottomRightCorner]}>
+                     <View style={[styles.cornerH, { backgroundColor: colors.primary }]} />
+                     <View style={[styles.cornerV, { backgroundColor: colors.primary }]} />
+                  </View>
+
+                  {!scanned && <ScanLineAnimation color={colors.primary} />}
+                  
+                  {processing && (
+                     <View style={styles.processingOverlay}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.processingText}>{t('treasureHuntProcessing')}</Text>
+                     </View>
+                  )}
+               </View>
+               
+               <Animatable.Text 
+                 animation="fadeIn" 
+                 iterationCount="infinite" 
+                 direction="alternate" 
+                 style={styles.scanHint}
+               >
+                 {t('treasureHuntPositionQR')}
+               </Animatable.Text>
             </View>
-            
-            <Text style={styles.scanHint}>
-              {processing ? t('treasureHuntProcessing') : t('treasureHuntPositionQR')}
-            </Text>
           </View>
 
-          <View style={styles.instructions}>
-            <View style={styles.instructionItem}>
-              <MapPin size={20} color="#FFF" />
-              <Text style={styles.instructionText}>
-                {t('treasureHuntBeAtLocation')}
-              </Text>
-            </View>
-            <View style={styles.instructionItem}>
-              <Scan size={20} color="#FFF" />
-              <Text style={styles.instructionText}>
-                {t('treasureHuntAlignQR')}
-              </Text>
-            </View>
+          <View style={styles.instructionsContainer}>
+             <BlurView intensity={20} tint="dark" style={styles.instructionsBlur}>
+                <View style={styles.instructionItem}>
+                   <View style={styles.instructionIconBox}>
+                      <MapPin size={18} color={colors.primary} />
+                   </View>
+                   <Text style={styles.instructionText}>{t('treasureHuntBeAtLocation')}</Text>
+                </View>
+                <View style={styles.instructionItem}>
+                   <View style={styles.instructionIconBox}>
+                      <Target size={18} color="#FF3366" />
+                   </View>
+                   <Text style={styles.instructionText}>{t('treasureHuntAlignQR')}</Text>
+                </View>
+             </BlurView>
           </View>
         </LinearGradient>
       </CameraView>
 
-      <Modal
-        visible={scanResult !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={resetScanner}
-      >
-        <BlurView intensity={80} tint={theme} style={styles.resultOverlay}>
-          <Animatable.View 
-            animation="zoomIn" 
-            duration={300}
-            style={[styles.resultCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}
-          >
-            {scanResult?.success ? (
-              <>
-                <Animatable.View animation="bounceIn" duration={500}>
-                  <View style={[styles.resultIcon, { backgroundColor: '#4ECDC420' }]}>
-                    <Sparkles size={48} color="#4ECDC4" />
-                  </View>
-                </Animatable.View>
-                <Text style={[styles.resultTitle, { color: '#4ECDC4' }]}>
-                  {scanResult.isCompleted ? t('treasureHuntCampaignComplete') : t('treasureHuntTreasureFound')}
-                </Text>
-                {scanResult.location && (
-                  <Text style={[styles.resultLocation, { color: colors.foreground }]}>
-                    {scanResult.location.name?.fr || scanResult.location.name?.['ar-tn']}
-                  </Text>
-                )}
-                {scanResult.location?.rewardValue && (
-                  <View style={styles.rewardInfo}>
-                    <Gift size={24} color={colors.primary} />
-                    <Text style={[styles.rewardText, { color: colors.foreground }]}>
-                      {scanResult.location.rewardType === 'points' 
-                        ? `+${scanResult.location.rewardValue} ${t('treasureHuntPoints')}`
-                        : scanResult.location.rewardType === 'discount'
-                        ? `${scanResult.location.rewardValue}% ${t('treasureHuntDiscount')}`
-                        : t('treasureHuntRewardClaimed')
-                      }
-                    </Text>
-                  </View>
-                )}
-                <TouchableOpacity 
-                  onPress={resetScanner}
-                  style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                >
-                  <Scan size={20} color="#FFF" />
-                  <Text style={styles.actionButtonText}>{t('treasureHuntScanAgain')}</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={[styles.resultIcon, { backgroundColor: '#FF6B6B20' }]}>
-                  {scanResult?.message?.includes('Not close') ? (
-                    <AlertCircle size={48} color="#FF6B6B" />
-                  ) : scanResult?.message?.includes('Already') ? (
-                    <CheckCircle2 size={48} color="#FF6B6B" />
-                  ) : (
-                    <XCircle size={48} color="#FF6B6B" />
-                  )}
-                </View>
-                <Text style={[styles.resultTitle, { color: '#FF6B6B' }]}>
-                  {scanResult?.message?.includes('Not close') 
-                    ? t('treasureHuntTooFar')
-                    : scanResult?.message?.includes('Already')
-                    ? t('treasureHuntAlreadyDiscovered')
-                    : t('treasureHuntScanFailed')
-                  }
-                </Text>
-                <Text style={[styles.resultDescription, { color: colors.textMuted }]}>
-                  {scanResult?.message || t('treasureHuntTryAgain')}
-                </Text>
-                <TouchableOpacity 
-                  onPress={resetScanner}
-                  style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                >
-                  <RotateCcw size={20} color="#FFF" />
-                  <Text style={styles.actionButtonText}>{t('treasureHuntTryAgain')}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            
-            <TouchableOpacity 
-              onPress={onBack}
-              style={styles.doneButton}
-            >
-              <Text style={[styles.doneButtonText, { color: colors.textMuted }]}>
-                {t('treasureHuntBackToMap')}
-              </Text>
-            </TouchableOpacity>
-          </Animatable.View>
+      <Modal visible={scanResult !== null} transparent animationType="slide">
+        <BlurView intensity={60} tint="dark" style={styles.resultOverlay}>
+           <Animatable.View 
+             animation="zoomIn" 
+             duration={400} 
+             style={[styles.resultCard, { backgroundColor: theme === 'dark' ? '#1E1E24' : '#FFF' }]}
+           >
+              <LinearGradient
+                colors={scanResult?.success ? ['rgba(16, 185, 129, 0.1)', 'transparent'] : ['rgba(255, 51, 102, 0.1)', 'transparent']}
+                style={styles.resultGradient}
+              >
+                 <View style={[styles.resultIconBox, { backgroundColor: scanResult?.success ? '#10B98120' : '#FF336620' }]}>
+                    {scanResult?.success ? (
+                       <Sparkles size={48} color="#10B981" />
+                    ) : (
+                       <AlertCircle size={48} color="#FF3366" />
+                    )}
+                 </View>
+
+                 <Text style={[styles.resultTitle, { color: scanResult?.success ? '#10B981' : '#FF3366' }]}>
+                    {scanResult?.success ? (scanResult.isCompleted ? t('treasureHuntCampaignComplete') : t('treasureHuntTreasureFound')) : t('treasureHuntScanFailed')}
+                 </Text>
+
+                 <Text style={[styles.resultMessage, { color: theme === 'dark' ? '#E5E7EB' : '#4B5563' }]}>
+                    {scanResult?.message || (scanResult?.success ? t('treasureHuntSuccessDesc') : t('treasureHuntTryAgain'))}
+                 </Text>
+
+                 {scanResult?.success && scanResult.location && (
+                    <View style={styles.rewardSummary}>
+                       <View style={styles.rewardItemBox}>
+                          <Gift size={20} color={colors.primary} />
+                          <Text style={[styles.rewardLabel, { color: theme === 'dark' ? '#9CA3AF' : '#6B7280' }]}>Location Found</Text>
+                          <Text style={[styles.rewardValue, { color: colors.foreground }]}>
+                             {scanResult.location.name?.fr || 'Treasure'}
+                          </Text>
+                       </View>
+                       <View style={styles.rewardDivider} />
+                       <View style={styles.rewardItemBox}>
+                          <Trophy size={20} color="#FFD700" />
+                          <Text style={[styles.rewardLabel, { color: theme === 'dark' ? '#9CA3AF' : '#6B7280' }]}>Rank Boost</Text>
+                          <Text style={[styles.rewardValue, { color: colors.foreground }]}>+XP</Text>
+                       </View>
+                    </View>
+                 )}
+
+                 <TouchableOpacity 
+                   onPress={resetScanner} 
+                   style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                 >
+                    <LinearGradient colors={[colors.primary, colors.primary + 'CC']} style={styles.buttonGradient}>
+                       <RotateCcw size={20} color="#FFF" />
+                       <Text style={styles.buttonText}>{scanResult?.success ? t('treasureHuntScanAgain') : t('treasureHuntTryAgain')}</Text>
+                    </LinearGradient>
+                 </TouchableOpacity>
+
+                 <TouchableOpacity onPress={onBack} style={styles.secondaryButton}>
+                    <Text style={[styles.secondaryButtonText, { color: colors.textMuted }]}>{t('treasureHuntBackToMap')}</Text>
+                 </TouchableOpacity>
+              </LinearGradient>
+           </Animatable.View>
         </BlurView>
       </Modal>
     </View>
@@ -366,212 +373,296 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+    justifyContent: 'space-between',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: width * 0.04,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingHorizontal: 20,
+    marginTop: Platform.OS === 'ios' ? 10 : 30,
   },
   headerButton: {
-    width: Math.min(44, width * 0.11),
-    height: Math.min(44, width * 0.11),
+    width: 44,
+    height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    overflow: 'hidden',
+  },
+  buttonBlur: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  headerLabel: {
+    overflow: 'hidden',
+    borderRadius: 20,
+  },
+  labelBlur: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   headerTitleText: {
     color: '#FFF',
-    fontSize: Math.min(18, width * 0.045),
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 8,
   },
   scanArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scannerInterface: {
+    alignItems: 'center',
+  },
   scanFrame: {
     width: width * 0.7,
     height: width * 0.7,
-    borderWidth: 3,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderRadius: 2,
   },
-  corner: {
+  scannerLine: {
     position: 'absolute',
-    width: Math.min(30, width * 0.075),
-    height: Math.min(30, width * 0.075),
-    borderRadius: 5,
-  },
-  topLeft: {
-    top: -3,
-    left: -3,
-    borderTopLeftRadius: 20,
-  },
-  topRight: {
-    top: -3,
-    right: -3,
-    borderTopRightRadius: 20,
-  },
-  bottomLeft: {
-    bottom: -3,
-    left: -3,
-    borderBottomLeftRadius: 20,
-  },
-  bottomRight: {
-    bottom: -3,
-    right: -3,
-    borderBottomRightRadius: 20,
-  },
-  scanLine: {
-    position: 'absolute',
-    width: width * 0.65,
+    left: 10,
+    right: 10,
     height: 3,
     borderRadius: 2,
-    top: '50%',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  cornerBox: {
+     position: 'absolute',
+     width: 30,
+     height: 30,
+  },
+  cornerH: {
+     position: 'absolute',
+     width: '100%',
+     height: 3,
+     borderRadius: 2,
+  },
+  cornerV: {
+     position: 'absolute',
+     width: 3,
+     height: '100%',
+     borderRadius: 2,
+  },
+  topLeftCorner: { top: -2, left: -2 },
+  topRightCorner: { top: -2, right: -2, alignItems: 'flex-end' },
+  bottomLeftCorner: { bottom: -2, left: -2, justifyContent: 'flex-end' },
+  bottomRightCorner: { bottom: -2, right: -2, alignItems: 'flex-end', justifyContent: 'flex-end' },
+
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  processingText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 15,
   },
   scanHint: {
-    color: '#FFF',
-    fontSize: Math.min(14, width * 0.035),
-    marginTop: 20,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 40,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
-  instructions: {
-    paddingHorizontal: width * 0.075,
+  instructionsContainer: {
+    paddingHorizontal: 25,
     paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+  },
+  instructionsBlur: {
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   instructionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    padding: Math.min(12, width * 0.03),
-    borderRadius: Math.min(12, width * 0.03),
+    marginBottom: 16,
+  },
+  instructionIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
   },
   instructionText: {
     color: '#FFF',
     fontSize: 14,
-    marginLeft: 12,
+    fontWeight: '500',
     flex: 1,
+    opacity: 0.9,
   },
   resultOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   resultCard: {
     width: '100%',
-    borderRadius: 24,
-    padding: 30,
-    alignItems: 'center',
+    borderRadius: 32,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 15,
   },
-  resultIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  resultGradient: {
+     padding: 32,
+     alignItems: 'center',
+  },
+  resultIconBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   resultTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
     textAlign: 'center',
     marginBottom: 12,
+    letterSpacing: -0.5,
   },
-  resultLocation: {
-    fontSize: 18,
-    fontWeight: '600',
+  resultMessage: {
+    fontSize: 16,
     textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  rewardSummary: {
+     flexDirection: 'row',
+     width: '100%',
+     backgroundColor: 'rgba(0,0,0,0.03)',
+     borderRadius: 24,
+     padding: 20,
+     marginBottom: 32,
+     alignItems: 'center',
+  },
+  rewardItemBox: {
+     flex: 1,
+     alignItems: 'center',
+  },
+  rewardDivider: {
+     width: 1,
+     height: 40,
+     backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  rewardLabel: {
+     fontSize: 11,
+     fontWeight: '700',
+     textTransform: 'uppercase',
+     marginTop: 8,
+     letterSpacing: 0.5,
+  },
+  rewardValue: {
+     fontSize: 16,
+     fontWeight: '800',
+     marginTop: 2,
+  },
+  primaryButton: {
+    width: '100%',
+    height: 60,
+    borderRadius: 20,
+    overflow: 'hidden',
     marginBottom: 16,
   },
-  resultDescription: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
+  buttonGradient: {
+     flex: 1,
+     flexDirection: 'row',
+     justifyContent: 'center',
+     alignItems: 'center',
   },
-  rewardInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 24,
-    width: '100%',
-    justifyContent: 'center',
-  },
-  rewardText: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 14,
-    marginBottom: 12,
-    width: '100%',
-  },
-  actionButtonText: {
+  buttonText: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '800',
+    marginLeft: 10,
   },
-  doneButton: {
+  secondaryButton: {
     paddingVertical: 12,
   },
-  doneButtonText: {
-    fontSize: 14,
+  secondaryButtonText: {
+    fontSize: 15,
     fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: 30,
+  },
+  permissionBlur: {
+     borderRadius: 32,
+     padding: 40,
+     alignItems: 'center',
+     width: '100%',
+     borderWidth: 1,
+     borderColor: 'rgba(255,255,255,0.1)',
   },
   permissionTitle: {
+    color: '#FFF',
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     marginTop: 24,
     textAlign: 'center',
   },
   permissionText: {
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
     textAlign: 'center',
     marginTop: 12,
-    lineHeight: 22,
-    marginBottom: 30,
+    lineHeight: 24,
+    marginBottom: 32,
   },
   permissionButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 36,
+    borderRadius: 18,
+    width: '100%',
+    alignItems: 'center',
   },
   permissionButtonText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   backLink: {
     marginTop: 20,
-    padding: 12,
   },
   backLinkText: {
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
+    fontWeight: '600',
   },
 });
 
 export default TreasureScannerScreen;
-

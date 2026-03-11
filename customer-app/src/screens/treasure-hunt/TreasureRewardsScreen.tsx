@@ -8,41 +8,47 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Dimensions
+  Dimensions,
+  Platform,
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { 
   Gift, 
   Trophy, 
   Star, 
   CheckCircle2, 
   Clock,
-  ChevronRight,
+  ChevronLeft,
   Zap,
   Award,
   Sparkles,
   Gem,
   Tag,
-  X,
-  Copy
+  Copy,
+  TrendingUp,
+  ShieldCheck
 } from 'lucide-react-native';
 import { useAppTheme } from '@/context/ThemeContext';
+import { treasureHuntService } from '@/services/TreasureHuntService';
 
-const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 375;
-const isTablet = width > 768;
+const { width } = Dimensions.get('window');
 
 interface Reward {
   id: string;
-  type: 'points' | 'discount' | 'gift' | 'coupon';
+  type: 'points' | 'discount' | 'gift' | 'coupon' | 'free_product';
   value: number | string;
   description: string;
   campaignName: string;
   claimedAt: Date;
   isRedeemed?: boolean;
+  tier?: 'Common' | 'Rare' | 'Epic' | 'Legendary';
   code?: string;
+  participationId?: string;
+  rewardIndex?: number;
 }
 
 interface TreasureRewardsScreenProps {
@@ -61,44 +67,62 @@ const TreasureRewardsScreen: React.FC<TreasureRewardsScreenProps> = ({
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
   const { colors, theme } = useAppTheme();
 
-  // Simulated rewards data - in real app, fetch from Firestore
+  const handleClaimReward = async (reward: Reward) => {
+    if (!reward.participationId || reward.rewardIndex === undefined) return;
+    
+    setClaimingId(reward.id);
+    try {
+      const success = await treasureHuntService.claimReward(userId, reward.participationId, reward.rewardIndex);
+      if (success) {
+        Alert.alert(t('success') || 'Success', t('rewardClaimed') || 'Reward claimed successfully!');
+      } else {
+        Alert.alert(t('error') || 'Error', 'Failed to claim reward. It might be already claimed.');
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert(t('error') || 'Error', 'Something went wrong.');
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   const fetchRewards = async () => {
     try {
       setLoading(true);
-      // Simulated data - replace with actual API call
-      const mockRewards: Reward[] = [
-        {
-          id: '1',
-          type: 'points',
-          value: 500,
-          description: 'Treasure found at Store #1',
-          campaignName: 'Summer Treasure Hunt',
-          claimedAt: new Date(),
-          isRedeemed: false,
-        },
-        {
-          id: '2',
-          type: 'discount',
-          value: 20,
-          description: 'Complete all treasures!',
-          campaignName: 'Summer Treasure Hunt',
-          claimedAt: new Date(Date.now() - 86400000),
-          isRedeemed: false,
-          code: 'TREASURE20',
-        },
-        {
-          id: '3',
-          type: 'points',
-          value: 250,
-          description: 'Treasure found at Store #3',
-          campaignName: 'Winter Adventure',
-          claimedAt: new Date(Date.now() - 172800000),
-          isRedeemed: true,
-        },
-      ];
-      setRewards(mockRewards);
+      const participations = await treasureHuntService.getUserParticipations(userId);
+      const allRewards: Reward[] = [];
+
+      for (const p of participations) {
+        if (p.rewards && p.rewards.length > 0) {
+          // We might want to fetch campaign name if not included in participation
+          // For now, let's assume we can get some generic info or fetch it
+          const campaign = await treasureHuntService.getCampaign(p.campaignId);
+          
+          p.rewards.forEach((r: any, idx: number) => {
+            allRewards.push({
+              id: `${p.id}_${idx}`,
+              type: r.type as any,
+              value: r.value,
+              description: r.type === 'points' ? `Discovery Reward` : `Special Reward`,
+              campaignName: campaign?.name?.fr || campaign?.name?.['ar-tn'] || 'Adventure',
+              claimedAt: r.timestamp?.toDate ? r.timestamp.toDate() : new Date(),
+              isRedeemed: r.isRedeemed || false,
+              tier: r.type === 'points' && (r.value as number) > 500 ? 'Epic' : 
+                    r.type === 'discount' ? 'Legendary' : 'Common',
+              code: r.code,
+              participationId: p.id,
+              rewardIndex: idx
+            });
+          });
+        }
+      }
+
+      // Sort by date newest first
+      allRewards.sort((a, b) => b.claimedAt.getTime() - a.claimedAt.getTime());
+      setRewards(allRewards);
     } catch (error) {
       console.error('Error fetching rewards:', error);
     } finally {
@@ -108,175 +132,206 @@ const TreasureRewardsScreen: React.FC<TreasureRewardsScreenProps> = ({
   };
 
   useEffect(() => {
-    fetchRewards();
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    // Real-time listener for rewards (via participations)
+    const unsubscribe = treasureHuntService.subscribeToUserParticipations(userId, async (participations) => {
+      try {
+        const allRewards: Reward[] = [];
+
+        for (const p of participations) {
+          if (p.rewards && p.rewards.length > 0) {
+            // Optimization: fetch campaign once
+            const campaign = await treasureHuntService.getCampaign(p.campaignId);
+            
+            p.rewards.forEach((r: any, idx: number) => {
+              allRewards.push({
+                id: `${p.id}_${idx}`,
+                type: r.type as any,
+                value: r.value,
+                description: r.type === 'points' ? `Discovery Reward` : `Special Reward`,
+                campaignName: campaign?.name?.fr || campaign?.name?.['ar-tn'] || 'Adventure',
+                claimedAt: r.timestamp?.toDate ? r.timestamp.toDate() : new Date(),
+                isRedeemed: r.isRedeemed || false,
+                tier: r.type === 'points' && (Number(r.value) > 500) ? 'Epic' : 
+                      r.type === 'discount' ? 'Legendary' : 'Common',
+                code: r.code,
+                participationId: p.id,
+                rewardIndex: idx
+              });
+            });
+          }
+        }
+
+        // Sort by date newest first
+        allRewards.sort((a, b) => b.claimedAt.getTime() - a.claimedAt.getTime());
+        setRewards(allRewards);
+      } catch (error) {
+        console.error('Error processing rewards:', error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, [userId]);
 
-  const handleClaimReward = (reward: Reward) => {
-    Alert.alert(
-      t('treasureHuntClaimReward'),
-      t('treasureHuntClaimRewardConfirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { 
-          text: t('treasureHuntClaim'), 
-          onPress: () => {
-            // Handle reward claim
-            Alert.alert(t('treasureHuntSuccess'), t('treasureHuntRewardClaimed'));
-          }
-        },
-      ]
+  const getTierColors = (tier?: string): [string, string] => {
+    switch (tier) {
+      case 'Legendary': return ['#F59E0B', '#EF4444'];
+      case 'Epic': return ['#8B5CF6', '#D946EF'];
+      case 'Rare': return ['#3B82F6', '#2DD4BF'];
+      default: return ['#6B7280', '#4B5563'];
+    }
+  };
+
+  const renderRewardCard = (reward: Reward, index: number) => {
+    const tierColors = getTierColors(reward.tier);
+    
+    return (
+      <Animatable.View 
+        key={reward.id}
+        animation="fadeInUp"
+        delay={400 + (index * 100)}
+        style={styles.rewardCardContainer}
+      >
+        <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.rewardBlur}>
+          <View style={styles.cardHeader}>
+             <LinearGradient
+               colors={tierColors}
+               style={styles.tierBadge}
+             >
+                <Text style={styles.tierText}>{reward.tier || 'Common'}</Text>
+             </LinearGradient>
+             <Text style={[styles.dateText, { color: colors.textMuted }]}>
+                {reward.claimedAt.toLocaleDateString()}
+             </Text>
+          </View>
+
+          <View style={styles.cardMain}>
+             <View style={[styles.rewardIconBox, { backgroundColor: tierColors[0] + '20' }]}>
+                {reward.type === 'points' ? <TrendingUp size={24} color={tierColors[0]} /> : 
+                 reward.type === 'discount' ? <Tag size={24} color={tierColors[0]} /> :
+                 <Gift size={24} color={tierColors[0]} />}
+             </View>
+             <View style={styles.rewardInfo}>
+                <Text style={[styles.rewardTitle, { color: colors.foreground }]}>
+                   {reward.type === 'points' ? `${reward.value} Points` : 
+                    reward.type === 'discount' ? `${reward.value}% Discount` :
+                    reward.type === 'free_product' ? `Free Product` :
+                    `${reward.value || 'Special'} Reward`}
+                </Text>
+                <Text style={[styles.rewardCampaign, { color: colors.primary }]}>{reward.campaignName}</Text>
+             </View>
+          </View>
+
+          <Text style={[styles.rewardDesc, { color: colors.textMuted }]}>{reward.description}</Text>
+
+          {reward.code && !reward.isRedeemed && (
+             <TouchableOpacity style={[styles.codeBox, { backgroundColor: colors.background + '80' }]}>
+                <Text style={[styles.codeText, { color: colors.foreground }]}>{reward.code}</Text>
+                <Copy size={16} color={colors.primary} />
+             </TouchableOpacity>
+          )}
+
+          <View style={styles.cardFooter}>
+             {reward.isRedeemed ? (
+                <View style={styles.redeemedInfo}>
+                   <CheckCircle2 size={16} color="#10B981" />
+                   <Text style={styles.redeemedLabel}>Redeemed</Text>
+                </View>
+             ) : (
+                <TouchableOpacity 
+                   style={[styles.claimButton, { backgroundColor: colors.primary }]}
+                   onPress={() => handleClaimReward(reward)}
+                   disabled={claimingId === reward.id}
+                 >
+                   <LinearGradient colors={[colors.primary, colors.primary + 'AA']} style={styles.claimGradient}>
+                      {claimingId === reward.id ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.claimText}>Claim Reward</Text>
+                          <Sparkles size={16} color="#FFF" />
+                        </>
+                      )}
+                   </LinearGradient>
+                </TouchableOpacity>
+             )}
+          </View>
+        </BlurView>
+      </Animatable.View>
     );
-  };
-
-  const handleCopyCode = (code: string) => {
-    // In a real app, use Clipboard or expo-clipboard
-    Alert.alert(t('treasureHuntCopied'), code);
-  };
-
-  const getRewardIcon = (type: string) => {
-    switch (type) {
-      case 'points':
-        return <Zap size={24} color="#FFD700" />;
-      case 'discount':
-        return <Tag size={24} color="#4ECDC4" />;
-      case 'gift':
-        return <Gift size={24} color="#FF6B6B" />;
-      case 'coupon':
-        return <Award size={24} color="#9B59B6" />;
-      default:
-        return <Gift size={24} color={colors.primary} />;
-    }
-  };
-
-  const getRewardGradient = (type: string): [string, string] => {
-    switch (type) {
-      case 'points':
-        return ['#FFD700', '#FFA500'];
-      case 'discount':
-        return ['#4ECDC4', '#44A08D'];
-      case 'gift':
-        return ['#FF6B6B', '#FF8E53'];
-      case 'coupon':
-        return ['#9B59B6', '#8E44AD'];
-      default:
-        return [colors.primary, colors.primary];
-    }
   };
 
   const totalPoints = rewards
     .filter(r => r.type === 'points' && !r.isRedeemed)
     .reduce((sum, r) => sum + (r.value as number), 0);
 
-  const renderRewardCard = (reward: Reward, index: number) => (
-    <Animatable.View 
-      key={reward.id}
-      animation="fadeInUp"
-      delay={index * 100}
-      duration={400}
-      style={[styles.rewardCard, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}
-    >
-      <LinearGradient
-        colors={getRewardGradient(reward.type)}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.rewardHeader}
-      >
-        <View style={styles.rewardIconContainer}>
-          {getRewardIcon(reward.type)}
-        </View>
-        <View style={styles.rewardHeaderInfo}>
-          <Text style={styles.rewardValue}>
-            {reward.type === 'points' 
-              ? `${reward.value} ${t('treasureHuntPoints')}`
-              : reward.type === 'discount'
-              ? `${reward.value}% ${t('treasureHuntDiscount')}`
-              : reward.value
-            }
-          </Text>
-          <Text style={styles.rewardCampaign}>{reward.campaignName}</Text>
-        </View>
-        {reward.isRedeemed && (
-          <View style={styles.redeemedBadge}>
-            <CheckCircle2 size={16} color="#FFF" />
-          </View>
-        )}
-      </LinearGradient>
-
-      <View style={styles.rewardBody}>
-        <Text style={[styles.rewardDescription, { color: colors.textMuted }]}>
-          {reward.description}
-        </Text>
-
-        {reward.code && (
-          <TouchableOpacity 
-            onPress={() => handleCopyCode(reward.code!)}
-            style={[styles.codeContainer, { backgroundColor: colors.background }]}
-          >
-            <Text style={[styles.codeText, { color: colors.foreground }]}>{reward.code}</Text>
-            <Copy size={16} color={colors.primary} />
-          </TouchableOpacity>
-        )}
-
-        {!reward.isRedeemed && (
-          <TouchableOpacity 
-            onPress={() => handleClaimReward(reward)}
-            style={[styles.claimButton, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.claimButtonText}>{t('treasureHuntClaimReward')}</Text>
-            <ChevronRight size={18} color="#FFF" />
-          </TouchableOpacity>
-        )}
-
-        {reward.isRedeemed && (
-          <View style={[styles.claimedInfo, { backgroundColor: '#4ECDC420' }]}>
-            <CheckCircle2 size={16} color="#4ECDC4" />
-            <Text style={[styles.claimedText, { color: '#4ECDC4' }]}>
-              {t('treasureHuntRedeemed')}
-            </Text>
-          </View>
-        )}
-      </View>
-    </Animatable.View>
-  );
-
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const currentLevel = Math.floor(totalPoints / 1000) + 1;
+  const currentXP = totalPoints % 1000;
+  const xpToNextTier = 1000 - currentXP;
+  const xpProgress = (currentXP / 1000) * 100;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <ChevronRight size={24} color={colors.foreground} style={{ transform: [{ rotate: '180deg' }] }} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {t('treasureHuntMyRewards')}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
+      
+      {/* Premium Animated Header */}
+      <View style={styles.topSection}>
+         <LinearGradient
+            colors={theme === 'dark' ? ['#0F172A', '#1E293B'] : ['#F8FAFC', '#F1F5F9']}
+            style={styles.headerBackground}
+         />
+         <SafeAreaView style={styles.safeHeader} edges={['top']}>
+            <View style={styles.headerRow}>
+               <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                  <BlurView intensity={20} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blurBack}>
+                     <ChevronLeft size={24} color={colors.foreground} />
+                  </BlurView>
+               </TouchableOpacity>
+               <Text style={[styles.headerTitle, { color: colors.foreground }]}>My Rewards</Text>
+               <TouchableOpacity style={styles.infoButton}>
+                  <ShieldCheck size={24} color={colors.primary} />
+               </TouchableOpacity>
+            </View>
 
-      {/* Summary Card */}
-      <View style={styles.summaryContainer}>
-        <LinearGradient
-          colors={['#FF6B6B', '#FF8E53']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.summaryCard}
-        >
-          <View style={styles.summaryIcon}>
-            <Sparkles size={32} color="#FFF" />
-          </View>
-          <Text style={styles.summaryLabel}>{t('treasureHuntTotalPoints')}</Text>
-          <Text style={styles.summaryValue}>{totalPoints}</Text>
-          <Text style={styles.summaryHint}>{t('treasureHuntUsePoints')}</Text>
-        </LinearGradient>
+            <Animatable.View animation="zoomIn" duration={800} style={styles.statContainer}>
+               <BlurView intensity={theme === 'dark' ? 10 : 40} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.statBlur}>
+                  <LinearGradient
+                    colors={theme === 'dark' 
+                      ? ['rgba(79, 70, 229, 0.2)', 'rgba(79, 70, 229, 0.05)'] 
+                      : ['rgba(255, 255, 255, 0.9)', 'rgba(255, 255, 255, 0.5)']}
+                    style={styles.statGradient}
+                  >
+                     <View style={styles.statContentRow}>
+                        <View style={styles.statIconBox}>
+                           <Gem size={28} color={colors.primary} />
+                        </View>
+                        <View style={styles.statTextGroup}>
+                           <Text style={[styles.statLabel, { color: colors.textMuted }]}>TOTAL TREASURE POINTS</Text>
+                           <Text style={[styles.statValue, { color: colors.foreground }]}>{totalPoints}</Text>
+                        </View>
+                     </View>
+                     
+                     <View style={styles.xpSection}>
+                        <View style={styles.xpHeader}>
+                           <Text style={[styles.xpLevelText, { color: colors.primary }]}>{`Level ${currentLevel}`}</Text>
+                           <Text style={[styles.xpTargetText, { color: colors.textMuted }]}>{`${xpToNextTier} XP to Next Tier`}</Text>
+                        </View>
+                        <View style={styles.xpBar}>
+                           <View style={[styles.xpProgress, { backgroundColor: colors.primary, width: `${xpProgress}%` }]} />
+                        </View>
+                     </View>
+                  </LinearGradient>
+               </BlurView>
+            </Animatable.View>
+         </SafeAreaView>
       </View>
 
       <ScrollView
@@ -293,25 +348,25 @@ const TreasureRewardsScreen: React.FC<TreasureRewardsScreenProps> = ({
           />
         }
       >
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {t('treasureHuntYourRewards')}
-        </Text>
+        <Animatable.Text animation="fadeInLeft" style={[styles.sectionHeading, { color: colors.foreground }]}>
+           Recent Treasures
+        </Animatable.Text>
 
         {rewards.length === 0 ? (
           <View style={styles.emptyState}>
-            <Gift size={64} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              {t('treasureHuntNoRewards')}
-            </Text>
+            <View style={[styles.emptyIconBox, { backgroundColor: colors.primary + '10' }]}>
+               <Trophy size={60} color={colors.primary} opacity={0.3} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No Rewards Yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              {t('treasureHuntStartHunting')}
+               Start your first treasure hunt to unlock exclusive rewards and points!
             </Text>
           </View>
         ) : (
           rewards.map((reward, index) => renderRewardCard(reward, index))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -319,173 +374,263 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  topSection: {
+    minHeight: 320,
+    width: '100%',
+    position: 'relative',
   },
-  header: {
+  headerBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  safeHeader: {
+    flex: 1,
+  },
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: width * 0.04,
-    paddingVertical: 12,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 10,
+    height: 50,
   },
   backButton: {
-    width: Math.min(40, width * 0.1),
-    height: Math.min(40, width * 0.1),
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  infoButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+  },
+  blurBack: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   headerTitle: {
-    fontSize: Math.min(18, width * 0.045),
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
-  summaryContainer: {
-    paddingHorizontal: width * 0.05,
+  statContainer: {
+    paddingHorizontal: 20,
+    marginTop: 15,
+  },
+  statBlur: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statGradient: {
+    padding: 24,
+  },
+  statContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  summaryCard: {
-    padding: Math.min(24, width * 0.06),
-    borderRadius: Math.min(20, width * 0.05),
-    alignItems: 'center',
-  },
-  summaryIcon: {
-    width: Math.min(64, width * 0.16),
-    height: Math.min(64, width * 0.16),
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  statIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: 'rgba(79, 70, 229, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginRight: 16,
   },
-  summaryLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: Math.min(14, width * 0.035),
+  statTextGroup: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  xpSection: {
+    width: '100%',
+  },
+  xpHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  xpLevelText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  xpTargetText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  summaryValue: {
-    color: '#FFF',
-    fontSize: Math.min(48, width * 0.12),
-    fontWeight: '800',
-    marginVertical: 8,
+  xpBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  summaryHint: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: Math.min(12, width * 0.03),
+  xpProgress: {
+    height: '100%',
+    borderRadius: 4,
   },
   scrollContent: {
-    paddingHorizontal: width * 0.05,
-    paddingBottom: 100,
+    padding: 20,
+    paddingBottom: 40,
   },
-  sectionTitle: {
-    fontSize: Math.min(20, width * 0.05),
-    fontWeight: '800',
-    marginBottom: 16,
+  sectionHeading: {
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 20,
+    letterSpacing: -0.5,
   },
-  rewardCard: {
-    borderRadius: Math.min(16, width * 0.04),
-    marginBottom: 16,
+  rewardCardContainer: {
+    marginBottom: 20,
+  },
+  rewardBlur: {
+    borderRadius: 28,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  rewardHeader: {
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  tierBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  tierText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  dateText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cardMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    marginBottom: 12,
   },
-  rewardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  rewardIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 15,
   },
-  rewardHeaderInfo: {
+  rewardInfo: {
     flex: 1,
-    marginLeft: 12,
   },
-  rewardValue: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '800',
+  rewardTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
   rewardCampaign: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '700',
     marginTop: 2,
   },
-  redeemedBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rewardBody: {
-    padding: 16,
-  },
-  rewardDescription: {
+  rewardDesc: {
     fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 22,
+    marginBottom: 16,
   },
-  codeContainer: {
+  codeBox: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 12,
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(79, 70, 229, 0.3)',
   },
   codeText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     letterSpacing: 2,
   },
-  claimButton: {
+  cardFooter: {
+    marginTop: 4,
+  },
+  redeemedInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 14,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 12,
     borderRadius: 12,
   },
-  claimButtonText: {
+  redeemedLabel: {
+    color: '#10B981',
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  claimButton: {
+    height: 54,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  claimGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  claimText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     marginRight: 8,
-  },
-  claimedInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-  },
-  claimedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
   },
+  emptyIconBox: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
+    fontSize: 22,
+    fontWeight: '900',
   },
   emptySubtitle: {
-    fontSize: 14,
-    marginTop: 8,
+    fontSize: 15,
     textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 24,
+    paddingHorizontal: 30,
   },
 });
 

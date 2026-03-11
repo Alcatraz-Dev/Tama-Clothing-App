@@ -8,874 +8,1623 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Modal,
-  Animated as RNAnimated,
-  ScrollView
+  Vibration,
+  Animated,
+  StatusBar,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
-import * as Animatable from 'react-native-animatable';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Animatable from 'react-native-animatable';
 import { 
-  MapPin, 
   ChevronLeft, 
+  Navigation, 
   Target, 
+  MapPin, 
   CheckCircle2, 
-  Circle,
-  Navigation,
-  Locate,
-  ZoomIn,
-  ZoomOut,
-  X,
+  Scan, 
+  Trophy,
+  Zap,
   Sparkles,
-  Clock,
+  Crosshair,
+  Radar,
+  User,
   Gift,
-  Info
+  Award,
+  Gem,
+  Bomb as BombIcon,
+  CircleDot
 } from 'lucide-react-native';
-import { treasureHuntService, Campaign, TreasureLocation, Participation } from '@/services/TreasureHuntService';
+import { treasureHuntService, TreasureLocation, Participation, Bomb, Campaign } from '@/services/TreasureHuntService';
 import { useAppTheme } from '@/context/ThemeContext';
 
-const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 375;
-const isTablet = width > 768;
+const { width } = Dimensions.get('window');
 
 interface TreasureMapScreenProps {
-  campaign: Campaign;
+  campaignId: string;
   userId: string;
   t: any;
   isDark: boolean;
   onBack: () => void;
-  onScan: () => void;
-  onRewardClaim: () => void;
+  onScan: (location: TreasureLocation) => void;
+  onViewRewards?: () => void;
+  onViewProfile?: () => void;
 }
 
+
 const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
-  campaign,
+  campaignId,
   userId,
   t,
   isDark,
   onBack,
   onScan,
-  onRewardClaim
+  onViewRewards,
+  onViewProfile
 }) => {
-  const [locations, setLocations] = useState<(TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean; distance?: number })[]>([]);
+  const currentLang = t.locale || 'fr';
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [treasureLocations, setTreasureLocations] = useState<TreasureLocation[]>([]);
   const [participation, setParticipation] = useState<Participation | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState<(TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean; distance?: number }) | null>(null);
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [isNearTreasure, setIsNearTreasure] = useState(false);
-  const [nearbyDistance, setNearbyDistance] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<TreasureLocation | null>(null);
+  const [currentTargetId, setCurrentTargetId] = useState<string | null>(null);
+  const [nearLocation, setNearLocation] = useState<TreasureLocation | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [bombs, setBombs] = useState<Bomb[]>([]);
+  const [mapRegion, setMapRegion] = useState<any>({
+    latitude: 36.8065, // Tunis default
+    longitude: 10.1815,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
+  
+  const [capturing, setCapturing] = useState(false);
+  const [lastDiscoveredReward, setLastDiscoveredReward] = useState<any>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [showBoomAnimation, setShowBoomAnimation] = useState(false);
   const mapRef = useRef<MapView>(null);
-  const { colors, theme } = useAppTheme();
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const updateDistances = (userLat: number, userLon: number) => {
-    setLocations(prev => prev.map(loc => ({
-      ...loc,
-      distance: calculateDistance(
-        userLat, userLon,
-        loc.coordinates.latitude, loc.coordinates.longitude
-      )
-    })));
-
-    const currentTarget = locations.find(loc => loc.isCurrentTarget);
-    if (currentTarget) {
-      const distance = calculateDistance(
-        userLat, userLon,
-        currentTarget.coordinates.latitude, currentTarget.coordinates.longitude
-      );
-      
-      const threshold = (currentTarget.radius || 50);
-      setNearbyDistance(distance);
-      
-      if (distance <= threshold && !isNearTreasure) {
-        setIsNearTreasure(true);
-      } else if (distance > threshold && isNearTreasure) {
-        setIsNearTreasure(false);
-      }
-    }
-  };
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      
-      // Get user's participation
-      const participationData = await treasureHuntService.getParticipation(campaign.id, userId);
-      setParticipation(participationData);
-
-      // Get map data
-      const mapData = await treasureHuntService.getMapData(campaign.id, userId);
-      setLocations(mapData.locations);
-
-      // Get user location
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        const userLat = location.coords.latitude;
-        const userLon = location.coords.longitude;
-        setUserLocation({
-          latitude: userLat,
-          longitude: userLon
-        });
-        
-        // Calculate distances to all locations
-        const locationsWithDistance = mapData.locations.map(loc => ({
-          ...loc,
-          distance: calculateDistance(userLat, userLon, loc.coordinates.latitude, loc.coordinates.longitude)
-        }));
-        setLocations(locationsWithDistance);
-
-        // Check proximity to current target
-        const currentTarget = locationsWithDistance.find(loc => loc.isCurrentTarget);
-        if (currentTarget) {
-          const distance = currentTarget.distance || 0;
-          const threshold = currentTarget.radius || 50;
-          if (distance <= threshold) {
-            setIsNearTreasure(true);
-          }
-          setNearbyDistance(distance);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching map data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [campaign.id, userId]);
-
-  // Countdown timer for campaign end
-  useEffect(() => {
-    if (!campaign.endDate) return;
-    
-    const calculateTimeRemaining = () => {
-      // Handle Firestore Timestamp
-      let endDate: Date;
-      const endDateAny = campaign.endDate as any;
-      if (endDateAny && typeof endDateAny === 'object' && 'toDate' in endDateAny) {
-        endDate = endDateAny.toDate();
-      } else if (endDateAny instanceof Date) {
-        endDate = endDateAny;
-      } else {
-        endDate = new Date(endDateAny);
-      }
-      
-      const now = new Date();
-      const diff = endDate.getTime() - now.getTime();
-      
-      if (diff <= 0) {
-        setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-      
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
-      setTimeRemaining({ days, hours, minutes, seconds });
-    };
-    
-    calculateTimeRemaining();
-    const interval = setInterval(calculateTimeRemaining, 1000);
-    
-    return () => clearInterval(interval);
-  }, [campaign.endDate]);
-
-  // Live location tracking for proximity updates
-  useEffect(() => {
-    let locationSubscription: Location.LocationSubscription | null = null;
-
-    const startLocationTracking = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        locationSubscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 3000,
-            distanceInterval: 5,
-          },
-          (location) => {
-            const userLat = location.coords.latitude;
-            const userLon = location.coords.longitude;
-            setUserLocation({ latitude: userLat, longitude: userLon });
-
-            // Update distances
-            setLocations(prev => {
-              const updatedLocations = prev.map(loc => ({
-                ...loc,
-                distance: calculateDistance(
-                  userLat, userLon,
-                  loc.coordinates.latitude, loc.coordinates.longitude
-                )
-              }));
-
-              // Check proximity to current target
-              const currentTarget = updatedLocations.find(loc => loc.isCurrentTarget);
-              if (currentTarget && currentTarget.distance !== undefined) {
-                const threshold = currentTarget.radius || 50;
-                setNearbyDistance(currentTarget.distance);
-                
-                if (currentTarget.distance <= threshold && !isNearTreasure) {
-                  setIsNearTreasure(true);
-                } else if (currentTarget.distance > threshold && isNearTreasure) {
-                  setIsNearTreasure(false);
-                }
-              }
-
-              return updatedLocations;
-            });
-          }
-        );
-      }
-    };
-
-    startLocationTracking();
-
-    return () => {
-      if (locationSubscription) {
-        locationSubscription.remove();
-      }
-    };
-  }, []);
-
+  const shakeViewRef = useRef<any>(null);
+  
   const centerOnUser = () => {
     if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion({
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01
-      }, 500);
-    }
-  };
-
-  const centerOnTarget = () => {
-    const currentTarget = locations.find(loc => loc.isCurrentTarget);
-    if (currentTarget && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: currentTarget.coordinates.latitude,
-        longitude: currentTarget.coordinates.longitude,
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
         latitudeDelta: 0.005,
-        longitudeDelta: 0.005
-      }, 500);
+        longitudeDelta: 0.005,
+      }, 1000);
     }
   };
 
-  const handleMarkerPress = (location: TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean }) => {
-    setSelectedLocation(location);
-    setShowLocationModal(true);
+  const centerOnTreasure = () => {
+    let target = null;
+    if (currentTargetId) {
+      target = treasureLocations.find(l => l.id === currentTargetId);
+    } 
+    if (!target) {
+       const undiscovered = treasureLocations.filter(loc => !isDiscovered(loc.id));
+       if (undiscovered.length > 0 && userLocation) {
+         target = undiscovered.reduce((nearest, current) => {
+            const dist1 = getDistance(userLocation.coords.latitude, userLocation.coords.longitude, nearest.coordinates.latitude, nearest.coordinates.longitude);
+            const dist2 = getDistance(userLocation.coords.latitude, userLocation.coords.longitude, current.coordinates.latitude, current.coordinates.longitude);
+            return dist1 < dist2 ? nearest : current;
+         });
+       }
+    }
+    
+    if (target && mapRef.current) {
+       mapRef.current.animateCamera({
+         center: {
+           latitude: target.coordinates.latitude,
+           longitude: target.coordinates.longitude,
+         },
+         pitch: 45,
+         heading: 0,
+         altitude: 1000,
+         zoom: 17
+       }, { duration: 1000 });
+       setCurrentTargetId(target.id);
+    }
   };
 
-  const getMarkerColor = (location: TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean }) => {
-    if (location.isDiscovered) return '#4ECDC4';
-    if (location.isCurrentTarget) return '#FF6B6B';
-    return '#AEAEB2';
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const { colors, theme } = useAppTheme();
+
+  const triggerBoomEffect = () => {
+    setShowBoomAnimation(true);
+    Vibration.vibrate([0, 200, 100, 500]);
+    
+    // Smooth high-quality shake using Animatable
+    if (shakeViewRef.current) {
+        shakeViewRef.current.shake(800);
+    }
+
+    setTimeout(() => {
+      setShowBoomAnimation(false);
+      Alert.alert(
+        t('treasureHuntBoomTitle') || "BOOM!", 
+        t('treasureHuntBoomDesc') || "You stepped on a bomb! It has been removed. You are out of the game.",
+        [{ text: "OK", style: "destructive", onPress: async () => {
+          await treasureHuntService.abandonCampaign(campaignId, userId);
+          if (onBack) onBack(); // Kick out of the game
+        } }]
+      );
+    }, 1500);
   };
 
-  const getMarkerIcon = (location: TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean }) => {
-    if (location.isDiscovered) return 'check';
-    if (location.isCurrentTarget) return 'target';
-    return 'circle';
+  const handleCapture = async (location: TreasureLocation) => {
+    if (!userLocation) return;
+    
+    setCapturing(true);
+    Vibration.vibrate([0, 100, 100, 100]); // Poke-vibe
+    
+    try {
+      const result = await treasureHuntService.captureTreasure(
+        location.id,
+        userId,
+        userLocation.coords.latitude,
+        userLocation.coords.longitude
+      );
+
+      if (result.success) {
+        setShowSuccessAnimation(true);
+        Vibration.vibrate([0, 500, 100, 500]);
+        
+        setTimeout(() => {
+          setShowSuccessAnimation(false);
+          setLastDiscoveredReward(result.reward);
+        }, 2500);
+
+        // Refresh data
+        refreshData();
+        setNearLocation(null);
+        setSelectedLocation(null);
+      } else {
+        Alert.alert(t('treasureHuntError'), result.message || t('treasureHuntCaptureFailed'));
+      }
+    } catch (error) {
+      console.error('Capture error:', error);
+      Alert.alert(t('treasureHuntError'), t('treasureHuntErrorGeneral'));
+    } finally {
+      setCapturing(false);
+    }
   };
 
-  const progress = participation ? {
-    discovered: participation.progress.discoveredLocations,
-    total: participation.progress.totalLocations
-  } : { discovered: 0, total: locations.length };
+  const refreshData = async () => {
+    try {
+      const mapData = await treasureHuntService.getMapData(campaignId, userId);
+      setTreasureLocations(mapData.locations);
+      
+      const part = await treasureHuntService.getParticipation(campaignId, userId);
+      setParticipation(part);
 
-  const renderMarker = (location: TreasureLocation & { isDiscovered?: boolean; isCurrentTarget?: boolean }) => (
-    <Marker
-      key={location.id}
-      coordinate={{
-        latitude: location.coordinates.latitude,
-        longitude: location.coordinates.longitude
-      }}
-      onPress={() => handleMarkerPress(location)}
-    >
-      <Animatable.View 
-        animation={location.isCurrentTarget ? 'pulse' : undefined}
-        iterationCount="infinite"
-        duration={1500}
-        style={[styles.markerContainer, { backgroundColor: getMarkerColor(location) }]}
-      >
-        {location.isDiscovered ? (
-          <CheckCircle2 size={20} color="#FFF" />
-        ) : location.isCurrentTarget ? (
-          <Target size={20} color="#FFF" />
-        ) : (
-          <Circle size={16} color="#FFF" />
-        )}
-      </Animatable.View>
-    </Marker>
-  );
+      const camp = await treasureHuntService.getCampaign(campaignId);
+      setCampaign(camp);
+      
+      const bombData = await treasureHuntService.getBombs(campaignId);
+      setBombs(bombData);
+    } catch (error) {
+       console.error('Refresh error:', error);
+    }
+  };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('treasureHuntError'), t('treasureHuntPermissionError'));
+        onBack();
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location);
+      setMapRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+
+      
+      const locationSubscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
+        (loc) => setUserLocation(loc)
+      );
+
+      return () => locationSubscription.remove();
+    })();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.5, duration: 1500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  useEffect(() => {
+    console.log('TreasureMapScreen mounted:', { campaignId, userId });
+    setLoading(true);
+    
+    // Subscribe to participation
+    let unsubscribe = () => {};
+    if (campaignId && userId) {
+      unsubscribe = treasureHuntService.subscribeToParticipation(campaignId, userId, (data) => {
+        console.log('Participation updated:', data);
+        setParticipation(data);
+        setLoading(false);
+      });
+    } else {
+      console.log('Missing campaignId or userId');
+      setLoading(false);
+    }
+
+    // Fetch locations and bombs
+    const fetchMapData = async () => {
+      try {
+        const locationsData = await treasureHuntService.getLocations(campaignId);
+        console.log('Locations fetched:', locationsData.length);
+        setTreasureLocations(locationsData);
+
+        const bombsData = await treasureHuntService.getBombs(campaignId);
+        console.log('Bombs fetched:', bombsData.length);
+        setBombs(bombsData);
+      } catch (error) {
+        console.error('Error fetching map data:', error);
+      }
+    };
+
+    fetchMapData();
+
+    return () => unsubscribe();
+  }, [campaignId, userId]);
+
+  // Remove the random bomb generator
+
+  // Bomb collision detection
+  useEffect(() => {
+    if (userLocation && bombs.length > 0) {
+      let touchedBombId: string | null = null;
+      for (const b of bombs) {
+        const dist = getDistance(
+          userLocation.coords.latitude, 
+          userLocation.coords.longitude,
+          b.latitude,
+          b.longitude
+        );
+        // Detection radius: 10 meters for easier testing/gameplay
+        if (dist <= 10) { 
+          touchedBombId = b.id;
+          break;
+        }
+      }
+      if (touchedBombId) {
+         setBombs(prev => prev.filter(b => b.id !== touchedBombId));
+         triggerBoomEffect();
+      }
+    }
+  }, [userLocation, bombs]);
+
+  useEffect(() => {
+    if (!userLocation || !treasureLocations.length || !participation) return;
+
+    const discoveredIds = participation.progress.discoveredLocationIds || [];
+    const undiscovered = treasureLocations.filter(loc => !discoveredIds.includes(loc.id));
+
+    let closest: TreasureLocation | null = null;
+    let minDistance = Infinity;
+
+    undiscovered.forEach(loc => {
+      const distance = getDistance(
+        userLocation.coords.latitude,
+        userLocation.coords.longitude,
+        loc.coordinates.latitude,
+        loc.coordinates.longitude
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = loc;
+      }
+    });
+
+    if (closest) {
+      const loc = closest as TreasureLocation;
+      if (minDistance <= (loc.radius || 50)) {
+        if (nearLocation?.id !== loc.id) {
+          setNearLocation(loc);
+          Vibration.vibrate([0, 500, 200, 500]);
+        }
+      } else {
+        setNearLocation(null);
+      }
+    } else {
+      setNearLocation(null);
+    }
+  }, [userLocation, treasureLocations, participation]);
+
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  };
+
+  const isDiscovered = (locationId: string) => {
+    return participation?.progress.discoveredLocationIds?.includes(locationId);
+  };
+
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        initialRegion={{
-          latitude: locations[0]?.coordinates.latitude || 36.8065,
-          longitude: locations[0]?.coordinates.longitude || 10.1815,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05
-        }}
-        showsUserLocation
-        showsMyLocationButton={false}
+    <View style={styles.container}>
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
+      
+      <Animatable.View 
+        ref={shakeViewRef}
+        style={{ flex: 1 }}
+        useNativeDriver
       >
-        {locations.map(renderMarker)}
-      </MapView>
-
-      {/* Header */}
-      <SafeAreaView style={styles.headerContainer} edges={['top']}>
-        <View style={[styles.header, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)' }]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ChevronLeft size={24} color={colors.foreground} />
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
-              {campaign.name?.fr || campaign.name?.['ar-tn'] || 'Campaign'}
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {progress.discovered} / {progress.total} {t('treasureHuntFound')}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={onScan} style={[styles.scanButton, { backgroundColor: colors.primary }]}>
-            <MapPin size={20} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Countdown Timer */}
-        {timeRemaining && (timeRemaining.days > 0 || timeRemaining.hours > 0 || timeRemaining.minutes > 0) && (
-          <View style={[styles.countdownContainer, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)' }]}>
-            <Clock size={16} color={colors.primary} />
-            <Text style={[styles.countdownText, { color: colors.foreground }]}>
-              {timeRemaining.days > 0 && `${timeRemaining.days}d `}
-              {String(timeRemaining.hours).padStart(2, '0')}:
-              {String(timeRemaining.minutes).padStart(2, '0')}:
-              {String(timeRemaining.seconds).padStart(2, '0')}
-            </Text>
-            <Text style={[styles.countdownLabel, { color: colors.textMuted }]}>
-              {t('treasureHuntTimeRemaining') || 'remaining'}
-            </Text>
-          </View>
-        )}
-        
-        {/* Progress Bar - Inside Header */}
-        <View style={[styles.progressContainer, { backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)' }]}>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { 
-                  backgroundColor: colors.primary,
-                  width: `${(progress.discovered / progress.total) * 100}%` 
-                }
-              ]} 
-            />
-          </View>
-          <Text style={[styles.progressText, { color: colors.textMuted }]}>
-            {Math.round((progress.discovered / progress.total) * 100)}% {t('treasureHuntComplete')}
-          </Text>
-        </View>
-      </SafeAreaView>
-
-      {/* Proximity Alert - Pokemon Go style */}
-      {locations.find(loc => loc.isCurrentTarget) && nearbyDistance !== null && !showLocationModal && (
-        <Animatable.View 
-          animation={isNearTreasure ? 'bounceIn' : undefined}
-          iterationCount={isNearTreasure ? 'infinite' : 0}
-          style={[
-            styles.proximityAlert, 
-            { 
-              backgroundColor: isNearTreasure 
-                ? 'rgba(52, 199, 89, 0.95)' 
-                : theme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.98)',
-              borderColor: isNearTreasure ? '#2D8F3E' : colors.border
-            }
-          ]}
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFill}
+          initialRegion={mapRegion}
+          showsUserLocation={true}
+          showsPointsOfInterests={false}
+          showsCompass={true}
+          rotateEnabled={true}
+          pitchEnabled={true}
+          customMapStyle={theme === 'dark' ? darkMapStyle : lightMapStyle}
         >
-          <View style={styles.proximityContent}>
-            <View style={[styles.proximityIcon, { 
-              backgroundColor: isNearTreasure ? '#FFF' : colors.primary,
-              transform: [{ scale: isNearTreasure ? 1.2 : 1 }]
-            }]}>
-              <Sparkles size={24} color={isNearTreasure ? '#34C759' : '#FFF'} />
-            </View>
-            <View style={styles.proximityText}>
-              <Text style={[styles.proximityTitle, { color: isNearTreasure ? '#FFF' : colors.foreground }]}>
-                {isNearTreasure 
-                  ? '🎉 ' + (t('treasureHuntYouAreClose') || 'You are close!')
-                  : t('treasureHuntTargetNearby') || 'Target Nearby'}
-              </Text>
-              <View style={styles.proximityDistanceRow}>
-                <Text style={[styles.proximityDistance, { color: isNearTreasure ? '#E8F5E9' : colors.textMuted }]}>
-                  {nearbyDistance !== null && (
-                    <>
-                      {nearbyDistance <= 1000 
-                        ? `${Math.round(nearbyDistance)}m` 
-                        : `${(nearbyDistance / 1000).toFixed(1)}km`}
-                      {' '}{t('treasureHuntAway') || 'away'}
-                    </>
-                  )}
-                </Text>
-                {!isNearTreasure && nearbyDistance !== null && nearbyDistance <= 100 && (
-                  <Text style={[styles.almostThere, { color: '#FF9500' }]}>
-                     - Almost there!
-                  </Text>
-                )}
-              </View>
-            </View>
-            {isNearTreasure ? (
-              <TouchableOpacity 
-                onPress={onScan}
-                style={[styles.scanNowButton, { backgroundColor: '#FFF' }]}
-              >
-                <Sparkles size={16} color="#34C759" />
-                <Text style={[styles.scanNowText, { color: '#34C759' }]}>{t('treasureHuntScanNow') || 'Scan!'}</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                onPress={centerOnTarget}
-                style={[styles.scanNowButton, { backgroundColor: colors.primary }]}
-              >
-                <Navigation size={16} color="#FFF" />
-                <Text style={styles.scanNowText}>{t('treasureHuntNavigate') || 'Go'}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {/* Distance progress bar */}
-          {nearbyDistance && (
-            <View style={styles.distanceBarContainer}>
-              <View style={[
-                styles.distanceBarFill, 
-                { 
-                  backgroundColor: isNearTreasure ? '#FFF' : colors.primary,
-                  width: `${Math.max(0, Math.min(100, ((500 - nearbyDistance) / 500) * 100))}%`
-                }
-              ]} />
-            </View>
+          {/* User Interaction Radius */}
+          {userLocation && (
+            <Circle
+              center={{
+                latitude: userLocation.coords.latitude,
+                longitude: userLocation.coords.longitude
+              }}
+              radius={200} // Detection range
+              fillColor={theme === 'dark' ? 'rgba(79, 70, 229, 0.05)' : 'rgba(79, 70, 229, 0.03)'}
+              strokeColor={colors.primary + '40'}
+              strokeWidth={1}
+            />
           )}
-        </Animatable.View>
+
+          {treasureLocations.map(loc => {
+            const distance = userLocation ? getDistance(
+              userLocation.coords.latitude,
+              userLocation.coords.longitude,
+              loc.coordinates.latitude,
+              loc.coordinates.longitude
+            ) : 1000;
+
+            const isCurrentTarget = loc.id === participation?.progress.currentLocationId || loc.id === currentTargetId;
+            const discovered = isDiscovered(loc.id);
+            
+            // Always reveal the target, or existing discoveries. Others show if within 3km
+            const revealed = (distance < 3000) || isCurrentTarget || discovered;
+            if (!revealed) return null;
+            
+            const inRange = distance < 300; // Close enough to see more detail
+
+            const isNear = nearLocation?.id === loc.id;
+            
+            return (
+              <React.Fragment key={loc.id}>
+                <Marker
+                  coordinate={{ latitude: loc.coordinates.latitude, longitude: loc.coordinates.longitude }}
+                  onPress={() => setSelectedLocation(loc)}
+                >
+                  {discovered ? (
+                    <Animatable.View animation="fadeIn" style={styles.discoveredMarker}>
+                      <View style={styles.markerCircle}>
+                         <Award size={18} color="#FFF" />
+                      </View>
+                    </Animatable.View>
+                  ) : (
+                    <Animatable.View 
+                      animation={isNear ? "bounce" : "pulse"} 
+                      iterationCount="infinite" 
+                      duration={isNear ? 1000 : 2000} 
+                    >
+                      {distance < (loc.radius || 40) ? (
+                        /* Full Reveal - Pokemon GO style PokéStop/Gym */
+                        <View style={styles.treasureMarker}>
+                          <LinearGradient 
+                            colors={['#FFD700', '#FFA500']} 
+                            style={styles.markerHexagon}
+                          >
+                            <View style={styles.hexIcon}>
+                              <Gem size={20} color="#FFF" />
+                            </View>
+                          </LinearGradient>
+                          <View style={styles.markerPulse} />
+                        </View>
+                      ) : distance < 500 || isCurrentTarget ? (
+                        /* Mystery Radar / Target */
+                        <View style={styles.mysteryRadar}>
+                          <Animatable.View 
+                            animation="rotate" 
+                            iterationCount="infinite" 
+                            duration={4000} 
+                            style={styles.radarRing} 
+                          />
+                          <View style={[styles.radarCore, { backgroundColor: isCurrentTarget ? '#FFD700' : colors.primary }]}>
+                             {isCurrentTarget ? <Gem size={16} color="#FFF" /> : <Radar size={14} color="#FFF" />}
+                          </View>
+                        </View>
+                      ) : (
+                        /* Distant Glow */
+                        <View style={[styles.tinyGlow, { backgroundColor: colors.primary + '80' }]} />
+                      )}
+                    </Animatable.View>
+                  )}
+                </Marker>
+                
+                {!discovered && distance < 100 && (
+                  <Circle
+                    center={{ latitude: loc.coordinates.latitude, longitude: loc.coordinates.longitude }}
+                    radius={loc.radius || 30}
+                    fillColor={isNear ? 'rgba(255, 51, 102, 0.1)' : 'rgba(79, 70, 229, 0.05)'}
+                    strokeColor={isNear ? '#FF3366' : colors.primary}
+                    strokeWidth={2}
+                    lineDashPattern={isNear ? undefined : [5, 5]}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Render Bombs when user is <1.5km to its treasure */}
+          {bombs.map(b => {
+            const treasure = treasureLocations.find(t => t.id === b.treasureId);
+            if (!treasure) return null;
+
+            // Show bombs if user is near treasure OR it is the current target/looking at it
+            const isTargeted = treasure.id === currentTargetId || treasure.id === participation?.progress.currentLocationId;
+            const userDistToTreasure = userLocation ? getDistance(
+              userLocation.coords.latitude,
+              userLocation.coords.longitude,
+              treasure.coordinates.latitude,
+              treasure.coordinates.longitude
+            ) : Infinity;
+
+            if (userDistToTreasure > 1500 && !isTargeted) return null;
+
+            return (
+              <Marker
+                key={b.id}
+                coordinate={{ latitude: b.latitude, longitude: b.longitude }}
+              >
+                <View style={[styles.bombMarkerContainer, { borderColor: theme === 'dark' ? '#1F2937' : '#FFF' }]}>
+                   <BombIcon size={18} color="#FFF" />
+                </View>
+              </Marker>
+            );
+          })}
+        </MapView>
+      </Animatable.View>
+      
+      {loading && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }]}>
+           <ActivityIndicator size="large" color="#FFF" />
+        </View>
       )}
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity onPress={centerOnUser} style={[styles.actionButton, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-          <Locate size={22} color={colors.primary} />
-        </TouchableOpacity>
-        {locations.find(loc => loc.isCurrentTarget) && (
-          <TouchableOpacity onPress={centerOnTarget} style={[styles.actionButton, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            <Navigation size={22} color="#FF6B6B" />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Premium UI Overlays */}
+      <View style={styles.overlayContainer} pointerEvents="box-none">
+        {/* Top Status Bar (Floating) */}
+        <SafeAreaView style={styles.topSafeArea} pointerEvents="box-none">
+          <Animatable.View animation="fadeInDown" duration={600} style={styles.topBar}>
+            <TouchableOpacity onPress={onBack} style={styles.circularButton}>
+              <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blurCircular}>
+                <ChevronLeft size={24} color={colors.foreground} />
+              </BlurView>
+            </TouchableOpacity>
+            
+            <View style={styles.titleContainer}>
+              <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blurPill}>
+                 <MapPin size={14} color={colors.primary} />
+                 <Text style={[styles.titleText, { color: colors.foreground }]}>
+                   {nearLocation ? t('treasureHuntInArea') : 
+                    (participation ? `${participation.progress.discoveredLocationIds?.length || 0}/${treasureLocations.length || 0}` : 'EXPLORING...')}
+                 </Text>
+              </BlurView>
+            </View>
 
-      {/* Location Info Modal */}
-      <Modal
-        visible={showLocationModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowLocationModal(false)}
-      >
-        <BlurView intensity={80} tint={theme} style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1A1A1E' : '#FFF' }]}>
-            {selectedLocation && (
-              <>
-                <View style={styles.modalHeader}>
-                  <View style={[styles.locationBadge, { backgroundColor: getMarkerColor(selectedLocation) + '20' }]}>
-                    {selectedLocation.isDiscovered ? (
-                      <CheckCircle2 size={18} color={getMarkerColor(selectedLocation)} />
-                    ) : selectedLocation.isCurrentTarget ? (
-                      <Target size={18} color={getMarkerColor(selectedLocation)} />
-                    ) : (
-                      <Circle size={16} color={getMarkerColor(selectedLocation)} />
+            <TouchableOpacity onPress={centerOnUser} style={styles.circularButton}>
+              <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blurCircular}>
+                 <Navigation size={22} color={colors.primary} />
+              </BlurView>
+            </TouchableOpacity>
+          </Animatable.View>
+        </SafeAreaView>
+
+        {/* Bottom Menu (Pokemon GO Style) */}
+        {!selectedLocation && !nearLocation && (
+          <View style={styles.bottomControls} pointerEvents="box-none">
+            {/* Side Button Left: Profile */}
+            <Animatable.View animation="fadeInLeft" duration={600}>
+              <TouchableOpacity 
+                style={[styles.circularButton, { backgroundColor: theme === 'dark' ? 'rgba(30,30,30,0.8)' : 'rgba(255,255,255,0.8)' }]} 
+                onPress={() => setShowProfile(true)}
+              >
+                <User size={24} color={colors.foreground} />
+              </TouchableOpacity>
+
+              {/* Debug Boom Button */}
+              <TouchableOpacity 
+                style={[styles.circularButton, { marginTop: 15, backgroundColor: 'rgba(239, 68, 68, 0.8)' }]} 
+                onPress={triggerBoomEffect}
+              >
+                <BombIcon size={24} color="#FFF" />
+              </TouchableOpacity>
+            </Animatable.View>
+
+            {/* Central Menu Button - Recenter on Treasure */}
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={centerOnTreasure}
+              style={styles.mainMenuButton}
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#6D28D9']}
+                style={styles.mainMenuGradient}
+              >
+                <View style={styles.mainMenuInner}>
+                  <View style={styles.mainMenuCenter} />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Side Button Right: Rewards/Nearby */}
+            <Animatable.View animation="fadeInRight" duration={600}>
+              <TouchableOpacity 
+                style={[styles.circularButton, { backgroundColor: theme === 'dark' ? 'rgba(30,30,30,0.8)' : 'rgba(255,255,255,0.8)' }]} 
+                onPress={onViewRewards}
+              >
+                <View style={styles.sideButtonContent}>
+                  <Gift size={24} color={colors.primary} />
+                  {/* Small indicator dots for nearby treasures */}
+                  {treasureLocations.length > 0 && (
+                    <View style={styles.miniRadar}>
+                      <Radar size={10} color={colors.primary} />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </Animatable.View>
+          </View>
+        )}
+
+        {/* Near Treasure Alert (Pokemon Go style) */}
+        {nearLocation && (
+          <>
+            {/* Full-Screen Glow Overlay Effect (Gold) */}
+            <Animatable.View 
+              animation="pulse" 
+              iterationCount="infinite" 
+              duration={2000}
+              style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 215, 0, 0.15)', zIndex: 10 }]} 
+              pointerEvents="none"
+            />
+            
+            <Animatable.View animation="bounceInUp" duration={1000} style={[styles.nearAlertContainer, { zIndex: 20 }]}>
+              {/* Floating Treasure Animation */}
+              <Animatable.View 
+                animation="pulse"
+                iterationCount="infinite"
+                duration={1500}
+                style={{ alignSelf: 'center', marginBottom: -35, zIndex: 30 }}
+              >
+                <View style={{ backgroundColor: '#1A1A1A', padding: 18, borderRadius: 50, borderWidth: 3, borderColor: '#FFD700', shadowColor: '#FFD700', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.8, shadowRadius: 15, elevation: 20 }}>
+                  <Gem size={45} color="#FFD700" />
+                </View>
+              </Animatable.View>
+
+              <BlurView intensity={Platform.OS === 'ios' ? 40 : 100} tint="dark" style={styles.radarCard}>
+                <LinearGradient
+                  colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 142, 83, 0.2)']}
+                  style={styles.radarGradient}
+                >
+                   <View style={styles.radarContent}>
+                      <View style={styles.radarAnimationBox}>
+                         <Animatable.View 
+                           animation="pulse" 
+                           iterationCount="infinite" 
+                           style={styles.radarCircleBig} 
+                         />
+                         <Animatable.View 
+                           animation="pulse" 
+                           iterationCount="infinite" 
+                           delay={500}
+                           style={styles.radarCircleSmall} 
+                         />
+                         <Radar size={40} color="#FFD700" />
+                      </View>
+                       <View style={styles.radarTextBox}>
+                         <Text style={styles.radarTitle}>{t('treasureHuntNearTreasure')}</Text>
+                         <Text style={styles.radarDesc}>{t('treasureHuntNearTreasureDesc')}</Text>
+                         {campaign && (
+                           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                             {campaign.rewardType === 'points' && <Zap size={14} color="#FFD700" style={{ marginRight: 4 }} />}
+                             {campaign.rewardType === 'discount' && <Gift size={14} color="#FFD700" style={{ marginRight: 4 }} />}
+                             {campaign.rewardType === 'free_product' && <Gift size={14} color="#FFD700" style={{ marginRight: 4 }} />}
+                             {campaign.rewardType === 'coupon' && <Award size={14} color="#FFD700" style={{ marginRight: 4 }} />}
+                             
+                             <Text style={{ color: '#FFD700', fontSize: 13, fontWeight: 'bold' }}>
+                                {campaign.rewardType === 'points' ? `+${campaign.rewardValue} ${t('points')}` :
+                                 campaign.rewardType === 'discount' ? `${campaign.rewardValue}% ${t('discount')}` :
+                                 campaign.rewardType === 'free_product' ? `${t('treasureHuntFreeProduct')}` :
+                                 `${t('couponLabel')}`}
+                             </Text>
+                           </View>
+                         )}
+                      </View>
+                   </View>
+                    <TouchableOpacity 
+                      onPress={() => handleCapture(nearLocation)} 
+                      disabled={capturing}
+                      style={styles.scanButton}
+                    >
+                      <LinearGradient colors={['#FF3366', '#FF8E53']} style={styles.scanGradient}>
+                         {capturing ? (
+                           <ActivityIndicator color="#FFF" />
+                         ) : (
+                           <>
+                             <Target size={24} color="#FFF" />
+                             <Text style={styles.scanText}>{t('treasureHuntCaptureNow') || 'Capture Treasure'}</Text>
+                           </>
+                         )}
+                       </LinearGradient>
+                     </TouchableOpacity>
+                 </LinearGradient>
+              </BlurView>
+            </Animatable.View>
+          </>
+        )}
+
+         {/* Success Animation Overlay */}
+         {showSuccessAnimation && (
+           <Animatable.View 
+             animation="fadeIn" 
+             style={[StyleSheet.absoluteFill, styles.successOverlay]}
+           >
+             <Animatable.View 
+               animation="zoomIn" 
+               duration={600}
+               style={styles.successContent}
+             >
+                <Animatable.View 
+                  animation="tada" 
+                  iterationCount="infinite"
+                  duration={1500}
+                >
+                  <LinearGradient
+                    colors={['#FFD700', '#FFA500']}
+                    style={styles.treasureChestCircle}
+                  >
+                    <Gem size={80} color="#FFF" />
+                  </LinearGradient>
+                </Animatable.View>
+                
+                <Animatable.Text 
+                  animation="slideInUp" 
+                  delay={400}
+                  style={styles.successTitle}
+                >
+                  {t('treasureHuntFoundIt') || 'TREASURE FOUND!'}
+                </Animatable.Text>
+                
+                <View style={styles.particleContainer}>
+                  {[...Array(6)].map((_, i) => (
+                    <Animatable.View
+                      key={i}
+                      animation="fadeOutUp"
+                      duration={2000}
+                      iterationCount="infinite"
+                      delay={i * 200}
+                      style={[
+                        styles.particle,
+                        { left: 10 + i * 40, top: 40 + (i % 2) * 20 }
+                      ]}
+                    >
+                      <Sparkles size={16} color="#FFD700" />
+                    </Animatable.View>
+                  ))}
+                </View>
+             </Animatable.View>
+           </Animatable.View>
+         )}
+
+         {/* Boom Animation Overlay */}
+         {showBoomAnimation && (
+           <Animatable.View 
+             animation="fadeIn" 
+             duration={200}
+             style={[StyleSheet.absoluteFill, styles.boomOverlay]}
+           >
+             <Animatable.View 
+               animation="pulse" 
+               iterationCount="infinite" 
+               duration={200}
+               style={styles.boomContainer}
+             >
+               <BombIcon size={120} color="#FF3366" />
+               <Text style={styles.boomText}>BOOM!</Text>
+             </Animatable.View>
+           </Animatable.View>
+         )}
+
+         {/* Reward Celebration Modal */}
+        <Modal
+          visible={!!lastDiscoveredReward}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLastDiscoveredReward(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <Animatable.View 
+              animation="zoomIn" 
+              duration={600} 
+              style={styles.rewardModalContent}
+            >
+              <LinearGradient
+                colors={['#FFD700', '#FFA500']}
+                style={styles.rewardHeader}
+              >
+                <Animatable.View 
+                  animation="tada" 
+                  iterationCount="infinite" 
+                  duration={2000}
+                >
+                  <Trophy size={60} color="#FFF" />
+                </Animatable.View>
+                <Text style={styles.rewardModalTitle}>{t('treasureHuntCongratulations') || 'Congratulations!'}</Text>
+              </LinearGradient>
+
+              <View style={styles.rewardBody}>
+                <Text style={styles.rewardMessage}>
+                  {t('treasureHuntFoundReward') || 'You found a treasure!'}
+                </Text>
+                
+                <View style={styles.rewardDetailCard}>
+                  {lastDiscoveredReward?.type === 'points' && (
+                    <View style={styles.rewardInfoRow}>
+                      <Zap size={32} color="#FFD700" />
+                      <Text style={styles.rewardValue}>+{lastDiscoveredReward.value} {t('points') || 'Points'}</Text>
+                    </View>
+                  )}
+                  {lastDiscoveredReward?.type === 'discount' && (
+                     <View style={styles.rewardInfoRow}>
+                        <Gift size={32} color="#FF3366" />
+                        <Text style={styles.rewardValue}>{lastDiscoveredReward.value}% {t('discount') || 'OFF'}</Text>
+                     </View>
+                  )}
+                  {lastDiscoveredReward?.type === 'coupon' && (
+                     <View style={styles.rewardInfoRow}>
+                        <Award size={32} color="#4F46E5" />
+                        <Text style={styles.rewardValue}>{t('couponLabel') || 'Coupon'}</Text>
+                     </View>
+                  )}
+                  {lastDiscoveredReward?.type === 'free_product' && (
+                     <View style={styles.rewardInfoRow}>
+                        <Gift size={32} color="#10B981" />
+                        <Text style={styles.rewardValue}>{t('treasureHuntFreeProduct') || 'Free Product'}</Text>
+                     </View>
+                  )}
+                </View>
+
+                <TouchableOpacity 
+                  onPress={() => setLastDiscoveredReward(null)}
+                  style={styles.continueButton}
+                >
+                  <Text style={styles.continueButtonText}>{t('continue') || 'Continue'}</Text>
+                </TouchableOpacity>
+              </View>
+            </Animatable.View>
+          </View>
+        </Modal>
+
+        {/* Selected Treasure Detail (Bottom Sheet style) */}
+        {selectedLocation && !nearLocation && (
+           <Animatable.View animation="slideInUp" duration={400} style={styles.selectedLocationCard}>
+              <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.detailBlur}>
+                 <View style={styles.detailHeader}>
+                    <View style={[styles.detailIconBox, { backgroundColor: isDiscovered(selectedLocation.id) ? '#10B98120' : '#FFD70020' }]}>
+                       {isDiscovered(selectedLocation.id) ? <CheckCircle2 size={24} color="#10B981" /> : <Gem size={24} color="#FFD700" />}
+                    </View>
+                    <View style={styles.detailTitleBox}>
+                       <Text style={[styles.detailTitle, { color: colors.foreground }]}>
+                          {selectedLocation.name?.[currentLang as keyof typeof selectedLocation.name] || selectedLocation.name?.fr || selectedLocation.name?.['ar-tn'] || t('unknownProduct')}
+                       </Text>
+                       <Text style={[styles.detailStatus, { color: isDiscovered(selectedLocation.id) ? '#10B981' : colors.textMuted }]}>
+                          {isDiscovered(selectedLocation.id) ? t('treasureHuntFound') : t('treasureHuntStillHidden')}
+                       </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setSelectedLocation(null)} style={styles.detailCloseBtn}>
+                       <Crosshair size={24} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {selectedLocation.hint && (
+                    <View style={styles.hintBox}>
+                       <Sparkles size={16} color="#FFD700" />
+                       <Text style={[styles.hintText, { color: colors.textMuted }]}>
+                         {selectedLocation.hint?.[currentLang as keyof typeof selectedLocation.hint] || selectedLocation.hint?.fr || selectedLocation.hint?.['ar-tn']}
+                       </Text>
+                    </View>
+                  )}
+
+                  {!isDiscovered(selectedLocation.id) && (
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setCurrentTargetId(selectedLocation.id);
+                        if (mapRef.current) {
+                           mapRef.current.animateCamera({
+                             center: {
+                               latitude: selectedLocation.coordinates.latitude,
+                               longitude: selectedLocation.coordinates.longitude,
+                             },
+                             pitch: 45,
+                             heading: 0,
+                             altitude: 1000,
+                             zoom: 17
+                           }, { duration: 1000 });
+                        }
+                      }} 
+                      style={[styles.trackButton, { 
+                        marginBottom: 15, 
+                        backgroundColor: currentTargetId === selectedLocation.id ? '#10B981' : colors.primary 
+                      }]}
+                    >
+                      <Navigation size={18} color="#FFF" />
+                      <Text style={styles.trackButtonText}>
+                        {currentTargetId === selectedLocation.id ? t('treasureHuntTracking') : t('treasureHuntTrackTreasure')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <View style={styles.detailRewardRow}>
+                    <View style={styles.detailRewardItem}>
+                       <Award size={14} color={colors.primary} />
+                       <Text style={[styles.detailRewardText, { color: colors.textMuted }]}>
+                         {t('treasureHuntExperiencePoints')}++
+                       </Text>
+                    </View>
+                    <View style={styles.detailRewardItem}>
+                       <Target size={14} color="#FF3366" />
+                       <Text style={[styles.detailRewardText, { color: colors.textMuted }]}>
+                         {getDistance(
+                           userLocation?.coords.latitude || 0,
+                           userLocation?.coords.longitude || 0,
+                           selectedLocation.coordinates.latitude,
+                           selectedLocation.coordinates.longitude
+                         ).toFixed(0)}m {t('treasureHuntAway')}
+                       </Text>
+                    </View>
+                    {participation?.progress.discoveredLocationIds?.includes(selectedLocation.id) && (
+                      <View style={styles.detailRewardItem}>
+                         <CheckCircle2 size={14} color="#10B981" />
+                         <Text style={[styles.detailRewardText, { color: "#10B981", fontWeight: 'bold' }]}>
+                           {t('complete')}
+                         </Text>
+                      </View>
                     )}
                   </View>
-                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                    {selectedLocation.name?.fr || selectedLocation.name?.['ar-tn'] || 'Location'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-                    <X size={24} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-
-                {selectedLocation.hint && (
-                  <View style={styles.hintContainer}>
-                    <Info size={16} color={colors.primary} />
-                    <Text style={[styles.hintText, { color: colors.textMuted }]}>
-                      {selectedLocation.hint?.fr || selectedLocation.hint?.['ar-tn']}
+              </BlurView>
+           </Animatable.View>
+        )}
+        {/* Profile Modal Overlay */}
+        <Modal visible={showProfile} animationType="fade" transparent>
+           <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20}}>
+              <BlurView intensity={theme === 'dark' ? 60 : 100} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.profileModalContent}>
+                 <Text style={[styles.profileModalTitle, {color: colors.foreground}]}>
+                    {t('treasureHuntAdventureProfile') || 'Adventure Profile'}
+                 </Text>
+                 
+                 <View style={[styles.profileStatRow, {borderBottomColor: colors.border}]}>
+                    <Text style={{color: colors.textMuted, fontSize: 16}}>
+                       {t('treasureHuntTreasuresFound') || 'Treasures Found'}
                     </Text>
-                  </View>
-                )}
-
-                <View style={styles.rewardContainer}>
-                  <Gift size={20} color="#4ECDC4" />
-                  <Text style={[styles.rewardText, { color: colors.foreground }]}>
-                    {/* Rewards are now campaign-level */}
-                    {campaign.rewardType === 'points' 
-                      ? `${campaign.rewardValue} ${t('treasureHuntPoints')}`
-                      : campaign.rewardType === 'discount'
-                      ? `${campaign.rewardValue}% ${t('treasureHuntDiscount')}`
-                      : campaign.rewardType === 'coupon'
-                      ? t('treasureHuntCoupon')
-                      : campaign.rewardType === 'free_product'
-                      ? t('treasureHuntFreeProduct')
-                      : t('treasureHuntMysteryReward')
-                    }
-                  </Text>
-                </View>
-
-                {selectedLocation.isCurrentTarget && !selectedLocation.isDiscovered && (
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setShowLocationModal(false);
-                      onScan();
-                    }}
-                    style={[styles.scanLocationButton, { backgroundColor: colors.primary }]}
-                  >
-                    <MapPin size={20} color="#FFF" />
-                    <Text style={styles.scanLocationText}>{t('treasureHuntScanNow')}</Text>
-                  </TouchableOpacity>
-                )}
-
-                {selectedLocation.isDiscovered && (
-                  <View style={[styles.discoveredBadge, { backgroundColor: '#4ECDC420' }]}>
-                    <Sparkles size={20} color="#4ECDC4" />
-                    <Text style={[styles.discoveredText, { color: '#4ECDC4' }]}>
-                      {t('treasureHuntAlreadyFound')}
+                    <Text style={{color: colors.foreground, fontWeight: 'bold', fontSize: 16}}>
+                       {participation?.progress.discoveredLocationIds?.length || 0} / {treasureLocations.length || 0}
                     </Text>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        </BlurView>
-      </Modal>
+                 </View>
+
+                 <View style={styles.profileStatRowNoBorder}>
+                    <Text style={{color: colors.textMuted, fontSize: 16}}>
+                       {t('treasureHuntCampaignStatus') || 'Campaign Status'}
+                    </Text>
+                    <Text style={{color: '#10B981', fontWeight: 'bold', fontSize: 16}}>
+                       {t('treasureHuntActive') || 'Active'}
+                    </Text>
+                 </View>
+
+                 <TouchableOpacity 
+                    onPress={() => setShowProfile(false)} 
+                    style={[styles.profileCloseButton, {backgroundColor: colors.primary}]}
+                 >
+                    <Text style={{color: '#FFF', fontWeight: 'bold', fontSize: 16}}>
+                       {t('treasureHuntClose') || 'Close'}
+                    </Text>
+                 </TouchableOpacity>
+              </BlurView>
+           </View>
+        </Modal>
+
+      </View>
     </View>
   );
 };
+
+const lightMapStyle = [
+  { "elementType": "geometry", "stylers": [{ "color": "#ebe3cd" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#523735" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f1e6" }] },
+  { "featureType": "administrative", "elementType": "geometry.stroke", "stylers": [{ "color": "#c9b2a6" }] },
+  { "featureType": "landscape.natural", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+  { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#dfd2ae" }] },
+  { "featureType": "poi.park", "elementType": "geometry.fill", "stylers": [{ "color": "#a5b076" }] },
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#f5f1e6" }] },
+  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#f8c967" }] },
+  { "featureType": "water", "elementType": "geometry.fill", "stylers": [{ "color": "#b9d3c2" }] }
+];
+
+const darkMapStyle = [
+  { "elementType": "geometry", "stylers": [{ "color": "#1F2937" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#9CA3AF" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#111827" }] },
+  { "featureType": "landscape", "stylers": [{ "color": "#111827" }] },
+  { "featureType": "poi", "stylers": [{ "color": "#1F2937" }] },
+  { "featureType": "road", "stylers": [{ "color": "#374151" }] },
+  { "featureType": "water", "stylers": [{ "color": "#111827" }] }
+];
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
+  discoveryEffect: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  map: {
-    flex: 1,
+  spinRings: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  headerContainer: {
+  mysteryRipple: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rippleCircle: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: 'rgba(79, 70, 229, 0.4)',
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  topSafeArea: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: width * 0.04,
-    paddingTop: 8,
-    zIndex: 20,
+    zIndex: 100,
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Math.min(12, width * 0.03),
-    borderRadius: Math.min(16, width * 0.04),
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
-  progressContainer: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: Math.min(14, width * 0.035),
-    borderRadius: Math.min(14, width * 0.035),
+  circularButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 4,
-  },
-  countdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    elevation: 5,
     justifyContent: 'center',
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    gap: 6,
+    alignItems: 'center',
   },
-  countdownText: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+  blurCircular: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  countdownLabel: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitleContainer: {
+  titleContainer: {
     flex: 1,
+    alignItems: 'center',
     marginHorizontal: 12,
   },
-  headerTitle: {
-    fontSize: Math.min(18, width * 0.045),
-    fontWeight: '700',
-  },
-  headerSubtitle: {
-    fontSize: Math.min(12, width * 0.03),
-    marginTop: 2,
-  },
-  scanButton: {
-    width: Math.min(44, width * 0.11),
-    height: Math.min(44, width * 0.11),
-    borderRadius: Math.min(14, width * 0.035),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: Math.min(12, width * 0.03),
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  actionButtons: {
-    position: 'absolute',
-    right: width * 0.04,
-    bottom: 120,
-    zIndex: 25,
-  },
-  actionButton: {
-    width: Math.min(48, width * 0.12),
-    height: Math.min(48, width * 0.12),
-    borderRadius: Math.min(14, width * 0.035),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  markerContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  locationBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  modalTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  hintContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  hintText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  rewardContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  rewardText: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scanLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-  },
-  scanLocationText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  discoveredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 14,
-  },
-  discoveredText: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  proximityAlert: {
-    position: 'absolute',
-    left: width * 0.04,
-    right: width * 0.04,
-    top: 190,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
-    zIndex: 10,
-  },
-  proximityContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  proximityIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  proximityText: {
-    flex: 1,
-  },
-  proximityTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  proximityDistanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  proximityDistance: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  almostThere: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  scanNowButton: {
+  blurPill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 22,
-    gap: 6,
+    borderRadius: 25,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  scanNowText: {
-    color: '#FFF',
+  titleText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  distanceBarContainer: {
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 2,
-    marginTop: 12,
+  bottomControls: {
+    position: 'absolute',
+    bottom: 70,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    zIndex: 50,
+  },
+  miniRadar: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sideButtonContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  sideButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  sideBlur: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mainMenuButton: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#FFF',
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 12,
+    marginHorizontal: 30,
+  },
+  mainMenuGradient: {
+    flex: 1,
+    borderRadius: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  mainMenuInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 6,
+    borderColor: 'rgba(255,255,255,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mainMenuCenter: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFF',
+  },
+  markerHexagon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    transform: [{ rotate: '45deg' }],
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF3366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  markerPulse: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#FF3366',
+    opacity: 0.5,
+  },
+  mysteryRadar: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radarRing: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(79, 70, 229, 0.4)',
+    borderStyle: 'dashed',
+  },
+  radarCore: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  tinyGlow: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    shadowColor: '#FFF',
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  discoveredMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  treasureMarker: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  markerHalo: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 51, 102, 0.4)',
+  },
+  markerCore: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#FF3366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  hexIcon: {
+    transform: [{ rotate: '-45deg' }],
+  },
+  markerCircle: {
+     justifyContent: 'center',
+     alignItems: 'center',
+  },
+  nearAlertContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+  },
+  radarCard: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 51, 102, 0.3)',
+    shadowColor: '#FF3366',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.4,
+    shadowRadius: 25,
+  },
+  radarGradient: {
+    padding: 24,
+  },
+  radarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  radarAnimationBox: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radarCircleBig: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 51, 102, 0.4)',
+  },
+  radarCircleSmall: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 51, 102, 0.6)',
+  },
+  radarTextBox: {
+    flex: 1,
+    marginLeft: 20,
+  },
+  radarTitle: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  radarDesc: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  scanButton: {
+    borderRadius: 18,
     overflow: 'hidden',
   },
-  distanceBarFill: {
-    height: '100%',
-    borderRadius: 2,
+  scanGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
   },
-  radarAnimation: {
+  scanText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginLeft: 10,
+  },
+  selectedLocationCard: {
     position: 'absolute',
-    right: 12,
-    top: '50%',
-    width: 30,
-    height: 30,
+    bottom: 30,
+    left: 15,
+    right: 15,
+  },
+  detailBlur: {
+    padding: 24,
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  detailIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailTitleBox: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  detailTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  detailStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  detailCloseBtn: {
+    padding: 8,
+    marginRight: -8,
+  },
+  hintBox: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    padding: 14,
     borderRadius: 15,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.15)',
+  },
+  hintText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  detailRewardRow: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  detailRewardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  detailRewardText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginTop: 10,
+    gap: 8,
+  },
+  trackButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bombMarkerContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
-    opacity: 0.5,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  profileModalContent: {
+     padding: 24,
+     borderRadius: 32,
+     overflow: 'hidden',
+     borderWidth: 1,
+     borderColor: 'rgba(255,255,255,0.1)',
+     backgroundColor: 'rgba(30, 30, 30, 0.9)',
+  },
+  profileModalTitle: {
+     fontSize: 24,
+     fontWeight: '900',
+     marginBottom: 20,
+     textAlign: 'center',
+     letterSpacing: -0.5,
+  },
+  profileStatRow: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     marginBottom: 15,
+     paddingBottom: 15,
+     borderBottomWidth: 1,
+  },
+  profileStatRowNoBorder: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     marginBottom: 25,
+  },
+  profileCloseButton: {
+     padding: 16,
+     borderRadius: 16,
+     alignItems: 'center'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  rewardModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFF',
+    borderRadius: 30,
+    overflow: 'hidden',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  rewardHeader: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  rewardModalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFF',
+    marginTop: 15,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  rewardBody: {
+    padding: 25,
+    alignItems: 'center',
+  },
+  rewardMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  rewardDetailCard: {
+    width: '100%',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 25,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  rewardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  rewardValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  continueButton: {
+    width: '100%',
+    height: 55,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  boomOverlay: {
+    backgroundColor: 'rgba(255, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10000,
+  },
+  boomContainer: {
+    alignItems: 'center',
+  },
+  boomText: {
+    fontSize: 60,
+    fontWeight: '900',
+    color: '#FFF',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 4, height: 4 },
+    textShadowRadius: 10,
+    marginTop: 20,
+  },
+  successOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  successContent: {
+    alignItems: 'center',
+  },
+  treasureChestCircle: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 5,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  successTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#FFD700',
+    marginTop: 30,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+  },
+  particleContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: -50,
+  },
+  particle: {
+    position: 'absolute',
   },
 });
 
