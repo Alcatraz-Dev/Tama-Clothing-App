@@ -50,6 +50,7 @@ export interface TreasureLocation {
   qrCode: string;
   order: number;
   radius: number;
+  captureMethod?: 'virtual' | 'qr';
   isActive: boolean;
   isDiscoverable: boolean;
   discoveryOrder?: 'sequential' | 'any';
@@ -1010,6 +1011,7 @@ class TreasureHuntService {
         qrCode: locationData.qrCode || `TH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         order: locationData.order || 1,
         radius: locationData.radius || 50,
+        captureMethod: locationData.captureMethod || 'virtual',
         isActive: locationData.isActive !== false,
         isDiscoverable: locationData.isDiscoverable !== false,
         createdAt: serverTimestamp(),

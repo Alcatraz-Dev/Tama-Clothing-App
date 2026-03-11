@@ -412,6 +412,7 @@ export default function AdminTreasureHuntScreen({
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null,
   );
+  const [locationCaptureMethod, setLocationCaptureMethod] = useState<"virtual"|"qr">("virtual");
   const [campaignSelectedProductId, setCampaignSelectedProductId] = useState<
     string | null
   >(null);
@@ -720,6 +721,7 @@ export default function AdminTreasureHuntScreen({
     setMapPickerCoords(null);
     setLocationOrder(String(locations.length + 1));
     setLocationRadius("50");
+    setLocationCaptureMethod("virtual");
     setLocationStartDate(new Date());
     setLocationEndDate(undefined);
     setLocationDiscoveryOrder("any");
@@ -741,6 +743,7 @@ export default function AdminTreasureHuntScreen({
     setLongitude(String(location.coordinates.longitude));
     setLocationOrder(String(location.order || 1));
     setLocationRadius(String(location.radius || 50));
+    setLocationCaptureMethod(location.captureMethod || "virtual");
 
     // Note: Rewards are now managed at campaign level, not location level
     setLocationStartDate(new Date());
@@ -799,6 +802,7 @@ export default function AdminTreasureHuntScreen({
         qrCode: qrCode,
         order: parseInt(locationOrder) || 1,
         radius: parseInt(locationRadius) || 50,
+        captureMethod: locationCaptureMethod,
         isActive: true,
         isDiscoverable: true,
         discoveryOrder: locationDiscoveryOrder as "sequential" | "any",
@@ -1147,6 +1151,17 @@ export default function AdminTreasureHuntScreen({
           {location.coordinates.latitude.toFixed(6)},{" "}
           {location.coordinates.longitude.toFixed(6)}
         </Text>
+        {/* Capture method chip */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center',
+          marginLeft: 'auto',
+          backgroundColor: location.captureMethod === 'qr' ? '#4F46E5' + '20' : '#FF3366' + '15',
+          borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+        }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: location.captureMethod === 'qr' ? '#4F46E5' : '#FF3366' }}>
+            {location.captureMethod === 'qr' ? '📷 QR' : '👆 Virtual'}
+          </Text>
+        </View>
       </View>
 
       {location.hint?.fr && (
@@ -2051,6 +2066,19 @@ export default function AdminTreasureHuntScreen({
                       keyboardType="numeric"
                     />
                   </View>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <InputLabel text={t("treasureHuntCaptureMethod") || "Capture Method"} />
+                  <Picker
+                    value={locationCaptureMethod}
+                    onValueChange={(value) => setLocationCaptureMethod(value as "virtual"|"qr")}
+                    options={[
+                      { label: t("treasureHuntVirtualCapture") || "Virtual (Capture Button)", value: "virtual" },
+                      { label: t("treasureHuntQRCapture") || "Scan QR Code", value: "qr" }
+                    ]}
+                    style={{ minHeight: 48 }}
+                  />
                 </View>
 
                 {/* Note: Rewards are now managed at the campaign level */}

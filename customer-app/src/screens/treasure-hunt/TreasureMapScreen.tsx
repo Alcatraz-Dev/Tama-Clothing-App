@@ -444,11 +444,11 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                         /* Full Reveal - Pokemon GO style PokéStop/Gym */
                         <View style={styles.treasureMarker}>
                           <LinearGradient 
-                            colors={['#FFD700', '#FFA500']} 
+                            colors={loc.captureMethod === 'qr' ? ['#4F46E5','#7C3AED'] : ['#FFD700', '#FFA500']} 
                             style={styles.markerHexagon}
                           >
                             <View style={styles.hexIcon}>
-                              <Gem size={20} color="#FFF" />
+                              {loc.captureMethod === 'qr' ? <Scan size={20} color="#FFF" /> : <Gem size={20} color="#FFF" />}
                             </View>
                           </LinearGradient>
                           <View style={styles.markerPulse} />
@@ -675,22 +675,35 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                          )}
                       </View>
                    </View>
-                    <TouchableOpacity 
-                      onPress={() => handleCapture(nearLocation)} 
-                      disabled={capturing}
-                      style={styles.scanButton}
-                    >
-                      <LinearGradient colors={['#FF3366', '#FF8E53']} style={styles.scanGradient}>
-                         {capturing ? (
-                           <ActivityIndicator color="#FFF" />
-                         ) : (
-                           <>
-                             <Target size={24} color="#FFF" />
-                             <Text style={styles.scanText}>{t('treasureHuntCaptureNow') || 'Capture Treasure'}</Text>
-                           </>
-                         )}
-                       </LinearGradient>
-                     </TouchableOpacity>
+                               {/* Conditional button: QR scan or Virtual capture */}
+                     {nearLocation.captureMethod === 'qr' ? (
+                       <TouchableOpacity 
+                         onPress={() => { onScan(nearLocation); }} 
+                         style={styles.scanButton}
+                       >
+                         <LinearGradient colors={['#4F46E5', '#7C3AED']} style={styles.scanGradient}>
+                           <Scan size={24} color="#FFF" />
+                           <Text style={styles.scanText}>{t('treasureHuntScanQR') || 'Scan QR Code'}</Text>
+                         </LinearGradient>
+                       </TouchableOpacity>
+                     ) : (
+                       <TouchableOpacity 
+                         onPress={() => handleCapture(nearLocation)} 
+                         disabled={capturing}
+                         style={styles.scanButton}
+                       >
+                         <LinearGradient colors={['#FF3366', '#FF8E53']} style={styles.scanGradient}>
+                            {capturing ? (
+                              <ActivityIndicator color="#FFF" />
+                            ) : (
+                              <>
+                                <Target size={24} color="#FFF" />
+                                <Text style={styles.scanText}>{t('treasureHuntCaptureNow') || 'Capture Treasure'}</Text>
+                              </>
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                     )}
                  </LinearGradient>
               </BlurView>
             </Animatable.View>
@@ -866,6 +879,28 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                        <Text style={[styles.hintText, { color: colors.textMuted }]}>
                          {selectedLocation.hint?.[currentLang as keyof typeof selectedLocation.hint] || selectedLocation.hint?.fr || selectedLocation.hint?.['ar-tn']}
                        </Text>
+                    </View>
+                  )}
+
+                  {/* Capture Method Badge */}
+                  {!isDiscovered(selectedLocation.id) && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
+                      <View style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        backgroundColor: selectedLocation.captureMethod === 'qr' ? '#4F46E510' : '#FF336610',
+                        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
+                        borderWidth: 1, borderColor: selectedLocation.captureMethod === 'qr' ? '#4F46E540' : '#FF336640'
+                      }}>
+                        {selectedLocation.captureMethod === 'qr'
+                          ? <Scan size={13} color="#4F46E5" style={{ marginRight: 5 }} />
+                          : <Target size={13} color="#FF3366" style={{ marginRight: 5 }} />
+                        }
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: selectedLocation.captureMethod === 'qr' ? '#4F46E5' : '#FF3366' }}>
+                          {selectedLocation.captureMethod === 'qr'
+                            ? (t('treasureHuntQRCapture') || 'Scan QR Code')
+                            : (t('treasureHuntVirtualCapture') || 'Virtual Capture')}
+                        </Text>
+                      </View>
                     </View>
                   )}
 

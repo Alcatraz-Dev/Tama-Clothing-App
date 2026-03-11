@@ -1452,4 +1452,7 @@ export const fr = {
     "Une erreur est survenue. Veuillez réessayer plus tard.",
   treasureHuntAddDemo: "Ajouter Test",
   treasureHuntDeleteDemos: "Supprimer Tests",
+  treasureHuntCaptureMethod: "Méthode de capture",
+  treasureHuntVirtualCapture: "Virtuelle (Appuyer pour capturer)",
+  treasureHuntQRCapture: "Scanner le QR Code",
 };

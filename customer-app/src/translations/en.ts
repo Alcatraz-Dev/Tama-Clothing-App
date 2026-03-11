@@ -1417,4 +1417,7 @@ export const en = {
   treasureHuntErrorGeneral: "Something went wrong. Please try again later.",
   treasureHuntAddDemo: "Add Test Treasure",
   treasureHuntDeleteDemos: "Delete Demos",
+  treasureHuntCaptureMethod: "Capture Method",
+  treasureHuntVirtualCapture: "Virtual (Press to Capture)",
+  treasureHuntQRCapture: "Scan QR Code",
 };
