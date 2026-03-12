@@ -584,8 +584,12 @@ export default function VendorRegistrationScreen({
     const [idCardBack, setIdCardBack] = useState<string | null>(null);
     const [storeFront, setStoreFront] = useState<string | null>(null);
 
+    // Payment Proof
+    const [paymentProof, setPaymentProof] = useState<string | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState<'bank' | 'post' | null>(null);
+
     // Pick image for document
-    const pickImage = async (type: 'license' | 'idFront' | 'idBack' | 'front') => {
+    const pickImage = async (type: 'license' | 'idFront' | 'idBack' | 'front' | 'payment') => {
         try {
             const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (!permission.granted) {
@@ -599,12 +603,12 @@ export default function VendorRegistrationScreen({
                 aspect: (type === 'idFront' || type === 'idBack') ? [4, 3] : [16, 9],
                 quality: 0.8,
             });
-
-            if (!result.canceled && result.assets && result.assets[0]) {
+            if (!result.canceled && result.assets && result.assets.length > 0) {
                 if (type === 'license') setBusinessLicense(result.assets[0].uri);
                 if (type === 'idFront') setIdCardFront(result.assets[0].uri);
                 if (type === 'idBack') setIdCardBack(result.assets[0].uri);
                 if (type === 'front') setStoreFront(result.assets[0].uri);
+                if (type === 'payment') setPaymentProof(result.assets[0].uri);
             }
         } catch (error: any) {
             console.log('Image picker error:', error);
@@ -693,6 +697,12 @@ export default function VendorRegistrationScreen({
             if (idCardBack) idCardBackUrl = await uploadImage(idCardBack);
             if (storeFront) frontUrl = await uploadImage(storeFront);
 
+            let paymentProofUrl = null;
+            if (paymentProof) paymentProofUrl = await uploadImage(paymentProof);
+
+            // Find selected tier info to verify price
+            const selectedInfo = VENDOR_TIERS.find(t => t.id === selectedTier);
+
             const vendorData = {
                 userId: uid,
                 tier: selectedTier,
@@ -716,6 +726,8 @@ export default function VendorRegistrationScreen({
                     idCardBack: idCardBackUrl,
                     storeFront: frontUrl,
                 },
+                paymentProof: paymentProofUrl,
+                paymentMethod: selectedInfo?.price && selectedInfo.price > 0 ? paymentMethod : null,
                 contractAccepted: true,
                 contractAcceptedAt: serverTimestamp(),
                 status: 'pending', // pending, approved, rejected
@@ -1409,6 +1421,101 @@ export default function VendorRegistrationScreen({
                                 )}
                             </TouchableOpacity>
                         </View>
+
+                        {/* Payment Proof Section - IF PAID TIER */}
+                        {(() => {
+                            const selectedInfo = VENDOR_TIERS.find(t => t.id === selectedTier);
+                            if (selectedInfo && selectedInfo.price > 0) {
+                                return (
+                                    <View style={styles.documentSection}>
+                                        <Text style={[styles.inputLabel, { color: colors.foreground, fontSize: 18, marginTop: 16, marginBottom: 8 }]}>
+                                            {t('paymentDetails') || 'Payment Details'}
+                                        </Text>
+                                        <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
+                                            {t('paymentAmount') || 'Amount to Pay:'} {selectedInfo.price} TND / {t('month') || 'month'}
+                                        </Text>
+                                        
+                                        <Text style={[styles.inputLabel, { color: colors.foreground, marginTop: 12 }]}>
+                                            {t('selectPaymentMethod') || 'Select Payment Method'} *
+                                        </Text>
+                                        <View style={styles.paymentMethods}>
+                                            <TouchableOpacity 
+                                                style={[
+                                                    styles.paymentMethodBtn, 
+                                                    { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentMethod === 'bank' ? accent : colors.border }
+                                                ]}
+                                                onPress={() => setPaymentMethod('bank')}
+                                            >
+                                                <Building2 size={24} color={paymentMethod === 'bank' ? accent : colors.textMuted} />
+                                                <Text style={[styles.paymentMethodText, { color: paymentMethod === 'bank' ? accent : colors.foreground }]}>
+                                                    {t('bankTransfer') || 'Bank Transfer'}
+                                                </Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity 
+                                                style={[
+                                                    styles.paymentMethodBtn, 
+                                                    { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentMethod === 'post' ? accent : colors.border }
+                                                ]}
+                                                onPress={() => setPaymentMethod('post')}
+                                            >
+                                                <Mail size={24} color={paymentMethod === 'post' ? accent : colors.textMuted} />
+                                                <Text style={[styles.paymentMethodText, { color: paymentMethod === 'post' ? accent : colors.foreground }]}>
+                                                    {t('postTransfer') || 'Post Transfer'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {paymentMethod && (
+                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? '#2A2A2A' : '#F3F4F6', borderRadius: 8 }}>
+                                                {paymentMethod === 'bank' ? (
+                                                    <Text style={{ color: colors.foreground }}>
+                                                        {t('bankDetails') || 'Bank Details:'}{'\n'}
+                                                        RIB: 12345 67890 00000 12345{'\n'}
+                                                        Bank: Attijari Bank
+                                                    </Text>
+                                                ) : (
+                                                    <Text style={{ color: colors.foreground }}>
+                                                        {t('postDetails') || 'Post Details:'}{'\n'}
+                                                        Account: 1234-5678-90{'\n'}
+                                                        Name: Tama Clothing
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        )}
+
+                                        <Text style={[styles.inputLabel, { color: colors.textMuted, marginTop: 16 }]}>
+                                            {t('paymentProof') || 'Payment Receipt / Proof'} *
+                                        </Text>
+                                        <TouchableOpacity
+                                            style={[styles.uploadBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentProof ? accent : colors.border }]}
+                                            onPress={() => pickImage('payment')}
+                                        >
+                                            {paymentProof ? (
+                                                <View>
+                                                    <Image source={{ uri: paymentProof }} style={styles.uploadedImage} />
+                                                    <View style={styles.successOverlay}>
+                                                        <CheckCircle2 color="#10B981" size={24} />
+                                                    </View>
+                                                </View>
+                                            ) : (
+                                                <View style={styles.uploadPlaceholder}>
+                                                    <Upload size={32} color={colors.textMuted} />
+                                                    <Text style={[styles.uploadText, { color: colors.textMuted }]}>
+                                                        {t('vendorTapToUpload') || 'Tap to upload'}
+                                                    </Text>
+                                                    <Text style={[styles.uploadHint, { color: colors.textMuted, marginTop: 4, fontSize: 12 }]}>
+                                                        {t('uploadReceiptHint') || 'Upload a photo of your receipt'}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                );
+                            }
+                            return null;
+                        })()}
+
                     </View>
                 )}
 
@@ -1991,6 +2098,37 @@ const styles = StyleSheet.create({
     kycDesc: {
         fontSize: 13,
         marginBottom: 8,
+    },
+    paymentMethods: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 8,
+        marginBottom: 16,
+    },
+    paymentMethodBtn: {
+        flex: 1,
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 2,
+        gap: 8,
+    },
+    paymentMethodText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    successOverlay: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+    },
+    uploadHint: {
+        fontSize: 12,
+        marginTop: 4,
+        textAlign: 'center',
     },
     kycRequired: {
         fontSize: 12,

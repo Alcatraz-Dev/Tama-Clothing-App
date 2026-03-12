@@ -1,8 +1,3 @@
-// Plan-based Access Control System
-// This module handles feature visibility and permissions based on subscription plan tiers
-
-import { VendorTier, AccountType } from '../screens/VendorRegistrationScreen';
-
 // Feature types for access control
 export type FeatureName = 
     // Core features
@@ -27,7 +22,17 @@ export type FeatureName =
     | 'productsLimit'
     | 'ordersLimit'
     | 'storageLimit'
-    | 'commissionRate';
+    | 'commissionRate'
+    | 'marketing'
+    | 'treasureHunt'
+    | 'banners'
+    | 'brandRevenue'
+    | 'notifications';
+
+export type VendorTier = 'starter' | 'basic' | 'professional' | 'premium' | 'enterprise' | 'ultimate';
+
+// Account types
+export type AccountType = 'particulier' | 'venteOccasionnelle' | 'entreprise' | 'activiteCommerciale';
 
 // Permission levels
 export type PermissionLevel = 'none' | 'view' | 'limited' | 'full';
@@ -66,6 +71,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 100,
             storageLimit: '1 GB',
             commissionRate: '15%',
+            marketing: false,
+            treasureHunt: false,
+            banners: false,
+            brandRevenue: true,
+            notifications: false,
         },
         permissionLevel: 'limited',
         maxTeamMembers: 1,
@@ -92,6 +102,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 300,
             storageLimit: '5 GB',
             commissionRate: '10%',
+            marketing: true,
+            treasureHunt: false,
+            banners: false,
+            brandRevenue: true,
+            notifications: false,
         },
         permissionLevel: 'limited',
         maxTeamMembers: 1,
@@ -118,6 +133,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 1000,
             storageLimit: '25 GB',
             commissionRate: '8%',
+            marketing: true,
+            treasureHunt: false,
+            banners: true,
+            brandRevenue: true,
+            notifications: false,
         },
         permissionLevel: 'full',
         maxTeamMembers: 2,
@@ -144,6 +164,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 5000,
             storageLimit: '100 GB',
             commissionRate: '5%',
+            marketing: true,
+            treasureHunt: true,
+            banners: true,
+            brandRevenue: true,
+            notifications: true,
         },
         permissionLevel: 'full',
         maxTeamMembers: 3,
@@ -170,6 +195,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 10000,
             storageLimit: '500 GB',
             commissionRate: '3%',
+            marketing: true,
+            treasureHunt: true,
+            banners: true,
+            brandRevenue: true,
+            notifications: true,
         },
         permissionLevel: 'full',
         maxTeamMembers: 5,
@@ -196,6 +226,11 @@ export const TIER_PERMISSIONS: Record<VendorTier, TierPermissions> = {
             ordersLimit: 'unlimited',
             storageLimit: 'Unlimited',
             commissionRate: '0%',
+            marketing: true,
+            treasureHunt: true,
+            banners: true,
+            brandRevenue: true,
+            notifications: true,
         },
         permissionLevel: 'full',
         maxTeamMembers: 'unlimited',
@@ -311,4 +346,9 @@ export const FEATURE_LABELS: Record<FeatureName, { en: string; fr: string; ar: s
     ordersLimit: { en: 'Orders Limit', fr: 'Limite commandes', ar: 'حد الطلبات' },
     storageLimit: { en: 'Storage Limit', fr: 'Limite stockage', ar: 'حد التخزين' },
     commissionRate: { en: 'Commission Rate', fr: 'Taux de commission', ar: 'نسبة العمولة' },
+    marketing: { en: 'Marketing Tools', fr: 'Outils Marketing', ar: 'أدوات التسويق' },
+    treasureHunt: { en: 'Treasure Hunt', fr: 'Chasse au Trésor', ar: 'حملات الكنز' },
+    banners: { en: 'Banner Management', fr: 'Gestion des bannières', ar: 'إدارة البانرات' },
+    brandRevenue: { en: 'Revenue Analytics', fr: 'Analyse des revenus', ar: 'تحليل الإيرادات' },
+    notifications: { en: 'Push Notifications', fr: 'Notifications Push', ar: 'إشعارات بوش' },
 };

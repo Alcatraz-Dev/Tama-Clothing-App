@@ -26,7 +26,6 @@ import {
   Zap,
   Award,
   Sparkles,
-  Gem,
   Tag,
   Copy,
   TrendingUp,
@@ -311,7 +310,7 @@ const TreasureRewardsScreen: React.FC<TreasureRewardsScreenProps> = ({
                   >
                      <View style={styles.statContentRow}>
                         <View style={styles.statIconBox}>
-                           <Gem size={28} color={colors.primary} />
+                           <Gift size={28} color={colors.primary} />
                         </View>
                         <View style={styles.statTextGroup}>
                            <Text style={[styles.statLabel, { color: colors.textMuted }]}>TOTAL TREASURE POINTS</Text>

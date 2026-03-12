@@ -13,7 +13,8 @@ import {
   serverTimestamp,
   Timestamp,
   onSnapshot,
-  limit
+  limit,
+  increment
 } from 'firebase/firestore';
 
 // Types
@@ -58,6 +59,16 @@ export interface TreasureLocation {
   bonusRewardValue?: number;
   bonusRewardValue2?: number;
   bonusRewardValue3?: number;
+  requiresKey?: boolean;
+  keysRequired?: number;
+}
+
+export interface TreasureKey {
+  id: string;
+  campaignId: string;
+  latitude: number;
+  longitude: number;
+  isDemo?: boolean;
 }
 
 export interface Bomb {
@@ -92,6 +103,11 @@ export interface Participation {
   finalReward: any;
   enrolledAt: Timestamp;
   completedAt?: Timestamp;
+  abandonedAt?: Timestamp;
+  inventory?: {
+    keys: number;
+    lives: number;
+  };
 }
 
 class TreasureHuntService {
@@ -368,6 +384,135 @@ class TreasureHuntService {
     };
   }
 
+  // Get leaderboard (top users by XP)
+  async getLeaderboard() {
+    try {
+      // For performance in a real app, this should be a cloud function or 
+      // aggregate collection. For now, we fetch the 100 most recent completed participations
+      // to generate a dynamic winner list.
+      const q = query(
+        collection(db, 'treasure_participations'),
+        where('status', '==', 'completed'),
+        orderBy('completedAt', 'desc'),
+        limit(100)
+      );
+      
+      const snapshot = await getDocs(q);
+      const participations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Participation[];
+
+      // Group by userId and calculate total rewards
+      const userXPMap: Record<string, { userId: string; xp: number; count: number }> = {};
+      
+      participations.forEach(p => {
+        if (!userXPMap[p.userId]) {
+          (userXPMap[p.userId] as any) = { userId: p.userId, xp: 0, count: 0, p }; // Store p for demo names
+        }
+        
+        userXPMap[p.userId].count += 1;
+        if (p.rewards) {
+          p.rewards.forEach(r => {
+            if (r.type === 'points') {
+              userXPMap[p.userId].xp += (parseInt(String(r.value)) || 0);
+            }
+          });
+        }
+      });
+
+      // Convert to array and sort
+      const leaderboard = await Promise.all(
+        Object.values(userXPMap).map(async (entry) => {
+          // Fetch user info for each entry
+          const userDoc = await getDoc(doc(db, 'users', entry.userId));
+          const userData = userDoc.exists() ? userDoc.data() : {};
+          
+          return {
+            ...entry,
+            userName: userData.fullName || userData.displayName || ((entry as any).p ? (entry as any).p.userName : 'Explorer'),
+            avatar: userData.avatarUrl || '',
+          };
+        })
+      );
+
+      return leaderboard.sort((a, b) => b.xp - a.xp).slice(0, 10);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      return [];
+    }
+  }
+
+  async deleteDemoKeys() {
+    try {
+      const q = query(collection(db, 'treasure_keys'), where('isDemo', '==', true));
+      const snapshot = await getDocs(q);
+      const promises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(promises);
+    } catch (error) {
+      console.error('Error deleting demo keys:', error);
+    }
+  }
+
+  // Generate demo data for leaderboard testing
+  async createDemoLeaderboard() {
+    try {
+      const demoUsers = [
+        { name: 'Elite Hunter', xp: 2500 },
+        { name: 'Treasure Master', xp: 2100 },
+        { name: 'Swift Seeker', xp: 1850 },
+        { name: 'Hidden Gem', xp: 1500 },
+        { name: 'Map Expert', xp: 1200 },
+        { name: 'Brave Explorer', xp: 950 },
+        { name: 'Lucky Finder', xp: 800 },
+        { name: 'Shadow Tracker', xp: 650 },
+      ];
+
+      // Get an active campaign to link data
+      const campaigns = await this.getActiveCampaigns();
+      if (campaigns.length === 0) throw new Error('No active campaign for demo data');
+      const campaignId = campaigns[0].id;
+
+      const promises = demoUsers.map(user => {
+        return addDoc(collection(db, 'treasure_participations'), {
+          userId: `demo_${user.name.toLowerCase().replace(' ', '_')}`,
+          campaignId,
+          status: 'completed',
+          isDemo: true,
+          userName: user.name, // Direct name for demo display
+          rewards: [{
+            type: 'points',
+            value: user.xp,
+            timestamp: Timestamp.now()
+          }],
+          enrolledAt: serverTimestamp(),
+          completedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      await Promise.all(promises);
+      return true;
+    } catch (error) {
+      console.error('Error creating demo leaderboard:', error);
+      throw error;
+    }
+  }
+
+  // Delete all demo leaderboard data
+  async deleteDemoLeaderboard() {
+    try {
+      const q = query(collection(db, 'treasure_participations'), where('isDemo', '==', true));
+      const snap = await getDocs(q);
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'treasure_participations', d.id)));
+      await Promise.all(deletions);
+      return snap.size;
+    } catch (error) {
+      console.error('Error deleting demo leaderboard:', error);
+      return 0;
+    }
+  }
+
   // Create a demo location at current coordinates for testing
   async createDemoLocation(userId: string, latitude: number, longitude: number) {
     try {
@@ -466,9 +611,35 @@ class TreasureHuntService {
     }
   }
 
+  // Create a demo key at user location
+  async createDemoKey(userId: string, latitude: number, longitude: number) {
+    try {
+      const q = query(collection(db, 'treasure_campaigns'), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) throw new Error('No campaign found to add key to');
+      
+      const campaignId = snap.docs[0].id;
+      
+      const keyData = {
+        campaignId,
+        latitude: latitude + (Math.random() - 0.5) * 0.0005,
+        longitude: longitude + (Math.random() - 0.5) * 0.0005,
+        isDemo: true,
+        createdAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, 'treasure_keys'), keyData);
+      return { id: docRef.id, ...keyData };
+    } catch (error) {
+      console.error('Error creating demo key:', error);
+      throw error;
+    }
+  }
+
   // Delete all demo bombs
   async deleteDemoBombs() {
     try {
+      await this.deleteDemoKeys();
       const q = query(collection(db, 'treasure_bombs'), where('isDemo', '==', true));
       const snap = await getDocs(q);
       
@@ -510,9 +681,12 @@ class TreasureHuntService {
   // Enroll in a campaign
   async enrollInCampaign(campaignId: string, userId: string): Promise<Participation | null> {
     try {
-      // Check if already enrolled
+      // Check if already enrolled or abandoned (lost)
       const existing = await this.getParticipation(campaignId, userId);
       if (existing) {
+        if (existing.status === 'abandoned') {
+          throw new Error('ABANDONED'); // Special error so UI can handle it differently
+        }
         throw new Error('Already enrolled in this campaign');
       }
 
@@ -521,6 +695,9 @@ class TreasureHuntService {
       
       // If no locations, create participation without current location
       const firstLocation = locations.length > 0 ? locations[0] : null;
+      
+      // Calculate initial hearts: min(3, locations.length - 1), at least 1 if locations exist
+      const initialLives = locations.length > 0 ? Math.min(3, Math.max(1, locations.length - 1)) : 0;
 
       // Create participation
       const participationData = {
@@ -541,7 +718,11 @@ class TreasureHuntService {
           socialShares: 0
         },
         enrolledAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        inventory: {
+          keys: 0,
+          lives: initialLives
+        }
       };
 
       const docRef = await addDoc(collection(db, 'treasure_participations'), participationData);
@@ -565,7 +746,10 @@ class TreasureHuntService {
         claimedRewards: [],
         finalReward: null,
         enrolledAt: Timestamp.now(),
-        completedAt: undefined
+        inventory: {
+          keys: 0,
+          lives: initialLives
+        }
       } as Participation;
     } catch (error: any) {
       console.error('Error enrolling:', error);
@@ -579,15 +763,51 @@ class TreasureHuntService {
       const participation = await this.getParticipation(campaignId, userId);
       if (!participation) return false;
 
-      // In a real app we might mark as 'failed', but marking it as 'completed'
-      // or deleting it so the user can try again is an option. 
-      // For this game, let's delete the participation so they have to start over
-      await deleteDoc(doc(db, 'treasure_participations', participation.id));
+      // Mark as abandoned so user cannot re-enroll in this campaign
+      await updateDoc(doc(db, 'treasure_participations', participation.id), {
+        status: 'abandoned',
+        abandonedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
       
       return true;
     } catch (error) {
        console.error('Error abandoning campaign:', error);
        return false;
+    }
+  }
+
+  // Handle bomb hit - decrement lives or eliminate
+  async handleBombHit(campaignId: string, userId: string, bombId?: string): Promise<{ success: boolean; livesRemaining: number; eliminated: boolean }> {
+    try {
+      if (bombId) {
+        try {
+          await deleteDoc(doc(db, 'treasure_bombs', bombId));
+        } catch (e) {
+          console.error('Error removing bomb globally', e);
+        }
+      }
+      const participation = await this.getParticipation(campaignId, userId);
+      if (!participation) return { success: false, livesRemaining: 0, eliminated: false };
+
+      const currentLives = participation.inventory?.lives || 0;
+      
+      if (currentLives > 1) {
+        // Just lose a heart
+        const newLives = currentLives - 1;
+        await updateDoc(doc(db, 'treasure_participations', participation.id), {
+          'inventory.lives': newLives,
+          updatedAt: serverTimestamp()
+        });
+        return { success: true, livesRemaining: newLives, eliminated: false };
+      } else {
+        // Eliminated
+        await this.abandonCampaign(campaignId, userId);
+        return { success: true, livesRemaining: 0, eliminated: true };
+      }
+    } catch (error) {
+      console.error('Error handling bomb hit:', error);
+      return { success: false, livesRemaining: 0, eliminated: false };
     }
   }
 
@@ -615,6 +835,7 @@ class TreasureHuntService {
       total: number;
     };
     nextLocation?: TreasureLocation;
+    keysRequired?: number;
   }> {
     try {
       // Find location by QR code
@@ -694,6 +915,7 @@ class TreasureHuntService {
     reward?: any;
     progress?: any;
     nextLocation?: TreasureLocation;
+    keysRequired?: number;
   }> {
     try {
       const locationDoc = await getDoc(doc(db, 'treasure_locations', locationId));
@@ -729,6 +951,14 @@ class TreasureHuntService {
   }
 
   private async finalizeDiscovery(location: TreasureLocation, participation: Participation, userId: string) {
+      // Check if key is required and available
+      const currentKeys = participation.inventory?.keys || 0;
+      const keysNeeded = location.keysRequired || (location.requiresKey ? 1 : 0);
+      
+      if (keysNeeded > 0 && currentKeys < keysNeeded) {
+        return { success: false, message: 'REQUIRES_KEY', keysRequired: keysNeeded };
+      }
+
       // Logic from processScan to update participation and rewards
       const newDiscoveredIds = [...participation.progress.discoveredLocationIds, location.id];
       
@@ -754,7 +984,7 @@ class TreasureHuntService {
         rewardDetails = { type: campaignRewardType, value: campaignRewardValue, isRedeemed: false };
       }
 
-      await updateDoc(doc(db, 'treasure_participations', participation.id), {
+      const updateData: any = {
         'progress.discoveredLocationIds': newDiscoveredIds,
         'progress.discoveredLocations': newDiscoveredIds.length,
         'progress.currentLocationId': nextLocation?.id || null,
@@ -764,7 +994,14 @@ class TreasureHuntService {
           timestamp: Timestamp.now() 
         }],
         updatedAt: serverTimestamp()
-      });
+      };
+
+      // Consume key if used
+      if (keysNeeded > 0) {
+        updateData['inventory.keys'] = currentKeys - keysNeeded;
+      }
+
+      await updateDoc(doc(db, 'treasure_participations', participation.id), updateData);
 
       return {
         success: true,
@@ -1012,6 +1249,8 @@ class TreasureHuntService {
         order: locationData.order || 1,
         radius: locationData.radius || 50,
         captureMethod: locationData.captureMethod || 'virtual',
+        requiresKey: locationData.requiresKey || false,
+        keysRequired: locationData.keysRequired || 0,
         isActive: locationData.isActive !== false,
         isDiscoverable: locationData.isDiscoverable !== false,
         createdAt: serverTimestamp(),
@@ -1251,6 +1490,80 @@ class TreasureHuntService {
     }, (error) => {
       console.error('Participation subscription error:', error);
     });
+  }
+
+  // Get keys for a campaign
+  async getKeys(campaignId: string): Promise<TreasureKey[]> {
+    try {
+      const q = query(collection(db, 'treasure_keys'), where('campaignId', '==', campaignId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TreasureKey));
+    } catch (error) {
+      console.error('Error getting keys:', error);
+      return [];
+    }
+  }
+
+  // Collect a key
+  async collectKey(keyId: string, participationId: string): Promise<boolean> {
+    try {
+      const participationRef = doc(db, 'treasure_participations', participationId);
+      const participationSnap = await getDoc(participationRef);
+      if (!participationSnap.exists()) return false;
+      
+      const participation = participationSnap.data() as Participation;
+      const currentKeys = participation.inventory?.keys || 0;
+      
+      await updateDoc(participationRef, {
+        'inventory.keys': currentKeys + 1,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Remove key from map
+      await deleteDoc(doc(db, 'treasure_keys', keyId));
+      
+      return true;
+    } catch (error) {
+      console.error('Error collecting key:', error);
+      return false;
+    }
+  }
+
+  // Create a key
+  async createKey(keyData: Omit<TreasureKey, 'id'>): Promise<TreasureKey | null> {
+    try {
+      const docRef = await addDoc(collection(db, 'treasure_keys'), keyData);
+      return { id: docRef.id, ...keyData };
+    } catch (error) {
+      console.error('Error creating key:', error);
+      return null;
+    }
+  }
+
+  // Delete a key
+  async deleteKey(keyId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'treasure_keys', keyId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting key:', error);
+      return false;
+    }
+  }
+
+  // Log a treasure hunt event publicly
+  async logHuntEvent(campaignId: string, userId: string, userName: string, eventType: 'bomb' | 'key'): Promise<void> {
+    try {
+      await addDoc(collection(db, 'treasure_events'), {
+        campaignId,
+        userId,
+        userName,
+        eventType,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error('Error logging hunt event:', e);
+    }
   }
 }
 

@@ -35,6 +35,8 @@ import {
 } from 'lucide-react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminUI';
+import { hasFeature, FeatureName, VendorTier, AccountType } from '../../utils/planAccessControl';
+import { Lock } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2; // 2 columns with 20px side padding + 12px gap
@@ -52,6 +54,7 @@ type MenuItem = {
     route: string;
     roles: string[];
     color: string;
+    feature?: FeatureName;
 };
 
 export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: AdminMenuScreenProps) {
@@ -79,29 +82,46 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
 
     const menuItems: MenuItem[] = [
         { label: t('dashboard'), icon: LayoutDashboard, route: 'AdminDashboard', roles: ['admin', 'support', 'brand_owner', 'nor_kam', 'partner'], color: '#5856D6' },
-        { label: t('products'), icon: Package, route: 'AdminProducts', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55' },
+        { label: t('products'), icon: Package, route: 'AdminProducts', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55', feature: 'products' },
         { label: t('orders'), icon: ShoppingCart, route: 'AdminOrders', roles: ['admin', 'support', 'brand_owner', 'nor_kam'], color: '#34C759' },
-        { label: t('brandRevenue'), icon: Ticket, route: 'BrandRevenue', roles: ['admin', 'brand_owner'], color: '#EC4899' },
+        { label: t('brandRevenue'), icon: Ticket, route: 'BrandRevenue', roles: ['admin', 'brand_owner'], color: '#EC4899', feature: 'brandRevenue' },
         { label: t('clients'), icon: UsersIcon, route: 'AdminUsers', roles: ['admin', 'support'], color: '#5AC8FA' },
         { label: t('categories'), icon: ListTree, route: 'AdminCategories', roles: ['admin', 'nor_kam'], color: '#AF52DE' },
         { label: t('brands'), icon: Shield, route: 'AdminBrands', roles: ['admin'], color: '#007AFF' },
         { label: t('shipments'), icon: Truck, route: 'AdminShipments', roles: ['admin', 'support'], color: '#FF9500' },
         { label: t('collaborations'), icon: Handshake, route: 'AdminCollaboration', roles: ['admin'], color: '#FF9500' },
-        { label: t('banners'), icon: ImageIcon, route: 'AdminBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#0EA5E9' },
-        { label: t('adsCampaigns'), icon: Megaphone, route: 'AdminAds', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF3B30' },
-        { label: t('coupons'), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55' },
-        { label: t('flashSale'), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FFCC00' },
-        { label: t('treasureHunt'), icon: Trophy, route: 'AdminTreasureHunt', roles: ['admin'], color: '#FF6B6B' },
-        { label: t('promoBanners'), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#EC4899' },
+        { label: t('banners'), icon: ImageIcon, route: 'AdminBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#0EA5E9', feature: 'banners' },
+        { label: t('adsCampaigns'), icon: Megaphone, route: 'AdminAds', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF3B30', feature: 'marketing' },
+        { label: t('coupons'), icon: Ticket, route: 'AdminCoupons', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FF2D55', feature: 'marketing' },
+        { label: t('flashSale'), icon: Zap, route: 'AdminFlashSale', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#FFCC00', feature: 'marketing' },
+        { label: t('treasureHunt'), icon: Trophy, route: 'AdminTreasureHunt', roles: ['admin', 'brand_owner'], color: '#FF6B6B', feature: 'treasureHunt' },
+        { label: t('promoBanners'), icon: Ticket, route: 'AdminPromoBanners', roles: ['admin', 'brand_owner', 'nor_kam', 'editor'], color: '#EC4899', feature: 'banners' },
         { label: t('ourSelection'), icon: ListTree, route: 'AdminNotreSelection', roles: ['admin', 'nor_kam', 'editor'], color: '#10B981' },
         { label: t('support'), icon: MessageCircle, route: 'AdminSupportList', roles: ['admin', 'support'], color: '#5856D6' },
         { label: t('identityVerification'), icon: ShieldCheck, route: 'AdminKYC', roles: ['admin'], color: '#34C759' },
         { label: t('vendorApplications'), icon: Store, route: 'AdminVendorApplications', roles: ['admin'], color: '#6C63FF' },
-        { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin'], color: '#FF3B30' },
+        { label: t('broadcast'), icon: Bell, route: 'AdminNotifications', roles: ['admin', 'brand_owner'], color: '#FF3B30', feature: 'notifications' },
         { label: t('deliveryCompanies'), icon: Truck, route: 'AdminDeliveryCompanies', roles: ['admin'], color: '#F59E0B' },
         { label: t('platformRevenue'), icon: Ticket, route: 'AdminFinanceDashboard', roles: ['admin'], color: '#10B981' },
         { label: t('settings'), icon: Settings, route: 'AdminSettings', roles: ['admin'], color: '#8E8E93' },
-    ].filter(item => item.roles.includes(role));
+    ];
+
+    const isFeatureLocked = (item: MenuItem) => {
+        if (role !== 'brand_owner') return false;
+        if (!item.feature) return false;
+        
+        const tier = profileData?.vendorPlan as VendorTier || 'starter';
+        const accountType = profileData?.accountType as AccountType || 'entreprise';
+        return !hasFeature(tier, item.feature, accountType);
+    };
+
+    // Note: Since we are filtering out items, users won't see locked items.
+    // If we want to show them as locked, we should not filter and instead 
+    // disable the TouchableOpacity. But the prompt says "not able users to access", 
+    // and usually in a professional app, you either hide OR show with a lock.
+    // Let's SHOW them with a lock for better UX (so they know what they are missing).
+
+    const allVisibleItems = menuItems.filter(item => item.roles.includes(role));
     const iconColor = theme === 'dark' ? '#FFF' : '#000';
     return (
         <View style={[sc.root, { backgroundColor: colors.background }]}>
@@ -118,41 +138,46 @@ export default function AdminMenuScreen({ onBack, onNavigate, profileData, t }: 
                 scrollEventThrottle={16}
             >
                 <View style={sc.grid}>
-                    {menuItems.map((item, index) => {
-                        const isHighlighted = index === 0; // Dashboard gets a featured card
+                    {allVisibleItems.map((item, index) => {
+                        const locked = isFeatureLocked(item);
                         return (
                             <TouchableOpacity
                                 key={index}
-                                style={[
+                                onPress={() => {
+                                    if (locked) {
+                                        Alert.alert(
+                                            t('premiumFeature') || 'Premium Feature',
+                                            t('upgradeRequired') || 'This feature is not available in your current plan. Upgrade to unlock it!',
+                                            [
+                                                { text: t('cancel'), style: 'cancel' },
+                                                { text: t('seePlans') || 'See Plans', onPress: () => onNavigate('VendorRegistration') }
+                                            ]
+                                        );
+                                        return;
+                                    }
+                                    onNavigate(item.route);
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[
                                     sc.card,
                                     {
-                                        backgroundColor: isDark ? '#111118' : '#FFFFFF',
+                                        backgroundColor: isDark ? '#1C1C24' : '#FFFFFF',
                                         borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
                                     },
-                                ]}
-                                onPress={() => onNavigate(item.route)}
-                                activeOpacity={0.75}
-                            >
-                                {/* Icon container */}
-                                <View style={[
-                                    sc.iconBox,
-                                    {
-                                        backgroundColor: item.color + (isDark ? '20' : '14'),
-                                    }
                                 ]}>
-                                    <item.icon size={22} color={item.color} strokeWidth={1.7} />
+                                    <View style={[sc.iconBox, { backgroundColor: item.color + '15' }]}>
+                                        <item.icon size={26} color={item.color} strokeWidth={2.2} />
+                                    </View>
+                                    <Text style={[sc.label, { color: colors.foreground }]} numberOfLines={1}>
+                                        {item.label}
+                                    </Text>
+                                    {locked && (
+                                        <View style={{ position: 'absolute', top: 12, right: 12 }}>
+                                            <Lock size={14} color={colors.textMuted} />
+                                        </View>
+                                    )}
                                 </View>
-
-                                {/* Label */}
-                                <Text
-                                    style={[sc.label, { color: colors.foreground }]}
-                                    numberOfLines={2}
-                                >
-                                    {item.label.toUpperCase()}
-                                </Text>
-
-                                {/* Accent dot */}
-                                <View style={[sc.accentDot, { backgroundColor: item.color }]} />
                             </TouchableOpacity>
                         );
                     })}

@@ -25,21 +25,31 @@ import {
   Target, 
   MapPin, 
   CheckCircle2, 
-  Scan, 
-  Trophy,
-  Zap,
-  Sparkles,
+  Trophy, 
+  Zap, 
+  Award, 
+  Sparkles, 
+  Info, 
+  Play, 
+  Share2, 
+  Star,
+  Clock,
+  Users,
+  Medal,
+  Heart,
+  Scan,
   Crosshair,
   Radar,
   User,
   Gift,
-  Award,
-  Gem,
   Bomb as BombIcon,
-  CircleDot
+  CircleDot,
+  Key
 } from 'lucide-react-native';
-import { treasureHuntService, TreasureLocation, Participation, Bomb, Campaign } from '@/services/TreasureHuntService';
+import { treasureHuntService, TreasureLocation, Participation, Bomb, Campaign, TreasureKey } from '@/services/TreasureHuntService';
 import { useAppTheme } from '@/context/ThemeContext';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '@/api/firebase';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +86,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
   const [nearLocation, setNearLocation] = useState<TreasureLocation | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [bombs, setBombs] = useState<Bomb[]>([]);
+  const [keys, setKeys] = useState<TreasureKey[]>([]);
   const [mapRegion, setMapRegion] = useState<any>({
     latitude: 36.8065, // Tunis default
     longitude: 10.1815,
@@ -87,6 +98,10 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
   const [lastDiscoveredReward, setLastDiscoveredReward] = useState<any>(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showBoomAnimation, setShowBoomAnimation] = useState(false);
+  const [showLossModal, setShowLossModal] = useState(false);
+  const [isEliminated, setIsEliminated] = useState(false);
+  const [livesRemaining, setLivesRemaining] = useState(0);
+  const [liveEvent, setLiveEvent] = useState<{ userName: string, type: 'bomb' | 'key' } | null>(null);
   const mapRef = useRef<MapView>(null);
   const shakeViewRef = useRef<any>(null);
   
@@ -135,8 +150,10 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const { colors, theme } = useAppTheme();
 
-  const triggerBoomEffect = () => {
+  const triggerBoomEffect = (eliminated: boolean = true, remaining: number = 0) => {
     setShowBoomAnimation(true);
+    setIsEliminated(eliminated);
+    setLivesRemaining(remaining);
     Vibration.vibrate([0, 200, 100, 500]);
     
     // Smooth high-quality shake using Animatable
@@ -146,15 +163,35 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
 
     setTimeout(() => {
       setShowBoomAnimation(false);
-      Alert.alert(
-        t('treasureHuntBoomTitle') || "BOOM!", 
-        t('treasureHuntBoomDesc') || "You stepped on a bomb! It has been removed. You are out of the game.",
-        [{ text: "OK", style: "destructive", onPress: async () => {
-          await treasureHuntService.abandonCampaign(campaignId, userId);
-          if (onBack) onBack(); // Kick out of the game
-        } }]
-      );
+      setShowLossModal(true);
     }, 1500);
+  };
+
+  const handleBombHit = async (bombId: string) => {
+    if (!participation) return;
+    try {
+      setBombs(prev => prev.filter(b => b.id !== bombId));
+      const result = await treasureHuntService.handleBombHit(campaignId || '', userId, bombId);
+      
+      if (result.success) {
+        // Update local state
+        setParticipation(prev => prev ? {
+            ...prev,
+            inventory: {
+                keys: prev.inventory?.keys || 0,
+                lives: result.livesRemaining
+            },
+            status: result.eliminated ? 'abandoned' : (prev.status as any)
+        } : null);
+
+        // Broadcast event
+        treasureHuntService.logHuntEvent(campaignId || '', userId, auth.currentUser?.displayName || 'Participant', 'bomb');
+        
+        triggerBoomEffect(result.eliminated, result.livesRemaining);
+      }
+    } catch (error) {
+      console.error('Error handling bomb hit:', error);
+    }
   };
 
   const handleCapture = async (location: TreasureLocation) => {
@@ -185,7 +222,14 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
         setNearLocation(null);
         setSelectedLocation(null);
       } else {
-        Alert.alert(t('treasureHuntError'), result.message || t('treasureHuntCaptureFailed'));
+        if (result.message === 'REQUIRES_KEY') {
+          Alert.alert(
+            t('treasureLockedTitle'), 
+            `${t('treasureLockedMessage')} (${result.keysRequired || 1} ${t('treasureHuntKeysRequired')})`
+          );
+        } else {
+          Alert.alert(t('treasureHuntError'), result.message || t('treasureHuntCaptureFailed'));
+        }
       }
     } catch (error) {
       console.error('Capture error:', error);
@@ -208,6 +252,9 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
       
       const bombData = await treasureHuntService.getBombs(campaignId);
       setBombs(bombData);
+
+      const keyData = await treasureHuntService.getKeys(campaignId);
+      setKeys(keyData);
     } catch (error) {
        console.error('Refresh error:', error);
     }
@@ -275,6 +322,10 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
         const bombsData = await treasureHuntService.getBombs(campaignId);
         console.log('Bombs fetched:', bombsData.length);
         setBombs(bombsData);
+
+        const keysData = await treasureHuntService.getKeys(campaignId);
+        console.log('Keys fetched:', keysData.length);
+        setKeys(keysData);
       } catch (error) {
         console.error('Error fetching map data:', error);
       }
@@ -284,8 +335,6 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
 
     return () => unsubscribe();
   }, [campaignId, userId]);
-
-  // Remove the random bomb generator
 
   // Bomb collision detection
   useEffect(() => {
@@ -298,18 +347,85 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
           b.latitude,
           b.longitude
         );
-        // Detection radius: 10 meters for easier testing/gameplay
         if (dist <= 10) { 
           touchedBombId = b.id;
           break;
         }
       }
       if (touchedBombId) {
-         setBombs(prev => prev.filter(b => b.id !== touchedBombId));
-         triggerBoomEffect();
+         handleBombHit(touchedBombId);
       }
     }
-  }, [userLocation, bombs]);
+  }, [userLocation, bombs, participation]);
+
+  useEffect(() => {
+    if (!campaignId) return;
+    const q = query(
+      collection(db, 'treasure_events'),
+      where('campaignId', '==', campaignId),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+    const unsubscribeEvents = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const data = snapshot.docs[0].data();
+        if (data.userId !== userId) {
+          setLiveEvent({ userName: data.userName, type: data.eventType });
+          setTimeout(() => setLiveEvent(null), 5000);
+        }
+      }
+    });
+    return () => unsubscribeEvents();
+  }, [campaignId, userId]);
+
+  // Key collection detection
+  useEffect(() => {
+    if (userLocation && keys.length > 0 && participation) {
+      let collectedKeyId: string | null = null;
+      for (const k of keys) {
+        const dist = getDistance(
+          userLocation.coords.latitude, 
+          userLocation.coords.longitude,
+          k.latitude,
+          k.longitude
+        );
+        // Detection radius: 15 meters for keys
+        if (dist <= 15) { 
+          collectedKeyId = k.id;
+          break;
+        }
+      }
+      if (collectedKeyId) {
+         handleCollectKey(collectedKeyId);
+      }
+    }
+  }, [userLocation, keys, participation]);
+
+  const handleCollectKey = async (keyId: string) => {
+    if (!participation) return;
+    try {
+      const success = await treasureHuntService.collectKey(keyId, participation.id);
+      if (success) {
+        setKeys(prev => prev.filter(k => k.id !== keyId));
+        Vibration.vibrate([0, 200, 100, 200]);
+        Alert.alert(t('keyCollectedTitle'), t('keyCollectedMessage'));
+        
+        // Broadcast event
+        treasureHuntService.logHuntEvent(campaignId || '', userId, auth.currentUser?.displayName || 'Participant', 'key');
+
+        // Update participation locally to show key count without full refresh if possible
+        setParticipation(prev => prev ? {
+            ...prev,
+            inventory: {
+                keys: (prev.inventory?.keys || 0) + 1,
+                lives: prev.inventory?.lives || 0
+            }
+        } : null);
+      }
+    } catch (error) {
+      console.error('Error collecting key:', error);
+    }
+  };
 
   useEffect(() => {
     if (!userLocation || !treasureLocations.length || !participation) return;
@@ -448,7 +564,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                             style={styles.markerHexagon}
                           >
                             <View style={styles.hexIcon}>
-                              {loc.captureMethod === 'qr' ? <Scan size={20} color="#FFF" /> : <Gem size={20} color="#FFF" />}
+                              {loc.captureMethod === 'qr' ? <Scan size={20} color="#FFF" /> : <Gift size={20} color="#FFF" />}
                             </View>
                           </LinearGradient>
                           <View style={styles.markerPulse} />
@@ -463,7 +579,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                             style={styles.radarRing} 
                           />
                           <View style={[styles.radarCore, { backgroundColor: isCurrentTarget ? '#FFD700' : colors.primary }]}>
-                             {isCurrentTarget ? <Gem size={16} color="#FFF" /> : <Radar size={14} color="#FFF" />}
+                             {isCurrentTarget ? <Gift size={16} color="#FFF" /> : <Radar size={14} color="#FFF" />}
                           </View>
                         </View>
                       ) : (
@@ -515,6 +631,19 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
               </Marker>
             );
           })}
+
+          {/* Render Keys */}
+          {keys.map(k => (
+            <Marker
+              key={k.id}
+              coordinate={{ latitude: k.latitude, longitude: k.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <Animatable.View animation="pulse" iterationCount="infinite" duration={1500} style={styles.keyMarkerContainer}>
+                 <Key size={18} color="#FFF" />
+              </Animatable.View>
+            </Marker>
+          ))}
         </MapView>
       </Animatable.View>
       
@@ -528,6 +657,19 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
       <View style={styles.overlayContainer} pointerEvents="box-none">
         {/* Top Status Bar (Floating) */}
         <SafeAreaView style={styles.topSafeArea} pointerEvents="box-none">
+          {/* Live Event Toast - absolutely positioned */}
+          {liveEvent && (
+            <Animatable.View animation="slideInDown" duration={500} style={[styles.liveEventToast, { backgroundColor: liveEvent.type === 'bomb' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(245, 158, 11, 0.95)' }]}>
+              {liveEvent.type === 'bomb' ? <BombIcon size={20} color="#FFF" /> : <Key size={20} color="#FFF" />}
+              <Text style={styles.liveEventText}>
+                {liveEvent.type === 'bomb'
+                  ? `${liveEvent.userName} hit a bomb!`
+                  : `${liveEvent.userName} found a key!`}
+                {' '}{liveEvent.type === 'bomb' ? 'Be careful!' : 'Hurry up!'}
+              </Text>
+            </Animatable.View>
+          )}
+
           <Animatable.View animation="fadeInDown" duration={600} style={styles.topBar}>
             <TouchableOpacity onPress={onBack} style={styles.circularButton}>
               <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blurCircular}>
@@ -543,6 +685,25 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                     (participation ? `${participation.progress.discoveredLocationIds?.length || 0}/${treasureLocations.length || 0}` : 'EXPLORING...')}
                  </Text>
               </BlurView>
+
+              {participation && (participation.inventory?.keys || 0) > 0 && (
+                <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={[styles.blurPill, { marginLeft: 8 }]}>
+                   <Key size={14} color="#FFD700" />
+                   <Text style={[styles.titleText, { color: colors.foreground, marginLeft: 6 }]}>
+                     {participation.inventory?.keys || 0}
+                   </Text>
+                </BlurView>
+              )}
+
+              {participation && (participation.inventory?.lives || 0) > 0 && (
+                <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={[styles.blurPill, { marginLeft: 8 }]}>
+                   <View style={{ flexDirection: 'row', gap: 3 }}>
+                     {Array.from({ length: Math.min(3, participation.inventory?.lives || 0) }).map((_, i) => (
+                       <Heart key={i} size={14} color="#EF4444" fill="#EF4444" />
+                     ))}
+                   </View>
+                </BlurView>
+              )}
             </View>
 
             <TouchableOpacity onPress={centerOnUser} style={styles.circularButton}>
@@ -568,7 +729,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
               {/* Debug Boom Button */}
               <TouchableOpacity 
                 style={[styles.circularButton, { marginTop: 15, backgroundColor: 'rgba(239, 68, 68, 0.8)' }]} 
-                onPress={triggerBoomEffect}
+                onPress={() => triggerBoomEffect(false, 2)}
               >
                 <BombIcon size={24} color="#FFF" />
               </TouchableOpacity>
@@ -631,7 +792,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                 style={{ alignSelf: 'center', marginBottom: -35, zIndex: 30 }}
               >
                 <View style={{ backgroundColor: '#1A1A1A', padding: 18, borderRadius: 50, borderWidth: 3, borderColor: '#FFD700', shadowColor: '#FFD700', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.8, shadowRadius: 15, elevation: 20 }}>
-                  <Gem size={45} color="#FFD700" />
+                  <Gift size={45} color="#FFD700" />
                 </View>
               </Animatable.View>
 
@@ -657,7 +818,21 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                       </View>
                        <View style={styles.radarTextBox}>
                          <Text style={styles.radarTitle}>{t('treasureHuntNearTreasure')}</Text>
-                         <Text style={styles.radarDesc}>{t('treasureHuntNearTreasureDesc')}</Text>
+                         <Text style={styles.radarDesc}>
+                           {nearLocation.requiresKey && (participation?.inventory?.keys || 0) <= 0 
+                             ? t('treasureHuntKeyRequiredDesc') 
+                             : t('treasureHuntNearTreasureDesc')}
+                         </Text>
+                         {nearLocation.requiresKey && (
+                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                               <Key size={14} color={(participation?.inventory?.keys || 0) >= (nearLocation.keysRequired || 1) ? "#10B981" : "#FF3366"} style={{ marginRight: 4 }} />
+                               <Text style={{ color: (participation?.inventory?.keys || 0) >= (nearLocation.keysRequired || 1) ? "#10B981" : "#FF3366", fontSize: 12, fontWeight: 'bold' }}>
+                                  {(participation?.inventory?.keys || 0) >= (nearLocation.keysRequired || 1) 
+                                    ? t('treasureHuntHaveKey') 
+                                    : `${t('treasureHuntNeedKey')} (${participation?.inventory?.keys || 0}/${nearLocation.keysRequired || 1})`}
+                               </Text>
+                             </View>
+                          )}
                          {campaign && (
                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
                              {campaign.rewardType === 'points' && <Zap size={14} color="#FFD700" style={{ marginRight: 4 }} />}
@@ -676,34 +851,44 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                       </View>
                    </View>
                                {/* Conditional button: QR scan or Virtual capture */}
-                     {nearLocation.captureMethod === 'qr' ? (
-                       <TouchableOpacity 
-                         onPress={() => { onScan(nearLocation); }} 
-                         style={styles.scanButton}
-                       >
-                         <LinearGradient colors={['#4F46E5', '#7C3AED']} style={styles.scanGradient}>
-                           <Scan size={24} color="#FFF" />
-                           <Text style={styles.scanText}>{t('treasureHuntScanQR') || 'Scan QR Code'}</Text>
-                         </LinearGradient>
-                       </TouchableOpacity>
-                     ) : (
-                       <TouchableOpacity 
-                         onPress={() => handleCapture(nearLocation)} 
-                         disabled={capturing}
-                         style={styles.scanButton}
-                       >
-                         <LinearGradient colors={['#FF3366', '#FF8E53']} style={styles.scanGradient}>
-                            {capturing ? (
-                              <ActivityIndicator color="#FFF" />
-                            ) : (
-                              <>
-                                <Target size={24} color="#FFF" />
-                                <Text style={styles.scanText}>{t('treasureHuntCaptureNow') || 'Capture Treasure'}</Text>
-                              </>
-                            )}
+                      {nearLocation.captureMethod === 'qr' ? (
+                        <TouchableOpacity 
+                          onPress={() => { 
+                            if (nearLocation.requiresKey && (participation?.inventory?.keys || 0) < (nearLocation.keysRequired || 1)) {
+                              Alert.alert(t('treasureLockedTitle'), t('treasureLockedMessage'));
+                              return;
+                            }
+                            onScan(nearLocation); 
+                          }} 
+                          style={styles.scanButton}
+                        >
+                          <LinearGradient colors={['#4F46E5', '#7C3AED']} style={styles.scanGradient}>
+                            <Scan size={24} color="#FFF" />
+                            <Text style={styles.scanText}>{t('treasureHuntScanQR') || 'Scan QR Code'}</Text>
                           </LinearGradient>
                         </TouchableOpacity>
-                     )}
+                      ) : (
+                        <TouchableOpacity 
+                           onPress={() => handleCapture(nearLocation)} 
+                           disabled={capturing || (nearLocation.requiresKey && (participation?.inventory?.keys || 0) < (nearLocation.keysRequired || 1))}
+                           style={[styles.scanButton, (nearLocation.requiresKey && (participation?.inventory?.keys || 0) < (nearLocation.keysRequired || 1)) && { opacity: 0.5 }]}
+                         >
+                          <LinearGradient colors={['#FF3366', '#FF8E53']} style={styles.scanGradient}>
+                             {capturing ? (
+                               <ActivityIndicator color="#FFF" />
+                             ) : (
+                               <>
+                                 <Target size={24} color="#FFF" />
+                                 <Text style={styles.scanText}>
+                                   {nearLocation.requiresKey && (participation?.inventory?.keys || 0) < (nearLocation.keysRequired || 1) 
+                                     ? t('treasureHuntLocked') 
+                                     : (t('treasureHuntCaptureNow') || 'Capture Treasure')}
+                                 </Text>
+                               </>
+                             )}
+                           </LinearGradient>
+                         </TouchableOpacity>
+                      )}
                  </LinearGradient>
               </BlurView>
             </Animatable.View>
@@ -730,7 +915,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                     colors={['#FFD700', '#FFA500']}
                     style={styles.treasureChestCircle}
                   >
-                    <Gem size={80} color="#FFF" />
+                    <Gift size={80} color="#FFF" />
                   </LinearGradient>
                 </Animatable.View>
                 
@@ -852,13 +1037,89 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
           </View>
         </Modal>
 
+        {/* Loss Modal (Bomb Encounter) */}
+        <Modal visible={showLossModal} animationType="fade" transparent>
+          <View style={styles.modalOverlay}>
+            <Animatable.View 
+              animation="zoomIn" 
+              duration={600} 
+              style={[styles.rewardModalContent, { borderTopWidth: 5, borderTopColor: '#EF4444' }]}
+            >
+              <LinearGradient
+                colors={isEliminated ? ['#EF4444', '#991B1B'] : ['#F59E0B', '#B45309']}
+                style={styles.rewardHeader}
+              >
+                <Animatable.View 
+                  animation="shake" 
+                  iterationCount="infinite" 
+                  duration={2000}
+                >
+                  {isEliminated ? <BombIcon size={60} color="#FFF" /> : <Heart size={60} color="#FFF" fill="#FFF" />}
+                </Animatable.View>
+                <Text style={styles.rewardModalTitle}>
+                    {isEliminated ? (t('treasureHuntGameOver') || 'Game Over!') : (t('treasureHuntHeartLost') || 'Heart Lost!')}
+                </Text>
+              </LinearGradient>
+
+              <View style={styles.rewardBody}>
+                <Text style={[styles.rewardMessage, { fontWeight: 'bold', color: isEliminated ? '#EF4444' : '#F59E0B' }]}>
+                  {isEliminated ? (t('treasureHuntBoomTitle') || 'BOOM!') : (t('treasureHuntOuchTitle') || 'OUCH!')}
+                </Text>
+                <Text style={styles.rewardMessage}>
+                  {isEliminated 
+                    ? (t('treasureHuntBoomDescLong') || 'You stepped on a bomb! It has been removed, but you are out of the game for this campaign.')
+                    : (t('treasureHuntLifeLostDesc') || 'You hit a bomb! You lost one heart. Be careful!')}
+                </Text>
+                
+                <View style={[styles.rewardDetailCard, { backgroundColor: isEliminated ? '#EF444410' : '#F59E0B10', borderColor: isEliminated ? '#EF444420' : '#F59E0B20' }]}>
+                  <View style={styles.rewardInfoRow}>
+                    {isEliminated ? (
+                        <>
+                            <BombIcon size={32} color="#EF4444" />
+                            <Text style={[styles.rewardValue, { color: '#EF4444' }]}>{t('treasureHuntEliminated') || 'Eliminated'}</Text>
+                        </>
+                    ) : (
+                        <>
+                            <Heart size={32} color="#EF4444" fill="#EF4444" />
+                            <Text style={[styles.rewardValue, { color: '#EF4444' }]}>
+                                {livesRemaining} {t('treasureHuntLivesLeft') || 'Lives Left'}
+                            </Text>
+                        </>
+                    )}
+                  </View>
+                </View>
+
+                {isEliminated ? (
+                    <TouchableOpacity 
+                        onPress={async () => {
+                            await treasureHuntService.abandonCampaign(campaignId || '', userId);
+                            setShowLossModal(false);
+                            if (onBack) onBack();
+                        }}
+                        style={[styles.continueButton, { backgroundColor: '#EF4444' }]}
+                    >
+                        <Text style={styles.continueButtonText}>{t('treasureHuntTryAgainNextTime') || 'Return Home'}</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity 
+                        onPress={() => setShowLossModal(false)}
+                        style={[styles.continueButton, { backgroundColor: '#F59E0B' }]}
+                    >
+                        <Text style={styles.continueButtonText}>{t('treasureHuntKeepGoing') || 'Keep Going'}</Text>
+                    </TouchableOpacity>
+                )}
+              </View>
+            </Animatable.View>
+          </View>
+        </Modal>
+
         {/* Selected Treasure Detail (Bottom Sheet style) */}
         {selectedLocation && !nearLocation && (
            <Animatable.View animation="slideInUp" duration={400} style={styles.selectedLocationCard}>
               <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.detailBlur}>
                  <View style={styles.detailHeader}>
                     <View style={[styles.detailIconBox, { backgroundColor: isDiscovered(selectedLocation.id) ? '#10B98120' : '#FFD70020' }]}>
-                       {isDiscovered(selectedLocation.id) ? <CheckCircle2 size={24} color="#10B981" /> : <Gem size={24} color="#FFD700" />}
+                       {isDiscovered(selectedLocation.id) ? <CheckCircle2 size={24} color="#10B981" /> : <Gift size={24} color="#FFD700" />}
                     </View>
                     <View style={styles.detailTitleBox}>
                        <Text style={[styles.detailTitle, { color: colors.foreground }]}>
@@ -899,6 +1160,22 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                           {selectedLocation.captureMethod === 'qr'
                             ? (t('treasureHuntQRCapture') || 'Scan QR Code')
                             : (t('treasureHuntVirtualCapture') || 'Virtual Capture')}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {!isDiscovered(selectedLocation.id) && selectedLocation.requiresKey && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
+                      <View style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        backgroundColor: '#FFD70010',
+                        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
+                        borderWidth: 1, borderColor: '#FFD70040'
+                      }}>
+                        <Key size={13} color="#FFD700" style={{ marginRight: 5 }} />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme === 'dark' ? '#FFD700' : '#B8860B' }}>
+                          {selectedLocation.keysRequired || 1} {t('treasureHuntKeysRequired') || 'Keys required'}
                         </Text>
                       </View>
                     </View>
@@ -1081,6 +1358,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 20,
+  },
+  liveEventToast: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 20,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 30,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  liveEventText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 10,
   },
   circularButton: {
     width: 48,
@@ -1496,6 +1795,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  keyMarkerContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 5,

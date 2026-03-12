@@ -145,7 +145,9 @@ const TreasureScannerScreen: React.FC<TreasureScannerScreenProps> = ({
       setScanResult({
         success: scanResponse.success,
         location: scanResponse.location,
-        message: scanResponse.message,
+        message: scanResponse.message === 'REQUIRES_KEY' 
+          ? `${t('treasureLockedMessage')} (${scanResponse.keysRequired || 1} ${t('treasureHuntKeysRequired')})` 
+          : scanResponse.message,
         isCompleted: scanResponse.isCompleted
       });
 

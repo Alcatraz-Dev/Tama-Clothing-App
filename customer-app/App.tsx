@@ -192,9 +192,10 @@ import {
   TreasureScannerScreen, 
   TreasureRewardsScreen,
   TreasureCampaignScreen,
-  TreasureCaptureScreen
+  TreasureCaptureScreen,
+  TreasureLeaderboardScreen
 } from './src/screens/treasure-hunt';
-import { treasureHuntService } from './src/services/TreasureHuntService';
+import { treasureHuntService, Campaign } from './src/services/TreasureHuntService';
 
 // New extracted imports
 import { ThemeContext, ThemeProvider, useAppTheme, getAppColors } from './src/context/ThemeContext';
@@ -284,7 +285,7 @@ export default function App() {
   const [activeLiveChannel, setActiveLiveChannel] = useState<string>('bey3a-clothing');
   const [isLiveHost, setIsLiveHost] = useState(false);
   // Treasure Hunt State
-  const [treasureHuntState, setTreasureHuntState] = useState<'home' | 'campaign' | 'map' | 'scanner' | 'rewards' | 'capture'>('home');
+  const [treasureHuntState, setTreasureHuntState] = useState<'home' | 'campaign' | 'map' | 'scanner' | 'rewards' | 'capture' | 'leaderboard'>('home');
   const [selectedTreasureCampaign, setSelectedTreasureCampaign] = useState<any>(null);
   const [selectedTreasureLocation, setSelectedTreasureLocation] = useState<any>(null);
   const [isLiveReplay, setIsLiveReplay] = useState(false);
@@ -1723,11 +1724,21 @@ export default function App() {
               userId={user?.uid || ''}
               isDark={theme === 'dark'}
               onBack={previousTab === 'Profile' ? () => setActiveTab('Profile') : undefined}
-              onCampaignSelect={(campaign) => {
+              onCampaignSelect={(campaign: Campaign) => {
                 setSelectedTreasureCampaign(campaign);
                 setTreasureHuntState('campaign');
               }}
               onViewRewards={() => setTreasureHuntState('rewards')}
+              onViewLeaderboard={() => setTreasureHuntState('leaderboard')}
+              onMapPress={(campaign: Campaign) => {
+                setSelectedTreasureCampaign(campaign);
+                setTreasureHuntState('map');
+              }}
+              onScanPress={(campaign: Campaign) => {
+                setSelectedTreasureCampaign(campaign);
+                setTreasureHuntState('scanner');
+              }}
+              onShopPress={() => setActiveTab('Shop')}
             />
           )}
           {treasureHuntState === 'campaign' && selectedTreasureCampaign && (
@@ -1807,6 +1818,12 @@ export default function App() {
                   setTreasureHuntState('home');
                 }
               }}
+            />
+          )}
+          {treasureHuntState === 'leaderboard' && (
+            <TreasureLeaderboardScreen
+              t={t}
+              onBack={() => setTreasureHuntState('home')}
             />
           )}
         </>

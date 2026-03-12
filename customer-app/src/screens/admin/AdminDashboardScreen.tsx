@@ -16,6 +16,7 @@ import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { BlurView, AdminHeader } from '../../components/admin/AdminUI';
 import { BlurTargetView } from 'expo-blur';
+import { VendorTier } from '../../utils/planAccessControl';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 52) / 2;
@@ -177,7 +178,14 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
                                     <View style={sc.brandBannerContent}>
                                         <View>
                                             <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
-                                            <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()} {t('access').toUpperCase()}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                                <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()}</Text>
+                                                <View style={[sc.planBadge, { backgroundColor: colors.primary + '15' }]}>
+                                                    <Text style={[sc.planBadgeText, { color: colors.primary }]}>
+                                                        {(profileData.vendorPlan as string || 'starter').toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                            </View>
                                         </View>
                                         <View style={[sc.badgeRole, { backgroundColor: 'rgba(52, 199, 89, 0.15)' }]}>
                                             <Text style={[sc.badgeRoleText, { color: '#34C759' }]}>VERIFIED</Text>
@@ -470,5 +478,15 @@ const sc = StyleSheet.create({
         fontWeight: '600',
         marginTop: 2,
         letterSpacing: 0.1,
+    },
+    planBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    planBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        letterSpacing: 0.5,
     }
 });

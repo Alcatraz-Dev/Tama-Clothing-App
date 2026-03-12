@@ -33,8 +33,10 @@ import {
   TrendingUp,
   Map as MapIcon,
   ShoppingBag,
+  ShoppingCart,
   Bomb,
   Trash2,
+  Key,
 } from "lucide-react-native";
 import { treasureHuntService, Campaign } from "@/services/TreasureHuntService";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -51,13 +53,18 @@ const TreasureHuntHomeScreen: React.FC<{
   isDark: boolean;
   onCampaignSelect: (campaign: Campaign) => void;
   onViewRewards: () => void;
+  onViewLeaderboard: () => void;
+  onMapPress: (campaign: Campaign) => void;
+  onScanPress: (campaign: Campaign) => void;
+  onShopPress: () => void;
   onBack?: () => void;
-}> = ({ t, userId, isDark, onCampaignSelect, onViewRewards, onBack }) => {
+}> = ({ t, userId, isDark, onCampaignSelect, onViewRewards, onViewLeaderboard, onMapPress, onScanPress, onShopPress, onBack }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [upcomingCampaigns, setUpcomingCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userStats, setUserStats] = useState<any>(null);
+  const [userParticipations, setUserParticipations] = useState<any[]>([]);
   const [addingDemo, setAddingDemo] = useState(false);
   const [countdown, setCountdown] = useState<{ [key: string]: number }>({});
   const [endCountdown, setEndCountdown] = useState<{ [key: string]: number }>(
@@ -73,6 +80,8 @@ const TreasureHuntHomeScreen: React.FC<{
       if (userId) {
         const stats = await treasureHuntService.getUserStats(userId);
         setUserStats(stats);
+        const participations = await treasureHuntService.getUserParticipations(userId);
+        setUserParticipations(participations);
       }
 
       const now = Timestamp.now();
@@ -118,12 +127,38 @@ const TreasureHuntHomeScreen: React.FC<{
     }
   };
 
+  const handleCreateDemoLeaderboard = async () => {
+    try {
+      setAddingDemo(true);
+      await treasureHuntService.createDemoLeaderboard();
+      alert('Demo Leaderboard data generated! Check the trophy screen.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate leaderboard data');
+    } finally {
+      setAddingDemo(false);
+    }
+  };
+
+  const handleCreateDemoKey = async () => {
+    try {
+      setAddingDemo(true);
+      const loc = await Location.getCurrentPositionAsync({});
+      await treasureHuntService.createDemoKey(userId, loc.coords.latitude, loc.coords.longitude);
+      alert(t('demoKeyAdded') || 'Demo Key added at your location! Open map to collect it.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to add demo key');
+    } finally {
+      setAddingDemo(false);
+    }
+  };
+
   const handleDeleteDemos = async () => {
     try {
       setAddingDemo(true);
       const crossout = await treasureHuntService.deleteDemoLocations();
       const crossoutBombs = await treasureHuntService.deleteDemoBombs();
-      alert(`Deleted ${crossout} treasures and ${crossoutBombs} bombs.`);
+      const crossoutLeaderboard = await treasureHuntService.deleteDemoLeaderboard();
+      alert(`Deleted ${crossout} treasures, ${crossoutBombs} bombs, and ${crossoutLeaderboard} leaderboard entries.`);
       fetchCampaigns();
     } catch (err: any) {
       alert('Failed to delete demos');
@@ -212,6 +247,32 @@ const TreasureHuntHomeScreen: React.FC<{
     fetchCampaigns();
   };
 
+  const handleQuickAction = (type: 'map' | 'scan' | 'shop') => {
+    if (type === 'shop') {
+      onShopPress();
+      return;
+    }
+
+    // For map and scan, try to find an active participation
+    const activeParticipation = userParticipations.find(p => p.status === 'in_progress');
+    const campaignId = activeParticipation?.campaignId;
+    
+    if (campaignId) {
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (campaign) {
+        if (type === 'map') onMapPress(campaign);
+        else onScanPress(campaign);
+        return;
+      }
+    }
+
+    // If no active or found, find the first active campaign
+    if (campaigns.length > 0) {
+      if (type === 'map') onMapPress(campaigns[0]);
+      else onScanPress(campaigns[0]);
+    }
+  };
+
   const renderActiveCampaign = ({
     item,
     index,
@@ -242,6 +303,8 @@ const TreasureHuntHomeScreen: React.FC<{
         >
           <LinearGradient
             colors={
+              item.status === "completed" ? ["#475569", "#1E293B"] :
+              userParticipations.find(p => p.campaignId === item.id)?.status === 'abandoned' ? ["#991B1B", "#450A0A"] :
               isEndingSoon ? ["#FF3366", "#FF8E53"] : ["#0F172A", "#1E293B"]
             }
             start={{ x: 0, y: 0 }}
@@ -264,7 +327,9 @@ const TreasureHuntHomeScreen: React.FC<{
                   ]}
                 />
                 <Text style={styles.statusText}>
-                  {isEndingSoon
+                  {userParticipations.find(p => p.campaignId === item.id)?.status === 'abandoned'
+                    ? t("treasureHuntEliminated") || "ELIMINATED"
+                    : isEndingSoon
                     ? t("treasureHuntEndingSoon") || "ENDING SOON"
                     : t("treasureHuntActive") || "LIVE"}
                 </Text>
@@ -352,14 +417,24 @@ const TreasureHuntHomeScreen: React.FC<{
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={onViewRewards} style={styles.rewardButton}>
-          <LinearGradient
-            colors={["#FF3366", "#FF8E53"]}
-            style={styles.rewardGradient}
-          >
-            <Medal size={20} color="#FFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={onViewLeaderboard} style={styles.rewardButton}>
+            <LinearGradient
+              colors={["#4F46E5", "#7C3AED"]}
+              style={styles.rewardGradient}
+            >
+              <Trophy size={20} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onViewRewards} style={[styles.rewardButton, { marginLeft: 10 }]}>
+            <LinearGradient
+              colors={["#FF3366", "#FF8E53"]}
+              style={styles.rewardGradient}
+            >
+              <Medal size={20} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -450,9 +525,43 @@ const TreasureHuntHomeScreen: React.FC<{
           </TouchableOpacity>
 
           <TouchableOpacity 
+            onPress={handleCreateDemoKey} 
+            disabled={addingDemo}
+            style={[styles.demoButton, { borderColor: '#10B981', flex: 1, marginRight: 8, backgroundColor: 'rgba(16, 185, 129, 0.05)' }]}
+          >
+            {addingDemo ? (
+              <ActivityIndicator size="small" color="#10B981" />
+            ) : (
+              <>
+                <Key size={18} color="#10B981" />
+                <Text style={[styles.demoButtonText, { color: '#10B981' }]}>
+                  {t("addDemoKey") || "Add Key"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            onPress={handleCreateDemoLeaderboard} 
+            disabled={addingDemo}
+            style={[styles.demoButton, { borderColor: '#8B5CF6', flex: 1, marginRight: 8, backgroundColor: 'rgba(139, 92, 246, 0.05)' }]}
+          >
+            {addingDemo ? (
+              <ActivityIndicator size="small" color="#8B5CF6" />
+            ) : (
+              <>
+                <Trophy size={18} color="#8B5CF6" />
+                <Text style={[styles.demoButtonText, { color: '#8B5CF6' }]}>
+                  {t("treasureHuntAddLeaderboard") || "Add Board"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             onPress={handleDeleteDemos} 
             disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', paddingHorizontal: 10 }]}
+            style={[styles.demoButton, { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', paddingHorizontal: 12 }]}
           >
             <Trash2 size={16} color="#EF4444" />
           </TouchableOpacity>
@@ -501,33 +610,36 @@ const TreasureHuntHomeScreen: React.FC<{
 
         <View style={styles.quickActions}>
           <TouchableOpacity
+            onPress={() => handleQuickAction('map')}
             style={[styles.actionCard, { backgroundColor: colors.card }]}
           >
             <View style={[styles.actionIcon, { backgroundColor: "#FFEDED" }]}>
               <MapIcon size={22} color="#FF3366" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.foreground }]}>
-              {t("openMap") || "Open Map"}
+              {t("treasureHuntQuickMap") || "Map"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => handleQuickAction('scan')}
             style={[styles.actionCard, { backgroundColor: colors.card }]}
           >
             <View style={[styles.actionIcon, { backgroundColor: "#ECFDF5" }]}>
               <Scan size={22} color="#10B981" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.foreground }]}>
-              {t("scanQR") || "Scan QR"}
+              {t("treasureHuntQuickScan") || "Scan"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => handleQuickAction('shop')}
             style={[styles.actionCard, { backgroundColor: colors.card }]}
           >
             <View style={[styles.actionIcon, { backgroundColor: "#EFF6FF" }]}>
-              <ShoppingBag size={22} color="#3B82F6" />
+              <ShoppingCart size={22} color="#3B82F6" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.foreground }]}>
-              {t("shop") || "Shop"}
+              {t("treasureHuntQuickShop") || "Boutique"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -619,25 +731,34 @@ const TreasureHuntHomeScreen: React.FC<{
               <Text style={styles.guideNumberText}>1</Text>
             </View>
             <Text style={[styles.guideText, { color: colors.foreground }]}>
-              {t("guideFind") || "Find gems"}
+              {t("guideFind") || "EXPLORE"}
             </Text>
           </View>
           <View style={styles.guideDivider} />
           <View style={styles.guideStep}>
-            <View style={styles.guideNumber}>
+            <View style={[styles.guideNumber, { backgroundColor: '#10B981' }]}>
               <Text style={styles.guideNumberText}>2</Text>
             </View>
             <Text style={[styles.guideText, { color: colors.foreground }]}>
-              {t("guideScan") || "Scan QR"}
+              {t("guideCollectKeys") || "KEYS"}
             </Text>
           </View>
           <View style={styles.guideDivider} />
           <View style={styles.guideStep}>
-            <View style={styles.guideNumber}>
+            <View style={[styles.guideNumber, { backgroundColor: '#EF4444' }]}>
+              <Text style={styles.guideNumberText}>!</Text>
+            </View>
+            <Text style={[styles.guideText, { color: '#EF4444' }]}>
+              {t("guideWatchHearts") || "HEARTS"}
+            </Text>
+          </View>
+          <View style={styles.guideDivider} />
+          <View style={styles.guideStep}>
+            <View style={[styles.guideNumber, { backgroundColor: '#F59E0B' }]}>
               <Text style={styles.guideNumberText}>3</Text>
             </View>
             <Text style={[styles.guideText, { color: colors.foreground }]}>
-              {t("guideWin") || "Win big"}
+              {t("guideWin") || "WIN"}
             </Text>
           </View>
         </BlurView>
@@ -656,6 +777,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 15,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerLeft: {
     flexDirection: "row",

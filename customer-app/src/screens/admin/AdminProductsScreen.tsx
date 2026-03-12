@@ -16,6 +16,7 @@ import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { uploadToBunny } from '../../utils/bunny';
 import { AdminHeader } from '../../components/admin/AdminUI';
+import { getFeatureValue, VendorTier } from '../../utils/planAccessControl';
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const sc = StyleSheet.create({
@@ -441,6 +442,21 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
             Alert.alert(t('error'), t('requiredFields'));
             return;
         }
+
+        // Check product limits for brand owners
+        if (!editingProduct && isBrandOwner) {
+            const tier = profileData?.vendorPlan as VendorTier || 'starter';
+            const limit = getFeatureValue(tier, 'productsLimit');
+            
+            if (limit !== 'unlimited' && products.length >= (limit as number)) {
+                Alert.alert(
+                    t('limitReached') || 'Limit Reached',
+                    t('productLimitDesc')?.replace('{limit}', String(limit)) || `You have reached your limit of ${limit} products. Please upgrade your plan to add more.`
+                );
+                return;
+            }
+        }
+
         setUploading(true);
         try {
             const uploadedImages = await Promise.all(images.map(img => uploadToBunny(img)));

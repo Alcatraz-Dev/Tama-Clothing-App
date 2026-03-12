@@ -38,6 +38,7 @@ import {
   Printer,
   Bomb,
   ShieldAlert,
+  Key,
 } from "lucide-react-native";
 import {
   Timestamp,
@@ -73,6 +74,7 @@ import {
   Campaign,
   TreasureLocation,
   Bomb as BombType,
+  TreasureKey,
 } from "../../services/TreasureHuntService";
 
 const { width } = Dimensions.get("window");
@@ -132,6 +134,11 @@ export default function AdminTreasureHuntScreen({
     useState<TreasureLocation | null>(null);
   const [bombsForLocation, setBombsForLocation] = useState<BombType[]>([]);
   const [isAddingBomb, setIsAddingBomb] = useState(false);
+  
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [locationForKeys, setLocationForKeys] = useState<TreasureLocation | null>(null);
+  const [keysForCampaign, setKeysForCampaign] = useState<TreasureKey[]>([]);
+  const [isAddingKey, setIsAddingKey] = useState(false);
 
   // Form states
   const [campaignNameFr, setCampaignNameFr] = useState("");
@@ -431,6 +438,8 @@ export default function AdminTreasureHuntScreen({
   const [locationBonusReward1, setLocationBonusReward1] = useState("50");
   const [locationBonusReward2, setLocationBonusReward2] = useState("30");
   const [locationBonusReward3, setLocationBonusReward3] = useState("20");
+  const [requiresKey, setRequiresKey] = useState(false);
+  const [keysRequired, setKeysRequired] = useState("1");
 
   // Map picker state
   const [mapPickerCoords, setMapPickerCoords] = useState<{
@@ -729,6 +738,7 @@ export default function AdminTreasureHuntScreen({
     setLocationBonusReward1("50");
     setLocationBonusReward2("30");
     setLocationBonusReward3("20");
+    setRequiresKey(false);
   };
 
   const handleEditLocation = (location: TreasureLocation) => {
@@ -744,6 +754,8 @@ export default function AdminTreasureHuntScreen({
     setLocationOrder(String(location.order || 1));
     setLocationRadius(String(location.radius || 50));
     setLocationCaptureMethod(location.captureMethod || "virtual");
+    setRequiresKey(location.requiresKey || false);
+    setKeysRequired(String(location.keysRequired || 1));
 
     // Note: Rewards are now managed at campaign level, not location level
     setLocationStartDate(new Date());
@@ -814,6 +826,8 @@ export default function AdminTreasureHuntScreen({
         bonusRewardValue: parseInt(locationBonusReward1) || 50,
         bonusRewardValue2: parseInt(locationBonusReward2) || 30,
         bonusRewardValue3: parseInt(locationBonusReward3) || 20,
+        requiresKey,
+        keysRequired: requiresKey ? parseInt(keysRequired) || 1 : 0,
       };
 
       // Only add hint if it has values
@@ -885,6 +899,56 @@ export default function AdminTreasureHuntScreen({
       console.error("Error fetching bombs:", error);
     }
     setLoading(false);
+  };
+
+  const handleManageKeys = async (location: TreasureLocation) => {
+    setLocationForKeys(location);
+    setIsAddingKey(false);
+    setLoading(true);
+    try {
+      const keys = await treasureHuntService.getKeys(selectedCampaign!.id);
+      setKeysForCampaign(keys);
+      setShowKeyModal(true);
+    } catch (error) {
+      console.error("Error fetching keys:", error);
+    }
+    setLoading(false);
+  };
+
+  const handleAddKeyAtCoordinate = async (coordinate: {
+    latitude: number;
+    longitude: number;
+  }) => {
+    if (!selectedCampaign) return;
+
+    try {
+      const newKey = await treasureHuntService.createKey({
+        campaignId: selectedCampaign.id,
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+      });
+
+      if (newKey) {
+        setKeysForCampaign((prev) => [...prev, newKey]);
+      }
+    } catch (error) {
+      console.error("Error adding key:", error);
+      Alert.alert(
+        t("error"),
+        tr("treasureHuntErrorAddingKey", "Failed to add key."),
+      );
+    }
+  };
+
+  const handleDeleteKey = async (keyId: string) => {
+    try {
+      const success = await treasureHuntService.deleteKey(keyId);
+      if (success) {
+        setKeysForCampaign((prev) => prev.filter((k) => k.id !== keyId));
+      }
+    } catch (error) {
+      console.error("Error deleting key:", error);
+    }
   };
 
   const handleAddBombAtCoordinate = async (coordinate: {
@@ -1204,6 +1268,12 @@ export default function AdminTreasureHuntScreen({
           onPress={() => handleManageBombs(location)}
         >
           <Bomb size={16} color="#FFF" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconButton, { backgroundColor: "#10B981" }]}
+          onPress={() => handleManageKeys(location)}
+        >
+          <Key size={16} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: colors.primary }]}
@@ -2279,6 +2349,42 @@ export default function AdminTreasureHuntScreen({
                   </View>
                 )}
 
+                <View style={[styles.formGroup, { marginTop: 10 }]}>
+                    <SectionLabel text={tr("treasureHuntSettings", "Extra Settings")} />
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: colors.card,
+                        padding: 12,
+                        borderRadius: 12,
+                        marginTop: 8
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Key size={18} color={colors.primary} style={{ marginRight: 10 }} />
+                            <Text style={{ color: colors.foreground, fontWeight: '600' }}>
+                                {tr("treasureHuntRequiresKey", "Requires Key to Open")}
+                            </Text>
+                        </View>
+                        <ModernSwitch 
+                            active={requiresKey}
+                            onPress={() => setRequiresKey(!requiresKey)}
+                        />
+                    </View>
+
+                    {requiresKey && (
+                        <View style={{ marginTop: 12 }}>
+                            <InputLabel text={tr("treasureHuntKeysNeeded", "Number of Keys Needed")} />
+                            <AdminInput 
+                                value={keysRequired}
+                                onChangeText={setKeysRequired}
+                                keyboardType="numeric"
+                                placeholder="1"
+                            />
+                        </View>
+                    )}
+                </View>
+
                 <TouchableOpacity
                   style={[
                     styles.saveButton,
@@ -2899,6 +3005,308 @@ export default function AdminTreasureHuntScreen({
                   </View>
                 ))
               )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Key Management Modal */}
+      <Modal visible={showKeyModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.background, height: "90%" },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 20,
+                paddingBottom: 5,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Key size={22} color={colors.primary} style={{ marginRight: 10 }} />
+                <Text
+                  style={{
+                    fontSize: 20,
+                    fontWeight: "900",
+                    color: colors.foreground,
+                    letterSpacing: 0.5
+                  }}
+                >
+                  {tr("treasureHuntManageKeys", "MANAGE KEYS")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowKeyModal(false)}
+                style={{
+                  backgroundColor: colors.card,
+                  padding: 8,
+                  borderRadius: 20,
+                }}
+              >
+                <X size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 20 }}
+            >
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
+                  {tr("treasureHuntCampaign", "CAMPAIGN")}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "bold",
+                    color: colors.foreground,
+                    marginTop: 4
+                  }}
+                >
+                  {selectedCampaign?.name.fr || selectedCampaign?.name["ar-tn"]}
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  height: 380,
+                  borderRadius: 24,
+                  overflow: "hidden",
+                  marginBottom: 20,
+                  borderWidth: 2,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                }}
+              >
+                <MapView
+                  style={{ flex: 1 }}
+                  initialRegion={{
+                    latitude: locationForKeys?.coordinates.latitude || 36.8065,
+                    longitude:
+                      locationForKeys?.coordinates.longitude || 10.1815,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
+                  }}
+                  onPress={(e) => {
+                    if (isAddingKey) {
+                      handleAddKeyAtCoordinate(e.nativeEvent.coordinate);
+                      setIsAddingKey(false);
+                    }
+                  }}
+                >
+                  {/* Current Treasure Markers for context */}
+                  {locations.map((loc) => (
+                    <Marker
+                      key={loc.id}
+                      coordinate={loc.coordinates}
+                      opacity={0.6}
+                    >
+                      <View
+                        style={{
+                          padding: 6,
+                          backgroundColor: loc.id === locationForKeys?.id ? colors.primary : colors.card,
+                          borderRadius: 20,
+                          borderWidth: 2,
+                          borderColor: loc.id === locationForKeys?.id ? "#FFF" : colors.border,
+                        }}
+                      >
+                        <Trophy size={16} color={loc.id === locationForKeys?.id ? "#FFF" : colors.textMuted} />
+                      </View>
+                    </Marker>
+                  ))}
+
+                  {/* Key Markers */}
+                  {keysForCampaign.map((key) => (
+                    <Marker
+                      key={key.id}
+                      coordinate={{
+                        latitude: key.latitude,
+                        longitude: key.longitude,
+                      }}
+                      onPress={() => handleDeleteKey(key.id)}
+                    >
+                      <View
+                        style={{
+                          padding: 8,
+                          backgroundColor: "#10B981",
+                          borderRadius: 22,
+                          borderWidth: 2,
+                          borderColor: "#FFF",
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.3,
+                          shadowRadius: 3,
+                          elevation: 4
+                        }}
+                      >
+                        <Key size={18} color="#FFF" />
+                      </View>
+                    </Marker>
+                  ))}
+                </MapView>
+
+                {/* Map Overlay for Adding Mode */}
+                {isAddingKey && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 15,
+                      left: 15,
+                      right: 15,
+                      backgroundColor: 'rgba(16, 185, 129, 0.95)',
+                      padding: 12,
+                      borderRadius: 12,
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>
+                      {tr("treasureHuntTapToPlaceKey", "Tap on the map to place a key")}
+                    </Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => setIsAddingKey(!isAddingKey)}
+                  style={{
+                    position: "absolute",
+                    bottom: 20,
+                    right: 20,
+                    backgroundColor: isAddingKey ? "#EF4444" : "#10B981",
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 5,
+                    elevation: 8,
+                  }}
+                >
+                  {isAddingKey ? (
+                    <X size={26} color="#FFF" />
+                  ) : (
+                    <Plus size={28} color="#FFF" />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ marginBottom: 30 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: colors.foreground }}>
+                    {tr("treasureHuntKeyList", "COLLECTIBLE KEYS")} ({keysForCampaign.length})
+                  </Text>
+                  {keysForCampaign.length > 0 && (
+                    <TouchableOpacity onPress={() => {
+                        Alert.alert(
+                            tr("confirm", "Confirm"),
+                            tr("treasureHuntClearAllKeysConfirm", "Are you sure you want to delete all keys?"),
+                            [
+                                { text: tr("cancel", "Cancel"), style: 'cancel' },
+                                { 
+                                    text: tr("delete", "Delete"), 
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        for (const key of keysForCampaign) {
+                                            await treasureHuntService.deleteKey(key.id);
+                                        }
+                                        setKeysForCampaign([]);
+                                    }
+                                }
+                            ]
+                        );
+                    }}>
+                        <Text style={{ color: '#EF4444', fontWeight: '700' }}>{tr("clearAll", "Clear All")}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {keysForCampaign.length === 0 ? (
+                  <View style={{
+                      padding: 40,
+                      alignItems: 'center',
+                      backgroundColor: colors.card,
+                      borderRadius: 20,
+                      borderWidth: 1.5,
+                      borderColor: colors.border,
+                      borderStyle: 'dashed'
+                  }}>
+                    <Key size={48} color={colors.textMuted} opacity={0.4} />
+                    <Text style={{ color: colors.textMuted, marginTop: 15, textAlign: 'center', fontWeight: '600' }}>
+                      {tr("treasureHuntNoKeysDescription", "No keys have been added to this campaign yet. Tap the green + button to place keys on the map.")}
+                    </Text>
+                  </View>
+                ) : (
+                  keysForCampaign.map((key, index) => (
+                    <View
+                      key={key.id}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        padding: 15,
+                        backgroundColor: colors.card,
+                        borderRadius: 16,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: "#10B981" + "15",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          marginRight: 15,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "800",
+                            color: "#10B981",
+                          }}
+                        >
+                          {index + 1}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: colors.foreground,
+                            fontWeight: "700",
+                            fontSize: 15,
+                          }}
+                        >
+                          {key.latitude.toFixed(6)}, {key.longitude.toFixed(6)}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                          {tr("treasureHuntKeyPoint", "Key Pickup Point")}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteKey(key.id)}
+                        style={{
+                            padding: 8,
+                            backgroundColor: '#EF4444' + '10',
+                            borderRadius: 10
+                        }}
+                      >
+                        <Trash2 size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+              </View>
             </ScrollView>
           </View>
         </View>

@@ -32,6 +32,7 @@ import {
   Sparkles,
   Zap,
   Info,
+  Bomb as BombIcon,
 } from "lucide-react-native";
 import {
   treasureHuntService,
@@ -93,10 +94,17 @@ const TreasureCampaignScreen: React.FC<{
       await fetchParticipation();
     } catch (error: any) {
       console.error("Enrollment error:", error);
-      Alert.alert(
-        t("treasureHuntError"),
-        error.message || t("treasureHuntEnrollError"),
-      );
+      if (error.message === 'ABANDONED') {
+        Alert.alert(
+          t("treasureHuntGameOver") || "Game Over!",
+          t("treasureHuntBoomDescLong") || "You were eliminated from this hunt."
+        );
+      } else {
+        Alert.alert(
+          t("treasureHuntError"),
+          error.message || t("treasureHuntEnrollError"),
+        );
+      }
     } finally {
       setEnrolling(false);
     }
@@ -424,7 +432,19 @@ const TreasureCampaignScreen: React.FC<{
 
       {/* Primary Action Button */}
       <SafeAreaView edges={["bottom"]} style={styles.footerActions}>
-        {!participation ? (
+        {participation?.status === 'abandoned' ? (
+          <View style={[styles.actionBtn, { opacity: 0.8 }]}>
+            <LinearGradient
+              colors={["#991B1B", "#450A0A"]}
+              style={styles.actionGradient}
+            >
+              <BombIcon size={22} color="#FFF" />
+              <Text style={styles.actionText}>
+                {t("treasureHuntEliminated") || "ELIMINATED"}
+              </Text>
+            </LinearGradient>
+          </View>
+        ) : !participation ? (
           <TouchableOpacity
             onPress={handleEnroll}
             disabled={enrolling}
