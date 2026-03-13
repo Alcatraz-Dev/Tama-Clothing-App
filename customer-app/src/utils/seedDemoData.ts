@@ -37,6 +37,28 @@ export const seedDemoData = async (t: any) => {
             products: [
                 { name: { fr: 'Chemise en lin', en: 'Linen Shirt', ar: 'قميص كتان' }, price: 65, category: 'Chemises', description: { fr: 'Idéal pour l\'été', en: 'Ideal for summer', ar: 'مثالي للصيف' }, image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' }
             ]
+        },
+        {
+            name: { fr: 'Electronique', en: 'Electronics', ar: 'إلكترونيات' },
+            image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800',
+            subs: [
+                { name: { fr: 'Téléphones', en: 'Phones', ar: 'هواتف' }, image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400' },
+                { name: { fr: 'Laptops', en: 'Laptops', ar: 'حواسيب محمول' }, image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400' }
+            ],
+            products: [
+                { name: { fr: 'iPhone 15 Pro', en: 'iPhone 15 Pro', ar: 'آيفون 15 برو' }, price: 4500, category: 'Téléphones', description: { fr: 'Dernier modèle Apple', en: 'Latest Apple model', ar: 'أحدث موديلات آبل' }, image: 'https://images.unsplash.com/photo-1695048133142-1a2048a53694?w=400' }
+            ]
+        },
+        {
+            name: { fr: 'Maison', en: 'Home & Living', ar: 'منزل' },
+            image: 'https://images.unsplash.com/photo-1484101403033-5710672169ba?w=800',
+            subs: [
+                { name: { fr: 'Décoration', en: 'Decoration', ar: 'ديكور' }, image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400' },
+                { name: { fr: 'Meubles', en: 'Furniture', ar: 'أثاث' }, image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=400' }
+            ],
+            products: [
+                { name: { fr: 'Lampe Moderne', en: 'Modern Lamp', ar: 'مصباح عصري' }, price: 120, category: 'Décoration', description: { fr: 'Design épuré', en: 'Clean design', ar: 'تصميم أنيق' }, image: 'https://images.unsplash.com/photo-1507473885765-e6ed657ad9b1?w=400' }
+            ]
         }
     ];
 

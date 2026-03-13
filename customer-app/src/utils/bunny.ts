@@ -1,4 +1,4 @@
-import { File, Directory } from 'expo-file-system';
+import { File, Directory, Paths } from 'expo-file-system';
 import { BUNNY_CONFIG } from '../config/api';
 
 /**
@@ -7,16 +7,9 @@ import { BUNNY_CONFIG } from '../config/api';
 const uploadWithXHR = (uri: string, uploadUrl: string, contentType: string): Promise<{ status: number; body: string }> => {
     return new Promise(async (resolve, reject) => {
         try {
-            // Use the new File API from expo-file-system
             const file = new File(uri);
-            const base64Content = await file.base64();
-            
-            // Convert base64 to binary
-            const binaryString = atob(base64Content);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
+            const arrayBuffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
 
             const xhr = new XMLHttpRequest();
             xhr.open('PUT', uploadUrl, true);
@@ -45,8 +38,8 @@ const uploadWithXHR = (uri: string, uploadUrl: string, contentType: string): Pro
  * Copy file to cache directory for persistence
  */
 const persistFileBeforeUpload = async (uri: string): Promise<string> => {
-    const cacheDir = new Directory();
-    if (!cacheDir.exists) return uri;
+    const cacheDir = Paths.cache;
+    if (!cacheDir) return uri;
     
     const fileName = `upload-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
@@ -96,8 +89,8 @@ const uploadFileToBunnyStorage = async (uri: string) => {
     // Step 3: Convert HEIC/HEIF to JPG if needed
     let finalUri = persistedUri;
     if (['heic', 'heif'].includes(fileExtension)) {
-        const cacheDir = new Directory();
-        if (cacheDir.exists) {
+        const cacheDir = Paths.cache;
+        if (cacheDir) {
             const jpegUri = `${cacheDir.uri}upload-${Date.now()}.jpg`;
             try {
                 const sourceFile = new File(persistedUri);

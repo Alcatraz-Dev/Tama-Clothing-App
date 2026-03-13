@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, ScrollView, Animated } from 'react-native';
 import { AppText as Text } from '../components/common/AppText';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase';
@@ -77,6 +77,23 @@ export default function FidelityScreen({ onBack, onNavigate, user, t, theme }: F
         }
     }
 
+    // --- VIP Tiers Logic ---
+    const getVipTier = (count: number) => {
+        if (count >= 50) return { id: 'platinum', name: 'Platinum', icon: '👑', color: ['#E5E4E2', '#B4B4B4'] as [string, string], next: null as null, min: 50 };
+        if (count >= 30) return { id: 'gold', name: 'Gold', icon: '✨', color: ['#FFDF00', '#D4AF37'] as [string, string], next: { min: 50, name: 'Platinum' } as { min: number; name: string } | null, min: 30 };
+        if (count >= 10) return { id: 'silver', name: 'Silver', icon: '💎', color: ['#C0C0C0', '#808080'] as [string, string], next: { min: 30, name: 'Gold' } as { min: number; name: string } | null, min: 10 };
+        return { id: 'bronze', name: 'Bronze', icon: '🛡️', color: ['#CD7F32', '#8B4513'] as [string, string], next: { min: 10, name: 'Silver' } as { min: number; name: string } | null, min: 0 };
+    };
+    const currentTier = getVipTier(ordersCount);
+    let progress = 1;
+    let nextTierText = '';
+    if (currentTier.next) {
+        progress = (ordersCount - currentTier.min) / (currentTier.next.min - currentTier.min);
+        nextTierText = `${currentTier.next.min - ordersCount} orders away from ${currentTier.next.name}`;
+    } else {
+        nextTierText = 'You have reached the highest tier!';
+    }
+
     return (
         <View style={[styles.container, { backgroundColor: isDark ? '#080808' : '#F9F9FB' }]}>
             {/* Header */}
@@ -107,6 +124,27 @@ export default function FidelityScreen({ onBack, onNavigate, user, t, theme }: F
                             {ordersCount}
                         </Text>
                     </View>
+
+                    {/* VIP Tiers Visual */}
+                    <View style={styles.tierContainer}>
+                        <LinearGradient
+                            colors={currentTier.color}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.tierBadge}
+                        >
+                            <Text style={styles.tierIcon}>{currentTier.icon}</Text>
+                            <Text style={styles.tierName}>{currentTier.name} VIP</Text>
+                        </LinearGradient>
+                        
+                        <View style={styles.progressWrapper}>
+                            <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#333' : '#EEE' }]}>
+                                <Animated.View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: currentTier.color[0] }]} />
+                            </View>
+                            <Text style={[styles.progressText, { color: isDark ? '#AAA' : '#666' }]}>{nextTierText}</Text>
+                        </View>
+                    </View>
+
                     <View style={{ paddingVertical: 20 }}>
                         <FlatList
                             data={cards}
@@ -247,6 +285,56 @@ const styles = StyleSheet.create({
     totalOrdersCount: {
         fontSize: 40,
         fontWeight: '900',
+    },
+    tierContainer: {
+        marginHorizontal: 20,
+        padding: 20,
+        borderRadius: 24,
+        backgroundColor: 'rgba(128,128,128,0.05)',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(128,128,128,0.1)',
+        marginBottom: 10,
+    },
+    tierBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginBottom: 16,
+    },
+    tierIcon: {
+        fontSize: 16,
+        marginRight: 8,
+    },
+    tierName: {
+        color: '#FFF',
+        fontWeight: '900',
+        fontSize: 16,
+        letterSpacing: 1,
+        textShadowColor: 'rgba(0,0,0,0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+    },
+    progressWrapper: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    progressBarBg: {
+        width: '100%',
+        height: 10,
+        borderRadius: 5,
+        overflow: 'hidden',
+        marginBottom: 8,
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 5,
+    },
+    progressText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     scratchCTA: {
         marginTop: 30,

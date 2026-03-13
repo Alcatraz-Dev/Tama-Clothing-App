@@ -229,6 +229,14 @@ function ProductListItem({ item, onEdit, onDuplicate, onDelete, colors, theme, l
                     <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
                         <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{category}</Text>
                     </View>
+                    {/* Niche Badge */}
+                    {(parent || (catObj && !catObj.parentId)) && (
+                        <View style={[sc.metaTag, { backgroundColor: isDark ? 'rgba(0,122,255,0.12)' : '#E1F0FF' }]}>
+                            <Text style={[sc.metaTagText, { color: '#007AFF' }]}>
+                                {getString(parent?.name || catObj?.name).toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
                     {item.brandName ? (
                         <View style={[sc.metaTag, { backgroundColor: isDark ? '#1A1A24' : '#F2F2F7' }]}>
                             <Text style={[sc.metaTagText, { color: colors.textMuted }]}>{item.brandName}</Text>
@@ -288,6 +296,8 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     const [categories, setCategories] = useState<any[]>([]);
     const [brands, setBrands] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedNicheId, setSelectedNicheId] = useState<string | null>(null);
+    const [niches, setNiches] = useState<any[]>([]);
 
     // ── Modal / Form ─────────────────────────────────────────────────────────────
     const [modalVisible, setModalVisible] = useState(false);
@@ -320,10 +330,44 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     const headerOpacity = scrollY.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' });
     const modalHeaderOpacity = modalScrollY.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' });
 
+    // ── Niche Helpers ─────────────────────────────────────────────────────────────
+    const getSelectedNicheName = () => {
+        const niche = niches.find(n => n.id === selectedNicheId);
+        return getString(niche?.name).toLowerCase();
+    };
+
+    const isFashion = () => {
+        const name = getSelectedNicheName();
+        return name.includes('fashion') || name.includes('femme') || name.includes('homme') || name.includes('vêtement') || name.includes('clothing') || name.includes('summer');
+    };
+
+    const isElectronics = () => {
+        const name = getSelectedNicheName();
+        return name.includes('electro') || name.includes('tech') || name.includes('téléphone') || name.includes('phone') || name.includes('laptop');
+    };
+
+    const isHomeLiving = () => {
+        const name = getSelectedNicheName();
+        return name.includes('home') || name.includes('maison') || name.includes('deco') || name.includes('meuble');
+    };
+
     // ── Data Fetch ─────────────────────────────────────────────────────────────────
     useEffect(() => {
         Promise.all([fetchProducts(), fetchCategories(), fetchBrands()]).finally(() => setLoading(false));
     }, []);
+
+    // Set initial niche for brand owners
+    useEffect(() => {
+        if (isBrandOwner && profileData?.businessCategory && niches.length > 0) {
+            const myNiche = niches.find(n => 
+                getString(n.name).toLowerCase() === profileData.businessCategory.toLowerCase() ||
+                n.id === profileData.businessCategory
+            );
+            if (myNiche) {
+                setSelectedNicheId(myNiche.id);
+            }
+        }
+    }, [isBrandOwner, profileData, niches]);
 
     async function fetchProducts() {
         try {
@@ -334,8 +378,20 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     }
 
     async function fetchCategories() {
-        const snap = await getDocs(collection(db, 'categories'));
-        setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        try {
+            const snap = await getDocs(collection(db, 'categories'));
+            const allCats: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCategories(allCats);
+            
+            // Identifying niches (top-level categories)
+            const parentCats = allCats.filter(c => !c.parentId);
+            setNiches(parentCats);
+            
+            // If no niche selected yet and we have niches, select the first one for admin
+            if (!isBrandOwner && !selectedNicheId && parentCats.length > 0) {
+                setSelectedNicheId(parentCats[0].id);
+            }
+        } catch (err) { console.error(err); }
     }
 
     async function fetchBrands() {
@@ -377,6 +433,17 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
         setProductColors(p.colors || []);
         setIsSoldOut(p.status === 'sold_out');
         setZone(p.zone || '');
+
+        // When editing, ensure the niche matches the product's category parent
+        if (p.categoryId) {
+                const cat = categories.find(c => c.id === p.categoryId) as any;
+                if (cat && cat.parentId) {
+                setSelectedNicheId(cat.parentId);
+            } else if (cat) {
+                 setSelectedNicheId(cat.id);
+            }
+        }
+        
         setModalVisible(true);
     }
 
@@ -568,15 +635,43 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                 }
             />
 
+            {/* Niche Selector (Admin only) */}
+            {!loading && !isBrandOwner && niches.length > 0 && (
+                <View style={{ backgroundColor: colors.background, paddingTop: insets.top + 70, paddingBottom: 10 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                        {niches.map(niche => (
+                            <TouchableOpacity
+                                key={niche.id}
+                                onPress={() => setSelectedNicheId(niche.id)}
+                                style={[sc.chip, {
+                                    backgroundColor: selectedNicheId === niche.id ? colors.foreground : (isDark ? '#1A1A24' : '#F2F2F7'),
+                                    borderColor: selectedNicheId === niche.id ? colors.foreground : colors.border,
+                                    paddingVertical: 12,
+                                    borderRadius: 16
+                                }]}
+                            >
+                                <Text style={[sc.chipText, { color: selectedNicheId === niche.id ? (isDark ? '#000' : '#FFF') : colors.foreground }]}>
+                                    {getString(niche.name)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
             {/* Product List */}
             {loading ? (
                 <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 60 }} />
             ) : (
                 <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
                     <Animated.FlatList
-                        data={products}
+                        data={products.filter(p => {
+                            if (!selectedNicheId) return true;
+                            const cat = categories.find(c => c.id === p.categoryId);
+                            return cat?.parentId === selectedNicheId || p.categoryId === selectedNicheId;
+                        })}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                        contentContainerStyle={[sc.listContent, { paddingTop: isBrandOwner ? insets.top + 80 : 10 }]}
                         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
                         scrollEventThrottle={16}
                         ListEmptyComponent={
@@ -727,28 +822,59 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                             <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('deliveryPrice').toUpperCase()}</Text>
                             <TextInput style={[sc.input, { backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]} value={deliveryPrice} onChangeText={setDeliveryPrice} keyboardType="numeric" placeholder="7.00" placeholderTextColor={colors.textMuted} />
 
+                            {/* ── Niche Selection (Admin only during creation) ─────────────── */}
+                            {!isBrandOwner && (
+                                <>
+                                    <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('niche').toUpperCase()}</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
+                                        {niches.map(niche => (
+                                            <TouchableOpacity
+                                                key={niche.id}
+                                                onPress={() => {
+                                                    setSelectedNicheId(niche.id);
+                                                    setCategoryId(''); // Reset category when niche changes
+                                                }}
+                                                style={[sc.chip, {
+                                                    backgroundColor: selectedNicheId === niche.id ? colors.foreground : (theme === 'dark' ? '#17171F' : '#FFF'),
+                                                    borderColor: selectedNicheId === niche.id ? colors.foreground : colors.border,
+                                                }]}
+                                            >
+                                                <Text style={[sc.chipText, { color: selectedNicheId === niche.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>
+                                                    {getString(niche.name)}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </>
+                            )}
+
                             {/* ── Category ──────────────── */}
                             <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('category').toUpperCase()}</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-                                {categories.map(cat => {
-                                    const parent = cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
-                                    const label = parent ? `${getString(parent.name)} > ${getString(cat.name)}` : getString(cat.name);
-
-                                    return (
-                                        <TouchableOpacity
-                                            key={cat.id}
-                                            onPress={() => setCategoryId(cat.id)}
-                                            style={[sc.chip, {
-                                                backgroundColor: categoryId === cat.id ? colors.foreground : (theme === 'dark' ? '#17171F' : '#FFF'),
-                                                borderColor: categoryId === cat.id ? colors.foreground : colors.border,
-                                            }]}
-                                        >
-                                            <Text style={[sc.chipText, { color: categoryId === cat.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>
-                                                {label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                {categories
+                                    .filter(c => c.parentId === selectedNicheId) // Only show subcategories of the selected niche
+                                    .map(cat => {
+                                        const label = getString(cat.name);
+                                        return (
+                                            <TouchableOpacity
+                                                key={cat.id}
+                                                onPress={() => setCategoryId(cat.id)}
+                                                style={[sc.chip, {
+                                                    backgroundColor: categoryId === cat.id ? colors.foreground : (theme === 'dark' ? '#17171F' : '#FFF'),
+                                                    borderColor: categoryId === cat.id ? colors.foreground : colors.border,
+                                                }]}
+                                            >
+                                                <Text style={[sc.chipText, { color: categoryId === cat.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>
+                                                    {label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                {categories.filter(c => c.parentId === selectedNicheId).length === 0 && (
+                                     <Text style={{ color: colors.textMuted, fontSize: 12, fontStyle: 'italic', paddingVertical: 10 }}>
+                                         {t('noSubcategoriesForNiche') || 'Aucune sous-catégorie pour ce créneau'}
+                                     </Text>
+                                )}
                             </ScrollView>
 
                             {/* ── Brand ──────────────── */}
@@ -794,58 +920,88 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                                 </ScrollView>
                             )}
 
-                            {/* ── Sizes ──────────────── */}
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                                <Text style={[sc.fieldLabel, { color: colors.textMuted, marginBottom: 0, marginTop: 0 }]}>{t('sizesLabel').toUpperCase()}</Text>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                    <TouchableOpacity onPress={() => setSizes(['XS', 'S', 'M', 'L', 'XL', 'XXL'])} style={[sc.quickBtn, { backgroundColor: theme === 'dark' ? '#17171F' : '#F0F0F5' }]}>
-                                        <Text style={[sc.quickBtnText, { color: colors.foreground }]}>+ ALPHA</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => setSizes(['36', '38', '40', '42', '44', '46'])} style={[sc.quickBtn, { backgroundColor: theme === 'dark' ? '#17171F' : '#F0F0F5' }]}>
-                                        <Text style={[sc.quickBtnText, { color: colors.foreground }]}>+ NUM</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                            <View style={sc.sizesGrid}>
-                                {['TU', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '36', '38', '40', '42', '44', '46'].map(s => (
-                                    <TouchableOpacity
-                                        key={s}
-                                        onPress={() => setSizes(sizes.includes(s) ? sizes.filter(sz => sz !== s) : [...sizes, s])}
-                                        style={[sc.sizeBtn, {
-                                            backgroundColor: sizes.includes(s) ? colors.foreground : (theme === 'dark' ? '#17171F' : '#FFF'),
-                                            borderColor: sizes.includes(s) ? colors.foreground : colors.border,
-                                        }]}
-                                    >
-                                        <Text style={[sc.sizeBtnText, { color: sizes.includes(s) ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>{s}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                            {/* ── Niche Specific Fields: Fashion (Sizes & Colors) ──────────────── */}
+                            {isFashion() && (
+                                <>
+                                    {/* ── Sizes ──────────────── */}
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                        <Text style={[sc.fieldLabel, { color: colors.textMuted, marginBottom: 0, marginTop: 0 }]}>{t('sizesLabel').toUpperCase()}</Text>
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity onPress={() => setSizes(['XS', 'S', 'M', 'L', 'XL', 'XXL'])} style={[sc.quickBtn, { backgroundColor: theme === 'dark' ? '#17171F' : '#F0F0F5' }]}>
+                                                <Text style={[sc.quickBtnText, { color: colors.foreground }]}>+ ALPHA</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => setSizes(['36', '38', '40', '42', '44', '46'])} style={[sc.quickBtn, { backgroundColor: theme === 'dark' ? '#17171F' : '#F0F0F5' }]}>
+                                                <Text style={[sc.quickBtnText, { color: colors.foreground }]}>+ NUM</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                    <View style={sc.sizesGrid}>
+                                        {['TU', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '36', '38', '40', '42', '44', '46'].map(s => (
+                                            <TouchableOpacity
+                                                key={s}
+                                                onPress={() => setSizes(sizes.includes(s) ? sizes.filter(sz => sz !== s) : [...sizes, s])}
+                                                style={[sc.sizeBtn, {
+                                                    backgroundColor: sizes.includes(s) ? colors.foreground : (theme === 'dark' ? '#17171F' : '#FFF'),
+                                                    borderColor: sizes.includes(s) ? colors.foreground : colors.border,
+                                                }]}
+                                            >
+                                                <Text style={[sc.sizeBtnText, { color: sizes.includes(s) ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>{s}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
 
-                            {/* ── Colors ──────────────── */}
-                            <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('colorsLabel').toUpperCase()}</Text>
-                            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                                <TextInput
-                                    style={[sc.input, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]}
-                                    placeholder={t('colorPlaceholder')}
-                                    placeholderTextColor={colors.textMuted}
-                                    value={colorInput}
-                                    onChangeText={setColorInput}
-                                    onSubmitEditing={addColor}
-                                />
-                                <TouchableOpacity onPress={addColor} style={[sc.addColorBtn, { backgroundColor: colors.foreground }]}>
-                                    <Text style={[sc.addColorBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('add')}</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <View style={sc.colorsWrap}>
-                                {productColors.map((c, i) => (
-                                    <TouchableOpacity key={i} onPress={() => setProductColors(productColors.filter(col => col !== c))}
-                                        style={[sc.colorChip, { backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', borderColor: colors.border }]}>
-                                        <View style={[sc.colorDot, { backgroundColor: c.startsWith('#') ? c : c.toLowerCase() }]} />
-                                        <Text style={[sc.colorChipText, { color: colors.foreground }]}>{c}</Text>
-                                        <X size={11} color={colors.textMuted} />
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                                    {/* ── Colors ──────────────── */}
+                                    <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('colorsLabel').toUpperCase()}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                                        <TextInput
+                                            style={[sc.input, { flex: 1, marginBottom: 0, backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]}
+                                            placeholder={t('colorPlaceholder')}
+                                            placeholderTextColor={colors.textMuted}
+                                            value={colorInput}
+                                            onChangeText={setColorInput}
+                                            onSubmitEditing={addColor}
+                                        />
+                                        <TouchableOpacity onPress={addColor} style={[sc.addColorBtn, { backgroundColor: colors.foreground }]}>
+                                            <Text style={[sc.addColorBtnText, { color: theme === 'dark' ? '#000' : '#FFF' }]}>{t('add')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={sc.colorsWrap}>
+                                        {productColors.map((c, i) => (
+                                            <TouchableOpacity key={i} onPress={() => setProductColors(productColors.filter(col => col !== c))}
+                                                style={[sc.colorChip, { backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', borderColor: colors.border }]}>
+                                                <View style={[sc.colorDot, { backgroundColor: c.startsWith('#') ? c : c.toLowerCase() }]} />
+                                                <Text style={[sc.colorChipText, { color: colors.foreground }]}>{c}</Text>
+                                                <X size={11} color={colors.textMuted} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </>
+                            )}
+
+                            {/* ── Electronics (Placeholder for tech specs) ──────────────── */}
+                            {isElectronics() && (
+                                <View style={{ marginTop: 10 }}>
+                                    <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>SPECIFICATIONS TECHNIQUES</Text>
+                                    <TextInput 
+                                        style={[sc.input, sc.textarea, { backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]} 
+                                        multiline 
+                                        placeholder="Ex: RAM: 8GB, CPU: i7..." 
+                                        placeholderTextColor={colors.textMuted}
+                                    />
+                                </View>
+                            )}
+
+                            {/* ── Home & Living (Dimensions) ──────────────── */}
+                            {isHomeLiving() && (
+                                <View style={{ marginTop: 10 }}>
+                                    <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>DIMENSIONS & POIDS</Text>
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <TextInput style={[sc.input, { flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]} placeholder="Largeur" placeholderTextColor={colors.textMuted} />
+                                        <TextInput style={[sc.input, { flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]} placeholder="Hauteur" placeholderTextColor={colors.textMuted} />
+                                        <TextInput style={[sc.input, { flex: 1, backgroundColor: theme === 'dark' ? '#17171F' : '#FFF', color: colors.foreground, borderColor: colors.border }]} placeholder="Poids" placeholderTextColor={colors.textMuted} />
+                                    </View>
+                                </View>
+                            )}
 
                             {/* ── Zone ────────────────── */}
                             <Text style={[sc.fieldLabel, { color: colors.textMuted }]}>{t('zone') || 'ZONE / VILLE'}</Text>

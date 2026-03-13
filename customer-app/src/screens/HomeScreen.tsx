@@ -30,6 +30,7 @@ import {
     RotateCcw,
     Search,
     ChevronRight,
+    Sparkles,
 } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 
@@ -679,6 +680,7 @@ export default function HomeScreen({
                     </View>
                 </Animated.ScrollView>
             </BlurTargetView>
+
         </View>
     );
 }

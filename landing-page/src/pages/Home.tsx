@@ -22,7 +22,7 @@ export function Home() {
 
   return (
     <div className={`page-wrapper ${isRTL ? 'rtl' : 'ltr'}`}>
-      {/* Hero Section */}
+      {/* Hero Section - Refined for Premium Showcase */}
       <section className="hero-premium">
         <div className="container">
           <div className="hero-content-premium">
@@ -30,10 +30,6 @@ export function Home() {
               <div className="hero-badge animate-float">
                 <span className="badge-dot"></span>
                 {t('hero.badge')}
-              </div>
-
-              <div className="hero-logo-container">
-                <img src="/logo.png" alt="Bey3a Logo" className="hero-logo-big animate-bounce" />
               </div>
               
               <h1 className="hero-title">
@@ -46,7 +42,7 @@ export function Home() {
               </p>
               
               <div className="hero-actions">
-                <a href="#download" className="btn btn-premium animate-pulse">
+                <a href="#download" className="btn btn-premium">
                   <Smartphone size={20} />
                   <span>{t('nav.download')}</span>
                 </a>
@@ -68,17 +64,30 @@ export function Home() {
               </div>
             </div>
 
-            <div className="hero-visual animate-slide-up">
+            <div className="hero-visual animate-up">
               <div className="mockup-container">
                 <div className="mockup-bg-glow"></div>
-                <img src="/hero-mockup.png" alt="Bey3a App Hero" className="app-mockup-main" />
+                <div className="iphone-wrapper">
+                  <div className="iphone-inner">
+                    <img src="/hero-mockup.png" alt="Bey3a App Hero" className="app-mockup-main" />
+                  </div>
+                </div>
+                {/* Decorative Elements */}
+                <div className="floating-card card-1 animate-float">
+                  <Zap size={18} className="text-accent" />
+                  <span>Flash Drops Live</span>
+                </div>
+                <div className="floating-card card-2 animate-float" style={{ animationDelay: '1s' }}>
+                  <Star size={18} className="text-warning" />
+                  <span>#1 Fashion App</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Showcase */}
+      {/* Showcase Sections - Match Figma Template */}
       <section id="features" className="section-premium bg-soft">
         <div className="container">
           <div className="section-header-premium">
@@ -86,39 +95,45 @@ export function Home() {
             <p className="section-subtitle-premium">{t('features.subtitle')}</p>
           </div>
 
-          {/* Feature 1: Social Experience */}
-          <div className="showcase-grid">
-            <div className={`showcase-content ${isRTL ? 'order-2' : ''} animate-slide-left`}>
-              <div className="feature-tag">SOCIAL</div>
+          {/* Showcase 1: Personalization / Baby Gear */}
+          <div className="showcase-grid animate-up">
+            <div className={`showcase-content ${isRTL ? 'order-2' : ''}`}>
+              <div className="feature-tag">PERSONALIZED</div>
               <h3 className="showcase-title">{t('features.live')}</h3>
               <p className="showcase-description">{t('features.liveDesc')}</p>
-              <ul className="showcase-list">
-                <li><Check size={18} /> {t('live.p1')}</li>
-                <li><Check size={18} /> {t('live.p2')}</li>
-                <li><Check size={18} /> {t('live.p3')}</li>
-              </ul>
+              <div className="feature-card-premium" style={{ border: 'none', padding: '1.5rem 0' }}>
+                <ul className="showcase-list">
+                  <li><Check size={18} /> {t('live.p1')}</li>
+                  <li><Check size={18} /> {t('live.p2')}</li>
+                  <li><Check size={18} /> {t('live.p3')}</li>
+                </ul>
+              </div>
             </div>
-            <div className={`showcase-visual ${isRTL ? 'order-1' : ''} animate-slide-right`}>
+            <div className={`showcase-visual ${isRTL ? 'order-1' : ''} glass-card`}>
+               <div className="glow-effect"></div>
                <img src="/live-shopping.png" alt="Live Shopping" className="showcase-mockup" />
             </div>
           </div>
 
-          {/* Feature 2: Treasure Hunt */}
-          <div className="showcase-grid reverse mt-xl">
-             <div className="showcase-visual animate-slide-left">
+          {/* Showcase 2: Process / Rental Flow */}
+          <div className="showcase-grid reverse mt-xl animate-up">
+             <div className="showcase-visual glass-card">
+                <div className="glow-effect variant-2"></div>
                 <img src="/treasure-hunt.png" alt="Treasure Hunt" className="showcase-mockup" />
              </div>
-             <div className="showcase-content animate-slide-right">
+             <div className="showcase-content">
                 <div className="feature-tag tag-warning">GAMIFIED</div>
                 <h3 className="showcase-title">{t('features.treasure')}</h3>
                 <p className="showcase-description">
                   {t('features.treasureDesc')}
                 </p>
-                <ul className="showcase-list">
-                  <li><Check size={18} /> {t('treasure.p1')}</li>
-                  <li><Check size={18} /> {t('treasure.p2')}</li>
-                  <li><Check size={18} /> {t('treasure.p3')}</li>
-                </ul>
+                <div className="feature-card-premium" style={{ border: 'none', padding: '1.5rem 0' }}>
+                  <ul className="showcase-list">
+                    <li><Check size={18} /> {t('treasure.p1')}</li>
+                    <li><Check size={18} /> {t('treasure.p2')}</li>
+                    <li><Check size={18} /> {t('treasure.p3')}</li>
+                  </ul>
+                </div>
                 <div className="flex gap-md mt-lg">
                    <button className="btn btn-premium">{t('shop.discover')}</button>
                 </div>

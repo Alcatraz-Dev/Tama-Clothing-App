@@ -73,6 +73,8 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
     const [parentId, setParentId] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [showParentPicker, setShowParentPicker] = useState(false);
+    const [selectedNicheId, setSelectedNicheId] = useState<string | null>(null);
+    const [niches, setNiches] = useState<any[]>([]);
     const scrollY = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -82,15 +84,25 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
     const fetchCategories = async () => {
         try {
             const snap = await getDocs(collection(db, 'categories'));
-            setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const allCats: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCategories(allCats);
+            
+            // Identifying niches (top-level categories)
+            const parentCats = allCats.filter(c => !c.parentId);
+            setNiches(parentCats);
+            
+            // Default select the first niche if none selected
+            if (!selectedNicheId && parentCats.length > 0) {
+                setSelectedNicheId(parentCats[0].id);
+            }
         } catch (error) {
             console.error('Error fetching categories:', error);
         }
     };
 
     // Split into top-level and subcategories
-    const topLevelCats = categories.filter(c => !c.parentId);
-    const getSubcategories = (parentId: string) => categories.filter(c => c.parentId === parentId);
+    const topLevelCats = categories.filter((c: any) => !c.parentId);
+    const getSubcategories = (parentId: string) => categories.filter((c: any) => c.parentId === parentId);
 
     const getName = (cat: any) => {
         if (typeof cat.name === 'string') return cat.name;
@@ -335,18 +347,57 @@ export default function AdminCategoriesScreen({ onBack, t }: any) {
                 }
             />
 
+            {/* Niche Selector */}
+            {niches.length > 0 && (
+                <View style={{ backgroundColor: colors.background, paddingTop: insets.top + 70, paddingBottom: 10 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                        <TouchableOpacity
+                            onPress={() => setSelectedNicheId(null)}
+                            style={[sc.chip, {
+                                backgroundColor: selectedNicheId === null ? colors.foreground : (isDark ? '#1A1A24' : '#F2F2F7'),
+                                borderColor: selectedNicheId === null ? colors.foreground : colors.border,
+                                paddingVertical: 12,
+                                borderRadius: 16,
+                                marginRight: 10
+                            }]}
+                        >
+                            <Text style={[sc.chipText, { color: selectedNicheId === null ? (isDark ? '#000' : '#FFF') : colors.foreground }]}>
+                                {t('all').toUpperCase()}
+                            </Text>
+                        </TouchableOpacity>
+                        {niches.map(niche => (
+                            <TouchableOpacity
+                                key={niche.id}
+                                onPress={() => setSelectedNicheId(niche.id)}
+                                style={[sc.chip, {
+                                    backgroundColor: selectedNicheId === niche.id ? colors.foreground : (isDark ? '#1A1A24' : '#F2F2F7'),
+                                    borderColor: selectedNicheId === niche.id ? colors.foreground : colors.border,
+                                    paddingVertical: 12,
+                                    borderRadius: 16,
+                                    marginRight: 10
+                                }]}
+                            >
+                                <Text style={[sc.chipText, { color: selectedNicheId === niche.id ? (isDark ? '#000' : '#FFF') : colors.foreground }]}>
+                                    {getName(niche)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
             <Animated.ScrollView
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     { useNativeDriver: false }
                 )}
                 scrollEventThrottle={16}
-                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
+                contentContainerStyle={[sc.listContent, { paddingTop: 10 }]}
             >
-                {topLevelCats.length === 0 ? (
+                {topLevelCats.filter(c => !selectedNicheId || c.id === selectedNicheId).length === 0 ? (
                     <EmptyState message={t('noResults')} />
                 ) : (
-                    topLevelCats.map(renderCategory)
+                    topLevelCats.filter(c => !selectedNicheId || c.id === selectedNicheId).map(renderCategory)
                 )}
             </Animated.ScrollView>
 
@@ -529,6 +580,8 @@ const sc = StyleSheet.create({
         borderWidth: 1.5,
         overflow: 'hidden',
     },
+    chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, marginRight: 10, borderWidth: 1 },
+    chipText: { fontSize: 12, fontWeight: '700' },
     pickerImg: { width: '100%', height: '100%' },
     pickerPlaceholder: { alignItems: 'center', gap: 10 },
     pickerText: { fontSize: 10, fontWeight: '800' },

@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     Alert,
     StyleSheet,
+    Animated,
     Platform,
     Linking,
 } from 'react-native';
@@ -17,9 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { doc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase';
-import { ChevronLeft, Upload, CheckCircle2, Building2, Store, Star, Zap, Shield, ArrowRight, Instagram, Facebook, Phone, Mail, MapPin, FileText, Download } from 'lucide-react-native';
+import { ChevronLeft, Upload, CheckCircle2, XCircle, Clock, Building2, Store, Star, Zap, Shield, ArrowRight, ArrowDown, ArrowUp, Instagram, Facebook, Phone, Mail, MapPin, FileText, Download, RefreshCw, AlertTriangle, CreditCard } from 'lucide-react-native';
 import { Theme } from '../theme';
 import { uploadToBunny } from '../utils/bunny';
 
@@ -587,6 +588,29 @@ export default function VendorRegistrationScreen({
     // Payment Proof
     const [paymentProof, setPaymentProof] = useState<string | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<'bank' | 'post' | null>(null);
+    const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+    const [paymentProofForApproval, setPaymentProofForApproval] = useState<string | null>(null);
+    const [uploadingPaymentProof, setUploadingPaymentProof] = useState(false);
+
+    // ── Vendor status check ────────────────────────────────────────────────────
+    // If user already has a pending/approved/rejected vendor record, show status screen
+    const existingVendorData = profileData?.vendorData;
+    const existingStatus = existingVendorData?.status; // 'pending' | 'approved' | 'rejected'
+
+    // ── Helper Functions ────────────────────────────────────────────────────────
+    
+    // Get the final category value (handles 'other' category)
+    const getFinalCategory = () => {
+        if (businessCategory === 'other' && customCategory) {
+            return customCategory;
+        }
+        return businessCategory;
+    };
+
+    // Upload image to cloud
+    const uploadImage = async (uri: string): Promise<string> => {
+        return uploadToBunny(uri);
+    };
 
     // Pick image for document
     const pickImage = async (type: 'license' | 'idFront' | 'idBack' | 'front' | 'payment') => {
@@ -614,11 +638,6 @@ export default function VendorRegistrationScreen({
             console.log('Image picker error:', error);
             Alert.alert(t('error') || 'Error', error.message || 'Could not select image');
         }
-    };
-
-    // Upload image to cloud
-    const uploadImage = async (uri: string): Promise<string> => {
-        return uploadToBunny(uri);
     };
 
     // Validate form
@@ -691,18 +710,18 @@ export default function VendorRegistrationScreen({
             let idCardFrontUrl = null;
             let idCardBackUrl = null;
             let frontUrl = null;
-
+    
             if (businessLicense) licenseUrl = await uploadImage(businessLicense);
             if (idCardFront) idCardFrontUrl = await uploadImage(idCardFront);
             if (idCardBack) idCardBackUrl = await uploadImage(idCardBack);
             if (storeFront) frontUrl = await uploadImage(storeFront);
-
+    
             let paymentProofUrl = null;
             if (paymentProof) paymentProofUrl = await uploadImage(paymentProof);
-
+    
             // Find selected tier info to verify price
             const selectedInfo = VENDOR_TIERS.find(t => t.id === selectedTier);
-
+    
             const vendorData = {
                 userId: uid,
                 tier: selectedTier,
@@ -735,10 +754,10 @@ export default function VendorRegistrationScreen({
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
-
+    
             // Save vendor application
             await addDoc(collection(db, 'vendorApplications'), vendorData);
-
+    
             // Update user profile with vendor role
             await updateProfile({
                 role: 'vendor',
@@ -748,7 +767,7 @@ export default function VendorRegistrationScreen({
                     status: 'pending',
                 }
             });
-
+    
             Alert.alert(
                 t('successTitle') || 'Success',
                 t('vendorApplicationSubmitted') || 'Your vendor application has been submitted! We will review it within 2-3 business days.',
@@ -769,6 +788,379 @@ export default function VendorRegistrationScreen({
             setLoading(false);
         }
     };
+
+    const handleDeactivatePlan = () => {
+
+        Alert.alert(
+            t('deactivatePlan') || 'Désactiver le plan',
+            t('deactivatePlanConfirm') || 'Êtes-vous sûr de vouloir désactiver votre plan vendeur ?',
+            [
+                { text: t('cancel') || 'Annuler', style: 'cancel' },
+                {
+                    text: t('deactivate') || 'Désactiver',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await updateProfile({ vendorData: null, role: 'customer' });
+                            Alert.alert(t('successTitle') || 'Succès', t('planDeactivated') || 'Votre plan a été désactivé.');
+                            onBack();
+                        } catch (e) {
+                            Alert.alert(t('error') || 'Erreur', t('failedToSave') || 'Échec de la mise à jour.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleChangePlan = () => {
+        Alert.alert(
+            t('changePlan') || 'Changer de plan',
+            t('changePlanDesc') || 'Pour changer de plan, veuillez contacter notre équipe ou soumettre une nouvelle demande.',
+            [{ text: 'OK' }]
+        );
+    };
+
+    const handleSubmitPaymentProof = async () => {
+        if (!paymentProofForApproval) return;
+        setUploadingPaymentProof(true);
+        try {
+            const proofUrl = await uploadImage(paymentProofForApproval);
+            
+            // Find application doc
+            const q = query(collection(db, 'vendorApplications'), where('userId', '==', user?.uid), where('status', '==', 'approved'));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                const appDoc = querySnapshot.docs[0];
+                await updateDoc(doc(db, 'vendorApplications', appDoc.id), {
+                    paymentProof: proofUrl,
+                    updatedAt: serverTimestamp()
+                });
+
+                // Also update user vendorData to reflect that payment proof is uploaded
+                await updateProfile({
+                    vendorData: {
+                        ...existingVendorData,
+                        paymentProofUrl: proofUrl
+                    }
+                });
+
+                Alert.alert(t('successTitle') || 'Succès', t('vendorPaymentSent') || 'Preuve de paiement envoyée avec succès.');
+                setPaymentProofForApproval(null);
+            } else {
+                Alert.alert(t('error') || 'Erreur', t('adminVendorLoadError') || 'Impossible de trouver votre demande.');
+            }
+        } catch (e) {
+            console.error(e);
+            Alert.alert(t('error') || 'Erreur', t('failedToSave') || 'Échec de l\'envoi.');
+        } finally {
+            setUploadingPaymentProof(false);
+        }
+    };
+
+    // ── Status screen for already-registered vendors ────────────────────────────
+    if (existingStatus === 'pending') {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                        <ChevronLeft size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('becomeVendor') || 'Vendeur'}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', padding: 32, paddingBottom: 60 }}>
+                    <View style={[styles.statusIconCircle, { backgroundColor: isDark ? '#2A2520' : '#FFF8F0', borderColor: '#F59E0B' }]}>
+                        <Clock size={48} color="#F59E0B" />
+                    </View>
+                    <Text style={[styles.statusTitle, { color: colors.foreground }]}>
+                        {t('applicationPending') || 'Demande en cours d\'examen'}
+                    </Text>
+                    <Text style={[styles.statusDesc, { color: colors.textMuted }]}>
+                        {t('applicationPendingDesc') || 'Votre demande est en cours de vérification. Nous vous contacterons sous 2-3 jours ouvrables.'}
+                    </Text>
+
+                    {/* Info card */}
+                    <View style={[styles.statusCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: '#F59E0B30', width: '100%' }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <Text style={[styles.statusCardLabel, { color: colors.textMuted }]}>{t('plan') || 'Plan'}</Text>
+                            <Text style={[styles.statusCardValue, { color: accent }]}>{existingVendorData?.tier?.toUpperCase() || '—'}</Text>
+                        </View>
+                        <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={[styles.statusCardLabel, { color: colors.textMuted }]}>{t('businessName') || 'Entreprise'}</Text>
+                            <Text style={[styles.statusCardValue, { color: colors.foreground }]}>{existingVendorData?.businessName || '—'}</Text>
+                        </View>
+                    </View>
+
+                    <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', marginTop: 8 }]}>
+                        <Clock size={14} color="#D97706" />
+                        <Text style={{ color: '#D97706', fontWeight: '700', marginLeft: 6, fontSize: 13 }}>{t('vendorPending') || 'En attente de confirmation'}</Text>
+                    </View>
+
+                    <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 18 }}>
+                        {'⏱ Délai de réponse : 2 à 3 jours ouvrables\nVous recevrez une notification dès que votre demande sera traitée.'}
+                    </Text>
+                </ScrollView>
+            </View>
+        );
+    }
+
+    if (existingStatus === 'approved' || existingStatus === 'active') {
+        const currentTier = VENDOR_TIERS.find(t => t.id === existingVendorData?.tier);
+        const isActive = existingStatus === 'active';
+        const hasPaymentProofUploaded = !!existingVendorData?.paymentProofUrl;
+
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                        <ChevronLeft size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('myVendorPlan') || 'Mon Plan Vendeur'}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }}>
+                    <View style={[styles.statusIconCircle, { backgroundColor: isDark ? '#0D2520' : '#F0FFF8', borderColor: isActive ? '#10B981' : '#3B82F6', alignSelf: 'center' }]}>
+                        <CheckCircle2 size={48} color={isActive ? '#10B981' : '#3B82F6'} />
+                    </View>
+                    <Text style={[styles.statusTitle, { color: colors.foreground, textAlign: 'center' }]}>
+                        {isActive
+                            ? (t('vendorPlanActiveTitle') || 'Plan actif !')
+                            : (t('applicationApproved') || 'Demande approuvée !')
+                        }
+                    </Text>
+                    <Text style={[styles.statusDesc, { color: colors.textMuted, textAlign: 'center' }]}>
+                        {isActive
+                            ? (t('vendorPlanActiveDesc') || 'Votre plan vendeur est confirmé et actif.')
+                            : (t('applicationApprovedDesc') || 'Félicitations ! Votre demande a été approuvée.')
+                        }
+                    </Text>
+
+                    {currentTier && (
+                        <View style={[styles.activePlanCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: accent }]}>
+                            <View style={styles.activePlanHeader}>
+                                <View>
+                                    <Text style={[styles.activePlanLabel, { color: colors.textMuted }]}>{t('currentPlan') || 'Plan actuel'}</Text>
+                                    <Text style={[styles.activePlanName, { color: colors.foreground }]}>{t(currentTier.name) || currentTier.name}</Text>
+                                </View>
+                                <View style={[styles.activePlanBadge, { backgroundColor: accent + '20' }]}>
+                                    <Text style={[styles.activePlanBadgeText, { color: accent }]}>
+                                        {currentTier.price === 0 ? t('free') || 'Gratuit' : `${currentTier.price} TND/${t('month') || 'mois'}`}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 16 }} />
+                            <View style={{ gap: 8 }}>
+                                {currentTier.features.slice(0, 4).map((f, i) => (
+                                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <CheckCircle2 size={14} color={accent} />
+                                        <Text style={{ color: colors.foreground, fontSize: 13 }}>{t(f) || f}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                            {isActive && (
+                                <>
+                                    <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 16 }} />
+                                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                                        <TouchableOpacity
+                                            style={[styles.planActionBtn, { borderColor: accent, backgroundColor: accent }]}
+                                            onPress={handleChangePlan}
+                                        >
+                                            <RefreshCw size={16} color="#FFF" />
+                                            <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>{t('changePlan') || 'Changer'}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.planActionBtn, { borderColor: '#EF4444', backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}
+                                            onPress={handleDeactivatePlan}
+                                        >
+                                            <XCircle size={16} color="#EF4444" />
+                                            <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>{t('deactivate') || 'Désactiver'}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+                    )}
+
+                    {/* ─── Payment Proof Section (only for approved, not yet active) ─── */}
+                    {!isActive && currentTier && currentTier.price > 0 && (
+                        <View style={[styles.paymentProofSection, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: '#3B82F640' }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                                <CreditCard size={20} color="#3B82F6" />
+                                <Text style={{ color: colors.foreground, fontWeight: '700', fontSize: 16 }}>
+                                    {t('vendorPaymentProofTitle') || 'Preuve de paiement'}
+                                </Text>
+                            </View>
+                            <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 19 }}>
+                                {t('vendorPaymentProofDesc') || 'Veuillez télécharger la preuve de paiement de votre plan pour finaliser l\'activation.'}
+                            </Text>
+
+                            {hasPaymentProofUploaded ? (
+                                <>
+                                    {/* Already submitted — waiting for admin */}
+                                    <View style={[styles.paymentProofWaiting, { backgroundColor: isDark ? '#1A1A10' : '#FFFBEB', borderColor: '#F59E0B40' }]}>
+                                        <Clock size={20} color="#F59E0B" />
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 14, marginBottom: 4 }}>
+                                                {t('vendorPaymentSent') || 'Preuve envoyée'}
+                                            </Text>
+                                            <Text style={{ color: isDark ? '#FDE68A' : '#92400E', fontSize: 13, lineHeight: 19 }}>
+                                                {t('vendorPaymentSentDesc') || 'Votre preuve de paiement a été envoyée. L\'administrateur va vérifier et activer votre plan.'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Upload payment proof */}
+                                    <TouchableOpacity
+                                        style={[styles.uploadBox, {
+                                            backgroundColor: isDark ? '#0D0D1A' : '#F5F5FF',
+                                            borderColor: paymentProofForApproval ? '#10B981' : colors.border
+                                        }]}
+                                        onPress={async () => {
+                                            try {
+                                                const result = await ImagePicker.launchImageLibraryAsync({
+                                                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                                    quality: 0.8,
+                                                    allowsEditing: false,
+                                                });
+                                                if (!result.canceled && result.assets[0]) {
+                                                    setPaymentProofForApproval(result.assets[0].uri);
+                                                }
+                                            } catch (e: any) {
+                                                Alert.alert(t('error') || 'Error', e.message || 'Could not select image');
+                                            }
+                                        }}
+                                    >
+                                        {paymentProofForApproval ? (
+                                            <View style={{ alignItems: 'center' }}>
+                                                <Image source={{ uri: paymentProofForApproval }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
+                                                <Text style={{ color: '#10B981', fontSize: 13, marginTop: 8, fontWeight: '600' }}>
+                                                    {t('vendorChangeImage') || 'Appuyez pour changer'}
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                                                <Upload size={32} color={colors.textMuted} />
+                                                <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8 }}>
+                                                    {t('vendorUploadPaymentProof') || 'Télécharger la preuve de paiement'}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {/* Submit Button */}
+                                    <TouchableOpacity
+                                        style={[styles.submitPaymentBtn, {
+                                            backgroundColor: paymentProofForApproval ? '#10B981' : colors.border,
+                                            opacity: paymentProofForApproval && !uploadingPaymentProof ? 1 : 0.5,
+                                        }]}
+                                        disabled={!paymentProofForApproval || uploadingPaymentProof}
+                                        onPress={handleSubmitPaymentProof}
+                                    >
+                                        {uploadingPaymentProof ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <ArrowRight size={20} color="#FFF" />
+                                        )}
+                                        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 16, marginLeft: 8 }}>
+                                            {t('vendorSendPaymentProof') || 'Envoyer la preuve de paiement'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Free plan approved — already active info */}
+                    {!isActive && currentTier && currentTier.price === 0 && (
+                        <View style={[styles.paymentProofSection, { backgroundColor: isDark ? '#0A1A0A' : '#F0FFF4', borderColor: '#10B98140' }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <CheckCircle2 size={20} color="#10B981" />
+                                <Text style={{ color: '#10B981', fontWeight: '700', fontSize: 15 }}>
+                                    {t('vendorFreePlanActive') || 'Plan gratuit actif !'}
+                                </Text>
+                            </View>
+                            <Text style={{ color: isDark ? '#A7F3D0' : '#166534', fontSize: 13, marginTop: 8, lineHeight: 19 }}>
+                                {t('vendorFreePlanActiveDesc') || 'Votre plan gratuit est déjà activé. Vous pouvez commencer à ajouter vos produits.'}
+                            </Text>
+                        </View>
+                    )}
+
+                    <View style={[styles.statusCard, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: colors.border, marginTop: 16 }]}>
+                        <Text style={[styles.statusCardLabel, { color: colors.textMuted }]}>{t('businessName') || 'Entreprise'}</Text>
+                        <Text style={[styles.statusCardValue, { color: colors.foreground }]}>{existingVendorData?.businessName || '—'}</Text>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    }
+
+    if (existingStatus === 'rejected') {
+        const rejectionReason = existingVendorData?.rejectionReason;
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+                        <ChevronLeft size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('becomeVendor') || 'Vendeur'}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 28, paddingBottom: 60 }}>
+                    <View style={[styles.statusIconCircle, { backgroundColor: isDark ? '#201515' : '#FFF5F5', borderColor: '#EF4444', marginTop: 20 }]}>
+                        <XCircle size={48} color="#EF4444" />
+                    </View>
+                    <Text style={[styles.statusTitle, { color: colors.foreground }]}>{t('applicationRejected') || 'Demande refusée'}</Text>
+                    <Text style={[styles.statusDesc, { color: colors.textMuted }]}>
+                        {t('applicationRejectedDesc') || "Votre demande n'a pas pu être acceptée."}
+                    </Text>
+
+                    {/* Rejection reason card */}
+                    {rejectionReason ? (
+                        <View style={[
+                            styles.rejectionReasonCard,
+                            { backgroundColor: isDark ? '#1A0808' : '#FFF5F5', borderColor: '#EF444440' }
+                        ]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                <AlertTriangle size={18} color="#EF4444" />
+                                <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 14 }}>
+                                    {t('rejectionReason') || 'Raison du refus'}
+                                </Text>
+                            </View>
+                            <Text style={{ color: isDark ? '#FCA5A5' : '#7F1D1D', fontSize: 14, lineHeight: 22 }}>
+                                {rejectionReason}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={[styles.rejectionReasonCard, { backgroundColor: isDark ? '#1A1A1A' : '#F5F5F5', borderColor: colors.border }]}>
+                            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
+                                {t('contactSupport') || 'Veuillez contacter notre équipe pour plus d\'informations.'}
+                            </Text>
+                        </View>
+                    )}
+
+                    <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 19 }}>
+                        {t('reapplyHint') || 'Corrigez les problèmes mentionnés ci-dessus et soumettez une nouvelle demande.'}
+                    </Text>
+
+                    <TouchableOpacity
+                        style={[styles.reapplyBtn, { backgroundColor: accent }]}
+                        onPress={async () => {
+                            await updateProfile({ vendorData: null });
+                        }}
+                    >
+                        <RefreshCw size={18} color="#FFF" />
+                        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15, marginLeft: 8 }}>{t('reapply') || 'Nouvelle demande'}</Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </View>
+        );
+    }
+
 
     // Generate and download PDF contract
     const generateContractPDF = async () => {
@@ -849,13 +1241,6 @@ export default function VendorRegistrationScreen({
         return categories[category] || category;
     };
 
-    // Get the final category value (handles 'other' category)
-    const getFinalCategory = () => {
-        if (businessCategory === 'other' && customCategory) {
-            return customCategory;
-        }
-        return businessCategory;
-    };
 
     const categories = [
         'fashion', 'electronics', 'food', 'services', 'handmade', 
@@ -1429,14 +1814,15 @@ export default function VendorRegistrationScreen({
                                 return (
                                     <View style={styles.documentSection}>
                                         <Text style={[styles.inputLabel, { color: colors.foreground, fontSize: 18, marginTop: 16, marginBottom: 8 }]}>
-                                            {t('paymentDetails') || 'Payment Details'}
+                                            {t('paymentDetails') || 'Paiement du plan'}
                                         </Text>
                                         <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
-                                            {t('paymentAmount') || 'Amount to Pay:'} {selectedInfo.price} TND / {t('month') || 'month'}
+                                            {t('paymentAmount') || 'Montant à payer :'}{' '}
+                                            <Text style={{ color: accent, fontWeight: '700' }}>{selectedInfo.price} TND / {t('month') || 'mois'}</Text>
                                         </Text>
                                         
                                         <Text style={[styles.inputLabel, { color: colors.foreground, marginTop: 12 }]}>
-                                            {t('selectPaymentMethod') || 'Select Payment Method'} *
+                                            {t('selectPaymentMethod') || 'Méthode de paiement'} *
                                         </Text>
                                         <View style={styles.paymentMethods}>
                                             <TouchableOpacity 
@@ -1444,12 +1830,13 @@ export default function VendorRegistrationScreen({
                                                     styles.paymentMethodBtn, 
                                                     { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentMethod === 'bank' ? accent : colors.border }
                                                 ]}
-                                                onPress={() => setPaymentMethod('bank')}
+                                                onPress={() => { setPaymentMethod('bank'); setShowPaymentDetails(false); }}
                                             >
                                                 <Building2 size={24} color={paymentMethod === 'bank' ? accent : colors.textMuted} />
                                                 <Text style={[styles.paymentMethodText, { color: paymentMethod === 'bank' ? accent : colors.foreground }]}>
-                                                    {t('bankTransfer') || 'Bank Transfer'}
+                                                    {t('bankTransfer') || 'Virement bancaire'}
                                                 </Text>
+                                                {paymentMethod === 'bank' && <CheckCircle2 size={16} color={accent} />}
                                             </TouchableOpacity>
 
                                             <TouchableOpacity 
@@ -1457,35 +1844,91 @@ export default function VendorRegistrationScreen({
                                                     styles.paymentMethodBtn, 
                                                     { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentMethod === 'post' ? accent : colors.border }
                                                 ]}
-                                                onPress={() => setPaymentMethod('post')}
+                                                onPress={() => { setPaymentMethod('post'); setShowPaymentDetails(false); }}
                                             >
                                                 <Mail size={24} color={paymentMethod === 'post' ? accent : colors.textMuted} />
                                                 <Text style={[styles.paymentMethodText, { color: paymentMethod === 'post' ? accent : colors.foreground }]}>
-                                                    {t('postTransfer') || 'Post Transfer'}
+                                                    {t('postTransfer') || 'Mandat postal'}
                                                 </Text>
+                                                {paymentMethod === 'post' && <CheckCircle2 size={16} color={accent} />}
                                             </TouchableOpacity>
                                         </View>
 
+                                        {/* Expandable payment details accordion */}
                                         {paymentMethod && (
-                                            <View style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? '#2A2A2A' : '#F3F4F6', borderRadius: 8 }}>
-                                                {paymentMethod === 'bank' ? (
-                                                    <Text style={{ color: colors.foreground }}>
-                                                        {t('bankDetails') || 'Bank Details:'}{'\n'}
-                                                        RIB: 12345 67890 00000 12345{'\n'}
-                                                        Bank: Attijari Bank
-                                                    </Text>
-                                                ) : (
-                                                    <Text style={{ color: colors.foreground }}>
-                                                        {t('postDetails') || 'Post Details:'}{'\n'}
-                                                        Account: 1234-5678-90{'\n'}
-                                                        Name: Tama Clothing
-                                                    </Text>
+                                            <View style={{ marginBottom: 16 }}>
+                                                <TouchableOpacity
+                                                    style={[styles.paymentDetailsToggle, { backgroundColor: isDark ? '#1C1C1E' : '#F8F8FB', borderColor: accent + '50' }]}
+                                                    onPress={() => setShowPaymentDetails(!showPaymentDetails)}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                        {paymentMethod === 'bank' ? <Building2 size={18} color={accent} /> : <Mail size={18} color={accent} />}
+                                                        <Text style={{ color: accent, fontWeight: '700', fontSize: 14 }}>
+                                                            {paymentMethod === 'bank' 
+                                                                ? (t('viewBankDetails') || 'Voir les coordonnées bancaires') 
+                                                                : (t('viewPostDetails') || 'Voir les coordonnées du mandat')
+                                                            }
+                                                        </Text>
+                                                    </View>
+                                                    {showPaymentDetails ? <ArrowUp size={18} color={accent} /> : <ArrowDown size={18} color={accent} />}
+                                                </TouchableOpacity>
+
+                                                {showPaymentDetails && (
+                                                    <View style={[styles.paymentDetailsBox, { backgroundColor: isDark ? '#111118' : '#F0F0FF', borderColor: accent + '30' }]}>
+                                                        {paymentMethod === 'bank' ? (
+                                                            <>
+                                                                <Text style={[styles.paymentDetailsTitle, { color: colors.foreground }]}>
+                                                                    🏦 {t('bankTransferDetails') || 'Coordonnées bancaires'}
+                                                                </Text>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Banque</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: colors.foreground }]}>Attijari Bank</Text>
+                                                                </View>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Bénéficiaire</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: colors.foreground }]}>BEY3A SARL</Text>
+                                                                </View>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>RIB</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: accent, fontWeight: '700' }]}>12345 67890 00000 12345</Text>
+                                                                </View>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Montant</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: '#10B981', fontWeight: '700' }]}>{selectedInfo.price} TND</Text>
+                                                                </View>
+                                                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 10, fontStyle: 'italic' }}>
+                                                                    {t('paymentRef') || 'Mentionnez votre nom et email en référence du virement.'}
+                                                                </Text>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Text style={[styles.paymentDetailsTitle, { color: colors.foreground }]}>
+                                                                    📮 {t('postTransferDetails') || 'Coordonnées du mandat postal'}
+                                                                </Text>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Bénéficiaire</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: colors.foreground }]}>BEY3A SARL</Text>
+                                                                </View>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Numéro de compte</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: accent, fontWeight: '700' }]}>1234-5678-90</Text>
+                                                                </View>
+                                                                <View style={styles.paymentDetailRow}>
+                                                                    <Text style={[styles.paymentDetailLabel, { color: colors.textMuted }]}>Montant</Text>
+                                                                    <Text style={[styles.paymentDetailValue, { color: '#10B981', fontWeight: '700' }]}>{selectedInfo.price} TND</Text>
+                                                                </View>
+                                                                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 10, fontStyle: 'italic' }}>
+                                                                    {t('paymentRef') || 'Mentionnez votre nom et email en référence du mandat.'}
+                                                                </Text>
+                                                            </>
+                                                        )}
+                                                    </View>
                                                 )}
                                             </View>
                                         )}
 
-                                        <Text style={[styles.inputLabel, { color: colors.textMuted, marginTop: 16 }]}>
-                                            {t('paymentProof') || 'Payment Receipt / Proof'} *
+                                        <Text style={[styles.inputLabel, { color: colors.textMuted, marginTop: 8 }]}>
+                                            {t('paymentProof') || 'Reçu / Preuve de paiement'} *
                                         </Text>
                                         <TouchableOpacity
                                             style={[styles.uploadBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: paymentProof ? accent : colors.border }]}
@@ -1502,10 +1945,10 @@ export default function VendorRegistrationScreen({
                                                 <View style={styles.uploadPlaceholder}>
                                                     <Upload size={32} color={colors.textMuted} />
                                                     <Text style={[styles.uploadText, { color: colors.textMuted }]}>
-                                                        {t('vendorTapToUpload') || 'Tap to upload'}
+                                                        {t('vendorTapToUpload') || 'Appuyer pour télécharger'}
                                                     </Text>
                                                     <Text style={[styles.uploadHint, { color: colors.textMuted, marginTop: 4, fontSize: 12 }]}>
-                                                        {t('uploadReceiptHint') || 'Upload a photo of your receipt'}
+                                                        {t('uploadReceiptHint') || 'Téléchargez une photo de votre reçu de paiement'}
                                                     </Text>
                                                 </View>
                                             )}
@@ -2309,5 +2752,172 @@ const styles = StyleSheet.create({
         marginTop: 12,
         textAlign: 'center',
         fontStyle: 'italic',
+    },
+    // Payment accordion styles
+    paymentDetailsToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        marginBottom: 4,
+    },
+    paymentDetailsBox: {
+        borderRadius: 10,
+        borderWidth: 1,
+        padding: 16,
+        gap: 10,
+    },
+    paymentDetailsTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    paymentDetailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+        borderBottomWidth: 0.5,
+        borderBottomColor: 'rgba(128,128,128,0.15)',
+    },
+    paymentDetailLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    paymentDetailValue: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    // Vendor status screen styles
+    statusIconCircle: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 24,
+        alignSelf: 'center',
+    },
+    statusTitle: {
+        fontSize: 24,
+        fontWeight: '800',
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    statusDesc: {
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 24,
+    },
+    statusCard: {
+        width: '100%',
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 1,
+        marginBottom: 20,
+    },
+    statusCardLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    statusCardValue: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 24,
+        marginTop: 8,
+    },
+    activePlanCard: {
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 2,
+        marginBottom: 16,
+    },
+    activePlanHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    activePlanLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    activePlanName: {
+        fontSize: 20,
+        fontWeight: '800',
+    },
+    activePlanBadge: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    activePlanBadgeText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    planActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1.5,
+    },
+    reapplyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+        borderRadius: 14,
+        marginTop: 8,
+        width: '100%',
+    },
+    rejectionReasonCard: {
+        width: '100%',
+        borderWidth: 1.5,
+        borderRadius: 14,
+        padding: 16,
+        marginTop: 4,
+        marginBottom: 16,
+    },
+    paymentProofSection: {
+        width: '100%',
+        borderRadius: 16,
+        borderWidth: 1.5,
+        padding: 20,
+        marginTop: 16,
+    },
+    paymentProofWaiting: {
+        flexDirection: 'row',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    submitPaymentBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        borderRadius: 14,
+        marginTop: 16,
     },
 });

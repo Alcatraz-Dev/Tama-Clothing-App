@@ -301,6 +301,8 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<string>('all');
+    const [deliveryCompanies, setDeliveryCompanies] = useState<any[]>([]);
+    const [assigningCompany, setAssigningCompany] = useState(false);
 
     const scrollY = useRef(new Animated.Value(0)).current;
     const blurTargetRef = useRef(null);
@@ -309,7 +311,31 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
     const headerOpacity = scrollY.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' });
     const modalHeaderOpacity = modalScrollY.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' });
 
-    useEffect(() => { fetchOrders(); }, [currentUser, profileData]);
+    useEffect(() => { fetchOrders(); fetchDeliveryCompanies(); }, [currentUser, profileData]);
+
+    async function fetchDeliveryCompanies() {
+        try {
+            const snap = await getDocs(collection(db, 'deliveryCompanies'));
+            setDeliveryCompanies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) { console.error('Error fetching delivery companies:', err); }
+    }
+
+    async function assignDeliveryCompany(orderId: string, company: any) {
+        try {
+            setAssigningCompany(true);
+            await updateDoc(doc(db, 'orders', orderId), {
+                deliveryCompanyId: company.id,
+                deliveryCompanyName: company.name,
+                deliveryAssignedAt: serverTimestamp(),
+            });
+            setSelectedOrder((prev: any) => ({ ...prev, deliveryCompanyId: company.id, deliveryCompanyName: company.name }));
+            Alert.alert('✅ Done', `Order assigned to ${company.name}`);
+        } catch (err) {
+            Alert.alert('Error', 'Failed to assign delivery company.');
+        } finally {
+            setAssigningCompany(false);
+        }
+    }
 
     async function fetchOrders() {
         try {
@@ -807,6 +833,48 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                         </View>
                     </View>
                 </View>
+                {/* Delivery Company Assignment */}
+                <View style={[sc.section, { backgroundColor: isDark ? '#121218' : '#FFF', borderColor: colors.border }]}>
+                    <View style={sc.sectionHeader}>
+                        <Text style={[sc.sectionTitle, { color: colors.textMuted }]}>🚚 DELIVERY COMPANY</Text>
+                        {selectedOrder.deliveryCompanyName && (
+                            <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#3B82F620' }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#3B82F6' }}>{selectedOrder.deliveryCompanyName}</Text>
+                            </View>
+                        )}
+                    </View>
+                    {!selectedOrder.deliveryCompanyId && (
+                        <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500', marginBottom: 12 }}>No delivery company assigned yet. Select one:</Text>
+                    )}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {deliveryCompanies.length === 0 ? (
+                            <Text style={{ fontSize: 12, color: colors.textMuted }}>No delivery companies available. Add some in Admin → Delivery Companies.</Text>
+                        ) : deliveryCompanies.map(company => {
+                            const isAssigned = selectedOrder.deliveryCompanyId === company.id;
+                            return (
+                                <TouchableOpacity
+                                    key={company.id}
+                                    onPress={() => assignDeliveryCompany(selectedOrder.id, company)}
+                                    disabled={assigningCompany}
+                                    style={[sc.statusChip, {
+                                        backgroundColor: isAssigned ? '#3B82F620' : 'transparent',
+                                        borderColor: isAssigned ? '#3B82F6' : colors.border,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                    }]}
+                                >
+                                    {isAssigned && <Truck size={12} color="#3B82F6" />}
+                                    <Text style={[sc.statusChipText, { color: isAssigned ? '#3B82F6' : colors.textMuted }]}>
+                                        {company.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    {assigningCompany && <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />}
+                </View>
+
             </Animated.ScrollView>
         );
     }
