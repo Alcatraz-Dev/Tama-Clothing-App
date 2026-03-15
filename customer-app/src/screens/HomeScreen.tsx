@@ -31,6 +31,7 @@ import {
     Search,
     ChevronRight,
     Sparkles,
+    QrCode,
 } from 'lucide-react-native';
 import * as Animatable from 'react-native-animatable';
 
@@ -321,6 +322,7 @@ export default function HomeScreen({
                     <Bell size={20} color={foregroundColor} strokeWidth={2.5} />
                     {unreadCount > 0 && <View style={[styles.unreadBadge, { backgroundColor: errorColor, borderColor: theme === 'dark' ? '#000' : '#FFF' }]} />}
                 </TouchableOpacity>
+
             </Animated.View>
 
             <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>

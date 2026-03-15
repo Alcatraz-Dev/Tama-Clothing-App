@@ -192,7 +192,9 @@ import {
   Trophy,
   Ruler,
   BrainCircuit,
+  Printer,
 } from "lucide-react-native";
+import QRCode from "react-native-qrcode-svg";
 import UserBadge from "./src/components/UserBadge";
 import QRScanner from "./src/components/QRScanner";
 import { Share } from "react-native";
@@ -230,6 +232,7 @@ import FidelityScreen from "./src/screens/FidelityScreen";
 import DriverDeliveryScreen from "./src/screens/delivery/DriverDeliveryScreen";
 import OrderTrackingScreen from "./src/screens/delivery/OrderTrackingScreen";
 import ScratchAndWinScreen from "./src/screens/ScratchAndWinScreen";
+import InStoreDiscountScreen from "./src/screens/InStoreDiscountScreen";
 import {
   TreasureHuntHomeScreen,
   TreasureMapScreen,
@@ -251,7 +254,7 @@ import {
   useAppTheme,
   getAppColors,
 } from "./src/context/ThemeContext";
-import { APP_ICON, width, height } from "./src/constants/layout";
+import { APP_ICON, LOGO, width, height } from "./src/constants/layout";
 import { uploadToBunny as uploadImageToCloudinary } from "./src/utils/bunny";
 import {
   registerForPushNotificationsAsync,
@@ -385,6 +388,7 @@ export default function App() {
   const [activeTabParams, setActiveTabParams] = useState<any>(null);
   const [trackingModalVisible, setTrackingModalVisible] = useState(false);
   const [trackingInput, setTrackingInput] = useState("");
+  const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
 
   // Category navigation stack: [{id, name}]
   const [categoryStack, setCategoryStack] = useState<
@@ -482,6 +486,50 @@ export default function App() {
     }
   };
 
+  const processCouponVerification = async (couponId: string) => {
+    try {
+      const couponRef = doc(db, "active_coupons", couponId);
+      const couponSnap = await getDoc(couponRef);
+
+      if (!couponSnap.exists()) {
+        Alert.alert(t("error"), t("invalidCoupon") || "Invalid Coupon");
+        return;
+      }
+
+      const couponData = couponSnap.data();
+      if (couponData.status !== "pending") {
+        Alert.alert(
+          t("error"),
+          t("couponAlreadyUsed") || "Coupon already used or expired",
+        );
+        return;
+      }
+
+      // Mark as used
+      await updateDoc(couponRef, {
+        status: "used",
+        verifiedAt: serverTimestamp(),
+        verifiedBy: user?.uid,
+      });
+
+      // Award loyalty points to the user who generated the coupon
+      if (couponData.points > 0 && couponData.userId) {
+        const userRef = doc(db, "users", couponData.userId);
+        await updateDoc(userRef, {
+          "wallet.coins": increment(couponData.points),
+        });
+      }
+
+      Alert.alert(
+        t("success"),
+        `${t("couponVerified") || "Coupon Verified!"}\n${couponData.value}${couponData.type === "percentage" ? "%" : " TND"} ${t("discountApplied") || "discount applied"}`,
+      );
+    } catch (error) {
+      console.error("Error verifying coupon:", error);
+      Alert.alert(t("error"), "Verification failed");
+    }
+  };
+
   const handleScan = async (data: string) => {
     setShowScanner(false);
 
@@ -508,6 +556,26 @@ export default function App() {
       } catch (e) {
         console.error("Scan Error", e);
         Alert.alert(t("error"), "Failed to fetch collaboration");
+      }
+    } else if (normalizedData.startsWith("bey3a://store/")) {
+      const storeId = normalizedData.replace("bey3a://store/", "");
+      setActiveStoreId(storeId);
+      setPreviousTab(activeTab);
+      setActiveTab("InStoreDiscount");
+    } else if (normalizedData.startsWith("bey3a://verify-coupon/")) {
+      const couponId = normalizedData.replace("bey3a://verify-coupon/", "");
+      // Only allow vendors or admins to verify
+      if (
+        profileData?.role === "vendor" ||
+        profileData?.role === "admin" ||
+        profileData?.role === "driver"
+      ) {
+        await processCouponVerification(couponId);
+      } else {
+        Alert.alert(
+          t("error"),
+          t("unauthorizedVerify") || "Only staff can verify coupons",
+        );
       }
     } else if (
       data.startsWith("BEY3A-") ||
@@ -2063,6 +2131,7 @@ export default function App() {
             updateProfile={updateProfileData}
             onBack={() => setActiveTab("Shop")}
             t={t}
+            onShowScanner={() => setShowScanner(true)}
           />
         );
       case "Profile":
@@ -2310,6 +2379,21 @@ export default function App() {
             user={user}
             t={t}
             theme={theme}
+            language={language}
+          />
+        );
+      case "InStoreDiscount":
+        return (
+          <InStoreDiscountScreen
+            storeId={activeStoreId || ""}
+            onClose={() => {
+              setActiveTab(previousTab || "Home");
+              setActiveStoreId(null);
+            }}
+            userId={user?.uid || ""}
+            cart={cart}
+            t={t}
+            isDark={theme === "dark"}
             language={language}
           />
         );
@@ -4223,6 +4307,54 @@ function ProfileScreen({
   const [selectedTransferUser, setSelectedTransferUser] = useState<any>(null);
   const [transferAmount, setTransferAmount] = useState("");
   const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [showStoreQRModal, setShowStoreQRModal] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [storeDiscountValue, setStoreDiscountValue] = useState("10");
+  const [updatingDiscount, setUpdatingDiscount] = useState(false);
+
+  const onOpenStoreQRModal = async () => {
+    setShowStoreQRModal(true);
+    const brandId = profileData?.brandId;
+    if (brandId) {
+      try {
+        const brandDoc = await getDoc(doc(db, "brands", brandId));
+        if (brandDoc.exists()) {
+          const data = brandDoc.data();
+          if (data.inStorePromotion?.value) {
+            setStoreDiscountValue(String(data.inStorePromotion.value));
+          }
+        }
+      } catch (err) {
+        console.log("Error fetching brand discount:", err);
+      }
+    }
+  };
+
+  const handleUpdateDiscount = async () => {
+    const brandId = profileData?.brandId;
+    if (!brandId) {
+      Alert.alert(t("error"), "No brand ID found for your account");
+      return;
+    }
+
+    setUpdatingDiscount(true);
+    try {
+      await updateDoc(doc(db, "brands", brandId), {
+        inStorePromotion: {
+          type: "percentage",
+          value: parseInt(storeDiscountValue) || 10,
+          points: 50,
+        },
+      });
+      setEditingDiscount(false);
+      Alert.alert(t("success"), t("settingsSaved"));
+    } catch (error) {
+      console.error("Error updating discount:", error);
+      Alert.alert(t("error"), "Failed to update discount");
+    } finally {
+      setUpdatingDiscount(false);
+    }
+  };
 
   const handleConfirmQuickExchange = async () => {
     const amount = parseInt(exchangeAmount);
@@ -4787,7 +4919,9 @@ function ProfileScreen({
 
   const isBrandOwner =
     profileData?.role === "brand_owner" ||
-    (profileData?.role === "admin" && profileData?.brandId);
+    (profileData?.role === "admin" && profileData?.brandId) ||
+    (profileData?.role === "vendor" &&
+      ["approved", "active"].includes(profileData?.vendorData?.status));
 
   useEffect(() => {
     if (isBrandOwner && profileData?.brandId) {
@@ -6641,12 +6775,54 @@ function ProfileScreen({
                               { color: colors.purple, fontWeight: "600" },
                             ]}
                           >
-                            {profileData?.vendorData?.status === 'approved'
-                              ? (t("myVendorPlan") || "Mon Plan Vendeur")
-                              : profileData?.vendorData?.status === 'pending'
-                              ? (t("applicationPending") || "Demande en attente")
-                              : t("becomeVendor")
-                            }
+                            {["approved", "active"].includes(
+                              profileData?.vendorData?.status,
+                            )
+                              ? t("myVendorPlan") || "Mon Plan Vendeur"
+                              : profileData?.vendorData?.status === "pending"
+                                ? t("applicationPending") ||
+                                  "Demande en attente"
+                                : t("becomeVendor")}
+                          </Text>
+                        </View>
+                        <ChevronRight size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+
+                    {(["approved", "active"].includes(
+                      profileData?.vendorData?.status,
+                    ) ||
+                      profileData?.role === "brand_owner" ||
+                      profileData?.role === "vendor") && (
+                      <TouchableOpacity
+                        style={[
+                          styles.menuRow,
+                          {
+                            paddingVertical: 18,
+                            borderBottomColor: colors.border,
+                          },
+                        ]}
+                        onPress={() => onOpenStoreQRModal()}
+                      >
+                        <View style={styles.menuRowLeft}>
+                          <View
+                            style={[
+                              styles.iconCircle,
+                              {
+                                backgroundColor:
+                                  theme === "dark" ? "#17171F" : "#F9F9FB",
+                              },
+                            ]}
+                          >
+                            <QrCode size={20} color={colors.accent} />
+                          </View>
+                          <Text
+                            style={[
+                              styles.menuRowText,
+                              { color: colors.foreground },
+                            ]}
+                          >
+                            {t("storeQRCode")}
                           </Text>
                         </View>
                         <ChevronRight size={18} color={colors.textMuted} />
@@ -9415,6 +9591,286 @@ function ProfileScreen({
                 )}
               />
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Store QR Code Modal */}
+      <Modal
+        visible={showStoreQRModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStoreQRModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.8)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.background,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              padding: 25,
+              paddingBottom: insets.bottom + 20,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: "900",
+                  color: colors.foreground,
+                }}
+              >
+                {t("storeQRCode")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowStoreQRModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor:
+                    theme === "dark"
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.05)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ alignItems: "center", marginVertical: 20 }}>
+              <View
+                style={{
+                  padding: 20,
+                  backgroundColor: "#FFF",
+                  borderRadius: 20,
+                }}
+              >
+                <QRCode
+                  value={`bey3a://store/${profileData?.brandId || profileData?.uid || profileData?.id}`}
+                  size={200}
+                  color="#000"
+                  backgroundColor="#FFF"
+                />
+              </View>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  marginTop: 20,
+                  textAlign: "center",
+                  paddingHorizontal: 20,
+                }}
+              >
+                {t("storeQRDescription")}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={async () => {
+                const logoAsset = Image.resolveAssetSource(LOGO);
+                const logoUri = logoAsset ? logoAsset.uri : "";
+                const html = `
+                  <html>
+                    <head>
+                      <style>
+                        body { font-family: sans-serif; text-align: center; padding: 50px; }
+                        .qr-container { margin: 50px auto; width: 300px; height: 300px; border: 20px solid #000; padding: 20px; border-radius: 40px; }
+                        h1 { font-size: 40px; margin-bottom: 10px; }
+                        p { font-size: 20px; color: #666; }
+                        .logo-container { 
+                          margin-top: 50px; 
+                          margin-bottom: 20px; 
+                          display: flex; 
+                          justify-content: center; 
+                          align-items: center; 
+                        }
+                      .logo-box {
+                        width: 80px;
+                        height: 80px;
+                        background: #000;
+                        border-radius: 22px;
+                        overflow: hidden;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+                      }
+                       .app-logo {
+                        max-width: 70%;
+                        max-height: 70%;
+                        object-fit: contain;
+                        background: transparent;
+                      }
+                        .footer-container {
+                          margin-top: 40px;
+                          display: flex;
+                          flex-direction: column;
+                          align-items: center;
+                          gap: 10px;
+                        }
+                        .footer-logo-box {
+                          width: 40px;
+                          height: 40px;
+                          background-color: #000;
+                          border-radius: 12px;
+                          display: flex;
+                          justify-content: center;
+                          align-items: center;
+                          box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+                        }
+                        .footer-logo {
+                          max-width: 65%;
+                          max-height: 65%;
+                          object-fit: contain;
+                        }
+                        .footer-text {
+                          font-size: 14px;
+                          color: #999;
+                          font-weight: 600;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="logo-container">
+                        ${logoUri ? `<div class="logo-box"><img src="${logoUri}" class="app-logo" /></div>` : '<h1 style="color: #6C63FF">BEY3A</h1>'}
+                      </div>
+                      <h1>${getName(brandInfo?.name, displayName)}</h1>
+                      <p>${t("scanToGetDiscounts")}</p>
+                      <div class="qr-container">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=bey3a://store/${profileData?.brandId || profileData?.uid || profileData?.id}" style="width: 100%; height: 100%;" />
+                      </div>
+                      <div class="footer-container">
+                        ${logoUri ? `<div class="footer-logo-box"><img src="${logoUri}" class="footer-logo" /></div>` : ""}
+                        <span class="footer-text">${t("poweredByBey3aLabel")}</span>
+                      </div>
+                    </body>
+                  </html>
+                `;
+                try {
+                  await Print.printAsync({ html });
+                } catch (error) {
+                  console.log("Printing cancelled or failed:", error);
+                }
+              }}
+              style={{
+                backgroundColor: colors.accent,
+                borderRadius: 20,
+                paddingVertical: 18,
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 10,
+              }}
+            >
+              <Printer size={20} color="#FFF" />
+              <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 16 }}>
+                {t("printQRCode")}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Manage Discount Section */}
+            <View
+              style={{
+                marginTop: 20,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                paddingTop: 20,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setEditingDiscount(!editingDiscount)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: editingDiscount ? 15 : 0,
+                }}
+              >
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                >
+                  <Settings size={20} color={colors.foreground} />
+                  <Text style={{ fontWeight: "700", color: colors.foreground }}>
+                    {t("manageDiscount")}
+                  </Text>
+                </View>
+                <ChevronRight
+                  size={20}
+                  color={colors.textMuted}
+                  style={{
+                    transform: [{ rotate: editingDiscount ? "90deg" : "0deg" }],
+                  }}
+                />
+              </TouchableOpacity>
+
+              {editingDiscount && (
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: colors.textMuted,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {t("discountPercentage")}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        backgroundColor:
+                          theme === "dark" ? "#17171F" : "#F9F9F9",
+                        padding: 15,
+                        borderRadius: 12,
+                        color: colors.foreground,
+                        fontWeight: "700",
+                        fontSize: 16,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                      value={storeDiscountValue}
+                      onChangeText={setStoreDiscountValue}
+                      keyboardType="numeric"
+                      maxLength={2}
+                    />
+                    <TouchableOpacity
+                      onPress={handleUpdateDiscount}
+                      disabled={updatingDiscount}
+                      style={{
+                        backgroundColor: colors.accent,
+                        paddingHorizontal: 25,
+                        borderRadius: 12,
+                        justifyContent: "center",
+                        opacity: updatingDiscount ? 0.6 : 1,
+                      }}
+                    >
+                      {updatingDiscount ? (
+                        <ActivityIndicator color="#FFF" />
+                       ) : (
+                        <Text style={{ color: "#FFF", fontWeight: "800" }}>
+                          {t("saveSettings")}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </Modal>
@@ -14621,6 +15077,7 @@ function CartScreen({
   updateProfile,
   onBack,
   t,
+  onShowScanner,
 }: any) {
   const { colors, theme } = useAppTheme();
   const [checkingOut, setCheckingOut] = useState(false);
@@ -15455,48 +15912,79 @@ function CartScreen({
             </TouchableOpacity>
 
             {showCouponInput && (
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <TextInput
-                  style={[
-                    styles.modernCartInput,
-                    {
-                      flex: 1,
-                      textTransform: "uppercase",
+              <>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TextInput
+                    style={[
+                      styles.modernCartInput,
+                      {
+                        flex: 1,
+                        textTransform: "uppercase",
+                        height: 54,
+                        backgroundColor:
+                          theme === "dark" ? "#17171F" : "#FAFAFA",
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                        color: colors.foreground,
+                      },
+                    ]}
+                    placeholder={t("enterCouponCode")}
+                    placeholderTextColor={colors.textMuted}
+                    value={couponCode}
+                    onChangeText={setCouponCode}
+                    autoCapitalize="characters"
+                  />
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: colors.foreground,
+                      paddingHorizontal: 20,
+                      justifyContent: "center",
+                      borderRadius: 12,
                       height: 54,
-                      backgroundColor: theme === "dark" ? "#17171F" : "#FAFAFA",
-                      borderColor: colors.border,
-                      borderWidth: 1,
-                      color: colors.foreground,
-                    },
-                  ]}
-                  placeholder={t("enterCouponCode")}
-                  placeholderTextColor={colors.textMuted}
-                  value={couponCode}
-                  onChangeText={setCouponCode}
-                  autoCapitalize="characters"
-                />
+                    }}
+                    onPress={validateCoupon}
+                  >
+                    <Text
+                      style={{
+                        color: theme === "dark" ? "#000" : "#FFF",
+                        fontWeight: "700",
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      {t("apply")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity
                   style={{
-                    backgroundColor: colors.foreground,
-                    paddingHorizontal: 20,
+                    backgroundColor: theme === "dark" ? "#17171F" : "#F2F2F7",
+                    flexDirection: "row",
+                    alignItems: "center",
                     justifyContent: "center",
+                    padding: 15,
                     borderRadius: 12,
-                    height: 54,
+                    gap: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderStyle: "dashed",
+                    marginTop: 12,
                   }}
-                  onPress={validateCoupon}
+                  onPress={onShowScanner}
                 >
+                  <QrCode size={20} color={colors.foreground} />
                   <Text
                     style={{
-                      color: theme === "dark" ? "#000" : "#FFF",
+                      color: colors.foreground,
                       fontWeight: "700",
                       fontSize: 13,
-                      letterSpacing: 0.5,
                     }}
                   >
-                    {t("apply")}
+                    {t("scanToGetDiscounts")}
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </>
             )}
 
             {couponError ? (
