@@ -38,6 +38,8 @@ import {
     query,
     where,
     serverTimestamp,
+    arrayUnion,
+    arrayRemove,
 } from 'firebase/firestore';
 import {
     getAuth,
@@ -56,7 +58,7 @@ import {
     AdminHeader,
 } from '../../components/admin/AdminUI';
 
-export default function AdminSettingsScreen({ onBack, user, t }: any) {
+export default function AdminSettingsScreen({ onBack, user, profileData, t }: any) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -69,15 +71,28 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const [adding, setAdding] = useState(false);
     const scrollY = useRef(new Animated.Value(0)).current;
 
-    const ROLES = [
+    const role = profileData?.role || user?.role || 'customer';
+    const isVendor = role === 'brand_owner' || role === 'vendor' || role === 'nor_kam';
+
+    const ROLES = (role === 'admin') ? [
         { value: 'admin', label: t('admin')?.toUpperCase() || 'ADMIN' },
         { value: 'brand_owner', label: t('brandOwner')?.toUpperCase() || 'BRAND OWNER' },
         { value: 'nor_kam', label: t('norKam')?.toUpperCase() || 'NOR KAM' },
         { value: 'editor', label: t('editor')?.toUpperCase() || 'EDITOR' },
-        { value: 'support', label: t('support')?.toUpperCase() || 'SUPPORT' },
+        { value: 'support', label: t('supportRole')?.toUpperCase() || 'SUPPORT' },
         { value: 'viewer', label: t('viewer')?.toUpperCase() || 'VIEWER' },
         { value: 'driver', label: t('driver')?.toUpperCase() || 'DRIVER' },
+    ] : [
+        { value: 'manager', label: (t('manager') || 'Manager').toUpperCase() },
+        { value: 'support', label: (t('supportRole') || 'Support').toUpperCase() },
+        { value: 'orders', label: (t('ordersManager') || 'Orders').toUpperCase() },
+        { value: 'viewer', label: (t('viewer') || 'Viewer').toUpperCase() },
     ];
+
+    useEffect(() => {
+        if (!isVendor && activeTab === 'team') setNewRole('admin');
+        else if (isVendor && activeTab === 'team') setNewRole('support');
+    }, [activeTab, isVendor]);
 
     // Account State
     const [currentPassword, setCurrentPassword] = useState('');
@@ -145,7 +160,13 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const fetchTeam = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'editor', 'viewer', 'support']));
+            let q;
+            if (user?.role === 'admin') {
+                q = query(collection(db, 'users'), where('role', 'in', ['admin', 'editor', 'viewer', 'support', 'driver']));
+            } else {
+                // For vendors, fetch their specific team members
+                q = query(collection(db, 'users'), where('vendorOwnerId', '==', user.uid));
+            }
             const snap = await getDocs(q);
             setTeam(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (err) {
@@ -228,18 +249,37 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
         if (!newEmail) return;
         setAdding(true);
         try {
-            const q = query(collection(db, 'users'), where('email', '==', newEmail.toLowerCase()));
+            const q = query(collection(db, 'users'), where('email', '==', newEmail.toLowerCase().trim()));
             const snap = await getDocs(q);
             if (snap.empty) {
                 Alert.alert(t('error'), t('userNotRegistered') || 'User not found in system.');
             } else {
                 const target = snap.docs[0];
-                await updateDoc(doc(db, 'users', target.id), { role: newRole });
+                const targetId = target.id;
+
+                if (user?.role === 'admin') {
+                    await updateDoc(doc(db, 'users', targetId), { role: newRole });
+                } else {
+                    // Vendor flow
+                    await updateDoc(doc(db, 'users', targetId), { 
+                        role: 'vendor_support',
+                        vendorTeamRole: newRole,
+                        vendorOwnerId: user.uid,
+                        vendorStoreId: user.vendorData?.storeId || null
+                    });
+                    
+                    // Also update vendor's own document team list if needed
+                    await updateDoc(doc(db, 'users', user.uid), {
+                        'vendorData.team': arrayUnion(targetId)
+                    });
+                }
+
                 setNewEmail('');
                 fetchTeam();
                 Alert.alert(t('successTitle'), t('memberAdded'));
             }
         } catch (err) {
+            console.error(err);
             Alert.alert(t('error'), t('updateFailed'));
         } finally {
             setAdding(false);
@@ -249,7 +289,11 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
     const handleRoleChange = async (uid: string, role: string) => {
         if (uid === user?.uid) return;
         try {
-            await updateDoc(doc(db, 'users', uid), { role });
+            if (user?.role === 'admin') {
+                await updateDoc(doc(db, 'users', uid), { role });
+            } else {
+                await updateDoc(doc(db, 'users', uid), { vendorTeamRole: role });
+            }
             fetchTeam();
         } catch (err) {
             console.error(err);
@@ -264,7 +308,20 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                 text: t('remove') || 'Remove',
                 style: 'destructive',
                 onPress: async () => {
-                    await updateDoc(doc(db, 'users', uid), { role: 'customer' });
+                    if (user?.role === 'admin') {
+                        await updateDoc(doc(db, 'users', uid), { role: 'customer' });
+                    } else {
+                        await updateDoc(doc(db, 'users', uid), { 
+                            role: 'customer',
+                            vendorOwnerId: null,
+                            vendorStoreId: null,
+                            vendorTeamRole: null
+                        });
+                        // Also remove from vendor's list
+                        await updateDoc(doc(db, 'users', user.uid), {
+                            'vendorData.team': arrayRemove(uid)
+                        });
+                    }
                     fetchTeam();
                 }
             }
@@ -279,8 +336,10 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                 {[
                     { id: 'account', icon: User, label: t('account') },
                     { id: 'team', icon: Users, label: t('team') },
-                    { id: 'socials', icon: Globe, label: t('socials') },
-                    { id: 'legal', icon: FileText, label: t('legal') }
+                    ...(user?.role === 'admin' ? [
+                        { id: 'socials', icon: Globe, label: t('socials') },
+                        { id: 'legal', icon: FileText, label: t('legal') }
+                    ] : [])
                 ].map((tab: any) => (
                     <TouchableOpacity
                         key={tab.id}
@@ -422,7 +481,9 @@ export default function AdminSettingsScreen({ onBack, user, t }: any) {
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 12 }}>
                                         <Text style={[sc.memberName, { color: colors.foreground }]}>{member.email}</Text>
-                                        <Text style={[sc.memberRole, { color: colors.textMuted }]}>{member.role?.toUpperCase()}</Text>
+                                        <Text style={[sc.memberRole, { color: colors.textMuted }]}>
+                                            {(member.role === 'vendor_support' ? member.vendorTeamRole : member.role)?.toUpperCase()}
+                                        </Text>
 
                                         {/* Quick Role Change */}
                                         {member.id !== user?.uid && (

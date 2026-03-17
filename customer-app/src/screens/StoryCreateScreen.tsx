@@ -14,7 +14,9 @@ import {
 import { Text } from '../components/ui/text';
 import { Button } from '../components/ui/button';
 import { Avatar } from '../components/ui/avatar';
-import { X, ChevronLeft, Clock, Sparkles, Check, Filter, Timer } from 'lucide-react-native';
+import { X, ChevronLeft, Clock, Sparkles, Check, Filter, Timer, Plus, Send, Zap, Music, Type, Sticker, MoreHorizontal } from 'lucide-react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
@@ -97,7 +99,7 @@ export default function StoryCreateScreen({
             const fileExtension = uploadUri.split('.').pop()?.toLowerCase() || '';
             if (['heic', 'heif'].includes(fileExtension)) {
                 try {
-                    const cacheDir = FileSystem.cacheDirectory;
+                    const cacheDir = (FileSystem as any).cacheDirectory || '';
                     const jpegUri = `${cacheDir}story_${Date.now()}.jpg`;
                     
                     // Copy HEIC to JPEG (Bunny will handle it better)
@@ -144,26 +146,28 @@ export default function StoryCreateScreen({
         }
     };
 
-    const getFilterStyle = () => {
+    const getFilterOverlay = () => {
         switch (selectedFilter) {
-            case 'warm':
-                return { tintColor: undefined, overlay: 'rgba(255, 150, 50, 0.2)' };
-            case 'cool':
-                return { tintColor: undefined, overlay: 'rgba(50, 150, 180, 0.2)' };
-            case 'noir':
-                return { tintColor: undefined, overlay: 'rgba(0, 0, 0, 0.4)' };
-            case 'vivid':
-                return { tintColor: undefined, overlay: 'rgba(255, 0, 128, 0.15)' };
-            default:
-                return { tintColor: undefined, overlay: 'transparent' };
+            case 'warm': return 'rgba(255, 150, 50, 0.2)';
+            case 'cool': return 'rgba(50, 150, 180, 0.2)';
+            case 'noir': return 'rgba(0, 0, 0, 0.4)';
+            case 'vivid': return 'rgba(255, 0, 128, 0.15)';
+            default: return 'transparent';
         }
     };
 
     const renderMediaPicker = () => (
         <View style={styles.mediaPickerContainer}>
-            <Text style={[styles.pickerTitle, { color: isDark ? '#FFF' : '#000' }]}>
-                {t('Select Media') || 'Select Media'}
-            </Text>
+            <View style={styles.pickerHeader}>
+                <Zap size={32} color="#FFD700" style={{ marginBottom: 16 }} />
+                <Text style={styles.pickerTitle}>
+                    {t('Share your moment') || 'Share your moment'}
+                </Text>
+                <Text style={styles.pickerSubtitle}>
+                    {t('Photos and videos will disappear after the selected duration.') || 'Photos and videos will disappear after the selected duration.'}
+                </Text>
+            </View>
+            
             <MediaPicker
                 gallery={true}
                 mediaType="all"
@@ -176,7 +180,8 @@ export default function StoryCreateScreen({
                         end={{ x: 1, y: 1 }}
                         style={styles.pickerGradient}
                     >
-                        <View style={[styles.pickerButtonInner, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
+                        <View style={styles.pickerButtonInner}>
+                            <Plus size={20} color="#FFF" style={{ marginRight: 8 }} />
                             <Text style={styles.pickerButtonText}>
                                 {t('Choose from Gallery') || 'Choose from Gallery'}
                             </Text>
@@ -188,37 +193,30 @@ export default function StoryCreateScreen({
     );
 
     const renderFilters = () => (
-        <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-                <Filter size={20} color={isDark ? '#FFF' : '#000'} />
-                <Text style={[styles.sectionTitle, { color: isDark ? '#FFF' : '#000' }]}>
-                    {t('Filter') || 'Filter'}
-                </Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow}>
+        <View style={styles.toolSection}>
+            <Text style={styles.toolTitle}>
+                {t('Filter') || 'Filter'}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 {FILTERS.map((filter) => (
                     <TouchableOpacity
                         key={filter.id}
                         onPress={() => setSelectedFilter(filter.id)}
                         style={styles.filterItem}
                     >
-                        <LinearGradient
-                            colors={filter.colors}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[
-                                styles.filterCircle,
-                                selectedFilter === filter.id && styles.filterCircleSelected
-                            ]}
-                        >
-                            <View style={[
-                                styles.filterPreview,
-                                { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }
-                            ]} />
-                        </LinearGradient>
+                        <View style={[
+                            styles.filterCircle,
+                            selectedFilter === filter.id && styles.filterCircleSelected
+                        ]}>
+                            <LinearGradient
+                                colors={filter.colors}
+                                style={styles.filterPreview}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            />
+                        </View>
                         <Text style={[
                             styles.filterName,
-                            { color: isDark ? '#FFF' : '#000' },
                             selectedFilter === filter.id && styles.filterNameSelected
                         ]}>
                             {filter.name}
@@ -230,28 +228,24 @@ export default function StoryCreateScreen({
     );
 
     const renderDuration = () => (
-        <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-                <Timer size={20} color={isDark ? '#FFF' : '#000'} />
-                <Text style={[styles.sectionTitle, { color: isDark ? '#FFF' : '#000' }]}>
-                    {t('Story Duration') || 'Story Duration'}
-                </Text>
-            </View>
+        <View style={[styles.toolSection, { marginTop: 20 }]}>
+            <Text style={styles.toolTitle}>
+                {t('Duration') || 'Duration'}
+            </Text>
             <View style={styles.durationRow}>
                 {DURATIONS.map((duration) => (
                     <TouchableOpacity
                         key={duration.value}
                         onPress={() => setSelectedDuration(duration.value)}
                         style={[
-                            styles.durationButton,
-                            { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' },
-                            selectedDuration === duration.value && styles.durationButtonSelected
+                            styles.durationPill,
+                            selectedDuration === duration.value && styles.durationPillSelected
                         ]}
                     >
-                        <Clock size={16} color={selectedDuration === duration.value ? '#FFF' : (isDark ? '#FFF' : '#000')} />
+                        <Clock size={14} color={selectedDuration === duration.value ? '#FFF' : 'rgba(255,255,255,0.6)'} />
                         <Text style={[
                             styles.durationLabel,
-                            { color: selectedDuration === duration.value ? '#FFF' : (isDark ? '#FFF' : '#000') }
+                            { color: selectedDuration === duration.value ? '#FFF' : 'rgba(255,255,255,0.6)' }
                         ]}>
                             {duration.label}
                         </Text>
@@ -264,37 +258,93 @@ export default function StoryCreateScreen({
     const renderPreview = () => {
         if (!selectedMedia) return null;
         
-        const filterStyle = getFilterStyle();
-        
         return (
-            <View style={styles.previewContainer}>
-                <Text style={[styles.sectionTitle, { color: isDark ? '#FFF' : '#000', marginBottom: 12 }]}>
-                    {t('Preview') || 'Preview'}
-                </Text>
-                <View style={styles.previewImageWrapper}>
-                    <Image
-                        source={{ uri: selectedMedia.uri }}
-                        style={styles.previewImage}
-                        resizeMode="cover"
-                    />
-                    {filterStyle.overlay !== 'transparent' && (
-                        <View style={[styles.filterOverlay, { backgroundColor: filterStyle.overlay }]} />
-                    )}
-                    <View style={styles.previewUserInfo}>
-                        <Avatar
-                            source={user?.avatarUrl || user?.photoURL}
-                            size={32}
-                            fallback={user?.displayName?.[0] || 'U'}
-                            style={{ borderWidth: 1, borderColor: '#FFF' }}
+            <View style={styles.fullPreviewContainer}>
+                
+                {selectedMedia.type === 'video' ? (
+                    <View style={StyleSheet.absoluteFill}>
+                        {/* In a real app, use expo-video or similar for preview */}
+                        <ExpoImage
+                            source={{ uri: selectedMedia.uri }}
+                            style={StyleSheet.absoluteFillObject}
+                            contentFit="cover"
                         />
-                        <Text style={styles.previewUserName}>
-                            {user?.displayName || user?.fullName || 'You'}
-                        </Text>
-                        <View style={styles.previewDuration}>
-                            <Clock size={12} color="#FFF" />
-                            <Text style={styles.previewDurationText}>{selectedDuration}h</Text>
-                        </View>
+                        <View style={[styles.filterOverlay, { backgroundColor: getFilterOverlay() }]} />
                     </View>
+                ) : (
+                    <View style={StyleSheet.absoluteFill}>
+                        <ExpoImage
+                            source={{ uri: selectedMedia.uri }}
+                            style={StyleSheet.absoluteFillObject}
+                            contentFit="cover"
+                            transition={300}
+                        />
+                        <View style={[styles.filterOverlay, { backgroundColor: getFilterOverlay() }]} />
+                    </View>
+                )}
+
+                {/* Editor Controls Overlay */}
+                <View style={[styles.editorControls, { top: insets.top + 10 }]}>
+                    <TouchableOpacity onPress={onClose} style={styles.iconButton}>
+                        <X color="#FFF" size={24} />
+                    </TouchableOpacity>
+
+                    <View style={styles.rightControls}>
+                        {[
+                            { Icon: Type, id: 'text' },
+                            { Icon: Music, id: 'music' },
+                            { Icon: Sticker, id: 'sticker' },
+                            { Icon: Sparkles, id: 'filter' },
+                        ].map((item, idx) => (
+                            <TouchableOpacity key={idx} style={styles.iconButton}>
+                                <item.Icon color="#FFF" size={22} />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Bottom Tools Overlay */}
+                <View style={[styles.bottomTools, { paddingBottom: insets.bottom + 20 }]}>
+                    <BlurView intensity={60} tint="dark" style={styles.bottomPanel}>
+                        <View style={styles.userBar}>
+                            <Avatar
+                                source={user?.avatarUrl || user?.photoURL}
+                                size={40}
+                                fallback={user?.displayName?.[0] || 'U'}
+                                style={{ borderWidth: 2, borderColor: '#FFF' }}
+                            />
+                            <View style={{ marginLeft: 12 }}>
+                                <Text style={styles.userNameText}>{user?.displayName || 'You'}</Text>
+                                <Text style={styles.infoText}>{selectedDuration}h story</Text>
+                            </View>
+                        </View>
+                        
+                        <View style={styles.divider} />
+                        
+                        {renderFilters()}
+                        {renderDuration()}
+
+                        <TouchableOpacity 
+                            onPress={handlePublish} 
+                            disabled={uploading}
+                            style={styles.shareFab}
+                        >
+                            <LinearGradient
+                                colors={['#FF0080', '#FF8C00']}
+                                style={styles.shareFabGradient}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            >
+                                {uploading ? (
+                                    <ActivityIndicator color="#FFF" size="small" />
+                                ) : (
+                                    <>
+                                        <Text style={styles.shareFabText}>{t('Share') || 'Share'}</Text>
+                                        <Send size={16} color="#FFF" style={{ marginLeft: 6 }} />
+                                    </>
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </BlurView>
                 </View>
             </View>
         );
@@ -305,7 +355,7 @@ export default function StoryCreateScreen({
             <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#FFF' }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <X size={28} color={isDark ? '#FFF' : '#000'} />
+                        <ChevronLeft size={28} color={isDark ? '#FFF' : '#000'} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>
                         {t('Create Story') || 'Create Story'}
@@ -318,43 +368,8 @@ export default function StoryCreateScreen({
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#FFF' }]}>
-            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                    <X size={28} color={isDark ? '#FFF' : '#000'} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#000' }]}>
-                    {t('Create Story') || 'Create Story'}
-                </Text>
-                <TouchableOpacity 
-                    onPress={handlePublish} 
-                    disabled={uploading || !selectedMedia}
-                    style={styles.publishButton}
-                >
-                    {uploading ? (
-                        <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                        <LinearGradient
-                            colors={['#FF0080', '#FF8C00']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.publishGradient}
-                        >
-                            <Text style={styles.publishText}>
-                                {t('Share') || 'Share'}
-                            </Text>
-                        </LinearGradient>
-                    )}
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {renderPreview()}
-                {renderFilters()}
-                {renderDuration()}
-                
-                <View style={{ height: 100 }} />
-            </ScrollView>
+        <View style={styles.container}>
+            {renderPreview()}
         </View>
     );
 }
@@ -362,6 +377,7 @@ export default function StoryCreateScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: '#000',
     },
     header: {
         flexDirection: 'row',
@@ -369,8 +385,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingBottom: 16,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: 'rgba(128, 128, 128, 0.3)',
+        backgroundColor: '#000',
     },
     closeButton: {
         width: 40,
@@ -380,174 +395,225 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: '700',
-    },
-    publishButton: {
-        width: 80,
-        height: 36,
-        borderRadius: 18,
-        overflow: 'hidden',
-    },
-    publishGradient: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 18,
-    },
-    publishText: {
-        color: '#FFF',
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    content: {
-        flex: 1,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     mediaPickerContainer: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
+        padding: 30,
+        backgroundColor: '#000',
+    },
+    pickerHeader: {
+        alignItems: 'center',
+        marginBottom: 40,
     },
     pickerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginBottom: 24,
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#FFF',
+        textAlign: 'center',
+        marginBottom: 12,
+        letterSpacing: -0.5,
+    },
+    pickerSubtitle: {
+        fontSize: 15,
+        color: 'rgba(255,255,255,0.6)',
+        textAlign: 'center',
+        lineHeight: 22,
+        paddingHorizontal: 20,
     },
     pickerButton: {
-        width: SCREEN_WIDTH * 0.7,
-        height: 50,
-        borderRadius: 25,
+        width: SCREEN_WIDTH * 0.75,
+        height: 56,
+        borderRadius: 28,
         overflow: 'hidden',
     },
     pickerGradient: {
         flex: 1,
-        padding: 2,
-        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     pickerButtonInner: {
         flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 23,
     },
     pickerButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
+        color: '#FFF',
+        fontSize: 17,
+        fontWeight: '700',
     },
-    previewContainer: {
-        padding: 16,
+    fullPreviewContainer: {
+        flex: 1,
+        backgroundColor: '#000',
     },
-    previewImageWrapper: {
-        width: '100%',
-        aspectRatio: 9 / 16,
-        maxHeight: SCREEN_HEIGHT * 0.45,
-        borderRadius: 16,
-        overflow: 'hidden',
-        position: 'relative',
-    },
-    previewImage: {
-        width: '100%',
-        height: '100%',
+    fullPreviewImage: {
+        width: SCREEN_WIDTH,
+        height: SCREEN_HEIGHT,
+        position: 'absolute',
     },
     filterOverlay: {
         ...StyleSheet.absoluteFillObject,
+        zIndex: 1,
     },
-    previewUserInfo: {
+    overlayHeader: {
         position: 'absolute',
-        bottom: 12,
-        left: 12,
-        right: 12,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        zIndex: 10,
+    },
+    iconButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    blurCircle: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    shareFab: {
+        height: 44,
+        borderRadius: 22,
+        overflow: 'hidden',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        marginTop: 20,
+    },
+    shareFabGradient: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
     },
-    previewUserName: {
+    shareFabText: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    bottomTools: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 5,
+    },
+    bottomPanel: {
+        marginHorizontal: 10,
+        marginBottom: 10,
+        borderRadius: 24,
+        padding: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    userBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    userNameText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    infoText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+        marginTop: 2,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginBottom: 16,
+    },
+    toolSection: {
+        marginBottom: 8,
+    },
+    toolTitle: {
         color: '#FFF',
         fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 8,
-        flex: 1,
-        textShadowColor: 'rgba(0,0,0,0.5)',
-        textShadowRadius: 4,
-    },
-    previewDuration: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    previewDurationText: {
-        color: '#FFF',
-        fontSize: 12,
-        fontWeight: '600',
-        marginLeft: 4,
-    },
-    section: {
-        padding: 16,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        fontWeight: '700',
         marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
+        marginHorizontal: 4,
+        opacity: 0.8,
     },
     filtersRow: {
-        flexDirection: 'row',
+        marginBottom: 4,
     },
     filterItem: {
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: 20,
     },
     filterCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        padding: 2,
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        padding: 3,
+        backgroundColor: 'rgba(255,255,255,0.1)',
         marginBottom: 8,
     },
     filterCircleSelected: {
-        borderWidth: 3,
-        borderColor: '#FF0080',
+        backgroundColor: '#FFF',
     },
     filterPreview: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 30,
+        flex: 1,
+        borderRadius: 25,
     },
     filterName: {
-        fontSize: 12,
-        fontWeight: '500',
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    editorControls: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 10,
+    },
+    rightControls: {
+        flexDirection: 'row',
+        gap: 15,
     },
     filterNameSelected: {
-        color: '#FF0080',
-        fontWeight: '700',
+        color: '#FFF',
     },
     durationRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
     },
-    durationButton: {
+    durationPill: {
         flex: 1,
         flexDirection: 'row',
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
-        borderRadius: 12,
         marginHorizontal: 4,
     },
-    durationButtonSelected: {
+    durationPillSelected: {
         backgroundColor: '#FF0080',
     },
     durationLabel: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '700',
-        marginLeft: 8,
+        marginLeft: 6,
     },
 });

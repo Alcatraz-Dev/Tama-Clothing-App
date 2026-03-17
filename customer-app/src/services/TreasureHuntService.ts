@@ -1058,6 +1058,20 @@ class TreasureHuntService {
       rewards[rewardIndex].isRedeemed = true;
       rewards[rewardIndex].claimedAt = Timestamp.now();
 
+      // Notify User
+      try {
+          await addDoc(collection(db, "notifications"), {
+              userId: userId,
+              title: "Gift Earned! / Cadeau gagné!",
+              body: "You just received a new gift! / Vous venez de recevoir un nouveau cadeau !",
+              read: false,
+              createdAt: serverTimestamp(),
+              type: "general"
+          });
+      } catch (err) {
+          console.error("Gift notification error:", err);
+      }
+
       await updateDoc(pRef, { rewards });
       return true;
     } catch (e) {

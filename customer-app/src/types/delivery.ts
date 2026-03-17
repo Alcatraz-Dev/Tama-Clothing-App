@@ -261,7 +261,7 @@ export interface DeliveryNotification {
 export const getDeliveryStatusColor = (status: DeliveryStatus): string => {
   switch (status) {
     case 'pending': return '#FF9500';    // Orange
-    case 'accepted': return '#5856D6';   // Purple
+    case 'accepted': return '#1fa7f0';   // Primary Brand Blue
     case 'picked_up': return '#007AFF';  // Blue
     case 'in_transit': return '#FF2D55'; // Pink/Red
     case 'out_for_delivery': return '#FF2D55'; // Pink/Red

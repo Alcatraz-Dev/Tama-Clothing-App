@@ -25,8 +25,9 @@ import { APP_ICON } from '../constants/layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { Checkbox } from '@/components/ui/checkbox';
 
-export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, language }: any) {
+export default function AuthScreen({ isLogin, toggleAuth, onComplete, onViewTerms, onViewPrivacy, t, language }: any) {
     const { colors, theme } = useAppTheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -34,12 +35,20 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [agreed, setAgreed] = useState(false);
 
     const inputBgColor = theme === 'dark' ? '#121218' : '#F9F9F9';
 
     const handleAuth = async () => {
         setLoading(true);
         setError('');
+
+        if (!isLogin && !agreed) {
+            setError(t('mustAgree') || 'You must agree to the terms and policy to continue');
+            setLoading(false);
+            return;
+        }
+
         try {
             if (isLogin) {
                 await signInWithEmailAndPassword(auth, email, password);
@@ -111,7 +120,7 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
             <View style={styles.authContent}>
                 <View style={styles.headerSection}>
                     <Image source={APP_ICON} style={styles.logo} />
-                    <Text variant="heading" style={[styles.authTitle, { color: colors.foreground }]}>
+                    <Text variant="title" style={[styles.authTitle, { color: colors.foreground, fontSize: 22 }]}>
                         {isLogin ? t('welcomeBack') : t('createAccount')}
                     </Text>
                 </View>
@@ -175,6 +184,20 @@ export default function AuthScreen({ isLogin, toggleAuth, onComplete, t, languag
                         <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
                             <Text variant="caption" style={{ fontWeight: '600' }}>{t('forgotPassword')}</Text>
                         </TouchableOpacity>
+                    )}
+
+                    {!isLogin && (
+                        <View style={styles.agreementRow}>
+                            <Checkbox checked={agreed} onCheckedChange={setAgreed} />
+                            <TouchableOpacity activeOpacity={0.8} onPress={() => setAgreed(!agreed)} style={styles.agreementTextWrapper}>
+                                <Text variant="caption" style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginLeft: 10 }}>
+                                    {language === 'fr' ? "J'accepte les " : language === 'ar' ? "أوافق على " : "I agree to the "}
+                                    <Text onPress={onViewTerms} style={{ color: colors.foreground, fontWeight: '600', textDecorationLine: 'underline', fontSize: 13 }}>{t('termsOfService')}</Text>
+                                    {language === 'fr' ? " et la " : language === 'ar' ? " و " : " and "}
+                                    <Text onPress={onViewPrivacy} style={{ color: colors.foreground, fontWeight: '600', textDecorationLine: 'underline', fontSize: 13 }}>{t('privacyPolicy')}</Text>
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
 
                     <Button
@@ -250,5 +273,14 @@ const styles = StyleSheet.create({
     authToggleText: {
         fontSize: 15,
         fontWeight: '600',
+    },
+    agreementRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        paddingRight: 20,
+    },
+    agreementTextWrapper: {
+        flex: 1,
     }
 });

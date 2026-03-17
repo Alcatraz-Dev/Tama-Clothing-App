@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { doc, updateDoc, serverTimestamp, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, addDoc, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { ChevronLeft, Upload, CheckCircle2, XCircle, Clock, Building2, Store, Star, Zap, Shield, ArrowRight, ArrowDown, ArrowUp, Instagram, Facebook, Phone, Mail, MapPin, FileText, Download, RefreshCw, AlertTriangle, CreditCard } from 'lucide-react-native';
 import { Theme } from '../theme';
@@ -591,6 +591,7 @@ export default function VendorRegistrationScreen({
     const [showPaymentDetails, setShowPaymentDetails] = useState(false);
     const [paymentProofForApproval, setPaymentProofForApproval] = useState<string | null>(null);
     const [uploadingPaymentProof, setUploadingPaymentProof] = useState(false);
+    const [isChangingPlan, setIsChangingPlan] = useState(false);
 
     // ── Vendor status check ────────────────────────────────────────────────────
     // If user already has a pending/approved/rejected vendor record, show status screen
@@ -711,13 +712,13 @@ export default function VendorRegistrationScreen({
             let idCardBackUrl = null;
             let frontUrl = null;
     
-            if (businessLicense) licenseUrl = await uploadImage(businessLicense);
-            if (idCardFront) idCardFrontUrl = await uploadImage(idCardFront);
-            if (idCardBack) idCardBackUrl = await uploadImage(idCardBack);
-            if (storeFront) frontUrl = await uploadImage(storeFront);
+            if (businessLicense) licenseUrl = businessLicense.startsWith('http') ? businessLicense : await uploadImage(businessLicense);
+            if (idCardFront) idCardFrontUrl = idCardFront.startsWith('http') ? idCardFront : await uploadImage(idCardFront);
+            if (idCardBack) idCardBackUrl = idCardBack.startsWith('http') ? idCardBack : await uploadImage(idCardBack);
+            if (storeFront) frontUrl = storeFront.startsWith('http') ? storeFront : await uploadImage(storeFront);
     
             let paymentProofUrl = null;
-            if (paymentProof) paymentProofUrl = await uploadImage(paymentProof);
+            if (paymentProof) paymentProofUrl = paymentProof.startsWith('http') ? paymentProof : await uploadImage(paymentProof);
     
             // Find selected tier info to verify price
             const selectedInfo = VENDOR_TIERS.find(t => t.id === selectedTier);
@@ -767,7 +768,21 @@ export default function VendorRegistrationScreen({
                     status: 'pending',
                 }
             });
-    
+
+            // Send notification to user
+            try {
+                await addDoc(collection(db, "notifications"), {
+                    userId: uid,
+                    title: t("notifVendorAppliedTitle") || "Application Sent",
+                    body: t("notifVendorAppliedBody") || "Your vendor registration is under review.",
+                    read: false,
+                    createdAt: serverTimestamp(),
+                    type: "general"
+                });
+            } catch (err) {
+                console.error("Vendor application notification error:", err);
+            }
+
             Alert.alert(
                 t('successTitle') || 'Success',
                 t('vendorApplicationSubmitted') || 'Your vendor application has been submitted! We will review it within 2-3 business days.',
@@ -813,12 +828,47 @@ export default function VendorRegistrationScreen({
         );
     };
 
-    const handleChangePlan = () => {
-        Alert.alert(
-            t('changePlan') || 'Changer de plan',
-            t('changePlanDesc') || 'Pour changer de plan, veuillez contacter notre équipe ou soumettre une nouvelle demande.',
-            [{ text: 'OK' }]
-        );
+    const handleChangePlan = async () => {
+        setIsChangingPlan(true);
+        setStep(1); // Start from the beginning
+        
+        // Try to fetch previous application to prefill the form
+        if (user?.uid) {
+            try {
+                setLoading(true);
+                const q = query(collection(db, 'vendorApplications'), where('userId', '==', user.uid), limit(1));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    const appDoc = querySnapshot.docs[0].data();
+                    if (appDoc.accountType) setAccountType(appDoc.accountType);
+                    if (appDoc.businessName) setBusinessName(appDoc.businessName);
+                    if (appDoc.businessEmail) setBusinessEmail(appDoc.businessEmail);
+                    if (appDoc.businessPhone) setBusinessPhone(appDoc.businessPhone);
+                    if (appDoc.businessAddress) setBusinessAddress(appDoc.businessAddress);
+                    if (appDoc.taxId) setTaxId(appDoc.taxId);
+                    if (appDoc.idCardFront) setIdCardFront(appDoc.idCardFront);
+                    if (appDoc.idCardBack) setIdCardBack(appDoc.idCardBack);
+                    if (appDoc.businessLicense) setBusinessLicense(appDoc.businessLicense);
+                    if (appDoc.storeFront) setStoreFront(appDoc.storeFront);
+                    if (appDoc.paymentMethod) setPaymentMethod(appDoc.paymentMethod);
+                    if (appDoc.paymentProof) setPaymentProof(appDoc.paymentProof);
+                    
+                    if (appDoc.businessCategory) {
+                        const predefinedCategories = ['retail', 'wholesale', 'manufacturing', 'services', 'clothing', 'fashion'];
+                        if (predefinedCategories.includes(appDoc.businessCategory.toLowerCase())) {
+                            setBusinessCategory(appDoc.businessCategory.toLowerCase() as any);
+                        } else {
+                            setBusinessCategory('other');
+                            setCustomCategory(appDoc.businessCategory);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching previous application data", e);
+            } finally {
+                setLoading(false);
+            }
+        }
     };
 
     const handleSubmitPaymentProof = async () => {
@@ -860,7 +910,7 @@ export default function VendorRegistrationScreen({
     };
 
     // ── Status screen for already-registered vendors ────────────────────────────
-    if (existingStatus === 'pending') {
+    if (!isChangingPlan && existingStatus === 'pending') {
         return (
             <View style={[styles.container, { backgroundColor: colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -907,7 +957,7 @@ export default function VendorRegistrationScreen({
         );
     }
 
-    if (existingStatus === 'approved' || existingStatus === 'active') {
+    if (!isChangingPlan && (existingStatus === 'approved' || existingStatus === 'active')) {
         const currentTier = VENDOR_TIERS.find(t => t.id === existingVendorData?.tier);
         const isActive = existingStatus === 'active';
         const hasPaymentProofUploaded = !!existingVendorData?.paymentProofUrl;
@@ -1099,7 +1149,7 @@ export default function VendorRegistrationScreen({
         );
     }
 
-    if (existingStatus === 'rejected') {
+    if (!isChangingPlan && existingStatus === 'rejected') {
         const rejectionReason = existingVendorData?.rejectionReason;
         return (
             <View style={[styles.container, { backgroundColor: colors.background }]}>

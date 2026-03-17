@@ -47,9 +47,10 @@ interface CameraScreenProps {
     user?: any;
     initialFile?: string;
     fileType?: 'image' | 'video';
+    onCapture?: (uri: string) => void;
 }
 
-export default function CameraScreen({ onBack, onNavigate, t, language, theme, user, initialFile, fileType }: CameraScreenProps) {
+export default function CameraScreen({ onBack, onNavigate, t, language, theme, user, initialFile, fileType, onCapture }: CameraScreenProps) {
     const insets = useSafeAreaInsets();
     const colors = theme === "dark" ? Theme.dark.colors : Theme.light.colors;
     const cameraRef = useRef<CameraView>(null);
@@ -399,51 +400,79 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
                 <View style={[styles.previewBottomContent, { paddingBottom: insets.bottom + 30 }]}>
                     <Animatable.View animation="fadeInUp" duration={600} style={styles.previewButtonsContainer}>
-                        <View style={styles.previewMainButtons}>
-/* The above code appears to be a snippet of TypeScript code for a React component. It looks like it is
-defining a Button component, but the code is incomplete and contains some syntax errors. The actual
-functionality or purpose of the Button component is not clear from the provided snippet. */
-                            <Button
-                                onPress={reset}
-                                variant="glass"
-                                // @ts-ignore
-                                icon={<RotateCcw size={20} color="white" />}
-                                title={t('retake')}
-                                disabled={uploading}
-                                style={styles.retakeBtn}
-                            />
+                        {onCapture ? (
+                            <View style={styles.previewMainButtons}>
+                                <Button
+                                    onPress={reset}
+                                    variant="glass"
+                                    // @ts-ignore
+                                    icon={<RotateCcw size={20} color="white" />}
+                                    title={t('retake')}
+                                    disabled={uploading}
+                                    style={styles.retakeBtn}
+                                />
+                                <Button
+                                    onPress={() => {
+                                        const uri = capturedPhoto || capturedVideo;
+                                        if (uri) {
+                                            onCapture(uri);
+                                            onBack();
+                                        }
+                                    }}
+                                    variant="primary"
+                                    // @ts-ignore
+                                    icon={<Send size={20} color="white" />}
+                                    title={tr('Envoyer', 'إرسال', 'Send')}
+                                    disabled={uploading}
+                                    style={styles.publishBtn}
+                                />
+                            </View>
+                        ) : (
+                            <>
+                                <View style={styles.previewMainButtons}>
+                                    <Button
+                                        onPress={reset}
+                                        variant="glass"
+                                        // @ts-ignore
+                                        icon={<RotateCcw size={20} color="white" />}
+                                        title={t('retake')}
+                                        disabled={uploading}
+                                        style={styles.retakeBtn}
+                                    />
 
-                            <Button
-                                onPress={saveToGalleryOnly}
-                                variant="glass"
-                                // @ts-ignore
-                                icon={<Download size={20} color="white" />}
-                                title={tr('Enregistrer', 'حفظ بالجهاز', 'Save')}
-                                disabled={uploading}
-                                style={styles.saveBtn}
-                            />
-                        </View>
+                                    <Button
+                                        onPress={saveToGalleryOnly}
+                                        variant="glass"
+                                        // @ts-ignore
+                                        icon={<Download size={20} color="white" />}
+                                        title={tr('Enregistrer', 'حفظ بالجهاز', 'Save')}
+                                        disabled={uploading}
+                                        style={styles.saveBtn}
+                                    />
+                                </View>
 
-                        <Button
-                            onPress={publishToWorks}
-                            variant="primary"
-                            // @ts-ignore
-                            icon={<Send size={20} color="white" />}
-                            title={tr('Publier comme Travail', 'نشر كعمل', 'Publish to Works')}
-                            loading={uploading}
-                            style={styles.publishBtn}
-                        />
+                                <Button
+                                    onPress={publishToWorks}
+                                    variant="primary"
+                                    // @ts-ignore
+                                    icon={<Send size={20} color="white" />}
+                                    title={tr('Publier comme Travail', 'نشر كعمل', 'Publish to Works')}
+                                    loading={uploading}
+                                    style={styles.publishBtn}
+                                />
 
-                        {(capturedPhoto || capturedVideo) && (
-                            <Button
-                                onPress={publishAsReel}
-                                variant="primary"
-                                // @ts-ignore
-                                icon={<VideoIcon size={20} color="white" />}
-                                title={tr('Publier comme Reel', 'نشر كريم ريل', 'Publish as Reel')}
-                                loading={uploading}
-                                style={[styles.publishBtn, { backgroundColor: '#A855F7', marginTop: 10, borderWidth: 0 }]}
-                            />
+                                {(capturedPhoto || capturedVideo) && (
+                                    <Button
+                                        onPress={publishAsReel}
+                                        variant="primary"
+                                        // @ts-ignore
+                                        icon={<VideoIcon size={20} color="white" />}
+                                        title={tr('Publier comme Reel', 'نشر كريم ريل', 'Publish as Reel')}
+                                        loading={uploading}
+                                        style={[styles.publishBtn, { backgroundColor: '#A855F7', marginTop: 10, borderWidth: 0 }]}
+                                    />
+                                )}
+                            </>
                         )}
                     </Animatable.View>
                 </View>

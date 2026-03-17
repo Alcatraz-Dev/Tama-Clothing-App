@@ -42,7 +42,7 @@ import {
 } from '../../components/admin/AdminUI';
 import { uploadToBunny } from '../../utils/bunny';
 
-const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#5856D6', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
+const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#1fa7f0', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
 
 export default function AdminPromoBannersScreen({ onBack, t, profileData }: any) {
     const { colors, theme } = useAppTheme();

@@ -706,7 +706,7 @@ export function PlaceholderAdminScreen({ title, onBack, t }: PlaceholderAdminScr
                     backgroundColor: isDark ? '#1C1C26' : '#F2F2F7',
                     alignItems: 'center', justifyContent: 'center', marginBottom: 25
                 }}>
-                    <ShieldCheck size={48} color={isDark ? '#5856D6' : '#5856D6'} strokeWidth={1.5} />
+                    <ShieldCheck size={48} color={colors.primary} strokeWidth={1.5} />
                 </View>
                 <Text style={{
                     fontSize: 18, fontWeight: '900', color: colors.foreground,

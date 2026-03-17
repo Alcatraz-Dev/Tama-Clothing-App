@@ -50,8 +50,8 @@ export default function AdminBannersScreen({ onBack, t, profileData }: any) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
-    const isBrandOwner = profileData?.role === 'brand_owner';
-    const myBrandId = profileData?.brandId;
+    const isBrandOwner = profileData?.role === 'brand_owner' || profileData?.role === 'vendor';
+    const myBrandId = profileData?.brandId || (profileData?.role === 'vendor' ? profileData?.uid : null);
 
     const [banners, setBanners] = useState<any[]>([]);
     const [modalVisible, setModalVisible] = useState(false);

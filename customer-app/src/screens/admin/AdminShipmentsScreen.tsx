@@ -51,7 +51,7 @@ export default function AdminShipmentsScreen({ onBack, t, language }: any) {
     const getStatusColor = (status: string) => {
         switch ((status || '').toLowerCase()) {
             case 'created': return '#FF9500';
-            case 'in_transit': return '#5856D6';
+            case 'in_transit': return colors.primary;
             case 'out_for_delivery': return '#007AFF';
             case 'delivered': return '#34C759';
             default: return '#8E8E93';

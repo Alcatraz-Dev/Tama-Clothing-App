@@ -213,14 +213,14 @@ export default function ProductCard({
             </Text>
             <View style={styles.priceRow}>
               <Text variant="subtitle" style={{ color: "#FFFFFF" }}>
-                {Number(product.discountPrice || 0) > 0
-                  ? Number(product.discountPrice).toFixed(2)
-                  : Number(product.price || 0).toFixed(2)}{" "}
+                {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price)
+                  ? Number(product.discountPrice).toFixed(3)
+                  : Number(product.price || 0).toFixed(3)}{" "}
                 TND
               </Text>
-              {Number(product.discountPrice || 0) > 0 && (
+              {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price) && (
                 <Text variant="caption" style={styles.originalPriceHero}>
-                  {Number(product.price || 0).toFixed(2)} TND
+                  {Number(product.price || 0).toFixed(3)} TND
                 </Text>
               )}
             </View>
@@ -328,14 +328,14 @@ export default function ProductCard({
           </View>
           <View style={styles.horizontalPricing}>
             <Text variant="body" style={{ color: fgColor, fontWeight: "800" }}>
-              {Number(product.discountPrice || 0) > 0
-                ? Number(product.discountPrice).toFixed(2)
-                : Number(product.price || 0).toFixed(2)}{" "}
+              {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price)
+                ? Number(product.discountPrice).toFixed(3)
+                : Number(product.price || 0).toFixed(3)}{" "}
               TND
             </Text>
-            {Number(product.discountPrice || 0) > 0 && (
+            {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price) && (
               <Text variant="caption" style={styles.originalPriceHorizontal}>
-                {Number(product.price || 0).toFixed(2)} TND
+                {Number(product.price || 0).toFixed(3)} TND
               </Text>
             )}
           </View>
@@ -483,16 +483,16 @@ export default function ProductCard({
               variant="body"
               style={{ color: "#FFFFFF", fontWeight: "900" }}
             >
-              {Number(product.discountPrice || 0) > 0
-                ? Number(product.discountPrice).toFixed(2)
+              {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price)
+                ? Number(product.discountPrice).toFixed(3)
                 : product.price
-                  ? Number(product.price).toFixed(2)
-                  : "0.00"}{" "}
+                  ? Number(product.price).toFixed(3)
+                  : "0.000"}{" "}
               TND
             </Text>
-            {Number(product.discountPrice || 0) > 0 && (
+            {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price) && (
               <Text variant="caption" style={styles.originalPriceModern}>
-                {product.price ? Number(product.price).toFixed(2) : "0.00"} TND
+                {product.price ? Number(product.price).toFixed(3) : "0.000"} TND
               </Text>
             )}
           </View>

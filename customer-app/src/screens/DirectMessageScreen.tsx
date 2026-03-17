@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, JSX } from "react";
+import { GifPicker } from "@/components/ui/gif-picker";
 import {
   TouchableOpacity,
   ActivityIndicator,
@@ -11,6 +12,7 @@ import {
   Dimensions,
   View,
   Alert,
+  ScrollView,
 } from "react-native";
 import {
   collection,
@@ -43,6 +45,15 @@ import {
   EyeOff,
   Shield,
   Send,
+  Video,
+  Smile,
+  Mic,
+  MicOff,
+  Trash2,
+  StopCircle,
+  Play,
+  Pause,
+  RotateCcw,
 } from "lucide-react-native";
 import { db } from "../api/firebase";
 import { useAppTheme } from "../context/ThemeContext";
@@ -52,6 +63,15 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+interface DirectMessageScreenProps {
+  user: any;
+  targetUser: any;
+  onBack: () => void;
+  onNavigate?: (screen: string, params?: any) => void;
+  t: (key: string) => string;
+  language: string;
+  currentUserData?: any;
+}
 import { Avatar } from "@/components/ui/avatar";
 import { AvoidKeyboard } from "@/components/ui/avoid-keyboard";
 import { Button } from "@/components/ui/button";
@@ -60,6 +80,14 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { MediaPicker, MediaAsset } from "@/components/ui/media-picker";
+import { AudioPlayer } from "@/components/ui/audio-player";
+import { AudioWaveform } from "@/components/ui/audio-waveform";
+import {
+  AudioModule,
+  RecordingPresets,
+  useAudioRecorder,
+  useAudioPlayer,
+} from "expo-audio";
 import {
   Popover,
   PopoverTrigger,
@@ -67,10 +95,12 @@ import {
   PopoverBody,
 } from "@/components/ui/popover";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { BlurView, BlurTargetView } from "expo-blur";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColor } from "@/hooks/useColor";
 import { router } from "expo-router";
+import { Image as ExpoImage } from "expo-image";
+import * as Haptics from "expo-haptics";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -78,10 +108,11 @@ export default function DirectMessageScreen({
   user,
   targetUser,
   onBack,
+  onNavigate,
   t,
   language,
   currentUserData,
-}: any) {
+}: DirectMessageScreenProps): React.ReactElement {
   const { theme } = useAppTheme();
   const colors = {
     background: useColor("background"),
@@ -100,17 +131,94 @@ export default function DirectMessageScreen({
   const [uploading, setUploading] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [isMediaModalVisible, setIsMediaModalVisible] = useState(false);
+  const [isGifPickerVisible, setIsGifPickerVisible] = useState(false);
   const [viewMode, setViewMode] = useState<"chat" | "camera">("chat");
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<any>(null);
   const blurTargetRef = useRef<View>(null);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recorderPermission, setRecorderPermission] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingWaveform, setRecordingWaveform] = useState<number[]>([]);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [recordedDuration, setRecordedDuration] = useState(0);
+  const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const previewPlayer = useAudioPlayer(recordedUri);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await AudioModule.getRecordingPermissionsAsync();
+      setRecorderPermission(status === "granted");
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (previewPlayer) {
+      const sub = previewPlayer.addListener("playbackStatusUpdate", (status) => {
+        setIsPreviewPlaying(status.playing);
+      });
+      return () => sub.remove();
+    }
+  }, [previewPlayer]);
+
+
+
+
+  useEffect(() => {
+    if (isRecording) {
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration((d) => d + 1);
+        // Simulate waveform data
+        setRecordingWaveform((prev) => {
+          const newLevel = 0.2 + Math.random() * 0.8;
+          const updated = [...prev, newLevel];
+          if (updated.length > 40) return updated.slice(1);
+          return updated;
+        });
+      }, 100);
+    } else {
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+      setRecordingDuration(0);
+      setRecordingWaveform([]);
+    }
+    return () => {
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+    };
+  }, [isRecording]);
+
   const insets = useSafeAreaInsets();
 
   const chatId = [user?.uid, targetUser?.uid].sort().join("_");
 
   const tr = (fr: string, ar: string, en: string) => {
-    return language === "ar" ? ar : language === "fr" ? fr : en;
+    if (language === "ar") return ar;
+    if (language === "fr") return fr;
+    return en;
   };
+
+  const emojiCategories = React.useMemo(() => [
+    {
+      title: tr("Visages", "وجوه", "Faces"),
+      emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾"],
+    },
+    {
+      title: tr("Cœurs", "قلوب", "Hearts"),
+      emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"],
+    },
+    {
+      title: tr("Mains", "أيدي", "Hands"),
+      emojis: ["👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "👇", "☝️", "🤳", "💪", "🦾", "🖕", "✍️", "🙏", "🤝", "🤲", "🤜", "🤛", "👐", "🙌", "👏", "👍", "👎", "👊", "✊"],
+    },
+    {
+      title: tr("Activités", "أنشطة", "Activities"),
+      emojis: ["⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸", "🥅", "🏒", "🏑", "🏏", "⛳", "🏹", "🎣", "🛶", "🎿", "🏂", "🏋️‍♀️", "🏋️‍♂️", "🚴‍♀️", "🚴‍♂️", "🚵‍♀️", "🚵‍♂️", "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🎫", "🎟️", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎸", "🎻"],
+    },
+  ], [language]);
 
   useEffect(() => {
     if (!chatId || !user?.uid) return;
@@ -160,13 +268,84 @@ export default function DirectMessageScreen({
 
     return () => unsubscribe();
   }, [chatId, user?.uid]);
+  const handleEmojiSelect = (emoji: string) => {
+    setInputText((prev) => prev + emoji);
+    Haptics.selectionAsync();
+  };
 
-  const sendMessage = async () => {
-    if (!inputText.trim() || !user?.uid || !targetUser?.uid) return;
+  const handleStartRecording = async () => {
+    if (!recorderPermission) {
+      Alert.alert(
+        tr("Permission requise", "الإذن مطلوب", "Permission required"),
+        tr(
+          "Veuillez autoriser l'accès au microphone.",
+          "يرجى السماح بالوصول إلى الميكروفون.",
+          "Please allow microphone access.",
+        ),
+      );
+      return;
+    }
+
+    try {
+      setIsEmojiPickerVisible(false);
+      await AudioModule.setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      await recorder.record();
+      setIsRecording(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      console.error("Error starting recording:", e);
+    }
+  };
+
+  const handleStopRecording = async (shouldKeep: boolean = true) => {
+    try {
+      await recorder.stop();
+      setIsRecording(false);
+      
+      if (shouldKeep && recorder.uri) {
+        setRecordedUri(recorder.uri);
+        setRecordedDuration(recordingDuration / 10);
+        setRecordedWaveform([...recordingWaveform]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setRecordingDuration(0);
+        setRecordingWaveform([]);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (e) {
+      console.error("Error stopping recording:", e);
+      setIsRecording(false);
+    }
+  };
+
+  const discardRecordedAudio = () => {
+    setRecordedUri(null);
+    setRecordedDuration(0);
+    setRecordedWaveform([]);
+    setIsPreviewPlaying(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+  const sendMessage = async (
+    overrideText?: string | null,
+    imageUrl?: string | null,
+    videoUrl?: string | null,
+    gifUrl?: string | null,
+    audioUrl?: string | null,
+    audioDuration?: number | null,
+  ) => {
+    const textToSend = overrideText !== undefined ? overrideText : inputText;
+    if (
+      (!textToSend?.trim() && !imageUrl && !videoUrl && !gifUrl && !audioUrl) ||
+      !user?.uid ||
+      !targetUser?.uid
+    )
+      return;
+
     setSending(true);
-    const text = inputText.trim();
-    setInputText("");
-
     try {
       const messagesRef = collection(db, "direct_chats", chatId, "messages");
       const senderName =
@@ -175,19 +354,54 @@ export default function DirectMessageScreen({
         user.displayName ||
         "User";
 
-      await addDoc(messagesRef, {
-        text: text,
+      const messageData: any = {
+        text: textToSend?.trim() || "",
         senderId: user.uid,
         senderName: senderName,
         timestamp: serverTimestamp(),
         read: false,
-      });
+      };
+
+      if (imageUrl) messageData.imageUrl = imageUrl;
+      if (videoUrl) messageData.videoUrl = videoUrl;
+      if (gifUrl) messageData.gifUrl = gifUrl;
+      if (audioUrl) {
+        messageData.audioUrl = audioUrl;
+        messageData.audioDuration = audioDuration;
+      }
+
+      if (replyingTo) {
+        messageData.replyTo = {
+          id: replyingTo.id,
+          text: replyingTo.text,
+          senderName: replyingTo.senderName,
+          senderId: replyingTo.senderId,
+          imageUrl: replyingTo.imageUrl || null,
+          videoUrl: replyingTo.videoUrl || null,
+          gifUrl: replyingTo.gifUrl || null,
+          audioUrl: replyingTo.audioUrl || null,
+        };
+      }
+
+      await addDoc(messagesRef, messageData);
+
+      setReplyingTo(null);
+
+      const lastMessageText = audioUrl
+        ? tr("Message vocal 🎤", "رسالة صوتية 🎤", "Voice message 🎤")
+        : imageUrl
+          ? tr("Photo 📸", "تصويرة 📸", "Photo 📸")
+          : videoUrl
+            ? tr("Vidéo 📹", "فيديو 📹", "Video 📹")
+            : gifUrl
+              ? "GIF 🖼️"
+              : (textToSend || "");
 
       const chatDocRef = doc(db, "direct_chats", chatId);
       await setDoc(
         chatDocRef,
         {
-          lastMessage: text,
+          lastMessage: lastMessageText,
           lastMessageTime: serverTimestamp(),
           participants: [user.uid, targetUser.uid],
           participantData: {
@@ -205,6 +419,10 @@ export default function DirectMessageScreen({
         { merge: true },
       );
 
+      if (overrideText === undefined) {
+        setInputText("");
+      }
+
       if (targetUser.expoPushToken) {
         sendPushNotification(
           targetUser.expoPushToken,
@@ -213,13 +431,30 @@ export default function DirectMessageScreen({
             `ميساج من عند ${senderName}`,
             `Message from ${senderName}`,
           ),
-          text,
+          lastMessageText,
         );
       }
     } catch (e) {
       console.error("Error sending DM:", e);
+      Alert.alert("Error", "Failed to send message");
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      await updateDoc(doc(db, "direct_chats", chatId, "messages", messageId), {
+        deleted: true,
+        text: tr("Message supprimé", "تم حذف الرسالة", "Message deleted"),
+        imageUrl: null,
+        videoUrl: null,
+        gifUrl: null,
+      });
+      setReplyingTo(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.error("Error deleting message:", e);
     }
   };
 
@@ -301,9 +536,17 @@ export default function DirectMessageScreen({
     setIsMediaModalVisible(false);
   };
 
-  const handleCameraCapture = async () => {
-    // Camera is handled by MediaPicker component
+  const handleCameraCapture = () => {
     setIsMediaModalVisible(false);
+    if (onNavigate) {
+      onNavigate("Camera", {
+        onCapture: (uri: string) => {
+          handleMediaUpload(uri);
+        },
+      });
+    } else {
+      setViewMode("camera");
+    }
   };
 
   const handleCameraResult = async (uri: string, type: "image" | "video") => {
@@ -325,72 +568,41 @@ export default function DirectMessageScreen({
       const isVideo = ["mp4", "mov", "avi", "mkv"].includes(fileType || "");
       const bunnyUrl = await uploadToBunny(uri);
 
-      const messagesRef = collection(db, "direct_chats", chatId, "messages");
-      const senderName =
-        currentUserData?.fullName ||
-        currentUserData?.displayName ||
-        user.displayName ||
-        "User";
-      const messageData: any = {
-        senderId: user.uid,
-        senderName: senderName,
-        timestamp: serverTimestamp(),
-        read: false,
-      };
-
-      if (isVideo) messageData.videoUrl = bunnyUrl;
-      else messageData.imageUrl = bunnyUrl;
-
-      await addDoc(messagesRef, messageData);
-
-      const chatDocRef = doc(db, "direct_chats", chatId);
-      await setDoc(
-        chatDocRef,
-        {
-          lastMessage: isVideo ? "Vidéo 📹" : "Image 📸",
-          lastMessageTime: serverTimestamp(),
-          participants: [user.uid, targetUser.uid],
-          participantData: {
-            [user.uid]: {
-              name: senderName,
-              photo:
-                currentUserData?.avatarUrl ||
-                currentUserData?.photoURL ||
-                user.photoURL ||
-                null,
-            },
-            [targetUser.uid]: {
-              name: targetUser.fullName || targetUser.displayName || "User",
-              photo:
-                targetUser.avatarUrl ||
-                targetUser.photoURL ||
-                targetUser.image ||
-                null,
-            },
-          },
-          [`unreadCount_${targetUser.uid}`]: increment(1),
-        },
-        { merge: true },
-      );
-
-      if (targetUser.expoPushToken) {
-        sendPushNotification(
-          targetUser.expoPushToken,
-          tr(
-            `Message de ${senderName}`,
-            `ميساج من عند ${senderName}`,
-            `Message from ${senderName}`,
-          ),
-          isVideo
-            ? tr("Vidéo 📹", "فيديو 📹", "Video 📹")
-            : tr("Image 📸", "تصويرة 📸", "Image 📸"),
-        );
-      }
-    } catch (error) {
-      console.error("DM media upload error:", error);
-      alert("Failed to upload media");
+      setUploading(false);
+      await sendMessage(null, isVideo ? null : bunnyUrl, isVideo ? bunnyUrl : null);
+    } catch (e) {
+      console.error("Error uploading media:", e);
+      Alert.alert("Error", "Failed to upload media");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleAudioUpload = async (uri: string, duration: number) => {
+    setUploading(true);
+    try {
+      const bunnyUrl = await uploadToBunny(uri);
+      await sendMessage(null, null, null, null, bunnyUrl, duration);
+    } catch (e) {
+      console.error("Error uploading audio:", e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+
+
+  const handleGifSelection = async (gifUrl: string) => {
+    setIsGifPickerVisible(false);
+    if (!gifUrl || !user?.uid || !targetUser?.uid) return;
+
+    setSending(true);
+    try {
+      await sendMessage(null, null, null, gifUrl);
+    } catch (e) {
+      console.error("Error sending GIF:", e);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -415,59 +627,127 @@ export default function DirectMessageScreen({
           paddingHorizontal: 16,
         }}
       >
-        {!isOwn && (
-          <View
-            style={{ width: 32, marginRight: 8, justifyContent: "flex-end" }}
-          >
-            {showAvatar && (
-              <Avatar
-                source={
-                  targetUser.avatarUrl ||
-                  targetUser.photoURL ||
-                  targetUser.image ||
-                  targetUser.photo
-                }
-                size={32}
-              />
-            )}
-          </View>
-        )}
-        <View
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onLongPress={() => {
+            if (item.deleted) return;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const options: any[] = [
+              {
+                text: tr("Répondre", "رد", "Reply"),
+                onPress: () => {
+                  setReplyingTo(item);
+                  Haptics.selectionAsync();
+                },
+              },
+            ];
+
+            if (isOwn) {
+              options.push({
+                text: tr("Supprimer", "حذف", "Delete"),
+                style: "destructive",
+                onPress: () => {
+                  Alert.alert(
+                    tr("Supprimer", "حذف", "Delete"),
+                    tr(
+                      "Voulez-vous supprimer ce message ?",
+                      "هل تريد حذف هذه الرسالة؟",
+                      "Do you want to delete this message?",
+                    ),
+                    [
+                      {
+                        text: tr("Annuler", "إلغاء", "Cancel"),
+                        style: "cancel",
+                      },
+                      {
+                        text: tr("Supprimer", "حذف", "Delete"),
+                        style: "destructive",
+                        onPress: () => deleteMessage(item.id),
+                      },
+                    ],
+                  );
+                },
+              });
+            }
+
+            options.push({
+              text: tr("Annuler", "إلغاء", "Cancel"),
+              style: "cancel",
+            });
+
+            Alert.alert(tr("Options", "خيارات", "Options"), "", options);
+          }}
+          delayLongPress={300}
           style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
             maxWidth: "80%",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 2,
-            elevation: 1,
           }}
         >
-          {isOwn ? (
+          {!isOwn && (
             <View
-              style={{
-                padding: item.imageUrl || item.videoUrl ? 4 : 12,
-                paddingHorizontal: item.imageUrl || item.videoUrl ? 4 : 16,
-                borderRadius: 20,
-                borderBottomRightRadius: isLastInGroup ? 4 : 20,
-                backgroundColor: theme === "dark" ? "#FFFFFF" : "#000000",
-              }}
+              style={{ width: 32, marginRight: 8, justifyContent: "flex-end" }}
             >
-              {renderMessageContent(item, true)}
-            </View>
-          ) : (
-            <View
-              style={{
-                padding: item.imageUrl || item.videoUrl ? 4 : 12,
-                paddingHorizontal: item.imageUrl || item.videoUrl ? 4 : 16,
-                borderRadius: 20,
-                borderBottomLeftRadius: isLastInGroup ? 4 : 20,
-                backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
-              }}
-            >
-              {renderMessageContent(item, false)}
+              {showAvatar && (
+                <Avatar
+                  source={
+                    targetUser.avatarUrl ||
+                    targetUser.photoURL ||
+                    targetUser.image ||
+                    targetUser.photo
+                  }
+                  size={32}
+                />
+              )}
             </View>
           )}
-        </View>
+          <View
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}
+          >
+            {isOwn ? (
+              <View
+                style={{
+                  padding:
+                    item.imageUrl || item.videoUrl || item.gifUrl ? 4 : 12,
+                  paddingHorizontal:
+                    (item.imageUrl || item.videoUrl || item.gifUrl) &&
+                    !item.replyTo
+                      ? 4
+                      : 16,
+                  borderRadius: 20,
+                  borderBottomRightRadius: isLastInGroup ? 4 : 20,
+                  backgroundColor: item.deleted
+                    ? (theme === "dark" ? "#2c2c2e" : "#f2f2f7")
+                    : (isOwn
+                      ? (theme === "dark" ? "#FFFFFF" : "#000000")
+                      : (theme === "dark" ? "#1c1c1e" : "#f2f2f7")),
+                  borderWidth: item.deleted ? 1 : 0,
+                  borderColor: theme === "dark" ? "#3a3a3c" : "#d1d1d6",
+                }}
+              >
+                {renderMessageContent(item, isOwn)}
+              </View>
+            ) : (
+              <View
+                style={{
+                  padding: item.imageUrl || item.videoUrl || item.gifUrl ? 4 : 12,
+                  paddingHorizontal: (item.imageUrl || item.videoUrl || item.gifUrl) && !item.replyTo ? 4 : 16,
+                  borderRadius: 20,
+                  borderBottomLeftRadius: isLastInGroup ? 4 : 20,
+                  backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+                }}
+              >
+                {renderMessageContent(item, false)}
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -478,6 +758,59 @@ export default function DirectMessageScreen({
       : new Date();
     return (
       <View>
+        {item.replyTo && (
+          <View
+            style={{
+              padding: 8,
+              backgroundColor: isOwn ? "rgba(0,0,0,0.05)" : "rgba(0,0,0,0.03)",
+              borderRadius: 12,
+              marginBottom: 8,
+              borderLeftWidth: 4,
+              borderLeftColor: isOwn
+                ? theme === "dark"
+                  ? "#000"
+                  : "#FFF"
+                : colors.blue,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "bold",
+                color: isOwn
+                  ? theme === "dark"
+                    ? "#000"
+                    : "#FFF"
+                  : colors.blue,
+              }}
+            >
+              {item.replyTo.senderId === user.uid
+                ? tr("Vous", "أنت", "You")
+                : item.replyTo.senderName}
+            </Text>
+            <Text
+              numberOfLines={2}
+              style={{
+                fontSize: 13,
+                color: isOwn
+                  ? theme === "dark"
+                    ? "rgba(0,0,0,0.6)"
+                    : "rgba(255,255,255,0.7)"
+                  : colors.textMuted,
+              }}
+            >
+              {item.replyTo.imageUrl
+                ? tr("Photo 📸", "تصويرة 📸", "Photo 📸")
+                : item.replyTo.videoUrl
+                  ? tr("Vidéo 📹", "فيديو 📹", "Video 📹")
+                  : item.replyTo.gifUrl
+                    ? "GIF 🖼️"
+                    : item.replyTo.audioUrl
+                      ? tr("Message vocal 🎤", "رسالة صوتية 🎤", "Voice message 🎤")
+                      : item.replyTo.text}
+            </Text>
+          </View>
+        )}
         {item.imageUrl ? (
           <TouchableOpacity
             onPress={() => setFullScreenImage(item.imageUrl)}
@@ -510,20 +843,49 @@ export default function DirectMessageScreen({
               resizeMode="cover"
             />
           </View>
+        ) : item.gifUrl ? (
+          <ExpoImage
+            source={{ uri: item.gifUrl }}
+            style={{
+              width: SCREEN_WIDTH * 0.7,
+              height: SCREEN_WIDTH * 0.7,
+              borderRadius: 16,
+            }}
+            contentFit="cover"
+            cachePolicy="disk"
+          />
+        ) : item.audioUrl ? (
+          <AudioPlayer
+            source={{ uri: item.audioUrl }}
+            showWaveform={true}
+            showControls={true}
+            showTimer={true}
+            style={{
+              backgroundColor: isOwn ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.1)",
+              borderRadius: 16,
+              width: SCREEN_WIDTH * 0.65,
+              padding: 10,
+            }}
+          />
         ) : (
           <Text
             style={{
-              color: isOwn
-                ? theme === "dark"
-                  ? "black"
-                  : "white"
-                : colors.foreground,
+              color: item.deleted
+                ? colors.textMuted
+                : isOwn
+                  ? theme === "dark"
+                    ? "black"
+                    : "white"
+                  : colors.foreground,
               fontSize: 16,
               lineHeight: 22,
-              fontWeight: "500",
+              fontWeight: item.deleted ? "400" : "500",
+              fontStyle: item.deleted ? "italic" : "normal",
             }}
           >
-            {item.text}
+            {item.deleted 
+              ? tr("Message supprimé", "تم حذف الرسالة", "Message deleted")
+              : item.text}
           </Text>
         )}
         <View
@@ -531,9 +893,11 @@ export default function DirectMessageScreen({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "flex-end",
-            marginTop: item.imageUrl || item.videoUrl ? -24 : 2,
-            paddingHorizontal: item.imageUrl || item.videoUrl ? 8 : 0,
-            paddingBottom: item.imageUrl || item.videoUrl ? 8 : 0,
+            marginTop: item.imageUrl || item.videoUrl || item.gifUrl ? -24 : 2,
+            paddingHorizontal:
+              item.imageUrl || item.videoUrl || item.gifUrl ? 8 : 0,
+            paddingBottom:
+              item.imageUrl || item.videoUrl || item.gifUrl ? 8 : 0,
           }}
         >
           <Text
@@ -546,10 +910,11 @@ export default function DirectMessageScreen({
               fontSize: 10,
               fontWeight: "600",
               textShadowColor:
-                item.imageUrl || item.videoUrl
+                item.imageUrl || item.videoUrl || item.gifUrl
                   ? "rgba(0,0,0,0.3)"
                   : "transparent",
-              textShadowRadius: item.imageUrl || item.videoUrl ? 2 : 0,
+              textShadowRadius:
+                item.imageUrl || item.videoUrl || item.gifUrl ? 2 : 0,
             }}
           >
             {timestamp.toLocaleTimeString([], {
@@ -590,10 +955,6 @@ export default function DirectMessageScreen({
         </View>
       </GestureHandlerRootView>
     );
-  }
-
-  function onNavigate(arg0: string): void {
-    router.push(arg0);
   }
 
   return (
@@ -650,106 +1011,128 @@ export default function DirectMessageScreen({
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                marginLeft: 4,
+                marginLeft: 15,
               }}
             >
-              <View style={{ position: "relative", marginLeft: 10 }}>
-                <Avatar
-                  size={44}
-                  source={
-                    targetUser?.avatarUrl ||
-                    targetUser?.photoURL ||
-                    targetUser?.image ||
-                    targetUser?.photo
-                  }
-                  fallback={
-                    targetUser?.fullName?.[0] ||
-                    targetUser?.displayName?.[0] ||
-                    "U"
-                  }
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: "#22c55e",
-                    borderWidth: 2,
-                    borderColor: theme === "dark" ? "#000" : "#FFF",
-                  }}
-                />
-              </View>
-              <View style={{ marginLeft: 12 }}>
-                <Text
-                  style={{
-                    color: colors.foreground,
-                    fontSize: 17,
-                    fontWeight: "700",
-                    letterSpacing: -0.3,
-                  }}
-                  numberOfLines={1}
-                >
-                  {targetUser.fullName || targetUser.displayName || "User"}
-                </Text>
-                <Text
-                  style={{ color: "#22c55e", fontSize: 12, fontWeight: "600" }}
-                >
-                  {tr("En ligne", "اونلاين", "Online")}
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ position: "relative" }}>
+                  <Avatar
+                    source={
+                      targetUser?.avatarUrl ||
+                      targetUser?.photoURL ||
+                      targetUser?.image ||
+                      targetUser?.photo
+                    }
+                    size={44}
+                    fallback={(targetUser?.fullName ||
+                      targetUser?.displayName ||
+                      targetUser?.name ||
+                      "U")[0].toUpperCase()}
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      bottom: 1,
+                      right: 1,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: "#31A24C",
+                      borderWidth: 2,
+                      borderColor: colors.background,
+                    }}
+                  />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 17,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {[
+                      targetUser?.fullName,
+                      targetUser?.displayName,
+                      targetUser?.name,
+                    ].find((n) => n) || "User"}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: "#31A24C",
+                        marginRight: 6,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: 13,
+                        opacity: 0.8,
+                      }}
+                    >
+                      {tr("En ligne", "متصل", "Online")}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert(tr("Options", "خيارات", "Options"), "", [
-                { text: tr("Annuler", "إلغاء", "Cancel"), style: "cancel" },
-                {
-                  text: tr(
-                    "Supprimer la conversation",
-                    "حذف المحادثة",
-                    "Delete conversation",
-                  ),
-                  style: "destructive",
-                  onPress: handleDeleteConversation,
-                },
-                {
-                  text: tr(
-                    "Masquer la conversation",
-                    "إخفاء المحادثة",
-                    "Hide conversation",
-                  ),
-                  onPress: handleHideConversation,
-                },
-                {
-                  text: tr(
-                    "Bloquer l'utilisateur",
-                    "بلوك المستخدم",
-                    "Block user",
-                  ),
-                  style: "destructive",
-                  onPress: handleBlockUser,
-                },
-              ]);
-            }}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              style={{ width: 40, height: 40, borderRadius: 20 }}
-              disabled
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {/* Camera icon removed from header as per user request */}
+
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(tr("Options", "خيارات", "Options"), "", [
+                  { text: tr("Annuler", "إلغاء", "Cancel"), style: "cancel" },
+                  {
+                    text: tr(
+                      "Supprimer la conversation",
+                      "حذف المحادثة",
+                      "Delete conversation",
+                    ),
+                    style: "destructive",
+                    onPress: handleDeleteConversation,
+                  },
+                  {
+                    text: tr(
+                      "Masquer la conversation",
+                      "إخفاء المحادثة",
+                      "Hide conversation",
+                    ),
+                    onPress: handleHideConversation,
+                  },
+                  {
+                    text: tr(
+                      "Bloquer l'utilisateur",
+                      "بلوك المستخدم",
+                      "Block user",
+                    ),
+                    style: "destructive",
+                    onPress: handleBlockUser,
+                  },
+                ]);
+              }}
             >
-              <MoreVertical size={24} color={colors.foreground} />
-            </Button>
-          </TouchableOpacity>
+              <Button
+                variant="ghost"
+                size="icon"
+                style={{ width: 40, height: 40, borderRadius: 20 }}
+                disabled
+              >
+                <MoreVertical size={24} color={colors.foreground} />
+              </Button>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* Messages */}
-      <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -820,13 +1203,12 @@ export default function DirectMessageScreen({
             )
           }
         />
-      </BlurTargetView>
+      </View>
 
       {/* Input Area */}
       <BlurView
-        intensity={80}
-        tint={theme ? "dark" : "light"}
-        blurTarget={blurTargetRef}
+        intensity={Platform.OS === "ios" ? 90 : 100}
+        tint={theme === "dark" ? "dark" : "light"}
         blurMethod="dimezisBlurView"
         style={{
           position: "absolute",
@@ -834,17 +1216,237 @@ export default function DirectMessageScreen({
           left: 0,
           right: 0,
           paddingHorizontal: 16,
-          paddingTop: 12,
-          paddingBottom: insets.bottom + 12,
-          borderTopWidth: 1,
-          borderTopColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
+          borderTopWidth: 0.5,
+          borderTopColor: colors.border,
         }}
       >
+        {replyingTo && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor:
+                theme === "dark"
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(0,0,0,0.05)",
+              padding: 10,
+              borderRadius: 12,
+              marginBottom: 8,
+              borderLeftWidth: 4,
+              borderLeftColor: colors.blue,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ fontSize: 13, fontWeight: "bold", color: colors.blue }}
+              >
+                {replyingTo.senderId === user.uid
+                  ? tr(
+                      "Répondre à vous-même",
+                      "رد على نفسك",
+                      "Replying to yourself",
+                    )
+                  : tr(
+                      `Répondre à ${replyingTo.senderName}`,
+                      `رد على ${replyingTo.senderName}`,
+                      `Replying to ${replyingTo.senderName}`,
+                    )}
+              </Text>
+             </View>
+            <TouchableOpacity
+              onPress={() => setReplyingTo(null)}
+              style={{ padding: 4 }}
+            >
+              <X size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isEmojiPickerVisible && (
+          <View
+            style={{
+              height: 200,
+              backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+              borderRadius: 20,
+              padding: 10,
+              marginBottom: 10,
+              overflow: "hidden",
+            }}
+          >
+            <ScrollView 
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingBottom: 15 }}
+            >
+              {emojiCategories.map((category, catIndex) => (
+                <View key={`cat-${catIndex}`} style={{ marginBottom: 15 }}>
+                  <Text style={{ 
+                    fontSize: 12, 
+                    fontWeight: "600", 
+                    color: colors.textMuted,
+                    marginBottom: 8,
+                    marginLeft: 5,
+                    textTransform: "uppercase",
+                    letterSpacing: 1
+                  }}>
+                    {category.title}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                    {category.emojis.map((emoji, index) => (
+                      <TouchableOpacity
+                        key={`emoji-${catIndex}-${index}`}
+                        onPress={() => handleEmojiSelect(emoji)}
+                        style={{
+                          width: "14.28%", // 7 items per row
+                          aspectRatio: 1,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {isRecording && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 10,
+              backgroundColor: colors.blue + "15",
+              borderRadius: 22,
+              marginBottom: 10,
+              paddingHorizontal: 15,
+              gap: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                backgroundColor: "#EF4444",
+              }}
+            />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: colors.foreground,
+                minWidth: 45,
+              }}
+            >
+              {(recordingDuration / 10).toFixed(1)}s
+            </Text>
+            <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
+              <AudioWaveform
+                data={recordingWaveform}
+                height={20}
+                activeColor={colors.blue}
+                inactiveColor={colors.blue + "40"}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={() => handleStopRecording(false)}
+              style={{ padding: 8 }}
+            >
+              <Trash2 size={20} color="#EF4444" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleStopRecording(true)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: colors.blue,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <StopCircle size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {recordedUri && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 10,
+              backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+              borderRadius: 22,
+              marginBottom: 10,
+              paddingHorizontal: 15,
+              gap: 12,
+            }}
+          >
+            <TouchableOpacity
+              onPress={discardRecordedAudio}
+              style={{ padding: 8 }}
+            >
+              <Trash2 size={20} color="#EF4444" />
+            </TouchableOpacity>
+            
+             <TouchableOpacity
+               onPress={() => isPreviewPlaying ? previewPlayer.pause() : previewPlayer.play()}
+               style={{
+                 width: 32,
+                 height: 32,
+                 borderRadius: 16,
+                 backgroundColor: colors.blue + "20",
+                 alignItems: "center",
+                 justifyContent: "center",
+               }}
+             >
+               {isPreviewPlaying ? (
+                 <Pause size={16} color={colors.blue} />
+               ) : (
+                 <Play size={16} color={colors.blue} fill={colors.blue} />
+               )}
+             </TouchableOpacity>
+
+             <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                  {recordedDuration.toFixed(1)}s
+                </Text>
+                <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
+                  <AudioWaveform
+                    data={recordedWaveform}
+                    height={20}
+                    activeColor={colors.blue}
+                    inactiveColor={colors.blue + "40"}
+                  />
+                </View>
+             </View>
+
+            <TouchableOpacity
+              onPress={() => handleAudioUpload(recordedUri, recordedDuration)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: colors.blue,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Send size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <TouchableOpacity
             onPress={() => setIsMediaModalVisible(true)}
-            disabled={uploading}
+            disabled={uploading || isRecording}
             style={{
               width: 44,
               height: 44,
@@ -853,70 +1455,93 @@ export default function DirectMessageScreen({
               alignItems: "center",
               justifyContent: "center",
               borderRadius: 12,
+              opacity: isRecording ? 0.3 : 1,
             }}
           >
             {uploading ? (
               <ActivityIndicator size="small" color={colors.blue} />
             ) : (
-              <ImageIcon size={24} color={colors.foreground} />
+              <ImageIcon size={22} color={colors.foreground} />
             )}
           </TouchableOpacity>
 
-          <View style={{ flex: 1 }}>
-            <Input
-              ref={inputRef}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder={tr(
-                "Tapez votre message...",
-                "اكتب رسالة...",
-                "Type a message...",
-              )}
-              variant="ghost"
-              multiline
-              containerStyle={{
-                minHeight: 44,
-                backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
-                borderRadius: 22,
-                paddingHorizontal: 5,
-                borderWidth: 0,
-              }}
-              inputStyle={{
-                maxHeight: 120,
-                fontSize: 16,
-                paddingVertical: 10,
-                color: colors.foreground,
-              }}
-            />
-          </View>
+          {!isRecording && !recordedUri && (
+            <>
+              <TouchableOpacity
+                onPress={() => setIsEmojiPickerVisible(!isEmojiPickerVisible)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  backgroundColor: isEmojiPickerVisible
+                    ? colors.blue + "20"
+                    : theme === "dark"
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.05)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 12,
+                }}
+              >
+                <Smile
+                  size={22}
+                  color={isEmojiPickerVisible ? colors.blue : colors.foreground}
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={inputText.trim() ? sendMessage : handleCameraCapture}
-            disabled={sending || (uploading && !inputText.trim())}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.foreground,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: sending ? 0.7 : 1,
-            }}
-          >
-            {sending ? (
-              <ActivityIndicator
-                size="small"
-                color={theme === "dark" ? "black" : "white"}
-              />
-            ) : inputText.trim() ? (
-              <SendHorizonal
-                size={20}
-                color={theme === "dark" ? "black" : "white"}
-              />
-            ) : (
-              <Camera size={20} color={theme === "dark" ? "black" : "white"} />
-            )}
-          </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Input
+                  ref={inputRef}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder={tr(
+                    "Tapez votre message...",
+                    "اكتب رسالة...",
+                    "Type a message...",
+                  )}
+                  variant="ghost"
+                  multiline
+                  containerStyle={{
+                    minHeight: 44,
+                    backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+                    borderRadius: 22,
+                    paddingHorizontal: 12,
+                    borderWidth: 0,
+                  }}
+                  inputStyle={{
+                    maxHeight: 120,
+                    fontSize: 16,
+                    paddingVertical: 10,
+                    color: colors.foreground,
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={
+                  inputText.trim()
+                    ? () => sendMessage()
+                    : handleStartRecording
+                }
+                disabled={sending}
+                style={{
+                  width: 44,
+                  height: 44,
+                  backgroundColor: colors.blue,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 22,
+                }}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : inputText.trim() ? (
+                  <Send size={20} color="white" />
+                ) : (
+                  <Mic size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </BlurView>
 
@@ -1017,9 +1642,13 @@ export default function DirectMessageScreen({
 
             <View style={{ gap: 12 }}>
               <MediaPicker
-                mediaType="all"
-                gallery={true}
-                onSelectionChange={handleMediaSelection}
+                mediaType="image"
+                onSelectionChange={(assets) => {
+                  if (assets.length > 0) {
+                    setIsMediaModalVisible(false);
+                    handleMediaUpload(assets[0].uri);
+                  }
+                }}
               >
                 <View
                   style={{
@@ -1035,13 +1664,13 @@ export default function DirectMessageScreen({
                       width: 44,
                       height: 44,
                       borderRadius: 22,
-                      backgroundColor: colors.blue,
+                      backgroundColor: "#A855F7",
                       alignItems: "center",
                       justifyContent: "center",
                       marginRight: 15,
                     }}
                   >
-                    <Camera size={22} color="#FFF" />
+                    <ImageIcon size={22} color="#FFF" />
                   </View>
                   <View>
                     <Text
@@ -1051,7 +1680,7 @@ export default function DirectMessageScreen({
                         fontWeight: "600",
                       }}
                     >
-                      {tr("Appareil photo", "كاميرا", "Camera")}
+                      {tr("Photo", "صورة", "Photo")}
                     </Text>
                     <Text
                       style={{
@@ -1061,82 +1690,79 @@ export default function DirectMessageScreen({
                       }}
                     >
                       {tr(
-                        "Prendre une photo ou vidéo",
-                        "التقط صورة أو فيديو",
-                        "Take a photo or video",
+                        "Choisir depuis la galerie",
+                        "اختر من المعرض",
+                        "Choose from gallery",
                       )}
                     </Text>
                   </View>
                 </View>
               </MediaPicker>
 
-              <TouchableOpacity
-                onPress={() => (
-                  <MediaPicker
-                    mediaType="video"
-                    onSelectionChange={(assets) => {
-                      console.log("Selected assets:", assets);
-                    }}
-                    onError={(error) => {
-                      console.error("Media picker error:", error);
-                    }}
-                  />
-                )}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: theme === "dark" ? "#2c2c2e" : "#F2F2F7",
-                  padding: 16,
-                  borderRadius: 16,
+              <MediaPicker
+                mediaType="video"
+                onSelectionChange={(assets) => {
+                  if (assets.length > 0) {
+                    setIsMediaModalVisible(false);
+                    handleMediaUpload(assets[0].uri);
+                  }
                 }}
               >
                 <View
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: "#A855F7",
+                    flexDirection: "row",
                     alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 15,
+                    backgroundColor: theme === "dark" ? "#2c2c2e" : "#F2F2F7",
+                    padding: 16,
+                    borderRadius: 16,
                   }}
                 >
-                  <MessageSquare size={22} color="#FFF" />
-                </View>
-                <View>
-                  <Text
+                  <View
                     style={{
-                      color: colors.foreground,
-                      fontSize: 16,
-                      fontWeight: "600",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: "#FF2D55",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 15,
                     }}
                   >
-                    {tr("Vidéo", "فيديو", "Video")}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textMuted,
-                      fontSize: 13,
-                      marginTop: 1,
-                    }}
-                  >
-                    {tr("Depuis la galerie", "من الاستوديو", "From gallery")}
-                  </Text>
+                    <Video size={22} color="#FFF" />
+                  </View>
+                  <View>
+                    <Text
+                      style={{
+                        color: colors.foreground,
+                        fontSize: 16,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {tr("Vidéo", "فيديو", "Video")}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: 13,
+                        marginTop: 1,
+                      }}
+                    >
+                      {tr(
+                        "Partager une vidéo",
+                        "مشاركة فيديو",
+                        "Share a video",
+                      )}
+                    </Text>
+                  </View>
                 </View>
-              </TouchableOpacity>
+              </MediaPicker>
 
+              {/* GIF Option */}
               <TouchableOpacity
-                onPress={() => (
-                  <MediaPicker
-                    mediaType="image"
-                    onSelectionChange={(assets) => {
-                      console.log("Selected assets:", assets);
-                    }}
-                    onError={(error) => {
-                      console.error("Media picker error:", error);
-                    }}
-                  />
-                )}
+                onPress={() => {
+                  setIsMediaModalVisible(false);
+                  setIsGifPickerVisible(true);
+                }}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -1150,13 +1776,13 @@ export default function DirectMessageScreen({
                     width: 44,
                     height: 44,
                     borderRadius: 22,
-                    backgroundColor: "#3B82F6",
+                    backgroundColor: "#00B2FF",
                     alignItems: "center",
                     justifyContent: "center",
                     marginRight: 15,
                   }}
                 >
-                  <ImageIcon size={22} color="#FFF" />
+                  <Smile size={22} color="#FFF" />
                 </View>
                 <View>
                   <Text
@@ -1166,7 +1792,7 @@ export default function DirectMessageScreen({
                       fontWeight: "600",
                     }}
                   >
-                    {tr("Photo", "صورة", "Photo")}
+                    {tr("GIF", "GIF", "GIF")}
                   </Text>
                   <Text
                     style={{
@@ -1175,7 +1801,11 @@ export default function DirectMessageScreen({
                       marginTop: 1,
                     }}
                   >
-                    {tr("Depuis la galerie", "من الاستوديو", "From gallery")}
+                    {tr(
+                      "Rechercher et envoyer des GIFs",
+                      "بحث وإرسال صور GIF",
+                      "Search and send GIFs",
+                    )}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1183,6 +1813,13 @@ export default function DirectMessageScreen({
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* GIF Picker Modal */}
+      <GifPicker
+        onGifSelect={handleGifSelection}
+        onClose={() => setIsGifPickerVisible(false)}
+        visible={isGifPickerVisible}
+      />
     </SafeAreaView>
   );
 }

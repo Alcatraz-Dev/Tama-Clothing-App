@@ -57,7 +57,9 @@ import {
   Camera,
   Eye,
   QrCode,
+  Lock,
 } from "lucide-react-native";
+import { hasFeature, VendorTier, AccountType } from "../utils/planAccessControl";
 import ProductCard from "../components/ProductCard";
 import CollabBadge from "../components/CollabBadge";
 import * as Animatable from "react-native-animatable";
@@ -170,6 +172,9 @@ export default function CollaborationDetailScreen({
     (collab.brandId && profileData?.brandId === collab.brandId) ||
     profileData?.brandId === collab.id;
   const isHost = isOwner;
+  const vendorTier = (profileData?.vendorPlan as VendorTier) || "starter";
+  const accountType = (profileData?.accountType as AccountType) || "entreprise";
+  const canUseLiveStreaming = hasFeature(vendorTier, "liveStreaming", accountType);
 
   const isFollowed = followedCollabs.includes(collab.id);
 
@@ -463,6 +468,18 @@ export default function CollaborationDetailScreen({
     // - If stream IS running: EVERYONE joins as AUDIENCE (including owner/admin if joining via this button)
     // - Strict Role Check: Use isOwner, remove isAdmin from host privileges
     const isHost = !isLive && isOwner;
+
+    if (isHost && !canUseLiveStreaming) {
+      Alert.alert(
+        t('premiumFeature') || 'Premium Feature',
+        t('upgradeRequiredLive') || 'Live streaming is not available in your current plan. Upgrade to Professional to unlock it!',
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('seePlans') || 'See Plans' }
+        ]
+      );
+      return;
+    }
 
 
     console.log(
@@ -1233,8 +1250,8 @@ export default function CollaborationDetailScreen({
                   gap: 12,
                 }}
               >
-                {/* START BUTTON - ONLY FOR HOST */}
-                {isHost && (
+                {/* START BUTTON - ONLY FOR HOST WITH LIVE STREAMING PLAN */}
+                {isHost && canUseLiveStreaming && (
                   <TouchableOpacity
                     style={[
                       styles.liveActionButton,

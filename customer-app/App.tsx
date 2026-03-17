@@ -52,7 +52,6 @@ import ShipmentTrackingScreen from "./src/screens/ShipmentTrackingScreen";
 import MyShipmentsScreen from "./src/screens/MyShipmentsScreen";
 import ProofOfDeliveryScreen from "./src/screens/ProofOfDeliveryScreen";
 import DriverDashboardScreen from "./src/screens/EnhancedDriverDashboard";
-import DynamicIslandTestScreen from "./src/screens/DynamicIslandTestScreen";
 import AdminProductsScreen from "./src/screens/admin/AdminProductsScreen";
 import AdminDashboardScreen from "./src/screens/admin/AdminDashboardScreen";
 import AdminOrdersScreen from "./src/screens/admin/AdminOrdersScreen";
@@ -71,6 +70,7 @@ import AdminSettingsScreen from "./src/screens/admin/AdminSettingsScreen";
 import AdminSupportListScreen from "./src/screens/admin/AdminSupportListScreen";
 import AdminSupportChatScreen from "./src/screens/admin/AdminSupportChatScreen";
 import AdminMenuScreen from "./src/screens/admin/AdminMenuScreen";
+import AdminVendorTeamScreen from "./src/screens/admin/AdminVendorTeamScreen";
 import AdminNotreSelectionScreen from "./src/screens/admin/AdminNotreSelectionScreen";
 import AdminGiftsScreen from "./src/screens/admin/AdminGiftsScreen";
 import AdminDeliveryCompaniesScreen from "./src/screens/admin/AdminDeliveryCompaniesScreen";
@@ -266,6 +266,7 @@ import {
   translateCategory as translateCategoryUtil,
   colorNameToHex,
 } from "./src/utils/translationHelpers";
+import { hasFeature, VendorTier, AccountType } from "./src/utils/planAccessControl";
 import { updateProductRating } from "./src/utils/productUtils";
 import Translations from "./src/translations";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
@@ -333,7 +334,7 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "fr" | "ar">("fr"); // 'en', 'fr' or 'ar'
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [appState, setAppState] = useState<
-    "Onboarding" | "Auth" | "Main" | "SizeGuide" | "VendorRegistration"
+    "Onboarding" | "Auth" | "Main" | "SizeGuide" | "VendorRegistration" | "PrivacyPolicy" | "TermsOfService"
   >("Onboarding");
   const [activeTab, setActiveTab] = useState("Home");
   const [previousTab, setPreviousTab] = useState("Home");
@@ -480,6 +481,32 @@ export default function App() {
           tr("Récompense de Fidélité", "مكافأة وفاء", "Fidelity Reward"),
           successMsg,
         );
+
+        // Notify user
+        try {
+          await addDoc(collection(db, "notifications"), {
+            userId: scannerUid,
+            title:
+              tr("Récompense de Fidélité", "مكافأة وفاء", "Fidelity Reward") ||
+              "Fidelity Reward",
+            body: successMsg,
+            read: false,
+            createdAt: serverTimestamp(),
+            type: "wallet",
+          });
+          if (targetDocRef && type === "user") {
+            await addDoc(collection(db, "notifications"), {
+              userId: targetId,
+              title: "Brand/User Reference",
+              body: `Someone scanned your affiliate code. You received ${targetReward} coins!`,
+              read: false,
+              createdAt: serverTimestamp(),
+              type: "wallet",
+            });
+          }
+        } catch (err) {
+          console.error("Scan reward notification error:", err);
+        }
       }
     } catch (e) {
       console.error("Error processing scan reward", e);
@@ -518,12 +545,42 @@ export default function App() {
         await updateDoc(userRef, {
           "wallet.coins": increment(couponData.points),
         });
+
+        // Notify User
+        try {
+          await addDoc(collection(db, "notifications"), {
+            userId: couponData.userId,
+            title: t("notifWalletUpdateTitle") || "Wallet Updated",
+            body:
+              t("notifWalletUpdateBody")?.replace(
+                "{{change}}",
+                `+${couponData.points}`,
+              ) || `You received ${couponData.points} coins from your coupon!`,
+            read: false,
+            createdAt: serverTimestamp(),
+            type: "wallet",
+          });
+        } catch (err) {
+          console.error(err);
+        }
       }
 
-      Alert.alert(
-        t("success"),
-        `${t("couponVerified") || "Coupon Verified!"}\n${couponData.value}${couponData.type === "percentage" ? "%" : " TND"} ${t("discountApplied") || "discount applied"}`,
-      );
+      let verificationBody = `${t("couponVerified") || "Coupon Verified!"}\n${couponData.value}${couponData.type === "percentage" ? "%" : " TND"} ${t("discountApplied") || "discount applied"}`;
+      Alert.alert(t("success"), verificationBody);
+
+      // Notify Vendor (the one scanning)
+      try {
+        await addDoc(collection(db, "notifications"), {
+          userId: user?.uid,
+          title: t("couponVerified") || "Coupon Verified!",
+          body: verificationBody.replace("\n", " - "),
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "general",
+        });
+      } catch (err) {
+        console.error(err);
+      }
     } catch (error) {
       console.error("Error verifying coupon:", error);
       Alert.alert(t("error"), "Verification failed");
@@ -1929,6 +1986,21 @@ export default function App() {
   };
 
   const handleStartLive = (arg?: any) => {
+    // Plan check
+    const tier = (profileData?.vendorPlan as VendorTier) || "starter";
+    const accountType = (profileData?.accountType as AccountType) || "entreprise";
+    if (!hasFeature(tier, "liveStreaming", accountType)) {
+      Alert.alert(
+        t('premiumFeature') || 'Premium Feature',
+        t('upgradeRequiredLive') || 'Live streaming is not available in your current plan. Upgrade to Professional to unlock it!',
+        [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('seePlans') || 'See Plans', onPress: () => navigateToVendorRegistration() }
+        ]
+      );
+      return;
+    }
+
     // Check if we were passed a collaboration ID (string) or a brandInfo object
     const isObject = arg && typeof arg === "object";
     const actualCollabId =
@@ -2337,6 +2409,7 @@ export default function App() {
             user={user}
             targetUser={activeTabParams?.targetUser || selectedChatUser}
             onBack={() => setActiveTab("Messages")}
+            onNavigate={handleTabChange}
             t={t}
             language={language}
             currentUserData={profileData}
@@ -2564,6 +2637,7 @@ export default function App() {
           <ChatScreen
             onBack={() => setActiveTab("Settings")}
             user={user}
+            profileData={profileData}
             t={t}
             theme={theme}
             colors={getAppColors(theme)}
@@ -2573,11 +2647,11 @@ export default function App() {
         );
       case "PrivacyPolicy":
         return (
-          <PrivacyPolicyScreen onBack={() => setActiveTab("Settings")} t={t} />
+          <PrivacyPolicyScreen onBack={() => setActiveTab("Settings")} t={t} language={language} />
         );
       case "TermsOfService":
         return (
-          <TermsOfServiceScreen onBack={() => setActiveTab("Settings")} t={t} />
+          <TermsOfServiceScreen onBack={() => setActiveTab("Settings")} t={t} language={language} />
         );
       case "LiveAnalytics":
         return (
@@ -2776,18 +2850,29 @@ export default function App() {
               setSelectedAdminChat({ chatId, customerName });
               setActiveTab("AdminSupportChat");
             }}
+            profileData={profileData}
             t={t}
             theme={theme}
             colors={getAppColors(theme)}
+          />
+        );
+      case "AdminVendorTeam":
+        return (
+          <AdminVendorTeamScreen
+            onBack={() => setActiveTab("AdminMenu")}
+            profileData={profileData}
+            t={t}
           />
         );
       case "AdminSupportChat":
         return (
           <AdminSupportChatScreen
             onBack={() => setActiveTab("AdminSupportList")}
+            onNavigate={handleTabChange}
             chatId={selectedAdminChat?.chatId}
             customerName={selectedAdminChat?.customerName}
             user={user}
+            profileData={profileData}
             t={t}
             theme={theme}
             colors={getAppColors(theme)}
@@ -2860,11 +2945,6 @@ export default function App() {
             t={t}
             language={language}
           />
-        );
-
-      case "DynamicIslandTest":
-        return (
-          <DynamicIslandTestScreen onBack={() => setActiveTab("Profile")} />
         );
 
       case "ShipmentCreation":
@@ -3119,6 +3199,8 @@ export default function App() {
               isLogin={isLogin}
               toggleAuth={() => setIsLogin(!isLogin)}
               onComplete={() => setAppState("Main")}
+              onViewTerms={() => setAppState("TermsOfService")}
+              onViewPrivacy={() => setAppState("PrivacyPolicy")}
               t={t}
               language={language}
             />
@@ -3136,6 +3218,18 @@ export default function App() {
               profileData={profileData}
               updateProfile={updateProfileData}
               theme={theme}
+              t={t}
+              language={language}
+            />
+          ) : appState === "PrivacyPolicy" ? (
+            <PrivacyPolicyScreen
+              onBack={() => user ? (setAppState("Main"), setActiveTab("Settings")) : setAppState("Auth")}
+              t={t}
+              language={language}
+            />
+          ) : appState === "TermsOfService" ? (
+            <TermsOfServiceScreen
+              onBack={() => user ? (setAppState("Main"), setActiveTab("Settings")) : setAppState("Auth")}
               t={t}
               language={language}
             />
@@ -4421,6 +4515,27 @@ function ProfileScreen({
         t("successTitle"),
         tr("Échange réussi !", "تم التبادل بنجاح!", "Exchange successful!"),
       );
+
+      // Notify User
+      try {
+        await addDoc(collection(db, "notifications"), {
+          userId: user.uid,
+          title: t("notifWalletUpdateTitle") || "Wallet Update",
+          body:
+            t("notifWalletUpdateBody")?.replace(
+              "{{change}}",
+              exchangeType === "diamondsToCoins"
+                ? `+${amount} coins / -${amount} diamonds`
+                : `+${amount} diamonds`,
+            ) || "Your balance has been modified",
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "wallet",
+        });
+      } catch (err) {
+        console.error("Wallet notification error:", err);
+      }
+
       setShowQuickExchange(false);
       setExchangeAmount("");
     } catch (err: any) {
@@ -4498,6 +4613,35 @@ function ProfileScreen({
         });
       });
       Alert.alert("Success", "Transfer completed");
+
+      // Notify Sender
+      try {
+        await addDoc(collection(db, "notifications"), {
+          userId: user.uid,
+          title: t("notifWalletUpdateTitle") || "Wallet Update",
+          body:
+            t("notifWalletUpdateBody")?.replace(
+              "{{change}}",
+              `-${amount} diamonds sent to ${selectedTransferUser.fullName}`,
+            ) || `Sent transfer to ${selectedTransferUser.fullName}`,
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "wallet",
+        });
+
+        // Notify Receiver
+        await addDoc(collection(db, "notifications"), {
+          userId: selectedTransferUser.id,
+          title: "Transfer Received",
+          body: `You received ${amount} diamonds from ${currentUserProfileData?.fullName || user.displayName}`,
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "wallet",
+        });
+      } catch (err) {
+        console.error("Transfer notification error:", err);
+      }
+
       setShowTransferModal(false);
       setSelectedTransferUser(null);
       setTransferAmount("");
@@ -6560,6 +6704,7 @@ function ProfileScreen({
                 </View>
               )}
 
+
               <View
                 style={[
                   styles.campaignDivider,
@@ -6580,7 +6725,8 @@ function ProfileScreen({
                 "editor",
                 "nor_kam",
                 "support",
-              ].includes(profileData?.role || "") && (
+              ].includes(profileData?.role || "") && 
+              hasFeature((profileData?.vendorPlan as VendorTier) || "starter", "liveStreaming", profileData?.accountType as AccountType) && (
                 <TouchableOpacity
                   onPress={() =>
                     onStartLive &&
@@ -6700,9 +6846,14 @@ function ProfileScreen({
                     >
                       {t("myStudio")}
                     </Text>
-                    {["admin", "support", "brand_owner"].includes(
-                      profileData?.role,
-                    ) && (
+                    {[
+                      "admin",
+                      "support",
+                      "brand_owner",
+                      "vendor",
+                      "nor_kam",
+                      "partner",
+                    ].includes(profileData?.role) && (
                       <TouchableOpacity
                         style={[
                           styles.menuRow,
@@ -6723,7 +6874,7 @@ function ProfileScreen({
                               },
                             ]}
                           >
-                            <LayoutDashboard size={20} color="#5856D6" />
+                            <LayoutDashboard size={20} color={colors.primary} />
                           </View>
                           <Text
                             style={[
@@ -6731,13 +6882,10 @@ function ProfileScreen({
                               { color: colors.foreground, fontWeight: "800" },
                             ]}
                           >
-                            {t("adminConsole")
-                              ? t("adminConsole").toUpperCase()
-                              : tr(
-                                  "CONSOLE ADMIN",
-                                  "وحدة تحكم المسؤول",
-                                  "ADMIN CONSOLE",
-                                )}
+                            {(["admin", "support"].includes(profileData?.role)
+                              ? t("adminConsole")
+                              : t("storeManagement") || "STORE MANAGEMENT"
+                            ).toUpperCase()}
                           </Text>
                         </View>
                         <ChevronRight size={18} color={colors.textMuted} />
@@ -6767,12 +6915,12 @@ function ProfileScreen({
                               },
                             ]}
                           >
-                            <Store size={20} color={colors.purple} />
+                            <Store size={20} color={colors.primary} />
                           </View>
                           <Text
                             style={[
                               styles.menuRowText,
-                              { color: colors.purple, fontWeight: "600" },
+                              { color: colors.primary, fontWeight: "600" },
                             ]}
                           >
                             {["approved", "active"].includes(
@@ -6998,39 +7146,6 @@ function ProfileScreen({
                   </View>
                   <ChevronRight size={18} color={colors.textMuted} />
                 </TouchableOpacity>
-
-                {profileData?.role === "admin" && (
-                  <TouchableOpacity
-                    style={[
-                      styles.menuRow,
-                      { paddingVertical: 18, borderBottomColor: colors.border },
-                    ]}
-                    onPress={() => setActiveTab("DynamicIslandTest")}
-                  >
-                    <View style={styles.menuRowLeft}>
-                      <View
-                        style={[
-                          styles.iconCircle,
-                          {
-                            backgroundColor:
-                              theme === "dark" ? "#17171F" : "#F9F9FB",
-                          },
-                        ]}
-                      >
-                        <LayoutDashboard size={20} color="#FF2D55" />
-                      </View>
-                      <Text
-                        style={[
-                          styles.menuRowText,
-                          { color: colors.foreground },
-                        ]}
-                      >
-                        TEST DYNAMIC ISLAND
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                )}
 
                 {(profileData?.role === "brand_owner" ||
                   profileData?.role === "admin") &&
@@ -9802,7 +9917,11 @@ function ProfileScreen({
                 }}
               >
                 <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
                 >
                   <Settings size={20} color={colors.foreground} />
                   <Text style={{ fontWeight: "700", color: colors.foreground }}>
@@ -9861,7 +9980,7 @@ function ProfileScreen({
                     >
                       {updatingDiscount ? (
                         <ActivityIndicator color="#FFF" />
-                       ) : (
+                      ) : (
                         <Text style={{ color: "#FFF", fontWeight: "800" }}>
                           {t("saveSettings")}
                         </Text>
@@ -11484,6 +11603,20 @@ function SettingsScreen({
 
   const [name, setName] = useState(profileData?.fullName || "");
   const [phone, setPhone] = useState(profileData?.phone || "");
+  const [bio, setBio] = useState<{ en: string; fr: string; ar: string }>(
+    typeof profileData?.bio === "object" && profileData?.bio !== null
+      ? {
+          en: profileData.bio.en || "",
+          fr: profileData.bio.fr || "",
+          ar: profileData.bio.ar || "",
+        }
+      : {
+          en: profileData?.bio || "",
+          fr: profileData?.bio || "",
+          ar: profileData?.bio || "",
+        },
+  );
+  const [bioLang, setBioLang] = useState<"en" | "fr" | "ar">("fr");
   const [addresses, setAddresses] = useState<any[]>(
     profileData?.addresses || [],
   );
@@ -11536,6 +11669,19 @@ function SettingsScreen({
     if (profileData) {
       setName(profileData.fullName || "");
       setPhone(profileData.phone || "");
+      setBio(
+        typeof profileData.bio === "object" && profileData.bio !== null
+          ? {
+              en: profileData.bio.en || "",
+              fr: profileData.bio.fr || "",
+              ar: profileData.bio.ar || "",
+            }
+          : {
+              en: profileData.bio || "",
+              fr: profileData.bio || "",
+              ar: profileData.bio || "",
+            },
+      );
       setAddresses(profileData.addresses || []);
       setAvatar(profileData.avatarUrl || null);
       if (profileData.settings) {
@@ -11584,6 +11730,7 @@ function SettingsScreen({
     await updateProfile({
       fullName: name,
       phone,
+      bio,
       addresses,
       settings: updatedSettings,
     });
@@ -11908,6 +12055,74 @@ function SettingsScreen({
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
+            />
+          </View>
+          <View style={styles.premiumInputGroup}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <Text
+                style={[
+                  styles.inputLabelField,
+                  { color: appColors.textMuted, marginBottom: 0 },
+                ]}
+              >
+                {t("bio") || "Bio"}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {(["en", "fr", "ar"] as const).map((l) => (
+                  <TouchableOpacity
+                    key={l}
+                    onPress={() => setBioLang(l)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      backgroundColor:
+                        bioLang === l
+                          ? appColors.primary
+                          : theme === "dark"
+                            ? "#222"
+                            : "#E0E0E0",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: bioLang === l ? "#FFF" : appColors.foreground,
+                        fontWeight: "bold",
+                        fontSize: 10,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {l}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <TextInput
+              style={[
+                styles.premiumInput,
+                {
+                  backgroundColor: theme === "dark" ? "#17171F" : "#F9F9FB",
+                  color: appColors.foreground,
+                  borderColor: appColors.border,
+                  borderWidth: 1,
+                  minHeight: 80,
+                  textAlignVertical: "top",
+                },
+              ]}
+              multiline={true}
+              numberOfLines={3}
+              placeholder={t("enterBio") || "Describe yourself..."}
+              placeholderTextColor={appColors.textMuted}
+              value={bio[bioLang]}
+              onChangeText={(text) => setBio({ ...bio, [bioLang]: text })}
             />
           </View>
 
@@ -12972,22 +13187,26 @@ function ProductDetailScreen({
                 { color: colors.foreground, marginBottom: 0 },
               ]}
             >
-              {product.discountPrice && product.discountPrice < product.price
-                ? product.discountPrice.toFixed(2)
-                : product.price.toFixed(2)}{" "}
+              {product.discountPrice !== undefined &&
+              product.discountPrice !== null &&
+              product.discountPrice < product.price
+                ? Number(product.discountPrice).toFixed(3)
+                : Number(product.price).toFixed(3)}{" "}
               TND
             </Text>
-            {product.discountPrice && product.discountPrice < product.price && (
-              <Text
-                style={{
-                  fontSize: 16,
-                  color: colors.textMuted,
-                  textDecorationLine: "line-through",
-                }}
-              >
-                {product.price.toFixed(2)} TND
-              </Text>
-            )}
+            {product.discountPrice !== undefined &&
+              product.discountPrice !== null &&
+              product.discountPrice < product.price && (
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: colors.textMuted,
+                    textDecorationLine: "line-through",
+                  }}
+                >
+                  {Number(product.price).toFixed(3)} TND
+                </Text>
+              )}
             {product.discountPrice && product.discountPrice < product.price && (
               <View
                 style={{
@@ -15135,9 +15354,10 @@ function CartScreen({
 
   // Use discountPrice if available, otherwise use regular price
   const subtotal = cart.reduce((sum: number, item: any) => {
-    const itemPrice = item.discountPrice
-      ? Number(item.discountPrice)
-      : Number(item.price);
+    const itemPrice =
+      item.discountPrice !== undefined && item.discountPrice !== null
+        ? Number(item.discountPrice)
+        : Number(item.price);
     return sum + itemPrice * (item.quantity || 1);
   }, 0);
 
@@ -15259,7 +15479,12 @@ function CartScreen({
           );
 
           if (tier) {
-            const originalPrice = Number(targetItem.price) * qty;
+            const actualItemPrice =
+              targetItem.discountPrice !== undefined &&
+              targetItem.discountPrice !== null
+                ? Number(targetItem.discountPrice)
+                : Number(targetItem.price);
+            const originalPrice = actualItemPrice * qty;
             const bundlePrice = Number(tier.price);
             if (originalPrice > bundlePrice) {
               discountAmount = originalPrice - bundlePrice;
@@ -15271,10 +15496,11 @@ function CartScreen({
 
     let discountedSubtotal = Math.max(0, subtotal - discountAmount);
     return {
-      total: (discountedSubtotal + deliveryCost).toFixed(3),
+      total: discountedSubtotal + deliveryCost,
       deliveryCost,
       discountAmount,
       discountedSubtotal,
+      subtotal,
     };
   };
 
@@ -15326,11 +15552,11 @@ function CartScreen({
       await updateProfile({ fullName: name, phone, address });
       const orderDoc = await addDoc(collection(db, "orders"), {
         items: cart,
-        total: parseFloat(total), // Use calculated local total with coupons
-        subtotal: subtotal,
-        discount: discountAmount,
+        total: Number(total),
+        subtotal: Number(subtotal),
+        discount: Number(discountAmount),
         couponCode: appliedCoupon ? appliedCoupon.code : null,
-        deliveryCost: deliveryCost,
+        deliveryCost: Number(deliveryCost),
         status: "pending",
         createdAt: serverTimestamp(),
         customer: {
@@ -15353,8 +15579,8 @@ function CartScreen({
           phone,
           address,
           items: cart.map((item: any) => item.name || item.title),
-          total: parseFloat(total),
-          deliveryCost: deliveryCost,
+          total: Number(total),
+          deliveryCost: Number(deliveryCost),
           orderId: orderDoc.id,
         });
 
@@ -15365,6 +15591,41 @@ function CartScreen({
         }
       } catch (shipmentError) {
         console.log("Auto shipment creation error:", shipmentError);
+      }
+      // Send notifications
+      try {
+        let orderSuccessBody = t("notifOrderSuccessBody").replace(
+          "{{orderId}}",
+          orderDoc.id.slice(0, 8).toUpperCase(),
+        );
+        await addDoc(collection(db, "notifications"), {
+          userId: auth.currentUser?.uid,
+          title: t("notifOrderSuccessTitle"),
+          body: orderSuccessBody,
+          data: { orderId: orderDoc.id, type: "order_placed" },
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "order",
+        });
+
+        let adminOrderBody = t("notifNewOrderAdminBody")
+          .replace("{{amount}}", Number(total).toFixed(3))
+          .replace("{{customer}}", name);
+        await addDoc(collection(db, "notifications"), {
+          userId: "ADMIN",
+          title: t("notifNewOrderAdminTitle"),
+          body: adminOrderBody,
+          data: {
+            orderId: orderDoc.id,
+            amount: Number(total).toFixed(3),
+            customer: name,
+          },
+          read: false,
+          createdAt: serverTimestamp(),
+          type: "order",
+        });
+      } catch (err) {
+        console.error("Order notification error:", err);
       }
 
       setOrderDone(true);
@@ -15660,20 +15921,27 @@ function CartScreen({
                         },
                       ]}
                     >
-                      {item.discountPrice || item.price} TND
+                      {(item.discountPrice !== undefined &&
+                      item.discountPrice !== null
+                        ? Number(item.discountPrice)
+                        : Number(item.price)
+                      ).toFixed(3)}{" "}
+                      TND
                     </Text>
-                    {item.discountPrice && (
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: colors.textMuted,
-                          textDecorationLine: "line-through",
-                          fontWeight: "600",
-                        }}
-                      >
-                        {item.price} TND
-                      </Text>
-                    )}
+                    {item.discountPrice !== undefined &&
+                      item.discountPrice !== null &&
+                      item.discountPrice < item.price && (
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: colors.textMuted,
+                            textDecorationLine: "line-through",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {Number(item.price).toFixed(3)} TND
+                        </Text>
+                      )}
                   </View>
 
                   {/* Smaller Quantity Controls */}
@@ -16034,11 +16302,11 @@ function CartScreen({
             <View style={[styles.summaryRow, { marginBottom: 12 }]}>
               <Text style={styles.summaryLabel}>{t("subtotal")}</Text>
               <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-                {subtotal.toFixed(3)} TND
+                {Number(subtotal).toFixed(3)} TND
               </Text>
             </View>
 
-            {appliedCoupon && discountAmount > 0 && (
+            {appliedCoupon && Number(discountAmount) > 0 && (
               <View style={[styles.summaryRow, { marginBottom: 12 }]}>
                 <Text style={[styles.summaryLabel, { color: "#2E7D32" }]}>
                   {t("discount")}
@@ -16087,7 +16355,7 @@ function CartScreen({
                   { fontSize: 18, color: colors.foreground, fontWeight: "900" },
                 ]}
               >
-                {total} TND
+                {Number(total).toFixed(3)} TND
               </Text>
             </View>
           </View>
@@ -18610,7 +18878,7 @@ const styles = StyleSheet.create({
 //   );
 // }
 
-function PrivacyPolicyScreen({ onBack, t }: any) {
+function PrivacyPolicyScreen({ onBack, t, language }: any) {
   const { colors, theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -18658,17 +18926,37 @@ If you have questions about this policy, please contact our support team.`;
 4. اتصل بنا
 إذا كانت لديك أسئلة حول هذه السياسة، يرجى الاتصال بفريق الدعم لدينا.`;
 
+        const defaultPrivacyFr = `Chez Bey3a, nous accordons une priorité absolue à votre vie privée. Cette politique explique comment nous collectons, utilisons et protégeons vos informations.
+
+1. Collecte d'Informations
+Nous collectons des données personnelles (nom, email, adresse de livraison) lorsque vous créez un compte ou passez une commande.
+
+2. Utilisation des Informations
+Vos données sont utilisées uniquement pour le traitement des commandes, l'amélioration de nos services et l'envoi d'offres pertinentes.
+
+3. Sécurité des Données
+Nous appliquons des mesures de sécurité standard pour protéger vos informations personnelles.
+
+4. Contact
+Si vous avez des questions, n'hésitez pas à contacter notre équipe support.`;
+
         if (snap.exists()) {
           const data = snap.data();
-          const lang = t("home") === "الرئيسية" ? "ar" : "fr";
           setContent(
-            lang === "ar"
+            language === "ar"
               ? data.privacyAr || defaultPrivacyAr
+              : language === "fr"
+              ? data.privacyFr || defaultPrivacyFr
               : data.privacy || defaultPrivacy,
           );
         } else {
-          const lang = t("home") === "الرئيسية" ? "ar" : "fr";
-          setContent(lang === "ar" ? defaultPrivacyAr : defaultPrivacy);
+          setContent(
+            language === "ar"
+              ? defaultPrivacyAr
+              : language === "fr"
+              ? defaultPrivacyFr
+              : defaultPrivacy,
+          );
         }
       } catch {
       } finally {
@@ -18773,7 +19061,7 @@ If you have questions about this policy, please contact our support team.`;
   );
 }
 
-function TermsOfServiceScreen({ onBack, t }: any) {
+function TermsOfServiceScreen({ onBack, t, language }: any) {
   const { colors, theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -18827,17 +19115,40 @@ Bey3a ليست مسؤولة عن الأضرار غير المباشرة النا
 5. القانون الحاكم
 تخضع هذه الشروط لقوانين تونس.`;
 
+        const defaultTermsFr = `Bienvenue chez Bey3a. En accédant à notre application, vous acceptez d'être lié par ces conditions.
+
+1. Droits d'Utilisation
+Vous bénéficiez d'une licence limitée pour utiliser l'application à des fins de shopping personnel.
+
+2. Achats et Paiements
+Tous les prix sont en TND. Nous nous réservons le droit de modifier les prix à tout moment.
+
+3. Propriété Intellectuelle
+Tout le contenu (images, texte, designs) appartient à Bey3a.
+
+4. Limitation de Responsabilité
+Bey3a n'est pas responsable des dommages indirects résultant de l'utilisation de l'application.
+
+5. Droit Applicable
+Ces conditions sont régies par les lois de la Tunisie.`;
+
         if (snap.exists()) {
           const data = snap.data();
-          const lang = t("home") === "الرئيسية" ? "ar" : "fr";
           setContent(
-            lang === "ar"
+            language === "ar"
               ? data.termsAr || defaultTermsAr
+              : language === "fr"
+              ? data.termsFr || defaultTermsFr
               : data.terms || defaultTerms,
           );
         } else {
-          const lang = t("home") === "الرئيسية" ? "ar" : "fr";
-          setContent(lang === "ar" ? defaultTermsAr : defaultTerms);
+          setContent(
+            language === "ar"
+              ? defaultTermsAr
+              : language === "fr"
+              ? defaultTermsFr
+              : defaultTerms,
+          );
         }
       } catch {
       } finally {

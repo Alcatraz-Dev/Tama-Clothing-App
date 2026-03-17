@@ -18,13 +18,14 @@ import {
     query,
     orderBy,
     onSnapshot,
+    where,
 } from 'firebase/firestore';
 
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AdminHeader } from '../../components/admin/AdminUI';
 
-export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) {
+export default function AdminSupportListScreen({ onBack, onChatPress, profileData, t }: any) {
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
@@ -34,7 +35,16 @@ export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) 
 
     useEffect(() => {
         const chatsRef = collection(db, 'chats');
-        const q = query(chatsRef, orderBy('lastMessageTime', 'desc'));
+        let q;
+
+        if (profileData?.role === 'vendor' || profileData?.role === 'vendor_support') {
+            const vendorId = profileData.vendorOwnerId || profileData.uid;
+            // Filter chats where vendorId matches the current vendor
+            q = query(chatsRef, where('vendorId', '==', vendorId), orderBy('lastMessageTime', 'desc'));
+        } else {
+            // Admins see all chats
+            q = query(chatsRef, orderBy('lastMessageTime', 'desc'));
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const chatList = snapshot.docs.map(doc => ({
@@ -43,10 +53,13 @@ export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) 
             }));
             setChats(chatList);
             setLoading(false);
+        }, (error) => {
+            console.error("Error fetching chats:", error);
+            setLoading(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [profileData?.uid, profileData?.vendorOwnerId, profileData?.role]);
 
     const formatTime = (timestamp: any) => {
         if (!timestamp?.toDate) return '';
@@ -98,7 +111,7 @@ export default function AdminSupportListScreen({ onBack, onChatPress, t }: any) 
                                         <Text numberOfLines={1} style={[sc.customerName, { color: colors.foreground }]}>{chat.customerName}</Text>
                                         <View style={[sc.statusBadge, { backgroundColor: chat.status === 'closed' ? 'rgba(107, 114, 128, 0.1)' : 'rgba(34, 197, 94, 0.15)' }]}>
                                             <Text style={[sc.statusBadgeText, { color: chat.status === 'closed' ? '#9CA3AF' : '#22c55e' }]}>
-                                                {(chat.status || 'open').toUpperCase()}
+                                                {(chat.status === 'open' ? (t('statusOpen') || 'OPEN') : (t('statusClosed') || 'CLOSED')).toUpperCase()}
                                             </Text>
                                         </View>
                                     </View>

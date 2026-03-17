@@ -41,15 +41,15 @@ export function Checkbox({
     >
       <View
         style={{
-          width: BORDER_RADIUS,
-          height: BORDER_RADIUS,
-          borderRadius: BORDER_RADIUS.default,
+          width: 20,
+          height: 20,
+          borderRadius: 4,
           borderWidth: 1.5,
           borderColor: checked ? primary : borderColor,
           backgroundColor: checked ? primary : 'transparent',
           alignItems: 'center',
           justifyContent: 'center',
-          marginRight: label ? 8 : 0,
+          marginRight: label ? 10 : 0,
         }}
       >
         {checked && (

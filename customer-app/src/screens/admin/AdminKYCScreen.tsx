@@ -289,7 +289,7 @@ export default function AdminKYCScreen({ onBack, t, theme, profileData }: AdminK
                             </View>
                             {kyc.requestedRole && (
                                 <View style={styles.infoRow}>
-                                    <ShieldCheck size={16} color={'#5856D6'} />
+                                    <ShieldCheck size={16} color={colors.primary} />
                                     <View>
                                         <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '700' }}>REQUESTED ROLE</Text>
                                         <Text style={[styles.infoText, { color: colors.foreground, textTransform: 'uppercase' }]}>{kyc.requestedRole.replace('_', ' ')}</Text>

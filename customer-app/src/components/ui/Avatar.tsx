@@ -37,6 +37,7 @@ export function Avatar({
     const textSubtleColor = useColor('textMuted');
     const foregroundColor = useColor('foreground');
 
+    const [hasError, setHasError] = React.useState(false);
     const containerStyles: StyleProp<ViewStyle> = [
         {
             width: size,
@@ -52,7 +53,7 @@ export function Avatar({
         style
     ];
 
-    const content = (source && source.trim() !== '') ? (
+    const content = (source && source.trim() !== '' && !hasError) ? (
         <Image
             source={{ uri: source }}
             style={[
@@ -60,6 +61,7 @@ export function Avatar({
                 imageStyle
             ]}
             resizeMode="cover"
+            onError={() => setHasError(true)}
         />
     ) : fallback ? (
         <Text variant="subtitle" style={{ color: foregroundColor, fontSize: size * 0.4 }}>

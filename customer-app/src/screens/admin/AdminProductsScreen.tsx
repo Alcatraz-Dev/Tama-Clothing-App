@@ -246,9 +246,11 @@ function ProductListItem({ item, onEdit, onDuplicate, onDelete, colors, theme, l
 
                 <View style={sc.priceAndStockRow}>
                     <View style={sc.priceCol}>
-                        <Text style={[sc.priceMain, { color: colors.foreground }]}>{item.discountPrice ?? item.price} TND</Text>
-                        {item.discountPrice ? (
-                            <Text style={[sc.priceOld, { color: colors.textMuted }]}>{item.price} TND</Text>
+                        <Text style={[sc.priceMain, { color: colors.foreground }]}>
+                            {((item.discountPrice !== undefined && item.discountPrice !== null && item.discountPrice < item.price) ? Number(item.discountPrice) : Number(item.price)).toFixed(3)} TND
+                        </Text>
+                        {(item.discountPrice !== undefined && item.discountPrice !== null && item.discountPrice < item.price) ? (
+                            <Text style={[sc.priceOld, { color: colors.textMuted }]}>{Number(item.price).toFixed(3)} TND</Text>
                         ) : null}
                     </View>
                 </View>
@@ -265,10 +267,10 @@ function ProductListItem({ item, onEdit, onDuplicate, onDelete, colors, theme, l
 
                 <TouchableOpacity
                     onPress={() => onDuplicate(item)}
-                    style={[sc.actionBtn, { backgroundColor: 'rgba(88,86,214,0.1)' }]}
+                    style={[sc.actionBtn, { backgroundColor: colors.primary + '1A' }]}
                     activeOpacity={0.7}
                 >
-                    <Copy size={18} color="#5856D6" />
+                    <Copy size={18} color={colors.primary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -288,8 +290,9 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
     const { colors, theme } = useAppTheme();
     const insets = useSafeAreaInsets();
     const isDark = theme === 'dark';
-    const isBrandOwner = profileData?.role === 'brand_owner';
-    const myBrandId = profileData?.brandId;
+    const isVendorTeam = ['vendor', 'vendor_support', 'manager', 'orders', 'viewer'].includes(profileData?.role);
+    const isBrandOwner = profileData?.role === 'brand_owner' || isVendorTeam;
+    const myBrandId = profileData?.brandId || profileData?.vendorOwnerId || (profileData?.role === 'vendor' ? profileData?.uid : null);
 
     // ── Data ────────────────────────────────────────────────────────────────────
     const [products, setProducts] = useState<any[]>([]);
@@ -540,7 +543,7 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
                 categoryId,
                 category: categories.find(c => c.id === categoryId)?.name?.fr || t('uncategorized'),
                 brandId,
-                brandName: brands.find(b => b.id === brandId)?.name?.fr || '',
+                brandName: brands.find(b => b.id === brandId)?.name?.fr || profileData?.vendorData?.businessName || '',
                 videoUrl: finalVideoUrl,
                 images: uploadedImages,
                 mainImage: uploadedImages[0],

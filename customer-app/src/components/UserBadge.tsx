@@ -129,7 +129,9 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                         <Image source={APP_ICON_2} style={styles.cornerLogo} />
                                         <View style={[styles.badgeType, { borderColor: themeColor + '40', backgroundColor: themeColor + '15' }]}>
                                             <Text style={[styles.badgeTypeText, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]}>
-                                                {t(userProfile.role?.toLowerCase() || 'customer').toUpperCase()}
+                                               {t(userProfile.role === 'brand_owner' ? 'brandOwner' : 
+                                                  userProfile.role === 'vendor_support' ? 'vendorSupport' :
+                                                  (userProfile.role?.toLowerCase() || 'customer')).toUpperCase()}
                                             </Text>
                                         </View>
                                     </View>
@@ -252,7 +254,7 @@ export default function UserBadge({ userProfile, isDark, language, onClose, onVi
                                 <View style={styles.detailsSection}>
                                     <View style={{ maxHeight: 100 }}>
                                         <Text style={[styles.description, { color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)' }]} numberOfLines={4}>
-                                            {getName(userProfile.bio) || t('noDescription') || 'No description available for this user.'}
+                                            {getName(userProfile.bio) || t('noUserDescription') || 'No description available for this user.'}
                                         </Text>
                                     </View>
 

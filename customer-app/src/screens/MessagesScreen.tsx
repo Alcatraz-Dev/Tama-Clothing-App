@@ -35,7 +35,7 @@ import {
     Video,
     X
 } from 'lucide-react-native';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -60,6 +60,23 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
     const { theme } = useAppTheme();
     const insets = useSafeAreaInsets();
 
+    const getAvatarSource = (data: any) => {
+        if (!data) return null;
+        return (
+            data.avatarUrl ||
+            data.photoURL ||
+            data.photoUrl ||
+            data.photo ||
+            data.image ||
+            data.profileImage ||
+            data.profilePhoto ||
+            data.imageUrl ||
+            data.userAvatar ||
+            data.userPhoto ||
+            data.picture
+        );
+    };
+
     // BNA Colors
     const colors = {
         background: useColor('background'),
@@ -79,9 +96,14 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [usersCache, setUsersCache] = useState<Record<string, any>>({});
+    const cacheRef = useRef<Record<string, any>>({});
     const [searchQuery, setSearchQuery] = useState('');
     const [reels, setReels] = useState<any[]>([]);
     const [isReelModalVisible, setIsReelModalVisible] = useState(false);
+
+    useEffect(() => {
+        cacheRef.current = usersCache;
+    }, [usersCache]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -123,7 +145,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
 
                 msgs.forEach((chat: any) => {
                     const otherId = chat.participants.find((id: string) => id !== user.uid);
-                    if (otherId && !chat.participantData?.[otherId] && !usersCache[otherId]) {
+                    if (otherId && !cacheRef.current[otherId]) {
                         missingUserIds.add(otherId);
                     }
                 });
@@ -270,7 +292,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         onPress={() => onBack?.()}
                         activeOpacity={0.7}
                         style={{
-                            marginRight: 12,
+                            marginRight: 16,
                             padding: 8,
                             borderRadius: 12,
                             backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'
@@ -278,6 +300,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                     >
                         <ChevronLeft size={24} color={colors.foreground} />
                     </TouchableOpacity>
+                    {/* Removed Camera Icon from Header */}
                     <View>
                         <Text variant="title" style={{ fontSize: 28, fontWeight: '800', letterSpacing: -0.5 }}>
                             Messages
@@ -287,37 +310,8 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         </Text>
                     </View>
                 </Animatable.View>
-                <Animatable.View 
-                    animation="fadeInRight" 
-                    duration={400}
-                    delay={100}
-                >
-                    <MediaPicker
-                        gallery={true}
-                        mediaType="all"
-                        onSelectionChange={handleMediaSelection}
-                    >
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 14,
-                                backgroundColor: colors.accent,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                shadowColor: colors.accent,
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 8,
-                                elevation: 4
-                            }}
-                            onPress={() => onNavigate('Camera')}
-                        >
-                            <Camera size={20} color="#FFF" />
-                        </TouchableOpacity>
-                    </MediaPicker>
-                </Animatable.View>
+                {/* Removed Camera Icon from Header */}
+                <View style={{ width: 44 }} />
             </View>
 
             {/* Enhanced Search Bar */}
@@ -412,7 +406,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                         >
                                             <View style={{ position: 'relative' }}>
                                                 <Avatar
-                                                    source={user.avatarUrl || user.photoURL}
+                                                    source={getAvatarSource(user)}
                                                     size={SCREEN_WIDTH * 0.16}
                                                     fallback={user.displayName?.[0] || 'V'}
                                                     style={{
@@ -433,6 +427,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                     alignItems: 'center',
                                                     justifyContent: 'center'
                                                 }}>
+                                                    {/* Removed Camera Icon from Header */}
                                                     <Plus size={14} color="white" />
                                                 </View>
                                             </View>
@@ -459,7 +454,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                         return {
                                                             ...r,
                                                             userName: p.displayName || p.fullName || p.name || r.userName || 'User',
-                                                            userPhoto: p.avatarUrl || p.photoURL || p.photo || r.userPhoto || null
+                                                            userPhoto: getAvatarSource(p) || r.userPhoto || null
                                                         };
                                                     });
                                                     const mappedInitial = mappedReels.find(r => r.id === reel.id);
@@ -482,7 +477,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                             backgroundColor: '#000'
                                                         }}>
                                                             <Avatar
-                                                                source={profile.avatarUrl || profile.photoURL}
+                                                                source={getAvatarSource(profile)}
                                                                 size={60}
                                                                 fallback={profile.displayName?.[0] || 'U'}
                                                             />
@@ -499,7 +494,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                             backgroundColor: '#000'
                                                         }}>
                                                             <Avatar
-                                                                source={profile.avatarUrl || profile.photoURL}
+                                                                source={getAvatarSource(profile)}
                                                                 size={60}
                                                                 fallback={profile.displayName?.[0] || 'U'}
                                                             />
@@ -550,9 +545,9 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                 >
                                     <View style={{ position: 'relative' }}>
                                         <Avatar
-                                            source={otherData.avatarUrl || otherData.photoURL || otherData.photo}
+                                            source={getAvatarSource(otherData)}
                                             size={60}
-                                            fallback={(otherData.displayName || otherData.fullName || otherData.name || 'A')[0]?.toUpperCase()}
+                                            fallback={(otherData.displayName || otherData.fullName || otherData.name || 'A').charAt(0).toUpperCase()}
                                         />
                                         <View style={{
                                             position: 'absolute',

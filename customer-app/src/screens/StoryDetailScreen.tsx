@@ -13,7 +13,8 @@ import {
 import { Text } from '../components/ui/text';
 import { Avatar } from '../components/ui/avatar';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
-import { X, ChevronLeft, ChevronRight, Trash2, Edit } from 'lucide-react-native';
+import { X, ChevronLeft, ChevronRight, Trash2, Edit, MoreVertical, Heart, MessageCircle, Send } from 'lucide-react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { deleteDoc, doc } from 'firebase/firestore';
@@ -51,6 +52,16 @@ export default function StoryDetailScreen({
 
     const currentReel = allReels[currentIndex];
     const isOwner = user && currentReel && (user.uid === currentReel.userId);
+
+    const getFilterOverlay = (filter: string) => {
+        switch (filter) {
+            case 'warm': return 'rgba(255, 150, 50, 0.2)';
+            case 'cool': return 'rgba(50, 150, 180, 0.2)';
+            case 'noir': return 'rgba(0, 0, 0, 0.4)';
+            case 'vivid': return 'rgba(255, 0, 128, 0.15)';
+            default: return 'transparent';
+        }
+    };
 
     const handleDelete = async () => {
         if (!currentReel?.id) return;
@@ -160,11 +171,23 @@ export default function StoryDetailScreen({
                         isLooping={false}
                     />
                 ) : (
-                    <Image
+                    <ExpoImage
                         source={{ uri: currentReel.url }}
                         style={StyleSheet.absoluteFillObject}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        transition={300}
                         onLoadEnd={() => setLoading(false)}
+                    />
+                )}
+
+                {/* Filter Overlay */}
+                {currentReel.filter && currentReel.filter !== 'none' && (
+                    <View 
+                        style={[
+                            StyleSheet.absoluteFillObject, 
+                            { backgroundColor: getFilterOverlay(currentReel.filter) }
+                        ]} 
+                        pointerEvents="none"
                     />
                 )}
 
@@ -174,6 +197,13 @@ export default function StoryDetailScreen({
                     </View>
                 )}
             </TouchableOpacity>
+
+            {/* Bottom Gradient for readability */}
+            <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.5)']}
+                style={styles.bottomGradient}
+                pointerEvents="none"
+            />
 
             {/* Top Overlays */}
             <LinearGradient
@@ -308,4 +338,12 @@ const styles = StyleSheet.create({
         padding: 8,
         marginRight: 10,
     },
+    bottomGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 150,
+        zIndex: 5,
+    }
 });

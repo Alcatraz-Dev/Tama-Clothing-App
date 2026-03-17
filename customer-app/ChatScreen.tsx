@@ -153,9 +153,10 @@ interface ChatScreenProps {
     colors: any;
     friend?: any;
     language: 'en' | 'fr' | 'ar';
+    profileData?: any;
 }
 
-export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors, friend , language }: ChatScreenProps) {
+export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors, friend , language, profileData }: ChatScreenProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
@@ -167,8 +168,14 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
     const [showMediaPreview, setShowMediaPreview] = useState(false);
     const insets = useSafeAreaInsets();
     const scrollViewRef = useRef<ScrollView>(null);
+    
+    // Determine the effective user ID for the chat (vendors share a support chat)
+    const effectiveUserId = (!friend && (profileData?.role === 'vendor' || profileData?.role === 'vendor_support'))
+        ? (profileData.vendorOwnerId || user?.uid)
+        : user?.uid;
+
     // If friend is provided, create a unique chat ID based on both user IDs (sorted to ensure consistency)
-    const chatId = friend ? [user?.uid, friend.uid].sort().join('_') : `chat_${user?.uid}`;
+    const chatId = friend ? [user?.uid, friend.uid].sort().join('_') : `chat_${effectiveUserId}`;
     const chatTitle = friend ? friend.fullName || friend.displayName || 'Chat' : t('Support');
    // Translations helper
     const tr = (en: string, fr: string, ar: string) => {
@@ -304,12 +311,15 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
             const chatDocRef = doc(db, 'chats', chatId);
             await setDoc(chatDocRef, {
                 chatId,
-                customerId: user.uid,
-                customerName: user.displayName || user.email || 'Customer',
+                customerId: effectiveUserId,
+                customerName: (profileData?.role === 'vendor' || profileData?.role === 'vendor_support') ? (profileData.vendorStoreId || profileData.displayName || user.displayName || 'Vendor') : (user.displayName || user.email || 'Customer'),
                 customerEmail: user.email,
                 lastMessage: messageText,
                 lastMessageTime: serverTimestamp(),
                 status: 'open',
+                // If it's a vendor support chat, mark it so admins can filter or identify it
+                isVendorSupport: (profileData?.role === 'vendor' || profileData?.role === 'vendor_support'),
+                vendorId: (profileData?.role === 'vendor' || profileData?.role === 'vendor_support') ? (profileData.vendorOwnerId || user.uid) : null
             }, { merge: true });
 
             // Only notify admins if not using bot
@@ -547,7 +557,7 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
                 >
                     {!isOwnMessage && (
                         <Text style={[styles.senderName, { color: isBotMessage ? '#6C63FF' : colors.accent, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }]}>
-                            {isBotMessage ? 'Tama Assistant' : (friend ? (friend.fullName || friend.displayName || 'User') : 'Support')}
+                            {isBotMessage ? (t('tamaAssistant') || 'Tama Assistant') : (friend ? (friend.fullName || friend.displayName || 'User') : (t('supportRole') || 'Support'))}
                         </Text>
                     )}
                     {message.imageUrl ? (
@@ -581,7 +591,7 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
                     {isBotMessage && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 }}>
                             <Sparkles size={10} color="#6C63FF" />
-                            <Text style={{ fontSize: 9, color: '#6C63FF', fontWeight: '500' }}>AI Assistant</Text>
+                            <Text style={{ fontSize: 9, color: '#6C63FF', fontWeight: '500' }}>{t('aiAssistant') || 'AI Assistant'}</Text>
                         </View>
                     )}
                     <Text
@@ -611,7 +621,7 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
                                 <ChevronLeft size={24} color={colors.foreground} />
                             </TouchableOpacity>
                             <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                                {t('support') || 'Customer Support'}
+                                {t('customerSupport') || 'Customer Support'}
                             </Text>
                             <View style={{ width: 40 }} />
                         </View>

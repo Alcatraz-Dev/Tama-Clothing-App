@@ -1046,7 +1046,7 @@ export default function AdminTreasureHuntScreen({
       case "draft":
         return "#8E8E93";
       case "completed":
-        return "#5856D6";
+        return colors.primary;
       case "cancelled":
         return "#FF3B30";
       default:
@@ -1187,7 +1187,7 @@ export default function AdminTreasureHuntScreen({
       ]}
     >
       <View style={styles.locationCardHeader}>
-        <View style={styles.locationOrderBadge}>
+        <View style={[styles.locationOrderBadge, { backgroundColor: colors.primary }]}>
           <Text style={styles.locationOrderText}>{location.order}</Text>
         </View>
         <View style={styles.locationCardTitleRow}>
@@ -1359,7 +1359,7 @@ export default function AdminTreasureHuntScreen({
               ),
             )}
             icon={Target}
-            color="#5856D6"
+            color={colors.primary}
             style={styles.statCard}
           />
         </ScrollView>
@@ -3462,8 +3462,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 14,
     marginBottom: 20,
-    backgroundColor: "#5856D6",
-    shadowColor: "#5856D6",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -3495,7 +3493,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#5856D6",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,

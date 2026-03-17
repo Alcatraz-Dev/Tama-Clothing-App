@@ -63,8 +63,9 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
 
     const fetchDashboardData = async () => {
         try {
-            const isBrandOwner = profileData?.role === 'brand_owner';
-            const myBrandId = profileData?.brandId;
+            const isVendorTeam = ['vendor', 'vendor_support', 'manager', 'orders', 'viewer'].includes(profileData?.role);
+            const isBrandOwner = profileData?.role === 'brand_owner' || isVendorTeam;
+            const myBrandId = profileData?.brandId || profileData?.vendorOwnerId || (profileData?.role === 'vendor' ? profileData?.uid : null);
 
             const [ordersSnap, usersSnap, productsSnap] = await Promise.all([
                 getDocs(collection(db, 'orders')),
@@ -130,7 +131,7 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
         const s = (status || '').toLowerCase();
         switch (s) {
             case 'pending': return '#FF9500';
-            case 'processing': return '#5856D6';
+            case 'processing': return colors.primary;
             case 'shipped': return '#007AFF';
             case 'delivered': return '#34C759';
             case 'cancelled': return '#FF3B30';
@@ -167,7 +168,7 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
                 >
                     {loading ? <ActivityIndicator size="large" color={colors.foreground} style={{ marginTop: 100 }} /> : (
                         <>
-                            {profileData?.role === 'brand_owner' && (
+                            {(profileData?.role === 'brand_owner' || profileData?.role === 'vendor') && (
                                 <View style={[
                                     sc.brandBanner,
                                     {
@@ -177,12 +178,12 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
                                 ]}>
                                     <View style={sc.brandBannerContent}>
                                         <View>
-                                            <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || t('brandOwner')}</Text>
+                                            <Text style={[sc.brandName, { color: colors.foreground }]}>{profileData.brandName?.toUpperCase() || profileData.vendorData?.businessName?.toUpperCase() || t('brandOwner')}</Text>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                                 <Text style={[sc.brandRole, { color: colors.textMuted }]}>{t('brandOwner').toUpperCase()}</Text>
                                                 <View style={[sc.planBadge, { backgroundColor: colors.primary + '15' }]}>
                                                     <Text style={[sc.planBadgeText, { color: colors.primary }]}>
-                                                        {(profileData.vendorPlan as string || 'starter').toUpperCase()}
+                                                        {(profileData.vendorPlan as string || profileData.vendorData?.tier || 'starter').toUpperCase()}
                                                     </Text>
                                                 </View>
                                             </View>
@@ -196,8 +197,8 @@ export default function AdminDashboardScreen({ onBack, onNavigate, t, profileDat
 
                             <View style={sc.statsGrid}>
                                 <StatCard label={t('totalSales')} value={`${stats.sales.toFixed(2)} TND`} icon={ShoppingCart} color="#34C759" />
-                                <StatCard label={t('orders')} value={stats.orders.toString()} icon={Package} color="#5856D6" />
-                                {profileData?.role !== 'brand_owner' && (
+                                <StatCard label={t('orders')} value={stats.orders.toString()} icon={Package} color={colors.primary} />
+                                {!(profileData?.role === 'brand_owner' || profileData?.role === 'vendor') && (
                                     <StatCard label={t('clients')} value={stats.customers.toString()} icon={UsersIcon} color="#007AFF" />
                                 )}
                                 <StatCard label={t('products')} value={stats.products.toString()} icon={ImageIcon} color="#FF2D55" />

@@ -340,7 +340,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                                                 )}
                                             </View>
                                             <Text style={[sc.userSub, { color: colors.textMuted }]}>
-                                                {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role || 'customer'))).toUpperCase()}
+                                                {item.email} • {t(item.role === 'brand_owner' ? 'brandOwner' : (item.role === 'nor_kam' ? 'norKam' : (item.role === 'support' ? 'supportRole' : (item.role || 'customer')))).toUpperCase()}
                                             </Text>
                                         </View>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

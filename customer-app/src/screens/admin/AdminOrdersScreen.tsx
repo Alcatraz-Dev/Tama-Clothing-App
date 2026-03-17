@@ -339,8 +339,8 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
 
     async function fetchOrders() {
         try {
-            const isBrandOwner = profileData?.role === 'brand_owner';
-            const myBrandId = profileData?.brandId;
+            const isBrandOwner = profileData?.role === 'brand_owner' || profileData?.role === 'vendor';
+            const myBrandId = profileData?.brandId || (profileData?.role === 'vendor' ? profileData?.uid : null);
             const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
             const snap = await getDocs(q);
             const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
@@ -813,7 +813,7 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                                 </View>
                             </View>
                             <Text style={[sc.itemPrice, { color: colors.foreground }]}>
-                                {(item.price || 0).toFixed(3)} TND
+                                {(Number(item.discountPrice ?? item.price) || 0).toFixed(3)} TND
                             </Text>
                         </View>
                     ))}
@@ -821,15 +821,21 @@ export default function AdminOrdersScreen({ onBack, t, user: currentUser, profil
                     <View style={[sc.totalBlock, { borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
                         <View style={sc.totalRow}>
                             <Text style={[sc.totalLabel, { color: colors.textMuted }]}>Sous-total</Text>
-                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(selectedOrder.subtotal || selectedOrder.total || 0).toFixed(3)} TND</Text>
+                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(Number(selectedOrder.subtotal) || 0).toFixed(3)} TND</Text>
                         </View>
+                        {Number(selectedOrder.discount) > 0 && (
+                            <View style={sc.totalRow}>
+                                <Text style={[sc.totalLabel, { color: colors.textMuted }]}>Remise</Text>
+                                <Text style={[sc.totalValue, { color: colors.error }]}>-{(Number(selectedOrder.discount) || 0).toFixed(3)} TND</Text>
+                            </View>
+                        )}
                         <View style={sc.totalRow}>
                             <Text style={[sc.totalLabel, { color: colors.textMuted }]}>Livraison</Text>
-                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(selectedOrder.shipping || 7).toFixed(3)} TND</Text>
+                            <Text style={[sc.totalValue, { color: colors.foreground }]}>{(Number(selectedOrder.deliveryCost ?? selectedOrder.shipping) || 7.000).toFixed(3)} TND</Text>
                         </View>
                         <View style={[sc.grandTotalRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
                             <Text style={[sc.grandLabel, { color: colors.foreground }]}>TOTAL</Text>
-                            <Text style={[sc.grandValue, { color: colors.primary }]}>{selectedOrder.total?.toFixed(3)} TND</Text>
+                            <Text style={[sc.grandValue, { color: colors.primary }]}>{(Number(selectedOrder.total) || 0).toFixed(3)} TND</Text>
                         </View>
                     </View>
                 </View>
