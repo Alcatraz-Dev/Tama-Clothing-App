@@ -67,6 +67,7 @@ const TreasureCampaignScreen: React.FC<{
   );
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [reviving, setReviving] = useState(false);
   const { colors, theme } = useAppTheme();
 
   useEffect(() => {
@@ -94,10 +95,11 @@ const TreasureCampaignScreen: React.FC<{
       await fetchParticipation();
     } catch (error: any) {
       console.error("Enrollment error:", error);
-      if (error.message === 'ABANDONED') {
+      if (error.message === "ABANDONED") {
         Alert.alert(
           t("treasureHuntGameOver") || "Game Over!",
-          t("treasureHuntBoomDescLong") || "You were eliminated from this hunt."
+          t("treasureHuntBoomDescLong") ||
+            "You were eliminated from this hunt.",
         );
       } else {
         Alert.alert(
@@ -107,6 +109,24 @@ const TreasureCampaignScreen: React.FC<{
       }
     } finally {
       setEnrolling(false);
+    }
+  };
+
+  const handleTaste = async () => {
+    try {
+      setReviving(true);
+      await treasureHuntService.reviveParticipation(campaign?.id || "", userId);
+      await fetchParticipation();
+    } catch (error: any) {
+      console.error("Revive error:", error);
+      Alert.alert(
+        t("treasureHuntError"),
+        error.message ||
+          t("treasureHuntReviveError") ||
+          "Failed to rejoin the hunt",
+      );
+    } finally {
+      setReviving(false);
     }
   };
 
@@ -432,18 +452,29 @@ const TreasureCampaignScreen: React.FC<{
 
       {/* Primary Action Button */}
       <SafeAreaView edges={["bottom"]} style={styles.footerActions}>
-        {participation?.status === 'abandoned' ? (
-          <View style={[styles.actionBtn, { opacity: 0.8 }]}>
+        {participation?.status === "abandoned" ? (
+          <TouchableOpacity
+            onPress={handleTaste}
+            disabled={reviving}
+            style={styles.actionBtn}
+            activeOpacity={0.8}
+          >
             <LinearGradient
-              colors={["#991B1B", "#450A0A"]}
+              colors={["#10B981", "#059669"]}
               style={styles.actionGradient}
             >
-              <BombIcon size={22} color="#FFF" />
-              <Text style={styles.actionText}>
-                {t("treasureHuntEliminated") || "ELIMINATED"}
-              </Text>
+              {reviving ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Play size={22} color="#FFF" fill="#FFF" />
+                  <Text style={styles.actionText}>
+                    {t("treasureHuntTaste") || "TASTE & CONTINUE"}
+                  </Text>
+                </>
+              )}
             </LinearGradient>
-          </View>
+          </TouchableOpacity>
         ) : !participation ? (
           <TouchableOpacity
             onPress={handleEnroll}

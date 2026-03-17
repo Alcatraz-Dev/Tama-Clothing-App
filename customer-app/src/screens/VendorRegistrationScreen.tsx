@@ -651,8 +651,8 @@ export default function VendorRegistrationScreen({
                 const hasCustomCategory = businessCategory === 'other' ? !!customCategory : true;
                 return !!accountType && !!businessName && !!businessEmail && !!businessPhone && !!businessAddress && hasCategory && hasCustomCategory;
             case 3:
-                // KYC documents are mandatory - ID card front and back required
-                return !!idCardFront && !!idCardBack;
+                // ID card no longer required as per user request
+                return true;
             case 4:
                 return contractAccepted && hasScrolledToEnd;
             default:
@@ -663,11 +663,8 @@ export default function VendorRegistrationScreen({
     // Handle next step
     const handleNext = () => {
         if (!validateStep(step)) {
-            if (step === 3 && (!idCardFront || !idCardBack)) {
-                Alert.alert(
-                    t('error') || 'Error',
-                    t('idCardRequired') || 'ID card (front and back) is required for verification'
-                );
+            if (step === 3) {
+                // Simplified KYC info
             } else if (step === 2 && !accountType) {
                 Alert.alert(
                     t('error') || 'Error',
@@ -713,8 +710,6 @@ export default function VendorRegistrationScreen({
             let frontUrl = null;
     
             if (businessLicense) licenseUrl = businessLicense.startsWith('http') ? businessLicense : await uploadImage(businessLicense);
-            if (idCardFront) idCardFrontUrl = idCardFront.startsWith('http') ? idCardFront : await uploadImage(idCardFront);
-            if (idCardBack) idCardBackUrl = idCardBack.startsWith('http') ? idCardBack : await uploadImage(idCardBack);
             if (storeFront) frontUrl = storeFront.startsWith('http') ? storeFront : await uploadImage(storeFront);
     
             let paymentProofUrl = null;
@@ -1753,64 +1748,17 @@ export default function VendorRegistrationScreen({
                             {t('documentsDesc') || 'Upload required documents for verification'}
                         </Text>
 
-                        {/* KYC Identity Verification - Mandatory */}
+                        {/* Profile/Store Verification - Simplified */}
                         <View style={[styles.kycSection, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: accent }]}>
                             <View style={styles.kycHeader}>
                                 <Shield size={20} color={accent} />
                                 <Text style={[styles.kycTitle, { color: colors.foreground }]}>
-                                    {t('kycDocuments') || 'Identity Verification'}
+                                    {t('storeVerification') || 'Store Verification'}
                                 </Text>
                             </View>
                             <Text style={[styles.kycDesc, { color: colors.textMuted }]}>
-                                {t('kycDocumentsDesc') || 'Upload your ID card (front and back) for verification'}
+                                {t('storeVerificationDesc') || 'Please upload photos of your store or business licenses if available.'}
                             </Text>
-                            <Text style={[styles.kycRequired, { color: '#EF4444' }]}>
-                                {t('idCardRequired') || 'ID card is required for verification'}
-                            </Text>
-                        </View>
-
-                        {/* ID Card Front - Mandatory */}
-                        <View style={styles.documentSection}>
-                            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
-                                {t('idCardFront') || 'ID Card (Front)'} *
-                            </Text>
-                            <TouchableOpacity
-                                style={[styles.uploadBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: idCardFront ? accent : colors.border }]}
-                                onPress={() => pickImage('idFront')}
-                            >
-                                {idCardFront ? (
-                                    <Image source={{ uri: idCardFront }} style={styles.uploadedImage} />
-                                ) : (
-                                    <View style={styles.uploadPlaceholder}>
-                                        <Upload size={32} color={colors.textMuted} />
-                                        <Text style={[styles.uploadText, { color: colors.textMuted }]}>
-                                            {t('uploadIdCardFront') || 'Upload front side of ID card'}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* ID Card Back - Mandatory */}
-                        <View style={styles.documentSection}>
-                            <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
-                                {t('idCardBack') || 'ID Card (Back)'} *
-                            </Text>
-                            <TouchableOpacity
-                                style={[styles.uploadBox, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', borderColor: idCardBack ? accent : colors.border }]}
-                                onPress={() => pickImage('idBack')}
-                            >
-                                {idCardBack ? (
-                                    <Image source={{ uri: idCardBack }} style={styles.uploadedImage} />
-                                ) : (
-                                    <View style={styles.uploadPlaceholder}>
-                                        <Upload size={32} color={colors.textMuted} />
-                                        <Text style={[styles.uploadText, { color: colors.textMuted }]}>
-                                            {t('uploadIdCardBack') || 'Upload back side of ID card'}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
                         </View>
 
                         {/* Business License - Optional */}

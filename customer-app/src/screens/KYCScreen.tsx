@@ -40,17 +40,14 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
 
     // Form Data
     const [fullName, setFullName] = useState(profileData?.fullName || user?.displayName || '');
-    const [idNumber, setIdNumber] = useState(profileData?.kycData?.idNumber || '');
     const [dob, setDob] = useState(profileData?.kycData?.dob || '');
     const [requestedRole, setRequestedRole] = useState<'user' | 'driver' | 'brand_owner'>(profileData?.kycData?.requestedRole || 'user');
     const [vehicleType, setVehicleType] = useState(profileData?.kycData?.vehicleType || '');
 
     // Images
-    const [idFront, setIdFront] = useState<string | null>(null);
-    const [idBack, setIdBack] = useState<string | null>(null);
     const [selfie, setSelfie] = useState<string | null>(null);
 
-    const pickImage = async (type: 'front' | 'back' | 'selfie') => {
+    const pickImage = async (type: 'selfie') => {
         try {
             const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (!permission.granted) {
@@ -61,13 +58,11 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
                 allowsEditing: true,
-                aspect: type === 'selfie' ? [1, 1] : [4, 3],
+                aspect: [1, 1],
                 quality: 0.8,
             });
 
             if (!result.canceled && result.assets && result.assets[0]) {
-                if (type === 'front') setIdFront(result.assets[0].uri);
-                if (type === 'back') setIdBack(result.assets[0].uri);
                 if (type === 'selfie') setSelfie(result.assets[0].uri);
             }
         } catch (error: any) {
@@ -81,29 +76,23 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
     };
 
     const handleSubmit = async () => {
-        if (!fullName || !idNumber || !dob || !idFront || !idBack || !selfie) {
-            Alert.alert('Missing Information', 'Please complete all fields and upload all required documents.');
+        if (!fullName || !dob || !selfie) {
+            Alert.alert(tr('Missing Information', 'Informations Manquantes', 'معلومات ناقصة'), tr('Please complete all fields and upload your profile photo.', 'Veuillez remplir tous les champs et télécharger votre photo de profil.', 'يرجى إكمال جميع الحقول وتحميل صورة ملفك الشخصي.'));
             return;
         }
 
         setLoading(true);
         try {
             const uid = user.uid;
-            const timestamp = Date.now();
 
-            // Upload Images
-            const frontUrl = await uploadImage(idFront);
-            const backUrl = await uploadImage(idBack);
+            // Upload Image
             const selfieUrl = await uploadImage(selfie);
 
             const kycData = {
                 fullName,
-                idNumber,
                 dob,
                 requestedRole,
                 vehicleType,
-                idFrontUrl: frontUrl,
-                idBackUrl: backUrl,
                 selfieUrl: selfieUrl,
                 submittedAt: new Date().toISOString(),
                 status: 'pending',
@@ -123,8 +112,8 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             });
 
             Alert.alert(
-                'Submission Successful',
-                'Your KYC documents have been submitted for review. We will notify you once verified.',
+                tr('Submission Successful', 'Soumission Réussie', 'تم الإرسال بنجاح'),
+                tr('Your account verification info has been submitted. We will notify you once verified.', 'Vos informations de vérification de compte ont été soumises. Nous vous informerons une fois vérifié.', 'تم إرسال معلومات التحقق من حسابك. سنخطرك بمجرد التحقق.'),
                 [{ text: 'OK', onPress: onBack }]
             );
         } catch (error) {
@@ -150,7 +139,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                     <ChevronLeft size={24} color={colors.foreground} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                    {tr('Verify Identity', 'Vérifier Identité', 'تأكيد الهوية')}
+                    {tr('Account Verification', 'Vérification du Compte', 'تحقق من الحساب')}
                 </Text>
                 <View style={{ width: 40 }} />
             </View>
@@ -162,15 +151,13 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             <View style={[styles.stepDot, step >= 1 ? { backgroundColor: colors.success } : { backgroundColor: colors.border }]} />
             <View style={[styles.stepLine, step >= 2 ? { backgroundColor: colors.success } : { backgroundColor: colors.border }]} />
             <View style={[styles.stepDot, step >= 2 ? { backgroundColor: colors.success } : { backgroundColor: colors.border }]} />
-            <View style={[styles.stepLine, step >= 3 ? { backgroundColor: colors.success } : { backgroundColor: colors.border }]} />
-            <View style={[styles.stepDot, step >= 3 ? { backgroundColor: colors.success } : { backgroundColor: colors.border }]} />
         </View>
     );
 
     const renderStep1 = () => (
         <View style={styles.stepContainer}>
             <Text style={[styles.stepTitle, { color: colors.foreground }]}>{tr('Personal Information', 'Informations Personnelles', 'المعلومات الشخصية')}</Text>
-            <Text style={[styles.stepSub, { color: colors.textMuted }]}>{tr('Please enter your details exactly as they appear on your ID.', 'Veuillez saisir vos détails exactement comme sur votre pièce d\'identité.', 'يرجى إدخال التفاصيل الخاصة بك كما تظهر في هويتك.')}</Text>
+            <Text style={[styles.stepSub, { color: colors.textMuted }]}>{tr('Please enter your details to verify your account.', 'Veuillez saisir vos détails pour vérifier votre compte.', 'يرجى إدخال التفاصيل الخاصة بك للتحقق من حسابك.')}</Text>
 
             <View style={styles.inputGroup}>
                 <Text style={[styles.label, { color: colors.textMuted }]}>{tr('Full Name', 'Nom Complet', 'الاسم الكامل')}</Text>
@@ -182,20 +169,6 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                         onChangeText={setFullName}
                         placeholderTextColor={colors.textMuted}
                         placeholder="John Doe"
-                    />
-                </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>{tr('ID / Passport Number', 'Numéro CIN / Passeport', 'رقم الهوية / جواز السفر')}</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1A1A1A' : '#F5F5F5', borderColor: colors.border }]}>
-                    <CreditCard size={20} color={colors.textMuted} />
-                    <TextInput
-                        style={[styles.input, { color: colors.foreground }]}
-                        value={idNumber}
-                        onChangeText={setIdNumber}
-                        placeholderTextColor={colors.textMuted}
-                        placeholder="12345678"
                     />
                 </View>
             </View>
@@ -262,7 +235,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             <TouchableOpacity
                 style={[styles.nextBtn, { backgroundColor: colors.foreground }]}
                 onPress={() => {
-                    if (fullName && idNumber && dob) setStep(2);
+                    if (fullName && dob) setStep(2);
                     else Alert.alert(tr('Required', 'Requis', 'مطلوب'), tr('Please fill all fields', 'Veuillez remplir tous les champs', 'يرجى ملء جميع الحقول'));
                 }}
             >
@@ -273,54 +246,8 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
 
     const renderStep2 = () => (
         <View style={styles.stepContainer}>
-            <Text style={[styles.stepTitle, { color: colors.foreground }]}>{tr('Upload ID', 'Télécharger CIN', 'تحميل الهوية')}</Text>
-            <Text style={[styles.stepSub, { color: colors.textMuted }]}>{tr('Please upload clear photos of your ID card (Front & Back).', 'Veuillez télécharger des photos claires de votre carte (Recto & Verso).', 'يرجى تحميل صور واضحة لبطاقة الهوية (الوجه والخلف).')}</Text>
-
-            <TouchableOpacity style={[styles.uploadBox, { borderColor: colors.border, backgroundColor: isDark ? '#1A1A1A' : '#F9F9F9' }]} onPress={() => pickImage('front')}>
-                {idFront ? (
-                    <Image source={{ uri: idFront }} style={styles.uploadedImage} />
-                ) : (
-                    <View style={styles.uploadPlaceholder}>
-                        <CreditCard size={40} color={colors.textMuted} />
-                        <Text style={[styles.uploadText, { color: colors.textMuted }]}>{tr('Front of ID', 'Recto CIN', 'وجه الهوية')}</Text>
-                    </View>
-                )}
-                {idFront && <TouchableOpacity style={styles.removeBtn} onPress={() => setIdFront(null)}><XCircle color="white" size={20} /></TouchableOpacity>}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.uploadBox, { borderColor: colors.border, backgroundColor: isDark ? '#1A1A1A' : '#F9F9F9' }]} onPress={() => pickImage('back')}>
-                {idBack ? (
-                    <Image source={{ uri: idBack }} style={styles.uploadedImage} />
-                ) : (
-                    <View style={styles.uploadPlaceholder}>
-                        <CreditCard size={40} color={colors.textMuted} />
-                        <Text style={[styles.uploadText, { color: colors.textMuted }]}>{tr('Back of ID', 'Verso CIN', 'خلفية الهوية')}</Text>
-                    </View>
-                )}
-                {idBack && <TouchableOpacity style={styles.removeBtn} onPress={() => setIdBack(null)}><XCircle color="white" size={20} /></TouchableOpacity>}
-            </TouchableOpacity>
-
-            <View style={styles.btnRow}>
-                <TouchableOpacity style={[styles.backStepBtn, { borderColor: colors.border }]} onPress={() => setStep(1)}>
-                    <Text style={{ color: colors.foreground }}>{tr('Back', 'Retour', 'رجوع')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.nextBtn, { backgroundColor: colors.foreground, flex: 1, marginLeft: 10 }]}
-                    onPress={() => {
-                        if (idFront && idBack) setStep(3);
-                        else Alert.alert(tr('Required', 'Requis', 'مطلوب'), tr('Please upload both sides of your ID', 'Veuillez télécharger les deux côtés', 'يرجى تحميل كلا الجانبين'));
-                    }}
-                >
-                    <Text style={[styles.nextBtnText, { color: colors.background }]}>{tr('Next', 'Suivant', 'التالي')}</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-
-    const renderStep3 = () => (
-        <View style={styles.stepContainer}>
-            <Text style={[styles.stepTitle, { color: colors.foreground }]}>{tr('Take a Selfie', 'Prendre un Selfie', 'التقط صورة ذاتية')}</Text>
-            <Text style={[styles.stepSub, { color: colors.textMuted }]}>{tr('Please take a clear selfie holding your ID card next to your face.', 'Prenez un selfie clair tenant votre CIN à côté de votre visage.', 'يرجى التقاط صورة شخصية واضحة وأنت تحمل بطاقة هويتك بجوار وجهك.')}</Text>
+            <Text style={[styles.stepTitle, { color: colors.foreground }]}>{tr('Profile Verification', 'Vérification du Profil', 'التحقق من الملف الشخصي')}</Text>
+            <Text style={[styles.stepSub, { color: colors.textMuted }]}>{tr('Please upload a clear selfie of yourself for account verification.', 'Veuillez télécharger un selfie clair pour la vérification de votre compte.', 'يرجى تحميل صورة ذاتية واضحة للتحقق من حسابك.')}</Text>
 
             <TouchableOpacity style={[styles.uploadBox, { height: 300, borderColor: colors.border, backgroundColor: isDark ? '#1A1A1A' : '#F9F9F9' }]} onPress={() => pickImage('selfie')}>
                 {selfie ? (
@@ -335,7 +262,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
             </TouchableOpacity>
 
             <View style={styles.btnRow}>
-                <TouchableOpacity style={[styles.backStepBtn, { borderColor: colors.border }]} onPress={() => setStep(2)}>
+                <TouchableOpacity style={[styles.backStepBtn, { borderColor: colors.border }]} onPress={() => setStep(1)}>
                     <Text style={{ color: colors.foreground }}>{tr('Back', 'Retour', 'رجوع')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -346,7 +273,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                     {loading ? (
                         <ActivityIndicator color="white" />
                     ) : (
-                        <Text style={[styles.nextBtnText, { color: 'white' }]}>{tr('Submit KYC', 'Soumettre', 'إرسال')}</Text>
+                        <Text style={[styles.nextBtnText, { color: 'white' }]}>{tr('Submit', 'Soumettre', 'إرسال')}</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -361,7 +288,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                     <Clock size={80} color={colors.warning} style={{ marginBottom: 20 }} />
                     <Text style={[styles.statusTitle, { color: colors.foreground }]}>{tr('Verification Pending', 'Vérification en Cours', 'قيد التحقق')}</Text>
                     <Text style={[styles.statusDesc, { color: colors.textMuted }]}>
-                        {tr('Your documents are under review. This usually takes 24-48 hours.', 'Vos documents sont en cours d\'examen. Cela prend généralement 24 à 48 heures.', 'مستنداتك قيد المراجعة. يستغرق هذا عادةً 24-48 ساعة.')}
+                        {tr('Your information is under review. This usually takes 24-48 hours.', 'Vos informations sont en cours d\'examen. Cela prend généralement 24 à 48 heures.', 'معلوماتك قيد المراجعة. يستغرق هذا عادةً 24-48 ساعة.')}
                     </Text>
                     <TouchableOpacity style={[styles.homeBtn, { backgroundColor: colors.foreground }]} onPress={onBack}>
                         <Text style={[styles.homeBtnText, { color: colors.background }]}>{tr('Back to Profile', 'Retour au Profil', 'العودة للملف الشخصي')}</Text>
@@ -379,7 +306,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                     <ShieldCheck size={80} color={colors.success} style={{ marginBottom: 20 }} />
                     <Text style={[styles.statusTitle, { color: colors.foreground }]}>{tr('Verified', 'Vérifié', 'تم التحقق')}</Text>
                     <Text style={[styles.statusDesc, { color: colors.textMuted }]}>
-                        {tr('Your identity has been verified successfully. You have full access.', 'Votre identité a été vérifiée avec succès.', 'تم التحقق من هويتك بنجاح.')}
+                        {tr('Your account has been verified successfully.', 'Votre compte a été vérifié avec succès.', 'تم التحقق من حسابك بنجاح.')}
                     </Text>
                     <TouchableOpacity style={[styles.homeBtn, { backgroundColor: colors.foreground }]} onPress={onBack}>
                         <Text style={[styles.homeBtnText, { color: colors.background }]}>{tr('Back to Profile', 'Retour au Profil', 'العودة للملف الشخصي')}</Text>
@@ -396,7 +323,6 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
                 {renderProgressBar()}
                 {step === 1 && renderStep1()}
                 {step === 2 && renderStep2()}
-                {step === 3 && renderStep3()}
             </ScrollView>
         </View>
     );
