@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   Text as RNText,
@@ -22,6 +22,17 @@ import {
   Dimensions,
   Clipboard,
 } from "react-native";
+
+// Stipop Sticker Service
+import {
+  searchStickers,
+  searchProfileStickers,
+  getDefaultStickers,
+  getMyProfileStickers,
+  getProfileStickerPackageInfo,
+  getStickerWithDimensions,
+  Sticker as StipopSticker,
+} from "./src/services/stickerService";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Animatable from "react-native-animatable";
@@ -193,6 +204,7 @@ import {
   Ruler,
   BrainCircuit,
   Printer,
+  Sticker,
 } from "lucide-react-native";
 import QRCode from "react-native-qrcode-svg";
 import UserBadge from "./src/components/UserBadge";
@@ -266,7 +278,11 @@ import {
   translateCategory as translateCategoryUtil,
   colorNameToHex,
 } from "./src/utils/translationHelpers";
-import { hasFeature, VendorTier, AccountType } from "./src/utils/planAccessControl";
+import {
+  hasFeature,
+  VendorTier,
+  AccountType,
+} from "./src/utils/planAccessControl";
 import { updateProductRating } from "./src/utils/productUtils";
 import Translations from "./src/translations";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
@@ -334,7 +350,13 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "fr" | "ar">("fr"); // 'en', 'fr' or 'ar'
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [appState, setAppState] = useState<
-    "Onboarding" | "Auth" | "Main" | "SizeGuide" | "VendorRegistration" | "PrivacyPolicy" | "TermsOfService"
+    | "Onboarding"
+    | "Auth"
+    | "Main"
+    | "SizeGuide"
+    | "VendorRegistration"
+    | "PrivacyPolicy"
+    | "TermsOfService"
   >("Onboarding");
   const [activeTab, setActiveTab] = useState("Home");
   const [previousTab, setPreviousTab] = useState("Home");
@@ -1988,15 +2010,20 @@ export default function App() {
   const handleStartLive = (arg?: any) => {
     // Plan check
     const tier = (profileData?.vendorPlan as VendorTier) || "starter";
-    const accountType = (profileData?.accountType as AccountType) || "entreprise";
+    const accountType =
+      (profileData?.accountType as AccountType) || "entreprise";
     if (!hasFeature(tier, "liveStreaming", accountType)) {
       Alert.alert(
-        t('premiumFeature') || 'Premium Feature',
-        t('upgradeRequiredLive') || 'Live streaming is not available in your current plan. Upgrade to Professional to unlock it!',
+        t("premiumFeature") || "Premium Feature",
+        t("upgradeRequiredLive") ||
+          "Live streaming is not available in your current plan. Upgrade to Professional to unlock it!",
         [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('seePlans') || 'See Plans', onPress: () => navigateToVendorRegistration() }
-        ]
+          { text: t("cancel"), style: "cancel" },
+          {
+            text: t("seePlans") || "See Plans",
+            onPress: () => navigateToVendorRegistration(),
+          },
+        ],
       );
       return;
     }
@@ -2647,11 +2674,19 @@ export default function App() {
         );
       case "PrivacyPolicy":
         return (
-          <PrivacyPolicyScreen onBack={() => setActiveTab("Settings")} t={t} language={language} />
+          <PrivacyPolicyScreen
+            onBack={() => setActiveTab("Settings")}
+            t={t}
+            language={language}
+          />
         );
       case "TermsOfService":
         return (
-          <TermsOfServiceScreen onBack={() => setActiveTab("Settings")} t={t} language={language} />
+          <TermsOfServiceScreen
+            onBack={() => setActiveTab("Settings")}
+            t={t}
+            language={language}
+          />
         );
       case "LiveAnalytics":
         return (
@@ -3223,13 +3258,21 @@ export default function App() {
             />
           ) : appState === "PrivacyPolicy" ? (
             <PrivacyPolicyScreen
-              onBack={() => user ? (setAppState("Main"), setActiveTab("Settings")) : setAppState("Auth")}
+              onBack={() =>
+                user
+                  ? (setAppState("Main"), setActiveTab("Settings"))
+                  : setAppState("Auth")
+              }
               t={t}
               language={language}
             />
           ) : appState === "TermsOfService" ? (
             <TermsOfServiceScreen
-              onBack={() => user ? (setAppState("Main"), setActiveTab("Settings")) : setAppState("Auth")}
+              onBack={() =>
+                user
+                  ? (setAppState("Main"), setActiveTab("Settings"))
+                  : setAppState("Auth")
+              }
               t={t}
               language={language}
             />
@@ -6704,7 +6747,6 @@ function ProfileScreen({
                 </View>
               )}
 
-
               <View
                 style={[
                   styles.campaignDivider,
@@ -6725,111 +6767,115 @@ function ProfileScreen({
                 "editor",
                 "nor_kam",
                 "support",
-              ].includes(profileData?.role || "") && 
-              hasFeature((profileData?.vendorPlan as VendorTier) || "starter", "liveStreaming", profileData?.accountType as AccountType) && (
-                <TouchableOpacity
-                  onPress={() =>
-                    onStartLive &&
-                    onStartLive(profileData?.brandId ? brandInfo : undefined)
-                  }
-                  activeOpacity={0.9}
-                  style={{
-                    marginHorizontal: 0,
-                    marginTop: 0,
-                    marginBottom: 35,
-                    borderRadius: 24,
-                    overflow: "hidden",
-                    elevation: 10,
-                    shadowColor: "#EF4444",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 15,
-                  }}
-                >
-                  <LinearGradient
-                    colors={["#EF4444", "#DC2626", "#B91C1C"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+              ].includes(profileData?.role || "") &&
+                hasFeature(
+                  (profileData?.vendorPlan as VendorTier) || "starter",
+                  "liveStreaming",
+                  profileData?.accountType as AccountType,
+                ) && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      onStartLive &&
+                      onStartLive(profileData?.brandId ? brandInfo : undefined)
+                    }
+                    activeOpacity={0.9}
                     style={{
-                      padding: 20,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
+                      marginHorizontal: 0,
+                      marginTop: 0,
+                      marginBottom: 35,
+                      borderRadius: 24,
+                      overflow: "hidden",
+                      elevation: 10,
+                      shadowColor: "#EF4444",
+                      shadowOffset: { width: 0, height: 8 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 15,
                     }}
                   >
-                    <View
+                    <LinearGradient
+                      colors={["#EF4444", "#DC2626", "#B91C1C"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
                       style={{
+                        padding: 20,
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 15,
+                        justifyContent: "space-between",
                       }}
                     >
                       <View
                         style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 24,
-                          backgroundColor: "rgba(255,255,255,0.2)",
+                          flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: "rgba(255,255,255,0.3)",
+                          gap: 15,
                         }}
                       >
-                        <Camera size={22} color="#FFF" strokeWidth={2.5} />
-                      </View>
-                      <View>
-                        <Text
+                        <View
                           style={{
-                            color: "rgba(255,255,255,0.8)",
-                            fontSize: 9,
-                            fontWeight: "800",
-                            letterSpacing: 1,
-                            marginBottom: 2,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "rgba(255,255,255,0.2)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: "rgba(255,255,255,0.3)",
                           }}
                         >
-                          {t("broadcastCenter")}
-                        </Text>
-                        <Text
-                          style={{
-                            color: "#FFF",
-                            fontSize: 13,
-                            fontWeight: "900",
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {t("startLiveSession")}
-                        </Text>
+                          <Camera size={22} color="#FFF" strokeWidth={2.5} />
+                        </View>
+                        <View>
+                          <Text
+                            style={{
+                              color: "rgba(255,255,255,0.8)",
+                              fontSize: 9,
+                              fontWeight: "800",
+                              letterSpacing: 1,
+                              marginBottom: 2,
+                            }}
+                          >
+                            {t("broadcastCenter")}
+                          </Text>
+                          <Text
+                            style={{
+                              color: "#FFF",
+                              fontSize: 13,
+                              fontWeight: "900",
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            {t("startLiveSession")}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                    <View
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: "rgba(0,0,0,0.15)",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <ChevronRight size={18} color="#FFF" strokeWidth={3} />
-                    </View>
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: "rgba(0,0,0,0.15)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <ChevronRight size={18} color="#FFF" strokeWidth={3} />
+                      </View>
 
-                    {/* Subtle Decorative Glow */}
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: -20,
-                        right: -20,
-                        width: 100,
-                        height: 100,
-                        borderRadius: 50,
-                        backgroundColor: "rgba(255,255,255,0.1)",
-                      }}
-                    />
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
+                      {/* Subtle Decorative Glow */}
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -20,
+                          right: -20,
+                          width: 100,
+                          height: 100,
+                          borderRadius: 50,
+                          backgroundColor: "rgba(255,255,255,0.1)",
+                        }}
+                      />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
 
               <View style={{ gap: 8 }}>
                 {profileData?.role !== "driver" && (
@@ -11625,6 +11671,12 @@ function SettingsScreen({
   const [gettingLocation, setGettingLocation] = useState(false);
   const [avatar, setAvatar] = useState(profileData?.avatarUrl || null);
   const [loading, setLoading] = useState(false);
+
+  // Profile Sticker Picker State
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [profileStickers, setProfileStickers] = useState<any[]>([]);
+  const [stickerLoading, setStickerLoading] = useState(false);
+  const [stickerSearchQuery, setStickerSearchQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotifications] = useState(
     profileData?.settings?.notifications ?? true,
@@ -11690,6 +11742,86 @@ function SettingsScreen({
       }
     }
   }, [profileData]);
+
+  // Profile Sticker Functions
+  const fetchProfileStickers = async (query: string = "") => {
+    const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
+    const uid = user?.uid || "guest";
+
+    if (!apiKey) {
+      console.log("No Stipop API key found");
+      return;
+    }
+
+    setStickerLoading(true);
+    try {
+      let stickers;
+      if (query.trim()) {
+        // Use Messenger API for search
+        const response = await searchStickers(apiKey, {
+          userId: uid,
+          q: query,
+          lang: "en",
+          countryCode: "US",
+          limit: 30,
+          pageNumber: 1,
+        });
+        stickers = response.body.stickerList;
+      } else {
+        // Use default stickers from Messenger API for initial load
+        stickers = await getDefaultStickers(apiKey, uid, "en", "US", 30);
+      }
+
+      const formattedStickers = stickers.map((s: StipopSticker) => ({
+        stickerUrl: getStickerWithDimensions(s.stickerImg, 75, 75),
+        stickerId: s.stickerId,
+        keyword: s.keyword,
+      }));
+
+      setProfileStickers(formattedStickers);
+    } catch (error) {
+      console.log("Error fetching profile stickers:", error);
+    } finally {
+      setStickerLoading(false);
+    }
+  };
+
+  const handleOpenStickerPicker = () => {
+    setShowStickerPicker(true);
+    fetchProfileStickers("");
+  };
+
+  const handleSelectProfileSticker = async (sticker: any) => {
+    try {
+      setLoading(true);
+      // Upload sticker to bunny or use directly
+      const stickerUrl = sticker.stickerUrl;
+
+      // Update user profile with sticker as avatar
+      await updateProfile({ avatarUrl: stickerUrl });
+      setAvatar(stickerUrl);
+      setShowStickerPicker(false);
+
+      Alert.alert(
+        t("Success") || "Succès",
+        t("Profile picture updated!") || "Photo de profil mise à jour !",
+      );
+    } catch (error) {
+      console.log("Error setting profile sticker:", error);
+      Alert.alert(
+        t("Error") || "Erreur",
+        t("Failed to update profile picture") ||
+          "Échec de la mise à jour de la photo de profil",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStickerSearch = (query: string) => {
+    setStickerSearchQuery(query);
+    fetchProfileStickers(query);
+  };
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -11982,6 +12114,24 @@ function SettingsScreen({
               ) : (
                 <Camera size={14} color={theme === "dark" ? "#000" : "#FFF"} />
               )}
+            </TouchableOpacity>
+            {/* Sticker Button for Profile Picture */}
+            <TouchableOpacity
+              onPress={handleOpenStickerPicker}
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 40,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: appColors.foreground,
+                borderColor: appColors.background,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Sticker size={14} color={theme === "dark" ? "#000" : "#FFF"} />
             </TouchableOpacity>
           </View>
           <Text
@@ -12863,6 +13013,161 @@ function SettingsScreen({
           </Text>
         </TouchableOpacity>
       </Animated.ScrollView>
+
+      {/* Profile Sticker Picker Modal */}
+      <Modal
+        visible={showStickerPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStickerPicker(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              height: height * 0.7,
+              padding: 15,
+            }}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 15,
+                borderBottomWidth: 1,
+                borderBottomColor: theme === "dark" ? "#333" : "#ddd",
+                paddingBottom: 10,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: appColors.foreground,
+                }}
+              >
+                {t("chooseSticker") || "Choose a Sticker"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowStickerPicker(false)}
+                style={{ padding: 5 }}
+              >
+                <X size={24} color={appColors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: theme === "dark" ? "#2c2c2e" : "#fff",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                marginBottom: 15,
+              }}
+            >
+              <Search size={18} color={appColors.textMuted} />
+              <TextInput
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  paddingHorizontal: 8,
+                  fontSize: 14,
+                  color: appColors.foreground,
+                }}
+                placeholder={
+                  t("searchStickers") || "Rechercher des autocollants..."
+                }
+                placeholderTextColor={appColors.textMuted}
+                value={stickerSearchQuery}
+                onChangeText={handleStickerSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {stickerSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => handleStickerSearch("")}
+                  style={{ padding: 4 }}
+                >
+                  <X size={16} color={appColors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Sticker Grid */}
+            {stickerLoading ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color={appColors.blue} />
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  {profileStickers.map((sticker: any, index: number) => (
+                    <TouchableOpacity
+                      key={`profile-sticker-${index}`}
+                      onPress={() => handleSelectProfileSticker(sticker)}
+                      disabled={loading}
+                      style={{
+                        width: "25%",
+                        aspectRatio: 1,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 5,
+                      }}
+                    >
+                      {loading ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={appColors.blue}
+                        />
+                      ) : (
+                        <Image
+                          source={{ uri: sticker.stickerUrl }}
+                          style={{
+                            width: 70,
+                            height: 70,
+                            resizeMode: "contain",
+                          }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {profileStickers.length === 0 && (
+                  <View style={{ padding: 40, alignItems: "center" }}>
+                    <Text style={{ color: appColors.textMuted, fontSize: 14 }}>
+                      {t("noStickersFound") || "No stickers found"}
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -18946,16 +19251,16 @@ Si vous avez des questions, n'hésitez pas à contacter notre équipe support.`;
             language === "ar"
               ? data.privacyAr || defaultPrivacyAr
               : language === "fr"
-              ? data.privacyFr || defaultPrivacyFr
-              : data.privacy || defaultPrivacy,
+                ? data.privacyFr || defaultPrivacyFr
+                : data.privacy || defaultPrivacy,
           );
         } else {
           setContent(
             language === "ar"
               ? defaultPrivacyAr
               : language === "fr"
-              ? defaultPrivacyFr
-              : defaultPrivacy,
+                ? defaultPrivacyFr
+                : defaultPrivacy,
           );
         }
       } catch {
@@ -19138,16 +19443,16 @@ Ces conditions sont régies par les lois de la Tunisie.`;
             language === "ar"
               ? data.termsAr || defaultTermsAr
               : language === "fr"
-              ? data.termsFr || defaultTermsFr
-              : data.terms || defaultTerms,
+                ? data.termsFr || defaultTermsFr
+                : data.terms || defaultTerms,
           );
         } else {
           setContent(
             language === "ar"
               ? defaultTermsAr
               : language === "fr"
-              ? defaultTermsFr
-              : defaultTerms,
+                ? defaultTermsFr
+                : defaultTerms,
           );
         }
       } catch {
