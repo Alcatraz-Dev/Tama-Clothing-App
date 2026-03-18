@@ -1,5 +1,17 @@
-import React, { useState, useEffect, useRef, JSX } from "react";
+import React, { useState, useEffect, useRef, JSX, useCallback } from "react";
 import { GifPicker } from "@/components/ui/gif-picker";
+
+// Import Stipop sticker service
+import {
+  searchStickers,
+  getDefaultStickers,
+  getStickerWithDimensions,
+  Sticker as StipopSticker,
+} from "@/services/stickerService";
+
+// Stipop SDK - using require for CommonJS module
+const StipopModule = require("stipop-js-sdk");
+const Stipop = StipopModule.default || StipopModule;
 import {
   TouchableOpacity,
   ActivityIndicator,
@@ -13,6 +25,9 @@ import {
   View,
   Alert,
   ScrollView,
+  Animated,
+  PanResponder,
+  TextInput,
 } from "react-native";
 import {
   collection,
@@ -47,6 +62,7 @@ import {
   Send,
   Video,
   Smile,
+  Sticker,
   Mic,
   MicOff,
   Trash2,
@@ -54,6 +70,7 @@ import {
   Play,
   Pause,
   RotateCcw,
+  Search,
 } from "lucide-react-native";
 import { db } from "../api/firebase";
 import { useAppTheme } from "../context/ThemeContext";
@@ -138,12 +155,25 @@ export default function DirectMessageScreen({
   const blurTargetRef = useRef<View>(null);
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
+  const [activePickerTab, setActivePickerTab] = useState<"emoji" | "sticker">(
+    "emoji",
+  );
+  const [stipopStickers, setStipopStickers] = useState<any[]>([]);
+  const [stipopLoading, setStipopLoading] = useState(false);
+  const [stickerSearchQuery, setStickerSearchQuery] = useState("");
+  const [stickerPageNumber, setStickerPageNumber] = useState(1);
+  const [stickerHasMore, setStickerHasMore] = useState(true);
+  const [isSearchingStickers, setIsSearchingStickers] = useState(false);
+  const stipopClientRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [recorderPermission, setRecorderPermission] = useState(false);
+  const [isRecordingCancelled, setIsRecordingCancelled] = useState(false);
+  const [recordingSlideOffset, setRecordingSlideOffset] = useState(0);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingWaveform, setRecordingWaveform] = useState<number[]>([]);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderPermission = useRef(false);
+  const recordingStartTime = useRef<number | null>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
@@ -153,21 +183,148 @@ export default function DirectMessageScreen({
   useEffect(() => {
     (async () => {
       const { status } = await AudioModule.getRecordingPermissionsAsync();
-      setRecorderPermission(status === "granted");
+      recorderPermission.current = status === "granted";
     })();
   }, []);
 
+  // Initialize Stipop client
+  useEffect(() => {
+    const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
+    console.log(
+      "Stipop API Key found:",
+      apiKey ? "YES" : "NO",
+      apiKey ? apiKey.substring(0, 5) + "..." : "",
+    );
+    if (apiKey && Stipop) {
+      try {
+        stipopClientRef.current = new Stipop(apiKey, "v1");
+        console.log("Stipop client initialized successfully");
+        console.log(
+          "Stipop client methods:",
+          Object.keys(stipopClientRef.current),
+        );
+      } catch (e) {
+        console.log("Stipop initialization error:", e);
+      }
+    } else {
+      console.log("Stipop not initialized - missing API key or SDK");
+    }
+  }, []);
+
+  // Fetch stickers when sticker tab is opened - using Stipop REST API
+  const fetchStickers = useCallback(
+    async (query: string = "", page: number = 1, append: boolean = false) => {
+      const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
+      const userId = user?.uid || "guest_user";
+
+      if (!apiKey) {
+        console.log("No API key found");
+        setStipopLoading(false);
+        return;
+      }
+
+      setIsSearchingStickers(query.length > 0);
+      if (!append) {
+        setStipopLoading(true);
+      }
+
+      try {
+        console.log(
+          "Fetching stickers from Stipop API...",
+          query ? `search: "${query}"` : "default",
+        );
+
+        let stickers;
+        if (query.trim()) {
+          // Search stickers with query
+          const response = await searchStickers(apiKey, {
+            userId,
+            q: query,
+            lang: language || "en",
+            countryCode: "US",
+            limit: 30,
+            pageNumber: page,
+          });
+          stickers = response.body.stickerList;
+          setStickerHasMore(
+            response.body.pageMap.pageNumber < response.body.pageMap.pageCount,
+          );
+        } else {
+          // Get default stickers
+          stickers = await getDefaultStickers(
+            apiKey,
+            userId,
+            language || "en",
+            "US",
+            30,
+          );
+          setStickerHasMore(false);
+        }
+
+        const formattedStickers = stickers.map((s: StipopSticker) => ({
+          stickerUrl: getStickerWithDimensions(s.stickerImg, 150, 150),
+          stickerId: s.stickerId,
+          keyword: s.keyword,
+        }));
+
+        if (append) {
+          setStipopStickers((prev) => [...prev, ...formattedStickers]);
+        } else {
+          setStipopStickers(formattedStickers);
+        }
+        console.log("Loaded stickers:", formattedStickers.length);
+      } catch (e) {
+        console.log("Error fetching stickers:", e);
+      } finally {
+        setStipopLoading(false);
+      }
+    },
+    [user?.uid, language],
+  );
+
+  // Fetch default stickers when sticker tab is opened
+  useEffect(() => {
+    if (activePickerTab === "sticker" && !stipopStickers.length) {
+      fetchStickers("", 1, false);
+    }
+  }, [activePickerTab, fetchStickers, stipopStickers.length]);
+
+  // Handle sticker search
+  const handleStickerSearch = useCallback(
+    (query: string) => {
+      setStickerSearchQuery(query);
+      setStickerPageNumber(1);
+      fetchStickers(query, 1, false);
+    },
+    [fetchStickers],
+  );
+
+  // Load more stickers (pagination)
+  const loadMoreStickers = useCallback(() => {
+    if (!stipopLoading && stickerHasMore) {
+      const nextPage = stickerPageNumber + 1;
+      setStickerPageNumber(nextPage);
+      fetchStickers(stickerSearchQuery, nextPage, true);
+    }
+  }, [
+    stipopLoading,
+    stickerHasMore,
+    stickerPageNumber,
+    stickerSearchQuery,
+    fetchStickers,
+  ]);
+
   useEffect(() => {
     if (previewPlayer) {
-      const sub = previewPlayer.addListener("playbackStatusUpdate", (status) => {
-        setIsPreviewPlaying(status.playing);
-      });
+      const sub = previewPlayer.addListener(
+        "playbackStatusUpdate",
+        (status) => {
+          setIsPreviewPlaying(status.playing);
+        },
+      );
       return () => sub.remove();
     }
   }, [previewPlayer]);
-
-
-
 
   useEffect(() => {
     if (isRecording) {
@@ -201,24 +358,363 @@ export default function DirectMessageScreen({
     return en;
   };
 
-  const emojiCategories = React.useMemo(() => [
-    {
-      title: tr("Visages", "وجوه", "Faces"),
-      emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾"],
-    },
-    {
-      title: tr("Cœurs", "قلوب", "Hearts"),
-      emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"],
-    },
-    {
-      title: tr("Mains", "أيدي", "Hands"),
-      emojis: ["👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "👇", "☝️", "🤳", "💪", "🦾", "🖕", "✍️", "🙏", "🤝", "🤲", "🤜", "🤛", "👐", "🙌", "👏", "👍", "👎", "👊", "✊"],
-    },
-    {
-      title: tr("Activités", "أنشطة", "Activities"),
-      emojis: ["⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸", "🥅", "🏒", "🏑", "🏏", "⛳", "🏹", "🎣", "🛶", "🎿", "🏂", "🏋️‍♀️", "🏋️‍♂️", "🚴‍♀️", "🚴‍♂️", "🚵‍♀️", "🚵‍♂️", "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🎫", "🎟️", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎸", "🎻"],
-    },
-  ], [language]);
+  const emojiCategories = React.useMemo(
+    () => [
+      {
+        title: tr("Visages", "وجوه", "Faces"),
+        emojis: [
+          "😀",
+          "😃",
+          "😄",
+          "😁",
+          "😆",
+          "😅",
+          "😂",
+          "🤣",
+          "😊",
+          "😇",
+          "🙂",
+          "🙃",
+          "😉",
+          "😌",
+          "😍",
+          "🥰",
+          "😘",
+          "😗",
+          "😙",
+          "😚",
+          "😋",
+          "😛",
+          "😝",
+          "😜",
+          "🤪",
+          "🤨",
+          "🧐",
+          "🤓",
+          "😎",
+          "🤩",
+          "🥳",
+          "😏",
+          "😒",
+          "😞",
+          "😔",
+          "😟",
+          "😕",
+          "🙁",
+          "☹️",
+          "😣",
+          "😖",
+          "😫",
+          "😩",
+          "🥺",
+          "😢",
+          "😭",
+          "😤",
+          "😠",
+          "😡",
+          "🤬",
+          "🤯",
+          "😳",
+          "🥵",
+          "🥶",
+          "😱",
+          "😨",
+          "😰",
+          "😥",
+          "😓",
+          "🤗",
+          "🤔",
+          "🤭",
+          "🤫",
+          "🤥",
+          "😶",
+          "😐",
+          "😑",
+          "😬",
+          "🙄",
+          "😯",
+          "😦",
+          "😧",
+          "😮",
+          "😲",
+          "🥱",
+          "😴",
+          "🤤",
+          "😪",
+          "😵",
+          "🤐",
+          "🥴",
+          "🤢",
+          "🤮",
+          "🤧",
+          "😷",
+          "🤒",
+          "🤕",
+          "🤑",
+          "🤠",
+          "😈",
+          "👿",
+          "👹",
+          "👺",
+          "🤡",
+          "💩",
+          "👻",
+          "💀",
+          "☠️",
+          "👽",
+          "👾",
+          "🤖",
+          "🎃",
+          "😺",
+          "😸",
+          "😹",
+          "😻",
+          "😼",
+          "😽",
+          "🙀",
+          "😿",
+          "😾",
+        ],
+      },
+      {
+        title: tr("Cœurs", "قلوب", "Hearts"),
+        emojis: [
+          "❤️",
+          "🧡",
+          "💛",
+          "💚",
+          "💙",
+          "💜",
+          "🖤",
+          "🤍",
+          "🤎",
+          "💔",
+          "❣️",
+          "💕",
+          "💞",
+          "💓",
+          "💗",
+          "💖",
+          "💘",
+          "💝",
+          "💟",
+        ],
+      },
+      {
+        title: tr("Mains", "أيدي", "Hands"),
+        emojis: [
+          "👋",
+          "🤚",
+          "🖐️",
+          "✋",
+          "🖖",
+          "👌",
+          "🤌",
+          "🤏",
+          "✌️",
+          "🤞",
+          "🤟",
+          "🤘",
+          "🤙",
+          "👈",
+          "👉",
+          "👆",
+          "👇",
+          "☝️",
+          "🤳",
+          "💪",
+          "🦾",
+          "🖕",
+          "✍️",
+          "🙏",
+          "🤝",
+          "🤲",
+          "🤜",
+          "🤛",
+          "👐",
+          "🙌",
+          "👏",
+          "👍",
+          "👎",
+          "👊",
+          "✊",
+        ],
+      },
+      {
+        title: tr("Activités", "أنشطة", "Activities"),
+        emojis: [
+          "⚽",
+          "🏀",
+          "🏈",
+          "⚾",
+          "🥎",
+          "🎾",
+          "🏐",
+          "🏉",
+          "🎱",
+          "🏓",
+          "🏸",
+          "🥅",
+          "🏒",
+          "🏑",
+          "🏏",
+          "⛳",
+          "🏹",
+          "🎣",
+          "🛶",
+          "🎿",
+          "🏂",
+          "🏋️‍♀️",
+          "🏋️‍♂️",
+          "🚴‍♀️",
+          "🚴‍♂️",
+          "🚵‍♀️",
+          "🚵‍♂️",
+          "🏆",
+          "🥇",
+          "🥈",
+          "🥉",
+          "🏅",
+          "🎖️",
+          "🎫",
+          "🎟️",
+          "🎭",
+          "🎨",
+          "🎬",
+          "🎤",
+          "🎧",
+          "🎼",
+          "🎹",
+          "🥁",
+          "🎸",
+          "🎻",
+        ],
+      },
+    ],
+    [language],
+  );
+
+  // Sticker categories - popular emoji combinations that work as stickers
+  const stickerCategories = React.useMemo(
+    () => [
+      {
+        title: tr("Réactions", "ردود فعل", "Reactions"),
+        stickers: [
+          "👍❤️",
+          "👏🎉",
+          "😂🤣",
+          "😍🥰",
+          "😢😭",
+          "😮😱",
+          "🤔💭",
+          "😎🔥",
+          "💪💯",
+          "🙏❤️",
+          "🎉🥳",
+          "❤️😍",
+          "😢💔",
+          "😂💀",
+          "😍🤩",
+          "🔥💯",
+          "👏🙌",
+          "😭❤️",
+        ],
+      },
+      {
+        title: tr("Amour", "حب", "Love"),
+        stickers: [
+          "❤️💕",
+          "😍💖",
+          "🥰💗",
+          "💕💞",
+          "❤️‍🔥",
+          "💘💝",
+          "😘💋",
+          "❤️🌹",
+          "😍🥰",
+          "💞💓",
+          "❤️‍🩹",
+          "💕✨",
+          "🥰😘",
+          "❤️💯",
+          "😍❤️",
+          "💗💖",
+          "❤️‍🔥",
+          "💝❤️",
+        ],
+      },
+      {
+        title: tr("Fête", "حفلة", "Party"),
+        stickers: [
+          "🎉🥳",
+          "🎊🎈",
+          "🥳🎉",
+          "🎆🎇",
+          "🎃👻",
+          "🎄🎅",
+          "🎂🍰",
+          "🎁🎀",
+          "🥂🍾",
+          "🎵🎶",
+          "🎭🎬",
+          "🎨🖼️",
+          "🏆🎖️",
+          "🎯🎲",
+          "🎮🕹️",
+          "🎱🎳",
+          "⚽🏆",
+          "🎤🎧",
+        ],
+      },
+      {
+        title: tr("Salutations", "تحيات", "Greetings"),
+        stickers: [
+          "👋😊",
+          "🙏❤️",
+          "🙌✨",
+          "💪🔥",
+          "😎🕶️",
+          "🤝💼",
+          "👋👋",
+          "😊🙂",
+          "👋💕",
+          "🙏✨",
+          "🙌❤️",
+          "💪💯",
+          "😎🔥",
+          "🤝🙌",
+          "👋😊",
+          "✨🙏",
+          "❤️🙌",
+          "🔥💪",
+        ],
+      },
+      {
+        title: tr("Animaux", "حيوانات", "Animals"),
+        stickers: [
+          "🐱😺",
+          "🐶🐕",
+          "🐼🐻",
+          "🦁🐯",
+          "🐰🐇",
+          "🦊🐺",
+          "🐸🐢",
+          "🦋🐝",
+          "🐠🐟",
+          "🦄🐲",
+          "🐕‍🦺🐾",
+          "🐈🐱",
+          "🐶💕",
+          "🐼❤️",
+          "🦁👑",
+          "🐨🌿",
+          "🦊🍀",
+          "🐰🌸",
+        ],
+      },
+    ],
+    [language],
+  );
 
   useEffect(() => {
     if (!chatId || !user?.uid) return;
@@ -273,21 +769,58 @@ export default function DirectMessageScreen({
     Haptics.selectionAsync();
   };
 
+  const handleStickerSelect = async (sticker: any) => {
+    // Check if it's a Stipop sticker (has url property)
+    if (sticker?.stickerUrl) {
+      // Send sticker as image
+      setIsEmojiPickerVisible(false);
+      setSending(true);
+      try {
+        const bunnyUrl = await uploadToBunny(sticker.stickerUrl);
+        await sendMessage(null, bunnyUrl, null, null, null, null);
+      } catch (e) {
+        console.error("Error sending sticker:", e);
+        Alert.alert(
+          tr("Erreur", "خطأ", "Error"),
+          tr(
+            "Impossible d'envoyer le sticker. Veuillez réessayer.",
+            "تعذر إرسال الملصق. يرجى المحاولة مرة أخرى.",
+            "Failed to send sticker. Please try again.",
+          ),
+        );
+      } finally {
+        setSending(false);
+      }
+    } else if (typeof sticker === "string") {
+      // It's an emoji combination - add to input
+      setInputText((prev) => prev + sticker);
+      Haptics.selectionAsync();
+    }
+  };
+
   const handleStartRecording = async () => {
-    if (!recorderPermission) {
-      Alert.alert(
-        tr("Permission requise", "الإذن مطلوب", "Permission required"),
-        tr(
-          "Veuillez autoriser l'accès au microphone.",
-          "يرجى السماح بالوصول إلى الميكروفون.",
-          "Please allow microphone access.",
-        ),
-      );
-      return;
+    // Request permission if not granted
+    if (!recorderPermission.current) {
+      const { status } = await AudioModule.requestRecordingPermissionsAsync();
+      recorderPermission.current = status === "granted";
+
+      if (!recorderPermission.current) {
+        Alert.alert(
+          tr("Permission requise", "الإذن مطلوب", "Permission required"),
+          tr(
+            "Veuillez autoriser l'accès au microphone pour enregistrer des messages vocaux.",
+            "يرجى السماح بالوصول إلى الميكروفون لتسجيل الرسائل الصوتية.",
+            "Please allow microphone access to record voice messages.",
+          ),
+        );
+        return;
+      }
     }
 
     try {
       setIsEmojiPickerVisible(false);
+      setIsRecordingCancelled(false);
+      recordingStartTime.current = Date.now();
       await AudioModule.setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
@@ -298,6 +831,14 @@ export default function DirectMessageScreen({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
       console.error("Error starting recording:", e);
+      Alert.alert(
+        tr("Erreur", "خطأ", "Error"),
+        tr(
+          "Impossible de démarrer l'enregistrement. Veuillez réessayer.",
+          "تعذر بدء التسجيل. يرجى المحاولة مرة أخرى.",
+          "Failed to start recording. Please try again.",
+        ),
+      );
     }
   };
 
@@ -305,8 +846,12 @@ export default function DirectMessageScreen({
     try {
       await recorder.stop();
       setIsRecording(false);
-      
-      if (shouldKeep && recorder.uri) {
+      setIsRecordingCancelled(false);
+
+      // If cancelled (swiped left), don't keep the recording
+      const shouldSave = shouldKeep && !isRecordingCancelled && recorder.uri;
+
+      if (shouldSave) {
         setRecordedUri(recorder.uri);
         setRecordedDuration(recordingDuration / 10);
         setRecordedWaveform([...recordingWaveform]);
@@ -314,11 +859,14 @@ export default function DirectMessageScreen({
       } else {
         setRecordingDuration(0);
         setRecordingWaveform([]);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (isRecordingCancelled) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
     } catch (e) {
       console.error("Error stopping recording:", e);
       setIsRecording(false);
+      setIsRecordingCancelled(false);
     }
   };
 
@@ -395,7 +943,7 @@ export default function DirectMessageScreen({
             ? tr("Vidéo 📹", "فيديو 📹", "Video 📹")
             : gifUrl
               ? "GIF 🖼️"
-              : (textToSend || "");
+              : textToSend || "";
 
       const chatDocRef = doc(db, "direct_chats", chatId);
       await setDoc(
@@ -569,7 +1117,11 @@ export default function DirectMessageScreen({
       const bunnyUrl = await uploadToBunny(uri);
 
       setUploading(false);
-      await sendMessage(null, isVideo ? null : bunnyUrl, isVideo ? bunnyUrl : null);
+      await sendMessage(
+        null,
+        isVideo ? null : bunnyUrl,
+        isVideo ? bunnyUrl : null,
+      );
     } catch (e) {
       console.error("Error uploading media:", e);
       Alert.alert("Error", "Failed to upload media");
@@ -585,12 +1137,18 @@ export default function DirectMessageScreen({
       await sendMessage(null, null, null, null, bunnyUrl, duration);
     } catch (e) {
       console.error("Error uploading audio:", e);
+      Alert.alert(
+        tr("Erreur d'upload", "خطأ في الرفع", "Upload Error"),
+        tr(
+          "Impossible d'envoyer le message vocal. Veuillez réessayer.",
+          "تعذر إرسال الرسالة الصوتية. يرجى المحاولة مرة أخرى.",
+          "Failed to send voice message. Please try again.",
+        ),
+      );
     } finally {
       setUploading(false);
     }
   };
-
-
 
   const handleGifSelection = async (gifUrl: string) => {
     setIsGifPickerVisible(false);
@@ -723,10 +1281,16 @@ export default function DirectMessageScreen({
                   borderRadius: 20,
                   borderBottomRightRadius: isLastInGroup ? 4 : 20,
                   backgroundColor: item.deleted
-                    ? (theme === "dark" ? "#2c2c2e" : "#f2f2f7")
-                    : (isOwn
-                      ? (theme === "dark" ? "#FFFFFF" : "#000000")
-                      : (theme === "dark" ? "#1c1c1e" : "#f2f2f7")),
+                    ? theme === "dark"
+                      ? "#2c2c2e"
+                      : "#f2f2f7"
+                    : isOwn
+                      ? theme === "dark"
+                        ? "#FFFFFF"
+                        : "#000000"
+                      : theme === "dark"
+                        ? "#1c1c1e"
+                        : "#f2f2f7",
                   borderWidth: item.deleted ? 1 : 0,
                   borderColor: theme === "dark" ? "#3a3a3c" : "#d1d1d6",
                 }}
@@ -736,8 +1300,13 @@ export default function DirectMessageScreen({
             ) : (
               <View
                 style={{
-                  padding: item.imageUrl || item.videoUrl || item.gifUrl ? 4 : 12,
-                  paddingHorizontal: (item.imageUrl || item.videoUrl || item.gifUrl) && !item.replyTo ? 4 : 16,
+                  padding:
+                    item.imageUrl || item.videoUrl || item.gifUrl ? 4 : 12,
+                  paddingHorizontal:
+                    (item.imageUrl || item.videoUrl || item.gifUrl) &&
+                    !item.replyTo
+                      ? 4
+                      : 16,
                   borderRadius: 20,
                   borderBottomLeftRadius: isLastInGroup ? 4 : 20,
                   backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
@@ -806,7 +1375,11 @@ export default function DirectMessageScreen({
                   : item.replyTo.gifUrl
                     ? "GIF 🖼️"
                     : item.replyTo.audioUrl
-                      ? tr("Message vocal 🎤", "رسالة صوتية 🎤", "Voice message 🎤")
+                      ? tr(
+                          "Message vocal 🎤",
+                          "رسالة صوتية 🎤",
+                          "Voice message 🎤",
+                        )
                       : item.replyTo.text}
             </Text>
           </View>
@@ -861,7 +1434,9 @@ export default function DirectMessageScreen({
             showControls={true}
             showTimer={true}
             style={{
-              backgroundColor: isOwn ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.1)",
+              backgroundColor: isOwn
+                ? "rgba(0,0,0,0.05)"
+                : "rgba(255,255,255,0.1)",
               borderRadius: 16,
               width: SCREEN_WIDTH * 0.65,
               padding: 10,
@@ -883,7 +1458,7 @@ export default function DirectMessageScreen({
               fontStyle: item.deleted ? "italic" : "normal",
             }}
           >
-            {item.deleted 
+            {item.deleted
               ? tr("Message supprimé", "تم حذف الرسالة", "Message deleted")
               : item.text}
           </Text>
@@ -1254,7 +1829,7 @@ export default function DirectMessageScreen({
                       `Replying to ${replyingTo.senderName}`,
                     )}
               </Text>
-             </View>
+            </View>
             <TouchableOpacity
               onPress={() => setReplyingTo(null)}
               style={{ padding: 4 }}
@@ -1267,7 +1842,7 @@ export default function DirectMessageScreen({
         {isEmojiPickerVisible && (
           <View
             style={{
-              height: 200,
+              height: 220,
               backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
               borderRadius: 20,
               padding: 10,
@@ -1275,104 +1850,344 @@ export default function DirectMessageScreen({
               overflow: "hidden",
             }}
           >
-            <ScrollView 
+            {/* Tab Bar */}
+            <View
+              style={{
+                flexDirection: "row",
+                marginBottom: 10,
+                borderBottomWidth: 1,
+                borderBottomColor: theme === "dark" ? "#333" : "#ddd",
+                paddingBottom: 8,
+                alignItems: "center",
+              }}
+            >
+              <View style={{ flex: 1, flexDirection: "row" }}>
+                <TouchableOpacity
+                  onPress={() => setActivePickerTab("emoji")}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    alignItems: "center",
+                    backgroundColor:
+                      activePickerTab === "emoji"
+                        ? colors.blue + "20"
+                        : "transparent",
+                    borderRadius: 8,
+                    marginRight: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color:
+                        activePickerTab === "emoji"
+                          ? colors.blue
+                          : colors.textMuted,
+                    }}
+                  >
+                    {tr("Émojis", "إيموجي", "Emojis")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setActivePickerTab("sticker")}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    alignItems: "center",
+                    backgroundColor:
+                      activePickerTab === "sticker"
+                        ? colors.blue + "20"
+                        : "transparent",
+                    borderRadius: 8,
+                    marginLeft: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color:
+                        activePickerTab === "sticker"
+                          ? colors.blue
+                          : colors.textMuted,
+                    }}
+                  >
+                    {tr("Autocollants", "ملصقات", "Stickers")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* Close Button */}
+              <TouchableOpacity
+                onPress={() => setIsEmojiPickerVisible(false)}
+                style={{
+                  padding: 4,
+                  marginLeft: 8,
+                }}
+              >
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            <ScrollView
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
               contentContainerStyle={{ paddingBottom: 15 }}
             >
-              {emojiCategories.map((category, catIndex) => (
-                <View key={`cat-${catIndex}`} style={{ marginBottom: 15 }}>
-                  <Text style={{ 
-                    fontSize: 12, 
-                    fontWeight: "600", 
-                    color: colors.textMuted,
-                    marginBottom: 8,
-                    marginLeft: 5,
-                    textTransform: "uppercase",
-                    letterSpacing: 1
-                  }}>
-                    {category.title}
-                  </Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                    {category.emojis.map((emoji, index) => (
+              {activePickerTab === "emoji" ? (
+                emojiCategories.map((category, catIndex) => (
+                  <View key={`cat-${catIndex}`} style={{ marginBottom: 15 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: colors.textMuted,
+                        marginBottom: 8,
+                        marginLeft: 5,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      {category.title}
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                      {category.emojis.map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`emoji-${catIndex}-${index}`}
+                          onPress={() => handleEmojiSelect(emoji)}
+                          style={{
+                            width: "14.28%", // 7 items per row
+                            aspectRatio: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))
+              ) : stipopStickers.length > 0 ? (
+                // Show Stipop stickers with search
+                <View style={{ flex: 1 }}>
+                  {/* Sticker Search Input */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: colors.background,
+                      borderRadius: 10,
+                      marginHorizontal: 10,
+                      marginVertical: 8,
+                      paddingHorizontal: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Search size={18} color={colors.textMuted} />
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        fontSize: 14,
+                        color: colors.foreground,
+                      }}
+                      placeholder={tr(
+                        "Rechercher des stickers...",
+                        "البحث عن ملصقات...",
+                        "Search stickers...",
+                      )}
+                      placeholderTextColor={colors.textMuted}
+                      value={stickerSearchQuery}
+                      onChangeText={handleStickerSearch}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="search"
+                    />
+                    {stickerSearchQuery.length > 0 && (
                       <TouchableOpacity
-                        key={`emoji-${catIndex}-${index}`}
-                        onPress={() => handleEmojiSelect(emoji)}
+                        onPress={() => handleStickerSearch("")}
+                        style={{ padding: 4 }}
+                      >
+                        <X size={16} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Loading indicator */}
+                  {stipopLoading && (
+                    <View style={{ padding: 20, alignItems: "center" }}>
+                      <ActivityIndicator size="small" color={colors.blue} />
+                    </View>
+                  )}
+
+                  {/* Sticker Grid */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      padding: 5,
+                    }}
+                  >
+                    {stipopStickers.map((sticker: any, index: number) => (
+                      <TouchableOpacity
+                        key={`stipop-${index}`}
+                        onPress={() => handleStickerSelect(sticker)}
                         style={{
-                          width: "14.28%", // 7 items per row
+                          width: "25%",
                           aspectRatio: 1,
                           alignItems: "center",
                           justifyContent: "center",
+                          padding: 5,
                         }}
                       >
-                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                        <ExpoImage
+                          source={{ uri: sticker.stickerUrl }}
+                          style={{
+                            width: 60,
+                            height: 60,
+                            resizeMode: "contain",
+                          }}
+                        />
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {/* Load more button */}
+                  {stickerHasMore && !stipopLoading && (
+                    <TouchableOpacity
+                      onPress={loadMoreStickers}
+                      style={{
+                        padding: 12,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: colors.blue, fontSize: 14 }}>
+                        {tr("Charger plus", "تحميل المزيد", "Load more")}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              ))}
+              ) : (
+                // Show manual stickers (emoji combinations)
+                stickerCategories.map((category, catIndex) => (
+                  <View
+                    key={`sticker-cat-${catIndex}`}
+                    style={{ marginBottom: 15 }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: colors.textMuted,
+                        marginBottom: 8,
+                        marginLeft: 5,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      {category.title}
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                      {category.stickers.map((sticker, index) => (
+                        <TouchableOpacity
+                          key={`sticker-${catIndex}-${index}`}
+                          onPress={() => handleStickerSelect(sticker)}
+                          style={{
+                            width: "25%", // 4 items per row for stickers
+                            aspectRatio: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ fontSize: 22 }}>{sticker}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))
+              )}
             </ScrollView>
           </View>
         )}
 
         {isRecording && (
           <View
+            onTouchMove={(e) => {
+              // Track horizontal movement for swipe-to-cancel
+              const touchX = e.nativeEvent.locationX;
+              const screenWidth = SCREEN_WIDTH;
+              // If swiped more than 30% to the left, show cancel state
+              if (touchX < screenWidth * 0.3) {
+                setIsRecordingCancelled(true);
+              } else {
+                setIsRecordingCancelled(false);
+              }
+            }}
             style={{
               flexDirection: "row",
               alignItems: "center",
               paddingVertical: 10,
-              backgroundColor: colors.blue + "15",
+              backgroundColor: isRecordingCancelled
+                ? "#EF444420"
+                : colors.blue + "15",
               borderRadius: 22,
               marginBottom: 10,
               paddingHorizontal: 15,
               gap: 12,
             }}
           >
-            <View
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                backgroundColor: "#EF4444",
-              }}
-            />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: colors.foreground,
-                minWidth: 45,
-              }}
-            >
-              {(recordingDuration / 10).toFixed(1)}s
-            </Text>
-            <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
-              <AudioWaveform
-                data={recordingWaveform}
-                height={20}
-                activeColor={colors.blue}
-                inactiveColor={colors.blue + "40"}
-              />
-            </View>
-            <TouchableOpacity
-              onPress={() => handleStopRecording(false)}
-              style={{ padding: 8 }}
-            >
-              <Trash2 size={20} color="#EF4444" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleStopRecording(true)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: colors.blue,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <StopCircle size={20} color="white" />
-            </TouchableOpacity>
+            {/* Cancel hint - swipe left */}
+            {isRecordingCancelled ? (
+              <View style={{ flex: 1, alignItems: "center" }}>
+                <Text
+                  style={{ color: "#EF4444", fontWeight: "600", fontSize: 14 }}
+                >
+                  {tr(
+                    "Relâchez pour annuler",
+                    "أفلت للإلغاء",
+                    "Release to cancel",
+                  )}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Recording indicator */}
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: "#EF4444",
+                  }}
+                />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: colors.foreground,
+                    minWidth: 45,
+                  }}
+                >
+                  {(recordingDuration / 10).toFixed(1)}s
+                </Text>
+                <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
+                  <AudioWaveform
+                    data={recordingWaveform}
+                    height={20}
+                    activeColor={colors.blue}
+                    inactiveColor={colors.blue + "40"}
+                  />
+                </View>
+                {/* Swipe hint */}
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                  ← {tr("Annuler", "إلغاء", "Cancel")}
+                </Text>
+              </>
+            )}
           </View>
         )}
 
@@ -1395,38 +2210,47 @@ export default function DirectMessageScreen({
             >
               <Trash2 size={20} color="#EF4444" />
             </TouchableOpacity>
-            
-             <TouchableOpacity
-               onPress={() => isPreviewPlaying ? previewPlayer.pause() : previewPlayer.play()}
-               style={{
-                 width: 32,
-                 height: 32,
-                 borderRadius: 16,
-                 backgroundColor: colors.blue + "20",
-                 alignItems: "center",
-                 justifyContent: "center",
-               }}
-             >
-               {isPreviewPlaying ? (
-                 <Pause size={16} color={colors.blue} />
-               ) : (
-                 <Play size={16} color={colors.blue} fill={colors.blue} />
-               )}
-             </TouchableOpacity>
 
-             <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                  {recordedDuration.toFixed(1)}s
-                </Text>
-                <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
-                  <AudioWaveform
-                    data={recordedWaveform}
-                    height={20}
-                    activeColor={colors.blue}
-                    inactiveColor={colors.blue + "40"}
-                  />
-                </View>
-             </View>
+            <TouchableOpacity
+              onPress={() =>
+                isPreviewPlaying ? previewPlayer.pause() : previewPlayer.play()
+              }
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: colors.blue + "20",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isPreviewPlaying ? (
+                <Pause size={16} color={colors.blue} />
+              ) : (
+                <Play size={16} color={colors.blue} fill={colors.blue} />
+              )}
+            </TouchableOpacity>
+
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                {recordedDuration.toFixed(1)}s
+              </Text>
+              <View style={{ flex: 1, height: 30, justifyContent: "center" }}>
+                <AudioWaveform
+                  data={recordedWaveform}
+                  height={20}
+                  activeColor={colors.blue}
+                  inactiveColor={colors.blue + "40"}
+                />
+              </View>
+            </View>
 
             <TouchableOpacity
               onPress={() => handleAudioUpload(recordedUri, recordedDuration)}
@@ -1467,24 +2291,33 @@ export default function DirectMessageScreen({
 
           {!isRecording && !recordedUri && (
             <>
+              {/* Sticker Button - Opens Sticker Tab with search and emoji stickers */}
               <TouchableOpacity
-                onPress={() => setIsEmojiPickerVisible(!isEmojiPickerVisible)}
+                onPress={() => {
+                  setIsEmojiPickerVisible(true);
+                  setActivePickerTab("sticker");
+                }}
                 style={{
                   width: 44,
                   height: 44,
-                  backgroundColor: isEmojiPickerVisible
-                    ? colors.blue + "20"
-                    : theme === "dark"
-                      ? "rgba(255,255,255,0.1)"
-                      : "rgba(0,0,0,0.05)",
+                  backgroundColor:
+                    isEmojiPickerVisible && activePickerTab === "sticker"
+                      ? colors.blue + "20"
+                      : theme === "dark"
+                        ? "rgba(255,255,255,0.1)"
+                        : "rgba(0,0,0,0.05)",
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: 12,
                 }}
               >
-                <Smile
+                <Sticker
                   size={22}
-                  color={isEmojiPickerVisible ? colors.blue : colors.foreground}
+                  color={
+                    isEmojiPickerVisible && activePickerTab === "sticker"
+                      ? colors.blue
+                      : colors.foreground
+                  }
                 />
               </TouchableOpacity>
 
@@ -1509,7 +2342,8 @@ export default function DirectMessageScreen({
                   }}
                   inputStyle={{
                     maxHeight: 120,
-                    fontSize: 16,
+                    fontSize: 14,
+                    textAlign: language === "ar" ? "right" : "left",
                     paddingVertical: 10,
                     color: colors.foreground,
                   }}
@@ -1517,16 +2351,22 @@ export default function DirectMessageScreen({
               </View>
 
               <TouchableOpacity
-                onPress={
-                  inputText.trim()
-                    ? () => sendMessage()
-                    : handleStartRecording
-                }
+                onPress={inputText.trim() ? () => sendMessage() : undefined}
+                onPressIn={() => {
+                  if (!inputText.trim() && !sending) {
+                    handleStartRecording();
+                  }
+                }}
+                onPressOut={() => {
+                  if (isRecording) {
+                    handleStopRecording(true);
+                  }
+                }}
                 disabled={sending}
                 style={{
                   width: 44,
                   height: 44,
-                  backgroundColor: colors.blue,
+                  backgroundColor: isRecording ? "#EF4444" : colors.blue,
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: 22,
@@ -1536,6 +2376,8 @@ export default function DirectMessageScreen({
                   <ActivityIndicator size="small" color="white" />
                 ) : inputText.trim() ? (
                   <Send size={20} color="white" />
+                ) : isRecording ? (
+                  <Mic size={20} color="white" />
                 ) : (
                   <Mic size={20} color="white" />
                 )}
