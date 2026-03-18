@@ -5575,11 +5575,23 @@ function ProfileScreen({
         scrollEventThrottle={16}
         stickyHeaderIndices={[2]}
       >
-        <View style={{ height: height * 0.55, width: "100%" }}>
+        <View
+          style={{
+            height: height * 0.55,
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           {profileData?.avatarUrl ? (
             <Image
               source={{ uri: profileData.avatarUrl }}
-              style={{ width: "100%", height: "100%" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 100,
+                resizeMode: "contain",
+              }}
             />
           ) : (
             <View
@@ -12089,7 +12101,15 @@ function SettingsScreen({
               ]}
             >
               {avatar ? (
-                <Image source={{ uri: avatar }} style={styles.fullAvatar} />
+                <Image
+                  source={{ uri: avatar }}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    resizeMode: "contain",
+                  }}
+                />
               ) : (
                 <User size={40} color={appColors.textMuted} />
               )}
