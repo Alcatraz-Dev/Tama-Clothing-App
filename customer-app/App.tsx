@@ -28,8 +28,10 @@ import {
   searchStickers,
   searchProfileStickers,
   getDefaultStickers,
+  getTrendingStickers,
   getProfilePackages,
   getProfilePackageStickers,
+  registerProfileSticker,
   getStickerWithDimensions,
   Sticker as StipopSticker,
   ProfilePackage,
@@ -11693,7 +11695,7 @@ function SettingsScreen({
   const [selectedPackage, setSelectedPackage] = useState<ProfilePackage | null>(null);
   const [packageStickers, setPackageStickers] = useState<ProfileSticker[]>([]);
   // Flat search results (overrides package view when there's a query)
-  const [searchResults, setSearchResults] = useState<ProfileSticker[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [stickerLoading, setStickerLoading] = useState(false);
   const [stickerSearchQuery, setStickerSearchQuery] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -11764,11 +11766,29 @@ function SettingsScreen({
 
   // ── Stipop Profile API ──────────────────────────────────────────────
 
-  /** Step 1 — load the package gallery */
+
+
+  /** Search across all stickers (global search) */
+  const fetchStickerSearch = async (q: string) => {
+    const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
+    const uid = user?.uid || 'guest';
+    if (!apiKey) return;
+    setStickerLoading(true);
+    try {
+      const response = await searchStickers(apiKey, { userId: uid, q, lang: 'en', countryCode: 'US', limit: 40 });
+      setSearchResults(response.body?.stickerList || []);
+    } catch (e) {
+      console.warn('fetchStickerSearch:', e);
+    } finally {
+      setStickerLoading(false);
+    }
+  };
+
+  /** Step 1 — load the profile package gallery */
   const fetchProfilePackages = async () => {
     const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
     const uid = user?.uid || 'guest';
-    if (!apiKey) { console.warn('No Stipop API key'); return; }
+    if (!apiKey) return;
     setStickerLoading(true);
     try {
       const packages = await getProfilePackages(apiKey, uid, 40);
@@ -11780,7 +11800,7 @@ function SettingsScreen({
     }
   };
 
-  /** Step 2 — drill into a package to see individual stickers */
+  /** Step 2 — drill into a package */
   const fetchPackageStickers = async (pkg: ProfilePackage) => {
     const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
     const uid = user?.uid || 'guest';
@@ -11790,7 +11810,7 @@ function SettingsScreen({
     setPackageStickers([]);
     try {
       const stickers = await getProfilePackageStickers(apiKey, uid, pkg.packageId);
-      setPackageStickers(stickers);
+      setPackageStickers(stickers as any);
     } catch (e) {
       console.warn('fetchPackageStickers:', e);
     } finally {
@@ -11798,23 +11818,7 @@ function SettingsScreen({
     }
   };
 
-  /** Search across all profile stickers */
-  const fetchStickerSearch = async (q: string) => {
-    const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
-    const uid = user?.uid || 'guest';
-    if (!apiKey) return;
-    setStickerLoading(true);
-    try {
-      const results = await searchProfileStickers(apiKey, { userId: uid, q, lang: 'en', countryCode: 'US', limit: 40 });
-      setSearchResults(results as any);
-    } catch (e) {
-      console.warn('fetchStickerSearch:', e);
-    } finally {
-      setStickerLoading(false);
-    }
-  };
-
-  const handleOpenStickerPicker = () => {
+  const handleOpenStickerPicker = async () => {
     setShowStickerPicker(true);
     setSelectedPackage(null);
     setStickerSearchQuery('');
@@ -11822,14 +11826,30 @@ function SettingsScreen({
     fetchProfilePackages();
   };
 
-  const handleSelectProfileSticker = async (sticker: ProfileSticker) => {
+  const handleSelectProfileSticker = async (sticker: any) => {
     try {
       setLoading(true);
-      const stickerUrl = getStickerWithDimensions(sticker.stickerImg, 200, 200);
+      const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
+      const uid = user?.uid || 'guest';
+
+      // 1. Register with Stipop
+      if (apiKey && sticker.stickerId) {
+        try {
+          await registerProfileSticker(apiKey, uid, sticker.stickerId);
+        } catch (e) {
+          console.warn('registerProfileSticker failed:', e);
+        }
+      }
+
+      // 2. High quality resize + upload to Bunny.net
+      const stickerUrl = getStickerWithDimensions(sticker.stickerImg, 400, 400);
       const savedUrl = await uploadToBunny(stickerUrl);
+
+      // 3. Save to profile
       await updateProfile({ avatarUrl: savedUrl });
       setAvatar(savedUrl);
       setShowStickerPicker(false);
+
       Alert.alert(
         t('Success') || 'Success',
         t('Profile picture updated!') || 'Profile picture updated!',
@@ -12121,15 +12141,16 @@ function SettingsScreen({
               ]}
             >
               {avatar ? (
-                <Image
-                  source={{ uri: avatar }}
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 40,
-                    resizeMode: "contain",
-                  }}
-                />
+                <View style={{ width: 80, height: 80, borderRadius: 40, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                  <Image
+                    source={{ uri: avatar }}
+                    style={{
+                      width: avatar.includes('stipop.io') ? 56 : 80,
+                      height: avatar.includes('stipop.io') ? 56 : 80,
+                      resizeMode: "contain",
+                    }}
+                  />
+                </View>
               ) : (
                 <User size={40} color={appColors.textMuted} />
               )}
@@ -13118,16 +13139,16 @@ function SettingsScreen({
                 {/* ── Search results (flat sticker grid) ── */}
                 {stickerSearchQuery.trim() ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {searchResults.length === 0 ? (
+                    {(searchResults || []).length === 0 ? (
                       <View style={{ width: '100%', padding: 40, alignItems: 'center' }}>
                         <Text style={{ color: appColors.textMuted }}>{t('noStickersFound') || 'No stickers found'}</Text>
                       </View>
-                    ) : searchResults.map((s: any, i: number) => (
+                    ) : searchResults?.map((s: any, i: number) => (
                       <TouchableOpacity key={`sr-${i}`} onPress={() => handleSelectProfileSticker(s)}
                         disabled={loading}
                         style={{ width: '25%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-                        <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 100, 100) }}
-                          style={{ width: 72, height: 72, resizeMode: 'contain' }} />
+                        <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 200, 200) }}
+                          style={{ width: 68, height: 68, resizeMode: 'contain' }} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -13135,17 +13156,17 @@ function SettingsScreen({
                 ) : selectedPackage ? (
                   /* ── Step 2: stickers inside a package ── */
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {packageStickers.map((s, i) => (
+                    {(packageStickers || []).map((s, i) => (
                       <TouchableOpacity key={`ps-${i}`} onPress={() => handleSelectProfileSticker(s)}
                         disabled={loading}
                         style={{ width: '25%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
                         {loading
                           ? <ActivityIndicator size="small" color={appColors.blue} />
-                          : <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 100, 100) }}
-                              style={{ width: 72, height: 72, resizeMode: 'contain' }} />}
+                          : <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 200, 200) }}
+                              style={{ width: 68, height: 68, resizeMode: 'contain' }} />}
                       </TouchableOpacity>
                     ))}
-                    {packageStickers.length === 0 && (
+                    {(packageStickers || []).length === 0 && (
                       <View style={{ width: '100%', padding: 30, alignItems: 'center' }}>
                         <Text style={{ color: appColors.textMuted }}>{t('noStickersFound') || 'No stickers in this pack'}</Text>
                       </View>

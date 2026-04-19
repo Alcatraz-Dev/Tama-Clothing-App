@@ -128,10 +128,13 @@ export const getProfilePackageStickers = async (
   if (data?.header?.code !== '0000') {
     throw new Error(data?.header?.message || 'Failed to fetch package stickers');
   }
-  const list = data.body?.stickerList ?? [];
+  // Structure from provided JSON: body.profileSticker[0].stickers
+  const pkgInfo = data.body?.profileSticker?.[0];
+  const list = pkgInfo?.stickers ?? [];
+  
   return list.map((s: any): ProfileSticker => ({
     stickerId: s.stickerId,
-    packageId: s.packageId ?? packageId,
+    packageId: pkgInfo?.packageId ?? packageId,
     stickerImg: s.stickerImg,
     keyword: s.keyword,
   }));
@@ -182,6 +185,24 @@ export const getMyProfileSticker = async (
   return { stickerId: s.stickerId, packageId: s.packageId, stickerImg: s.stickerImg, keyword: s.keyword };
 };
 
+/**
+ * POST /v1/package/sticker/:stickerId
+ * Registers a sticker as the user's current profile sticker on Stipop.
+ */
+export const registerProfileSticker = async (
+  apiKey: string,
+  userId: string,
+  stickerId: number,
+): Promise<boolean> => {
+  const qp = new URLSearchParams({ userId });
+  const res = await fetch(`${PROFILE_BASE}/v1/package/sticker/${stickerId}?${qp}`, {
+    method: 'POST',
+    headers: profileHeaders(apiKey),
+  });
+  const data = await res.json();
+  return data?.header?.code === '0000';
+};
+
 // ─── Messenger API (legacy / story sticker search) ────────────────────────────
 
 export const searchStickers = async (
@@ -215,10 +236,24 @@ export const getDefaultStickers = async (
   }
 };
 
+export const getTrendingStickers = async (
+  apiKey: string,
+  userId: string,
+  limit = 40,
+): Promise<Sticker[]> => {
+  const qp = new URLSearchParams({ userId, limit: String(limit) });
+  const res = await fetch(`${MESSENGER_BASE}/v1/trending?${qp}`, {
+    headers: { apikey: apiKey, 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+  if (data?.header?.code !== '0000') return [];
+  return data.body?.stickerList ?? [];
+};
+
 /** Append ?d=WxH dimension param to any Stipop image URL */
-export const getStickerWithDimensions = (url: string, w = 300, h = 300): string => {
-  const sw = Math.min(Math.max(w, 1), 700);
-  const sh = Math.min(Math.max(h, 1), 700);
+export const getStickerWithDimensions = (url: string, w = 400, h = 400): string => {
+  const sw = Math.min(Math.max(w, 1), 1000);
+  const sh = Math.min(Math.max(h, 1), 1000);
   return `${url}${url.includes('?') ? '&' : '?'}d=${sw}x${sh}`;
 };
 

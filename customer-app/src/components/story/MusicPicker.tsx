@@ -64,6 +64,10 @@ const LIBRARY: SongMeta[] = [
     { id: 'px-13', title: 'Midnight City', artist: 'Lofi_Hour', url: 'https://cdn.pixabay.com/audio/2023/05/22/audio_12345abcde.mp3', license: 'free', mood: 'chill', duration: 155, source: 'pixabay' },
     { id: 'px-14', title: 'Ocean Waves', artist: 'Zen_Master', url: 'https://cdn.pixabay.com/audio/2022/12/10/audio_5566778899.mp3', license: 'free', mood: 'chill', duration: 190, source: 'pixabay' },
     { id: 'px-15', title: 'Coffee Shop', artist: 'Jazz_Cats', url: 'https://cdn.pixabay.com/audio/2023/01/05/audio_aabbccddeeff.mp3', license: 'free', mood: 'chill', duration: 165, source: 'pixabay' },
+    { id: 'yt-1', title: 'Morning Joy', artist: 'YouTube Audio', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', license: 'free', mood: 'chill', duration: 180, source: 'yt-audio-lib' },
+    { id: 'yt-2', title: 'Starlight Lofi', artist: 'Silent Partner', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', license: 'free', mood: 'chill', duration: 210, source: 'yt-audio-lib' },
+    { id: 'yt-3', title: 'Soft Rain', artist: 'YouTube Studio', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', license: 'free', mood: 'chill', duration: 195, source: 'yt-audio-lib' },
+    { id: 'yt-4', title: 'Dreamy Vibe', artist: 'Cloud Walker', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', license: 'free', mood: 'chill', duration: 170, source: 'yt-audio-lib' },
 
     /* ── HYPE ── */
     { id: 'px-4', title: 'Epic Cinematic', artist: 'RomanSenykMusic', url: 'https://cdn.pixabay.com/audio/2022/11/22/audio_febc508520.mp3', license: 'free', mood: 'hype', duration: 130, source: 'pixabay' },
@@ -72,6 +76,10 @@ const LIBRARY: SongMeta[] = [
     { id: 'px-16', title: 'Cyberpunk Drive', artist: 'Synth_Wave', url: 'https://cdn.pixabay.com/audio/2023/04/15/audio_hq123.mp3', license: 'free', mood: 'hype', duration: 140, source: 'pixabay' },
     { id: 'px-17', title: 'Stadium Rock', artist: 'Guitar_Hero', url: 'https://cdn.pixabay.com/audio/2022/09/30/audio_rock99.mp3', license: 'free', mood: 'hype', duration: 125, source: 'pixabay' },
     { id: 'px-18', title: 'Bass Drop', artist: 'EDM_Lord', url: 'https://cdn.pixabay.com/audio/2023/02/10/audio_bassmax.mp3', license: 'free', mood: 'hype', duration: 150, source: 'pixabay' },
+    { id: 'yt-5', title: 'Neon Nights', artist: 'Retro Future', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', license: 'free', mood: 'hype', duration: 160, source: 'yt-audio-lib' },
+    { id: 'yt-6', title: 'Fast Lane', artist: 'Action Beats', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3', license: 'free', mood: 'hype', duration: 145, source: 'yt-audio-lib' },
+    { id: 'yt-7', title: 'Victory Anthem', artist: 'Epic Scores', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3', license: 'free', mood: 'hype', duration: 185, source: 'yt-audio-lib' },
+    { id: 'yt-8', title: 'Glitch Mode', artist: 'Digital Drift', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3', license: 'free', mood: 'hype', duration: 135, source: 'yt-audio-lib' },
 
     /* ── HAPPY ── */
     { id: 'px-7', title: 'Happy Whistling Ukulele', artist: 'Olexy', url: 'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3', license: 'free', mood: 'happy', duration: 166, source: 'pixabay' },
@@ -79,6 +87,10 @@ const LIBRARY: SongMeta[] = [
     { id: 'px-19', title: 'Sunshine Reggae', artist: 'Island_Vibes', url: 'https://cdn.pixabay.com/audio/2023/06/01/audio_reggae1.mp3', license: 'free', mood: 'happy', duration: 175, source: 'pixabay' },
     { id: 'px-20', title: 'Uplifting Pop', artist: 'Sky_High', url: 'https://cdn.pixabay.com/audio/2022/12/20/audio_pop90.mp3', license: 'free', mood: 'happy', duration: 145, source: 'pixabay' },
     { id: 'px-21', title: 'Happy Kids', artist: 'Family_Fun', url: 'https://cdn.pixabay.com/audio/2023/03/12/audio_kids22.mp3', license: 'free', mood: 'happy', duration: 120, source: 'pixabay' },
+    { id: 'yt-9', title: 'Bright Sky', artist: 'Sunshine Crew', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3', license: 'free', mood: 'happy', duration: 155, source: 'yt-audio-lib' },
+    { id: 'yt-10', title: 'Island Party', artist: 'Tropical Vibes', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3', license: 'free', mood: 'happy', duration: 190, source: 'yt-audio-lib' },
+    { id: 'yt-11', title: 'Happy Trails', artist: 'Acoustic Fun', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3', license: 'free', mood: 'happy', duration: 140, source: 'yt-audio-lib' },
+    { id: 'yt-12', title: 'Summer Groove', artist: 'Pop Star', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3', license: 'free', mood: 'happy', duration: 165, source: 'yt-audio-lib' },
 
     /* ── SAD ── */
     { id: 'px-9', title: 'Sad Piano', artist: 'AudioCoffee', url: 'https://cdn.pixabay.com/audio/2022/11/17/audio_e55fb37e95.mp3', license: 'free', mood: 'sad', duration: 150, source: 'pixabay' },
@@ -86,6 +98,10 @@ const LIBRARY: SongMeta[] = [
     { id: 'px-22', title: 'Rainy Night', artist: 'Alone_In_City', url: 'https://cdn.pixabay.com/audio/2023/01/15/audio_rain44.mp3', license: 'free', mood: 'sad', duration: 185, source: 'pixabay' },
     { id: 'px-23', title: 'Broken Strings', artist: 'Cello_Soul', url: 'https://cdn.pixabay.com/audio/2022/08/05/audio_sad9.mp3', license: 'free', mood: 'sad', duration: 195, source: 'pixabay' },
     { id: 'px-24', title: 'Lost Hope', artist: 'Spirit_Voice', url: 'https://cdn.pixabay.com/audio/2023/04/22/audio_lost1.mp3', license: 'free', mood: 'sad', duration: 160, source: 'pixabay' },
+    { id: 'yt-13', title: 'Lonely Road', artist: 'Melancholy Man', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3', license: 'free', mood: 'sad', duration: 200, source: 'yt-audio-lib' },
+    { id: 'yt-14', title: 'Silent Tears', artist: 'Piano Master', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3', license: 'free', mood: 'sad', duration: 180, source: 'yt-audio-lib' },
+    { id: 'yt-15', title: 'Dark Clouds', artist: 'Ambient Chill', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3', license: 'free', mood: 'sad', duration: 220, source: 'yt-audio-lib' },
+    { id: 'yt-16', title: 'Fade Away', artist: 'Ghost Notes', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3', license: 'free', mood: 'sad', duration: 175, source: 'yt-audio-lib' },
 
     /* ── ROMANTIC ── */
     { id: 'px-11', title: 'Romantic Acoustic', artist: 'Pasha_Music', url: 'https://cdn.pixabay.com/audio/2022/08/31/audio_98e1f2ef08.mp3', license: 'free', mood: 'romantic', duration: 145, source: 'pixabay' },
@@ -93,6 +109,10 @@ const LIBRARY: SongMeta[] = [
     { id: 'px-25', title: 'First Date', artist: 'Paris_Vibes', url: 'https://cdn.pixabay.com/audio/2023/02/14/audio_love14.mp3', license: 'free', mood: 'romantic', duration: 150, source: 'pixabay' },
     { id: 'px-26', title: 'Wedding Day', artist: 'Classic_Keys', url: 'https://cdn.pixabay.com/audio/2022/11/30/audio_wed9.mp3', license: 'free', mood: 'romantic', duration: 180, source: 'pixabay' },
     { id: 'px-27', title: 'Holding Hands', artist: 'Warm_Hearts', url: 'https://cdn.pixabay.com/audio/2023/05/01/audio_hand1.mp3', license: 'free', mood: 'romantic', duration: 135, source: 'pixabay' },
+    { id: 'yt-17', title: 'Soulmate', artist: 'Sweet Melodies', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3', license: 'free', mood: 'romantic', duration: 160, source: 'yt-audio-lib' },
+    { id: 'yt-18', title: 'Under the Stars', artist: 'Night Romance', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-24.mp3', license: 'free', mood: 'romantic', duration: 210, source: 'yt-audio-lib' },
+    { id: 'yt-19', title: 'Always You', artist: 'Heart Beats', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3', license: 'free', mood: 'romantic', duration: 190, source: 'yt-audio-lib' },
+    { id: 'yt-20', title: 'Moonlight Waltz', artist: 'Strings Trio', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3', license: 'free', mood: 'romantic', duration: 175, source: 'yt-audio-lib' },
 
     /* ── EXTRA VARIETY ── */
     { id: 'px-28', title: 'Techno Pulsar', artist: 'Night_Rider', url: 'https://cdn.pixabay.com/audio/2023/06/10/audio_pulsar.mp3', license: 'free', mood: 'hype', duration: 160, source: 'pixabay' },
