@@ -36,6 +36,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { uploadToBunny } from "@/utils/bunny";
 import * as FileSystem from "expo-file-system";
 import MusicPicker, { SelectedTrack } from "@/components/story/MusicPicker";
+import StoryStickerPicker from "@/components/story/StoryStickerPicker";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -106,12 +107,13 @@ export default function StoryCreateScreen({
   const [isTyping, setIsTyping] = useState(false);
   const [currentText, setCurrentText] = useState("");
   const textSubmittedRef = useRef(false);
-  const [showMusicPicker, setShowMusicPicker] = useState(false);
   const [selectedMusic, setSelectedMusic] = useState<SelectedTrack | null>(
     null,
   );
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [activeStickers, setActiveStickers] = useState<
-    { id: string; emoji: string; x: number; y: number }[]
+    { id: string; url: string; x: number; y: number }[]
   >([]);
 
   const isDark = theme === "dark";
@@ -350,17 +352,7 @@ export default function StoryCreateScreen({
     } else if (toolId === "music") {
       setShowMusicPicker(true);
     } else if (toolId === "sticker") {
-      const emojis = ["🔥", "✨", "💯", "❤️", "😎", "🎉", "🚀", "👑"];
-      const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-      setActiveStickers([
-        ...activeStickers,
-        {
-          id: Date.now().toString(),
-          emoji: randomEmoji,
-          x: SCREEN_WIDTH / 2 - 20,
-          y: SCREEN_HEIGHT / 2,
-        },
-      ]);
+      setShowStickerPicker(true);
     } else if (toolId === "filter") {
       const currentIndex = FILTERS.findIndex((f) => f.id === selectedFilter);
       const nextIndex = (currentIndex + 1) % FILTERS.length;
@@ -482,7 +474,17 @@ export default function StoryCreateScreen({
             isSticker
           >
             <View style={styles.floatingStickerContainer}>
-              <Text style={styles.floatingSticker}>{sticker.emoji}</Text>
+              <ExpoImage
+                source={{ uri: sticker.url }}
+                style={styles.floatingStickerImage}
+                contentFit="contain"
+              />
+              <TouchableOpacity
+                style={styles.removeSticker}
+                onPress={() => setActiveStickers(prev => prev.filter(s => s.id !== sticker.id))}
+              >
+                <X size={12} color="#FFF" />
+              </TouchableOpacity>
             </View>
           </DraggableElement>
         ))}
@@ -657,6 +659,24 @@ export default function StoryCreateScreen({
           }}
         />
       </Modal>
+
+      {/* Stipop Story Sticker Picker */}
+      <StoryStickerPicker
+        visible={showStickerPicker}
+        onClose={() => setShowStickerPicker(false)}
+        onSelect={(sticker) => {
+          setActiveStickers([
+            ...activeStickers,
+            {
+              id: Date.now().toString(),
+              url: sticker.url,
+              x: SCREEN_WIDTH / 2 - 50,
+              y: SCREEN_HEIGHT / 2 - 50,
+            },
+          ]);
+          setShowStickerPicker(false);
+        }}
+      />
     </View>
   );
 }
@@ -987,10 +1007,22 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   floatingStickerContainer: {
-    zIndex: 50,
+    width: 100,
+    height: 100,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  floatingSticker: {
-    fontSize: 55,
+  floatingStickerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  removeSticker: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 10,
+    padding: 2,
   },
   typingOverlay: {
     ...StyleSheet.absoluteFillObject,
