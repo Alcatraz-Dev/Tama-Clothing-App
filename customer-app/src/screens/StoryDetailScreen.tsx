@@ -87,7 +87,13 @@ export default function StoryDetailScreen({
     const currentReel = allReels[currentIndex];
     const isOwner = user && currentReel && (user.uid === currentReel.userId);
     const elements = currentReel?.elements || {};
-    const musicUrl = elements?.music?.url ?? null;
+    // Music is now stored at top-level: reel.music (new schema)
+    // Fall back to elements.music for backward-compat with old stories
+    const musicData = currentReel?.music ?? elements?.music ?? null;
+    const musicUrl = musicData?.url ?? null;
+    const musicStartTime = musicData?.startTime ?? 0;
+    const musicClipDuration = musicData?.duration ?? 15;
+
     // useAudioPlayer must always be called with a source — use placeholder when no music
     const audioSource = musicUrl ? { uri: musicUrl } : { uri: '' };
     const audioPlayer = useAudioPlayer(audioSource);
@@ -103,14 +109,14 @@ export default function StoryDetailScreen({
         if (!hasMusic) return;
         if (audioPlayer?.isLoaded) {
             try {
-                audioPlayer.seekTo(0);
+                audioPlayer.seekTo(musicStartTime);
                 audioPlayer.play();
             } catch (_) {}
         }
         return () => {
             try { audioPlayer?.pause(); } catch (_) {}
         };
-    }, [currentIndex, audioPlayer?.isLoaded, hasMusic]);
+    }, [currentIndex, audioPlayer?.isLoaded, hasMusic, musicStartTime]);
 
     const getFilterOverlay = (filter: string) => {
         switch (filter) {
@@ -266,11 +272,12 @@ export default function StoryDetailScreen({
             ))}
 
             {/* ── Music Badge ── */}
-            {elements?.music && (
+            {musicData && (
                 <View style={[styles.musicBadgeWrapper, { top: insets.top + 75 }]}>
-                    <MusicBadge title={elements.music.title} artist={elements.music.artist} />
+                    <MusicBadge title={musicData.title} artist={musicData.artist} />
                 </View>
             )}
+
 
             {/* ── Bottom gradient ── */}
             <LinearGradient
