@@ -1247,25 +1247,26 @@ export default function HostLiveScreen(props: Props) {
             });
 
             if (!result.canceled) {
-                uploadVideoToBunny(result.assets[0].uri);
+                uploadVideoToSanity(result.assets[0].uri);
             }
         } catch (error) {
             Alert.alert(t('error') || 'Error', t('failedToPickVideo') || 'Failed to pick video');
         }
     };
 
-    const uploadVideoToBunny = async (videoUri: string) => {
+    const uploadVideoToSanity = async (videoUri: string) => {
         setIsUploadingPromo(true);
         try {
-            const secure_url = await uploadToBunny(videoUri);
+            const { uploadToSanity } = require('../utils/sanity');
+            const secure_url = await uploadToSanity(videoUri);
             if (secure_url) {
                 setPromoUrl(secure_url);
             } else {
                 throw new Error('Upload failed');
             }
         } catch (error) {
-            console.error('Bunny.net Video Upload Error:', error);
-            Alert.alert(t('error') || 'Error', 'Failed to upload video to Bunny.net. Check your connection.');
+            console.error('Sanity Video Upload Error:', error);
+            Alert.alert(t('error') || 'Error', 'Failed to upload video to Sanity. Check your connection.');
         } finally {
             setIsUploadingPromo(false);
         }

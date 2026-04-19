@@ -5589,8 +5589,7 @@ function ProfileScreen({
               style={{
                 width: "100%",
                 height: "100%",
-                borderRadius: 100,
-                resizeMode: "contain",
+                resizeMode: "cover",
               }}
             />
           ) : (
@@ -11806,12 +11805,12 @@ function SettingsScreen({
   const handleSelectProfileSticker = async (sticker: any) => {
     try {
       setLoading(true);
-      // Upload sticker to bunny or use directly
-      const stickerUrl = sticker.stickerUrl;
+      // Upload sticker to Sanity (via wrapper) instead of using raw stipop URL
+      const sanityUrl = await uploadToBunny(sticker.stickerUrl);
 
       // Update user profile with sticker as avatar
-      await updateProfile({ avatarUrl: stickerUrl });
-      setAvatar(stickerUrl);
+      await updateProfile({ avatarUrl: sanityUrl });
+      setAvatar(sanityUrl);
       setShowStickerPicker(false);
 
       Alert.alert(

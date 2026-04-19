@@ -68,7 +68,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useColor } from '@/hooks/useColor';
 import { useAppTheme } from '@/context/ThemeContext';
-import { uploadToBunny } from '@/utils/bunny';
+import { uploadToSanity } from '@/utils/sanity';
 import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
 import CameraScreen from './Camera';
 
@@ -145,13 +145,13 @@ export default function FeedScreen(props: FeedScreenProps) {
         const asset = assets[0];
         setUploading(true);
         try {
-            // Upload to Bunny
-            const bunnyUrl = await uploadToBunny(asset.uri);
+            // Upload to Sanity
+            const sanityUrl = await uploadToSanity(asset.uri);
 
             const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const reelData = {
                 id: reelId,
-                url: bunnyUrl,
+                url: sanityUrl,
                 type: asset.type,
                 text: '',
                 createdAt: serverTimestamp(),
@@ -1173,7 +1173,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         label={tr('VIRAL', 'منتشر', 'VIRAL')}
                         variant="glass"
                         icon={<TrendingUp size={14} color="#FFF" />}
-                        style={[styles.viralBadge, { backgroundColor: 'rgba(247, 58, 58, 0.7)', top: 70, borderWidth: 0 }]}
+                        style={[styles.viralBadge, { backgroundColor: 'rgba(247, 58, 58, 0.7)', top: 110, borderWidth: 0 }]}
                     />
                 )}
 
@@ -1182,7 +1182,7 @@ export default function FeedScreen(props: FeedScreenProps) {
                         label={tr('REEL', 'ريل', 'REEL')}
                         variant="glass"
                         icon={<VideoIcon size={14} color="#FFF" />}
-                        style={[styles.viralBadge, { backgroundColor: 'rgba(168, 85, 247, 0.8)', top: viral ? 130 : 100, borderWidth: 0 }]}
+                        style={[styles.viralBadge, { backgroundColor: 'rgba(168, 85, 247, 0.8)', top: viral ? 150 : 110, borderWidth: 0 }]}
                     />
                 )}
 
@@ -1478,7 +1478,7 @@ export default function FeedScreen(props: FeedScreenProps) {
             {/* Header with Tabs */}
             <View style={{
                 position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-                paddingTop: insets.top + 5,
+                paddingTop: insets.top + 35,
                 backgroundColor: 'transparent'
             }}>
                 {/* Top Row */}

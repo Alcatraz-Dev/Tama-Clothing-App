@@ -251,6 +251,8 @@ export const en = {
   contactNumber: "CONTACT NUMBER",
   defaultAddress: "DEFAULT ADDRESS",
   changeAvatar: "CHANGE AVATAR",
+  chooseSticker: "Choose a Sticker",
+  searchStickers: "Search stickers...",
   rateProduct: "RATE PRODUCT",
   writeReview: "Write your review...",
   cancel: "CANCEL",

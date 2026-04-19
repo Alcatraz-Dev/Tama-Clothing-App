@@ -30,7 +30,7 @@ import Svg, { Circle } from 'react-native-svg';
 import * as Animatable from 'react-native-animatable';
 import * as Device from 'expo-device';
 import { Camera, RotateCcw, Zap, ZapOff, Video as VideoIcon, Camera as CameraIcon, Check, X, ChevronLeft, Download, Send, MonitorOff, Plus, Star } from 'lucide-react-native';
-import { uploadToBunny } from '../utils/bunny';
+import { uploadToSanity } from '../utils/sanity';
 import { Button } from '../components/ui/button';
 import { Badge } from "../components/ui/badge";
 
@@ -241,13 +241,13 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
         setUploading(true);
         try {
-            // Upload to Bunny first
-            const bunnyUrl = await uploadToBunny(uri);
+            // Upload to Sanity first
+            const sanityUrl = await uploadToSanity(uri);
 
             const workId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const workData = {
                 id: workId,
-                url: bunnyUrl, // Use the uploaded URL, not local URI
+                url: sanityUrl, // Use the uploaded URL, not local URI
                 type: type,
                 text: '',
                 createdAt: serverTimestamp(),
@@ -282,13 +282,13 @@ export default function CameraScreen({ onBack, onNavigate, t, language, theme, u
 
         setUploading(true);
         try {
-            // Upload to Bunny first
-            const bunnyUrl = await uploadToBunny(uri);
+            // Upload to Sanity first
+            const sanityUrl = await uploadToSanity(uri);
 
             const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const reelData = {
                 id: reelId,
-                url: bunnyUrl, // Use the uploaded URL, not local URI
+                url: sanityUrl, // Use the uploaded URL, not local URI
                 type: type,
                 text: '',
                 createdAt: serverTimestamp(),

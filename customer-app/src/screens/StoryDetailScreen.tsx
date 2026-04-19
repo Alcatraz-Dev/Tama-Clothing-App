@@ -3,22 +3,23 @@ import {
     View,
     StyleSheet,
     Dimensions,
-    Image,
     TouchableOpacity,
     StatusBar,
     Animated,
     ActivityIndicator,
-    Alert
+    Alert,
+    Easing
 } from 'react-native';
 import { Text } from '../components/ui/text';
 import { Avatar } from '../components/ui/avatar';
 import UniversalVideoPlayer from '../components/common/UniversalVideoPlayer';
-import { X, ChevronLeft, ChevronRight, Trash2, Edit, MoreVertical, Heart, MessageCircle, Send } from 'lucide-react-native';
+import { X, Trash2, Music2 } from 'lucide-react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../api/firebase';
+import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,6 +31,38 @@ interface StoryDetailScreenProps {
     t: (key: string) => string;
     theme: 'light' | 'dark';
     user?: any;
+}
+
+// Animated music disc component
+function MusicBadge({ title, artist }: { title: string; artist?: string }) {
+    const spinAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const spin = Animated.loop(
+            Animated.timing(spinAnim, {
+                toValue: 1,
+                duration: 3000,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            })
+        );
+        spin.start();
+        return () => spin.stop();
+    }, []);
+
+    const rotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+    return (
+        <View style={styles.musicBadge}>
+            <Animated.View style={[styles.musicDisc, { transform: [{ rotate }] }]}>
+                <Music2 size={14} color="#FFF" />
+            </Animated.View>
+            <View style={styles.musicTextContainer}>
+                <Text style={styles.musicTitle} numberOfLines={1}>{title}</Text>
+                {artist && <Text style={styles.musicArtist} numberOfLines={1}>{artist}</Text>}
+            </View>
+        </View>
+    );
 }
 
 export default function StoryDetailScreen({
@@ -46,12 +79,38 @@ export default function StoryDetailScreen({
         allReels.findIndex(r => r.id === initialReel.id)
     );
     const [loading, setLoading] = useState(true);
-    const progress = useRef(new Animated.Value(0)).current;
-    const STORY_DURATION = 5000; // 5 seconds per story
     const [deleting, setDeleting] = useState(false);
+    const progress = useRef(new Animated.Value(0)).current;
+    const progressAnimation = useRef<Animated.CompositeAnimation | null>(null);
+    const STORY_DURATION = 7000;
 
     const currentReel = allReels[currentIndex];
     const isOwner = user && currentReel && (user.uid === currentReel.userId);
+    const elements = currentReel?.elements || {};
+    const musicUrl = elements?.music?.url ?? null;
+    // useAudioPlayer must always be called with a source — use placeholder when no music
+    const audioSource = musicUrl ? { uri: musicUrl } : { uri: '' };
+    const audioPlayer = useAudioPlayer(audioSource);
+    const hasMusic = !!musicUrl;
+
+    // Configure audio session once on mount so iOS silent mode won't block playback
+    useEffect(() => {
+        setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch(() => {});
+    }, []);
+
+    // Play / stop music when story or loaded state changes
+    useEffect(() => {
+        if (!hasMusic) return;
+        if (audioPlayer?.isLoaded) {
+            try {
+                audioPlayer.seekTo(0);
+                audioPlayer.play();
+            } catch (_) {}
+        }
+        return () => {
+            try { audioPlayer?.pause(); } catch (_) {}
+        };
+    }, [currentIndex, audioPlayer?.isLoaded, hasMusic]);
 
     const getFilterOverlay = (filter: string) => {
         switch (filter) {
@@ -65,10 +124,9 @@ export default function StoryDetailScreen({
 
     const handleDelete = async () => {
         if (!currentReel?.id) return;
-        
         Alert.alert(
             t('Delete Story') || 'Delete Story',
-            t('Are you sure you want to delete this story?') || 'Are you sure you want to delete this story?',
+            t('Are you sure you want to delete this story?') || 'Are you sure?',
             [
                 { text: t('Cancel') || 'Cancel', style: 'cancel' },
                 {
@@ -78,12 +136,9 @@ export default function StoryDetailScreen({
                         setDeleting(true);
                         try {
                             await deleteDoc(doc(db, 'global_reels', currentReel.id));
-                            if (onDelete) {
-                                onDelete(currentReel.id);
-                            }
+                            if (onDelete) onDelete(currentReel.id);
                             onClose();
                         } catch (error) {
-                            console.error('Error deleting story:', error);
                             Alert.alert('Error', 'Failed to delete story');
                         } finally {
                             setDeleting(false);
@@ -94,41 +149,30 @@ export default function StoryDetailScreen({
         );
     };
 
-    useEffect(() => {
-        startProgress();
-        // Reset loading when changing stories
-        setLoading(true);
-        
-        // For videos, set a timeout to hide loading after initial buffer
-        if (currentReel?.type === 'video') {
-            const timer = setTimeout(() => {
-                setLoading(false);
-            }, 1500);
-            return () => {
-                progress.stopAnimation();
-                clearTimeout(timer);
-            };
-        }
-        
-        return () => progress.stopAnimation();
-    }, [currentIndex]);
-
     const startProgress = () => {
         progress.setValue(0);
-        Animated.timing(progress, {
+        progressAnimation.current?.stop();
+        progressAnimation.current = Animated.timing(progress, {
             toValue: 1,
             duration: STORY_DURATION,
             useNativeDriver: false,
-        }).start(({ finished }) => {
-            if (finished) {
-                nextStory();
-            }
+        });
+        progressAnimation.current.start(({ finished }) => {
+            if (finished) nextStory();
         });
     };
 
+    useEffect(() => {
+        setLoading(currentReel?.type !== 'image');
+        startProgress();
+        return () => {
+            progressAnimation.current?.stop();
+        };
+    }, [currentIndex]);
+
     const nextStory = () => {
         if (currentIndex < allReels.length - 1) {
-            setCurrentIndex(currentIndex + 1);
+            setCurrentIndex(prev => prev + 1);
         } else {
             onClose();
         }
@@ -136,7 +180,7 @@ export default function StoryDetailScreen({
 
     const prevStory = () => {
         if (currentIndex > 0) {
-            setCurrentIndex(currentIndex - 1);
+            setCurrentIndex(prev => prev - 1);
         } else {
             onClose();
         }
@@ -151,16 +195,20 @@ export default function StoryDetailScreen({
         }
     };
 
+    if (!currentReel) {
+        onClose();
+        return null;
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar hidden />
 
-            {/* Media Content */}
+            {/* ── Media Content ── */}
             <TouchableOpacity
                 activeOpacity={1}
                 onPress={handleTap}
                 style={StyleSheet.absoluteFill}
-                
             >
                 {currentReel.type === 'video' ? (
                     <UniversalVideoPlayer
@@ -180,13 +228,10 @@ export default function StoryDetailScreen({
                     />
                 )}
 
-                {/* Filter Overlay */}
+                {/* Filter overlay */}
                 {currentReel.filter && currentReel.filter !== 'none' && (
-                    <View 
-                        style={[
-                            StyleSheet.absoluteFillObject, 
-                            { backgroundColor: getFilterOverlay(currentReel.filter) }
-                        ]} 
+                    <View
+                        style={[StyleSheet.absoluteFillObject, { backgroundColor: getFilterOverlay(currentReel.filter) }]}
                         pointerEvents="none"
                     />
                 )}
@@ -198,31 +243,58 @@ export default function StoryDetailScreen({
                 )}
             </TouchableOpacity>
 
-            {/* Bottom Gradient for readability */}
+            {/* ── Floating Texts ── */}
+            {elements?.texts && elements.texts.map((txt: any) => (
+                <View
+                    key={txt.id}
+                    style={[styles.floatingTextWrapper, { left: txt.x ?? SCREEN_WIDTH / 2 - 80, top: txt.y ?? SCREEN_HEIGHT / 2 }]}
+                    pointerEvents="none"
+                >
+                    <Text style={styles.floatingText}>{txt.text}</Text>
+                </View>
+            ))}
+
+            {/* ── Stickers ── */}
+            {elements?.stickers && elements.stickers.map((sticker: any) => (
+                <View
+                    key={sticker.id}
+                    style={[styles.floatingStickerWrapper, { left: sticker.x ?? 50, top: sticker.y ?? SCREEN_HEIGHT / 2 }]}
+                    pointerEvents="none"
+                >
+                    <Text style={styles.floatingSticker}>{sticker.emoji}</Text>
+                </View>
+            ))}
+
+            {/* ── Music Badge ── */}
+            {elements?.music && (
+                <View style={[styles.musicBadgeWrapper, { top: insets.top + 75 }]}>
+                    <MusicBadge title={elements.music.title} artist={elements.music.artist} />
+                </View>
+            )}
+
+            {/* ── Bottom gradient ── */}
             <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.5)']}
+                colors={['transparent', 'rgba(0,0,0,0.6)']}
                 style={styles.bottomGradient}
                 pointerEvents="none"
             />
 
-            {/* Top Overlays */}
+            {/* ── Header: progress + user info ── */}
             <LinearGradient
-                colors={['rgba(0,0,0,0.5)', 'transparent']}
+                colors={['rgba(0,0,0,0.55)', 'transparent']}
                 style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
+                pointerEvents="box-none"
             >
-                {/* Progress Bars */}
+                {/* Progress bars */}
                 <View style={styles.progressContainer}>
                     {allReels.map((_, index) => (
-                        <View key={index} style={styles.progressBarBackground}>
+                        <View key={index} style={styles.progressBarBg}>
                             <Animated.View
                                 style={[
-                                    styles.progressBarForeground,
+                                    styles.progressBarFg,
                                     {
                                         width: index === currentIndex
-                                            ? progress.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: ['0%', '100%'],
-                                            })
+                                            ? progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
                                             : index < currentIndex ? '100%' : '0%',
                                     },
                                 ]}
@@ -231,84 +303,72 @@ export default function StoryDetailScreen({
                     ))}
                 </View>
 
-                {/* User Info & Close */}
+                {/* User info row */}
                 <View style={styles.headerInfo}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Avatar
                             source={currentReel.userPhoto}
-                            size={40}
+                            size={38}
                             fallback={currentReel.userName?.[0] || 'U'}
-                            style={{ borderWidth: 1, borderColor: '#FFF' }}
+                            style={{ borderWidth: 2, borderColor: '#FFF' }}
                         />
                         <View style={{ marginLeft: 10 }}>
                             <Text style={styles.userName}>{currentReel.userName}</Text>
                             <Text style={styles.timestamp}>
-                                {currentReel.createdAt?.toDate ?
-                                    currentReel.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
-                                    'Recent'}
+                                {currentReel.createdAt?.toDate
+                                    ? currentReel.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : 'Recent'}
                             </Text>
                         </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {/* Delete Button for owner */}
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         {isOwner && (
-                            <TouchableOpacity 
-                                onPress={handleDelete} 
-                                style={styles.actionButton}
-                                disabled={deleting}
-                            >
-                                {deleting ? (
-                                    <ActivityIndicator color="#FFF" size="small" />
-                                ) : (
-                                    <Trash2 color="#FFF" size={24} />
-                                )}
+                            <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} disabled={deleting}>
+                                {deleting
+                                    ? <ActivityIndicator color="#FFF" size="small" />
+                                    : <Trash2 color="#FFF" size={22} />}
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <X color="#FFF" size={28} />
+                        <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
+                            <X color="#FFF" size={26} />
                         </TouchableOpacity>
                     </View>
                 </View>
             </LinearGradient>
-
-            {/* Bottom Actions (Optional - can add reactions/comments) */}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#000',
-    },
+    container: { flex: 1, backgroundColor: '#000' },
     loadingContainer: {
         ...StyleSheet.absoluteFillObject,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.2)',
+        backgroundColor: 'rgba(0,0,0,0.25)',
     },
     headerGradient: {
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
+        top: 0, left: 0, right: 0,
         paddingHorizontal: 10,
-        zIndex: 10,
+        zIndex: 20,
+        paddingBottom: 20,
     },
     progressContainer: {
         flexDirection: 'row',
-        height: 2,
+        height: 2.5,
         paddingHorizontal: 5,
-        gap: 5,
+        gap: 4,
     },
-    progressBarBackground: {
+    progressBarBg: {
         flex: 1,
-        height: 2,
-        backgroundColor: 'rgba(255,255,255,0.3)',
-        borderRadius: 1,
+        height: 2.5,
+        backgroundColor: 'rgba(255,255,255,0.35)',
+        borderRadius: 2,
         overflow: 'hidden',
     },
-    progressBarForeground: {
+    progressBarFg: {
         height: '100%',
         backgroundColor: '#FFF',
     },
@@ -316,7 +376,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 15,
+        marginTop: 12,
         paddingHorizontal: 10,
     },
     userName: {
@@ -327,23 +387,76 @@ const styles = StyleSheet.create({
         textShadowRadius: 4,
     },
     timestamp: {
-        color: 'rgba(255,255,255,0.8)',
+        color: 'rgba(255,255,255,0.75)',
         fontSize: 11,
         marginTop: 2,
     },
-    closeButton: {
-        padding: 5,
-    },
-    actionButton: {
-        padding: 8,
-        marginRight: 10,
-    },
+    iconBtn: { padding: 6 },
     bottomGradient: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 150,
+        bottom: 0, left: 0, right: 0,
+        height: 160,
         zIndex: 5,
-    }
+    },
+
+    // ── Music badge ──
+    musicBadgeWrapper: {
+        position: 'absolute',
+        left: 16,
+        zIndex: 30,
+    },
+    musicBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        borderRadius: 20,
+        paddingVertical: 7,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
+        maxWidth: SCREEN_WIDTH * 0.55,
+    },
+    musicDisc: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    musicTextContainer: { flex: 1 },
+    musicTitle: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    musicArtist: {
+        color: 'rgba(255,255,255,0.65)',
+        fontSize: 10,
+        marginTop: 1,
+    },
+
+    // ── Floating overlays ──
+    floatingTextWrapper: {
+        position: 'absolute',
+        zIndex: 25,
+        padding: 4,
+    },
+    floatingText: {
+        color: '#FFF',
+        fontSize: 30,
+        fontWeight: '900',
+        textShadowColor: 'rgba(0,0,0,0.8)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 6,
+    },
+    floatingStickerWrapper: {
+        position: 'absolute',
+        zIndex: 25,
+        padding: 8,
+    },
+    floatingSticker: {
+        fontSize: 52,
+    },
 });

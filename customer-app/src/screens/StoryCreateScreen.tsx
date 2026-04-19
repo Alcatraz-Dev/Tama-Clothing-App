@@ -9,7 +9,8 @@ import {
     ActivityIndicator,
     Alert,
     Animated,
-    TextInput
+    TextInput,
+    PanResponder
 } from 'react-native';
 import { Text } from '../components/ui/text';
 import { Button } from '../components/ui/button';
@@ -53,6 +54,13 @@ const DURATIONS: { value: DurationType; label: string }[] = [
     { value: 24, label: '24h' },
 ];
 
+const DEMO_SONGS = [
+    { id: '1', title: 'BEY3A Tune', artist: 'Official', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+    { id: '2', title: 'Summer Vibe', artist: 'DJ Khalid', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+    { id: '3', title: 'Chill Beats', artist: 'LoFi Girl', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+    { id: '4', title: 'Trendy Flow', artist: 'TikTok Hits', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3' },
+];
+
 export default function StoryCreateScreen({
     user,
     media,
@@ -68,6 +76,15 @@ export default function StoryCreateScreen({
     const [uploading, setUploading] = useState(false);
     const [showMediaPicker, setShowMediaPicker] = useState(!media);
     const progressAnim = useRef(new Animated.Value(0)).current;
+    
+    // Editor States
+    const [floatingTexts, setFloatingTexts] = useState<{id: string, text: string, x: number, y: number}[]>([]);
+    const [isTyping, setIsTyping] = useState(false);
+    const [currentText, setCurrentText] = useState('');
+    const textSubmittedRef = useRef(false);
+    const [showMusicPicker, setShowMusicPicker] = useState(false);
+    const [selectedMusic, setSelectedMusic] = useState<{id: string, title: string, artist: string, url: string} | null>(null);
+    const [activeStickers, setActiveStickers] = useState<{id: string, emoji: string, x: number, y: number}[]>([]);
 
     const isDark = theme === 'dark';
 
@@ -128,6 +145,11 @@ export default function StoryCreateScreen({
                 userPhoto: user.avatarUrl || user.photoURL || null,
                 filter: selectedFilter,
                 duration: selectedDuration,
+                elements: {
+                    texts: floatingTexts,
+                    stickers: activeStickers,
+                    music: selectedMusic
+                },
                 createdAt: serverTimestamp(),
                 expiryAt: expiryDate.toISOString(),
                 views: 0,
@@ -255,6 +277,22 @@ export default function StoryCreateScreen({
         </View>
     );
 
+    const handleToolPress = (toolId: string) => {
+        if (toolId === 'text') {
+            setIsTyping(true);
+        } else if (toolId === 'music') {
+            setShowMusicPicker(true);
+        } else if (toolId === 'sticker') {
+            const emojis = ['🔥', '✨', '💯', '❤️', '😎', '🎉', '🚀', '👑'];
+            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            setActiveStickers([...activeStickers, { id: Date.now().toString(), emoji: randomEmoji, x: SCREEN_WIDTH/2 - 20, y: SCREEN_HEIGHT/2 }]);
+        } else if (toolId === 'filter') {
+            const currentIndex = FILTERS.findIndex(f => f.id === selectedFilter);
+            const nextIndex = (currentIndex + 1) % FILTERS.length;
+            setSelectedFilter(FILTERS[nextIndex].id);
+        }
+    };
+
     const renderPreview = () => {
         if (!selectedMedia) return null;
         
@@ -296,12 +334,98 @@ export default function StoryCreateScreen({
                             { Icon: Sticker, id: 'sticker' },
                             { Icon: Sparkles, id: 'filter' },
                         ].map((item, idx) => (
-                            <TouchableOpacity key={idx} style={styles.iconButton}>
-                                <item.Icon color="#FFF" size={22} />
+                            <TouchableOpacity key={idx} style={styles.iconButton} onPress={() => handleToolPress(item.id)}>
+                                <item.Icon color={item.id === 'music' && selectedMusic ? '#FFD700' : '#FFF'} size={22} />
                             </TouchableOpacity>
                         ))}
                     </View>
                 </View>
+
+                {/* Overlays Rendering */}
+                {selectedMusic && (
+                    <View style={styles.musicOverlay}>
+                        <Music size={14} color="#FFF" />
+                        <Text style={styles.musicOverlayText}>{selectedMusic.title}</Text>
+                    </View>
+                )}
+
+                {floatingTexts.map((txt) => (
+                    <DraggableElement key={txt.id} initialX={txt.x} initialY={txt.y} onPositionChange={(nx, ny) => {
+                        setFloatingTexts(prev => prev.map(t => t.id === txt.id ? {...t, x: nx, y: ny} : t));
+                    }}>
+                        <View style={styles.floatingTextContainer}>
+                            <Text style={styles.floatingText}>{txt.text}</Text>
+                        </View>
+                    </DraggableElement>
+                ))}
+
+                {activeStickers.map((sticker) => (
+                    <DraggableElement key={sticker.id} initialX={sticker.x} initialY={sticker.y} onPositionChange={(nx, ny) => {
+                        setActiveStickers(prev => prev.map(s => s.id === sticker.id ? {...s, x: nx, y: ny} : s));
+                    }} isSticker>
+                        <View style={styles.floatingStickerContainer}>
+                            <Text style={styles.floatingSticker}>{sticker.emoji}</Text>
+                        </View>
+                    </DraggableElement>
+                ))}
+
+                {/* Typing Overlay - Instagram style */}
+                {isTyping && (
+                    <View style={styles.typingOverlay}>
+                        {/* Close/Cancel area */}
+                        <TouchableOpacity
+                            style={styles.typingOverlayClose}
+                            onPress={() => { setCurrentText(''); setIsTyping(false); textSubmittedRef.current = false; }}
+                        />
+                        {/* Central text input */}
+                        <View style={styles.typingInputCard}>
+                            <TextInput
+                                autoFocus
+                                multiline
+                                style={styles.typingInput}
+                                placeholder={t('Type something...') || 'Type something...'}
+                                placeholderTextColor="rgba(255,255,255,0.45)"
+                                value={currentText}
+                                onChangeText={setCurrentText}
+                                returnKeyType="done"
+                                onSubmitEditing={() => {
+                                    if (!textSubmittedRef.current && currentText.trim()) {
+                                        textSubmittedRef.current = true;
+                                        setFloatingTexts(prev => [...prev, {
+                                            id: Date.now().toString(),
+                                            text: currentText.trim(),
+                                            x: SCREEN_WIDTH / 2 - 80,
+                                            y: SCREEN_HEIGHT / 2 - 60,
+                                        }]);
+                                    }
+                                    setCurrentText('');
+                                    setIsTyping(false);
+                                    setTimeout(() => { textSubmittedRef.current = false; }, 100);
+                                }}
+                            />
+                            {/* Done button */}
+                            <TouchableOpacity
+                                style={styles.typingDoneBtn}
+                                onPress={() => {
+                                    if (!textSubmittedRef.current && currentText.trim()) {
+                                        textSubmittedRef.current = true;
+                                        setFloatingTexts(prev => [...prev, {
+                                            id: Date.now().toString(),
+                                            text: currentText.trim(),
+                                            x: SCREEN_WIDTH / 2 - 80,
+                                            y: SCREEN_HEIGHT / 2 - 60,
+                                        }]);
+                                    }
+                                    setCurrentText('');
+                                    setIsTyping(false);
+                                    setTimeout(() => { textSubmittedRef.current = false; }, 100);
+                                }}
+                            >
+                                <Text style={styles.typingDoneText}>Done</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
                 {/* Bottom Tools Overlay */}
                 <View style={[styles.bottomTools, { paddingBottom: insets.bottom + 20 }]}>
@@ -370,9 +494,67 @@ export default function StoryCreateScreen({
     return (
         <View style={styles.container}>
             {renderPreview()}
+
+            {showMusicPicker && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end', zIndex: 100 }]}>
+                    <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setShowMusicPicker(false)} />
+                    <View style={{ backgroundColor: '#1A1A1A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: insets.bottom + 20 }}>
+                        <Text style={{ color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 20 }}>{t('Choose a track') || 'Choose a track'}</Text>
+                        {DEMO_SONGS.map(song => (
+                            <TouchableOpacity 
+                                key={song.id} 
+                                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' }}
+                                onPress={() => { setSelectedMusic(song); setShowMusicPicker(false); }}
+                            >
+                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
+                                    <Music size={20} color={selectedMusic?.id === song.id ? '#FFD700' : '#FFF'} />
+                                </View>
+                                <View>
+                                    <Text style={{ color: selectedMusic?.id === song.id ? '#FFD700' : '#FFF', fontSize: 16, fontWeight: '600' }}>{song.title}</Text>
+                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 2 }}>{song.artist}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
+
+const DraggableElement = ({ children, initialX, initialY, onPositionChange, isSticker }: { children: any, initialX: number, initialY: number, onPositionChange: (x: number, y: number) => void, isSticker?: boolean }) => {
+    const pan = useRef(new Animated.ValueXY({ x: initialX, y: initialY })).current;
+    
+    // Track current position internally to avoid losing it on multiple drags
+    const position = useRef({ x: initialX, y: initialY }).current;
+    
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {
+                pan.setOffset({ x: position.x, y: position.y });
+                pan.setValue({ x: 0, y: 0 });
+            },
+            onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+            onPanResponderRelease: (e, gestureState) => {
+                pan.flattenOffset();
+                position.x += gestureState.dx;
+                position.y += gestureState.dy;
+                onPositionChange(position.x, position.y);
+            }
+        })
+    ).current;
+
+    return (
+        <Animated.View
+            {...panResponder.panHandlers}
+            style={[pan.getLayout(), { position: 'absolute', zIndex: 50, padding: isSticker ? 10 : 0 }]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
 
 const styles = StyleSheet.create({
     container: {
@@ -615,5 +797,80 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
         marginLeft: 6,
+    },
+    musicOverlay: {
+        position: 'absolute',
+        top: 80,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        zIndex: 40,
+    },
+    musicOverlayText: {
+        color: '#FFF',
+        fontSize: 13,
+        marginLeft: 6,
+        fontWeight: '600',
+    },
+    floatingTextContainer: {
+        zIndex: 50,
+    },
+    floatingText: {
+        color: '#FFF',
+        fontSize: 32,
+        fontWeight: '900',
+        textShadowColor: 'rgba(0,0,0,0.75)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 5,
+        textAlign: 'center',
+    },
+    floatingStickerContainer: {
+        zIndex: 50,
+    },
+    floatingSticker: {
+        fontSize: 55,
+    },
+    typingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.65)',
+        zIndex: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    typingOverlayClose: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    typingInputCard: {
+        width: SCREEN_WIDTH * 0.85,
+        backgroundColor: 'rgba(30,30,30,0.92)',
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
+        zIndex: 101,
+    },
+    typingInput: {
+        color: '#FFF',
+        fontSize: 28,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        minHeight: 50,
+        maxHeight: 160,
+    },
+    typingDoneBtn: {
+        marginTop: 12,
+        backgroundColor: '#FF0080',
+        borderRadius: 14,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    typingDoneText: {
+        color: '#FFF',
+        fontWeight: '800',
+        fontSize: 16,
     },
 });

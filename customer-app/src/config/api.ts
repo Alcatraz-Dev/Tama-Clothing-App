@@ -12,3 +12,10 @@ export const BUNNY_CONFIG = {
   videoApiKey: "cddf0fc8-e12e-48ef-9001d3013912-aa63-4ee4",
   videoCdnHostname: "vz-96b67dd9-8c6.b-cdn.net",
 };
+
+export const SANITY_CONFIG = {
+  projectId: process.env.EXPO_PUBLIC_SANITY_PROJECT_ID,
+  dataset: process.env.EXPO_PUBLIC_SANITY_DATASET,
+  apiVersion: "2024-03-19", // Use a recent date
+  useCdn: false, // Set to false for uploads
+};

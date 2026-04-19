@@ -254,6 +254,8 @@ export const fr = {
   contactNumber: "NUMÉRO DE CONTACT",
   defaultAddress: "ADRESSE PAR DÉFAUT",
   changeAvatar: "CHANGER L'AVATAR",
+  chooseSticker: "Choisir un autocollant",
+  searchStickers: "Rechercher des autocollants...",
   rateProduct: "ÉVALUER LE PRODUIT",
   writeReview: "Écrivez votre avis...",
   cancel: "ANNULER",

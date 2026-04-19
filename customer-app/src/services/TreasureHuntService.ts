@@ -512,9 +512,18 @@ class TreasureHuntService {
 
       // Get an active campaign to link data
       const campaigns = await this.getActiveCampaigns();
-      if (campaigns.length === 0)
-        throw new Error("No active campaign for demo data");
-      const campaignId = campaigns[0].id;
+      let campaignId: string;
+      
+      if (campaigns.length === 0) {
+        // Fallback: search for any campaign if no active one
+        const allCampaigns = await this.getAllPublicCampaigns();
+        if (allCampaigns.length === 0) {
+          throw new Error("No campaigns found to attach demo data. Create a campaign first.");
+        }
+        campaignId = allCampaigns[0].id;
+      } else {
+        campaignId = campaigns[0].id;
+      }
 
       const promises = demoUsers.map((user) => {
         return addDoc(collection(db, "treasure_participations"), {
@@ -572,15 +581,17 @@ class TreasureHuntService {
     try {
       // Find an active campaign to attach to
       const campaigns = await this.getActiveCampaigns();
+      let campaignId: string;
+      
       if (campaigns.length === 0) {
         // Fallback: search for any campaign if no active one
-        const allCampaigns = await this.getAllCampaigns();
+        const allCampaigns = await this.getAllPublicCampaigns();
         if (allCampaigns.length === 0) {
           throw new Error("No campaigns found to add demo location");
         }
-        var campaignId = allCampaigns[0].id;
+        campaignId = allCampaigns[0].id;
       } else {
-        var campaignId = campaigns[0].id;
+        campaignId = campaigns[0].id;
       }
 
       const qrCode = await this.generateUniqueQRCode();

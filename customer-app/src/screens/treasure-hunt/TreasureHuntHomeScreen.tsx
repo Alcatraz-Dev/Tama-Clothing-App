@@ -408,11 +408,15 @@ const TreasureHuntHomeScreen: React.FC<{
               <ChevronLeft size={24} color={colors.foreground} />
             </TouchableOpacity>
           )}
-          <View>
-            <Text style={[styles.greeting, { color: colors.textMuted }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.greeting, { color: colors.textMuted }]} numberOfLines={1}>
               {t("welcomeBack") || "Hello Explorer,"}
             </Text>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            <Text 
+              style={[styles.headerTitle, { color: colors.foreground }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {t("treasureHuntTitle") || "Treasure Hunt"}
             </Text>
           </View>
@@ -785,6 +789,8 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
+    paddingRight: 10,
   },
   iconButton: {
     width: 44,

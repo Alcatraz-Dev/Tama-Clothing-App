@@ -44,7 +44,8 @@ import {
   Gift,
   Bomb as BombIcon,
   CircleDot,
-  Key
+  Key,
+  X
 } from 'lucide-react-native';
 import { treasureHuntService, TreasureLocation, Participation, Bomb, Campaign, TreasureKey } from '@/services/TreasureHuntService';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -1116,28 +1117,28 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
         {/* Selected Treasure Detail (Bottom Sheet style) */}
         {selectedLocation && !nearLocation && (
            <Animatable.View animation="slideInUp" duration={400} style={styles.selectedLocationCard}>
-              <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.detailBlur}>
+              <View style={[styles.detailBlur, { backgroundColor: 'rgba(25, 25, 25, 0.95)', overflow: 'hidden', padding: 20, borderRadius: 20, marginHorizontal: 15 }]}>
                  <View style={styles.detailHeader}>
                     <View style={[styles.detailIconBox, { backgroundColor: isDiscovered(selectedLocation.id) ? '#10B98120' : '#FFD70020' }]}>
                        {isDiscovered(selectedLocation.id) ? <CheckCircle2 size={24} color="#10B981" /> : <Gift size={24} color="#FFD700" />}
                     </View>
                     <View style={styles.detailTitleBox}>
-                       <Text style={[styles.detailTitle, { color: colors.foreground }]}>
+                       <Text style={[styles.detailTitle, { color: '#FFF' }]}>
                           {selectedLocation.name?.[currentLang as keyof typeof selectedLocation.name] || selectedLocation.name?.fr || selectedLocation.name?.['ar-tn'] || t('unknownProduct')}
                        </Text>
-                       <Text style={[styles.detailStatus, { color: isDiscovered(selectedLocation.id) ? '#10B981' : colors.textMuted }]}>
+                       <Text style={[styles.detailStatus, { color: isDiscovered(selectedLocation.id) ? '#10B981' : '#A3A3A3' }]}>
                           {isDiscovered(selectedLocation.id) ? t('treasureHuntFound') : t('treasureHuntStillHidden')}
                        </Text>
                     </View>
-                    <TouchableOpacity onPress={() => setSelectedLocation(null)} style={styles.detailCloseBtn}>
-                       <Crosshair size={24} color={colors.textMuted} />
+                    <TouchableOpacity onPress={() => setSelectedLocation(null)} style={styles.detailCloseBtn} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                       <X size={24} color="#FFF" />
                     </TouchableOpacity>
                   </View>
                   
                   {selectedLocation.hint && (
                     <View style={styles.hintBox}>
                        <Sparkles size={16} color="#FFD700" />
-                       <Text style={[styles.hintText, { color: colors.textMuted }]}>
+                       <Text style={[styles.hintText, { color: '#D4D4D4' }]}>
                          {selectedLocation.hint?.[currentLang as keyof typeof selectedLocation.hint] || selectedLocation.hint?.fr || selectedLocation.hint?.['ar-tn']}
                        </Text>
                     </View>
@@ -1148,15 +1149,15 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
                       <View style={{
                         flexDirection: 'row', alignItems: 'center',
-                        backgroundColor: selectedLocation.captureMethod === 'qr' ? '#4F46E510' : '#FF336610',
+                        backgroundColor: selectedLocation.captureMethod === 'qr' ? '#4F46E520' : '#FF336620',
                         borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
-                        borderWidth: 1, borderColor: selectedLocation.captureMethod === 'qr' ? '#4F46E540' : '#FF336640'
+                        borderWidth: 1, borderColor: selectedLocation.captureMethod === 'qr' ? '#4F46E560' : '#FF336660'
                       }}>
                         {selectedLocation.captureMethod === 'qr'
-                          ? <Scan size={13} color="#4F46E5" style={{ marginRight: 5 }} />
-                          : <Target size={13} color="#FF3366" style={{ marginRight: 5 }} />
+                          ? <Scan size={13} color="#818CF8" style={{ marginRight: 5 }} />
+                          : <Target size={13} color="#FB7185" style={{ marginRight: 5 }} />
                         }
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: selectedLocation.captureMethod === 'qr' ? '#4F46E5' : '#FF3366' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: selectedLocation.captureMethod === 'qr' ? '#818CF8' : '#FB7185' }}>
                           {selectedLocation.captureMethod === 'qr'
                             ? (t('treasureHuntQRCapture') || 'Scan QR Code')
                             : (t('treasureHuntVirtualCapture') || 'Virtual Capture')}
@@ -1169,12 +1170,12 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
                       <View style={{
                         flexDirection: 'row', alignItems: 'center',
-                        backgroundColor: '#FFD70010',
+                        backgroundColor: '#FFD70020',
                         borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
-                        borderWidth: 1, borderColor: '#FFD70040'
+                        borderWidth: 1, borderColor: '#FFD70060'
                       }}>
                         <Key size={13} color="#FFD700" style={{ marginRight: 5 }} />
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme === 'dark' ? '#FFD700' : '#B8860B' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFD700' }}>
                           {selectedLocation.keysRequired || 1} {t('treasureHuntKeysRequired') || 'Keys required'}
                         </Text>
                       </View>
@@ -1212,14 +1213,14 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
 
                   <View style={styles.detailRewardRow}>
                     <View style={styles.detailRewardItem}>
-                       <Award size={14} color={colors.primary} />
-                       <Text style={[styles.detailRewardText, { color: colors.textMuted }]}>
+                       <Award size={14} color="#818CF8" />
+                       <Text style={[styles.detailRewardText, { color: '#D4D4D4' }]}>
                          {t('treasureHuntExperiencePoints')}++
                        </Text>
                     </View>
                     <View style={styles.detailRewardItem}>
-                       <Target size={14} color="#FF3366" />
-                       <Text style={[styles.detailRewardText, { color: colors.textMuted }]}>
+                       <Target size={14} color="#FB7185" />
+                       <Text style={[styles.detailRewardText, { color: '#D4D4D4' }]}>
                          {getDistance(
                            userLocation?.coords.latitude || 0,
                            userLocation?.coords.longitude || 0,
@@ -1237,7 +1238,7 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                       </View>
                     )}
                   </View>
-              </BlurView>
+              </View>
            </Animatable.View>
         )}
         {/* Profile Modal Overlay */}
@@ -1404,8 +1405,11 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 12,
+    gap: 8,
   },
   blurPill: {
     flexDirection: 'row',

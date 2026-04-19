@@ -74,7 +74,7 @@ import {
 } from "lucide-react-native";
 import { db } from "../api/firebase";
 import { useAppTheme } from "../context/ThemeContext";
-import { uploadToBunny } from "../utils/bunny";
+import { uploadToSanity } from "../utils/sanity";
 import { sendPushNotification } from "../utils/notifications";
 import {
   SafeAreaView,
@@ -776,8 +776,8 @@ export default function DirectMessageScreen({
       setIsEmojiPickerVisible(false);
       setSending(true);
       try {
-        const bunnyUrl = await uploadToBunny(sticker.stickerUrl);
-        await sendMessage(null, bunnyUrl, null, null, null, null);
+        const sanityUrl = await uploadToSanity(sticker.stickerUrl);
+        await sendMessage(null, sanityUrl, null, null, null, null);
       } catch (e) {
         console.error("Error sending sticker:", e);
         Alert.alert(
@@ -1114,13 +1114,13 @@ export default function DirectMessageScreen({
     try {
       const fileType = uri.split(".").pop()?.toLowerCase();
       const isVideo = ["mp4", "mov", "avi", "mkv"].includes(fileType || "");
-      const bunnyUrl = await uploadToBunny(uri);
+      const sanityUrl = await uploadToSanity(uri);
 
       setUploading(false);
       await sendMessage(
         null,
-        isVideo ? null : bunnyUrl,
-        isVideo ? bunnyUrl : null,
+        isVideo ? null : sanityUrl,
+        isVideo ? sanityUrl : null,
       );
     } catch (e) {
       console.error("Error uploading media:", e);
@@ -1133,8 +1133,8 @@ export default function DirectMessageScreen({
   const handleAudioUpload = async (uri: string, duration: number) => {
     setUploading(true);
     try {
-      const bunnyUrl = await uploadToBunny(uri);
-      await sendMessage(null, null, null, null, bunnyUrl, duration);
+      const sanityUrl = await uploadToSanity(uri);
+      await sendMessage(null, null, null, null, sanityUrl, duration);
     } catch (e) {
       console.error("Error uploading audio:", e);
       Alert.alert(

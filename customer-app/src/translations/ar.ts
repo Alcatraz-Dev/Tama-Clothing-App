@@ -236,6 +236,8 @@ export const ar = {
   contactNumber: "نمرة التلفون",
   defaultAddress: "العنوان الرسمي",
   changeAvatar: "بدل التصويرة",
+  chooseSticker: "اختر ملصق",
+  searchStickers: "البحث عن ملصقات...",
   rateProduct: "قيم السلعة",
   writeReview: "أكتب رايك...",
   cancel: "بطل",
