@@ -11823,7 +11823,10 @@ function SettingsScreen({
     setSelectedPackage(null);
     setStickerSearchQuery('');
     setSearchResults([]);
-    fetchProfilePackages();
+    setStickerLoading(true);
+    
+    // Default to 'happy' stickers for instant visual joy
+    fetchStickerSearch('happy');
   };
 
   const handleSelectProfileSticker = async (sticker: any) => {
@@ -13122,12 +13125,29 @@ function SettingsScreen({
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {stickerSearchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => handleStickerSearch('')} style={{ padding: 4 }}>
-                  <X size={16} color={appColors.textMuted} />
-                </TouchableOpacity>
-              )}
             </View>
+            {/* ── Mood Filters (Sad, Happy, Love, Hate) ── */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 40, marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', paddingHorizontal: 16 }}>
+                {['happy', 'sad', 'love', 'hate'].map((mood) => (
+                  <TouchableOpacity 
+                    key={mood}
+                    onPress={() => {
+                      setSelectedPackage(null);
+                      setStickerSearchQuery(mood);
+                      fetchStickerSearch(mood);
+                    }} 
+                    style={{ 
+                      paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, marginRight: 10,
+                      backgroundColor: stickerSearchQuery.toLowerCase() === mood ? appColors.blue : 'rgba(255,255,255,0.05)'
+                    }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: stickerSearchQuery.toLowerCase() === mood ? '#FFF' : appColors.textMuted, textTransform: 'capitalize' }}>
+                      {t(mood) || mood}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
 
             {stickerLoading ? (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
