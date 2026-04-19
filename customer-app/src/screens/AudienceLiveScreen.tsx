@@ -12,6 +12,7 @@ import { FlameCounter } from '../components/FlameCounter';
 import { db } from '../api/firebase';
 import { GIFTS, Gift } from '../config/gifts';
 import { RechargeModal } from '../components/RechargeModal';
+import { LiveStickerPicker } from '../components/live/LiveStickerPicker';
 
 
 // ✅ Expo Go detection
@@ -153,8 +154,32 @@ export default function AudienceLiveScreen(props: Props) {
     const mediaPlayerRef = useRef<any>(null);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
     const [showGifts, setShowGifts] = useState(false);
-    const [giftQueue, setGiftQueue] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean }[]>([]);
-    const [recentGift, setRecentGift] = useState<{ senderName: string, targetName?: string, giftName: string, icon: string, isHost?: boolean, count: number, senderId?: string, senderAvatar?: string, isBig?: boolean } | null>(null);
+    const [giftQueue, setGiftQueue] = useState<{ 
+        senderName: string, 
+        targetName?: string, 
+        giftName: string, 
+        icon: string, 
+        isHost?: boolean, 
+        count: number, 
+        senderId?: string, 
+        senderAvatar?: string, 
+        isBig?: boolean,
+        points?: number,
+        isSticker?: boolean
+    }[]>([]);
+    const [recentGift, setRecentGift] = useState<{ 
+        senderName: string, 
+        targetName?: string, 
+        giftName: string, 
+        icon: string, 
+        isHost?: boolean, 
+        count: number, 
+        senderId?: string, 
+        senderAvatar?: string, 
+        isBig?: boolean,
+        points?: number,
+        isSticker?: boolean
+    } | null>(null);
     const recentGiftRef = useRef<any>(null);
     const giftTimerRef = useRef<any>(null);
     const [streamHostId, setStreamHostId] = useState<string | null>(null);
@@ -2393,8 +2418,35 @@ export default function AudienceLiveScreen(props: Props) {
             </Modal>
 
             {/* TikTok Style Gift Modal */}
+            {/* TikTok Style Gift Modal (Old Logic Commented out) */}
+            {/* 
             <Modal
                 visible={showGifts}
+                ...
+            </Modal>
+            */}
+
+            <LiveStickerPicker
+                visible={showGifts}
+                onClose={() => setShowGifts(false)}
+                userBalance={userBalance}
+                t={t || ((k: any) => k)}
+                onSendSticker={(sticker) => {
+                    sendGift({
+                        id: sticker.stickerId,
+                        name: 'Sticker',
+                        points: 1, // Default sticker cost
+                        icon: sticker.stickerImg
+                    });
+                }}
+            />
+
+
+            {/* Legacy Gift Modal archived below */}
+            {false && (
+            <View style={{ display: 'none' }}>
+            <Modal
+                visible={false}
                 transparent={true}
                 animationType="slide"
                 onRequestClose={() => setShowGifts(false)}
@@ -2573,6 +2625,8 @@ export default function AudienceLiveScreen(props: Props) {
                     </View>
                 </View>
             </Modal>
+            </View>
+            )}
 
 
             {/* Chat Muted Indicator */}
@@ -2684,9 +2738,12 @@ export default function AudienceLiveScreen(props: Props) {
                         }}
                     >
                         {(() => {
-                            const giftObj = GIFTS.find(g => g.name === recentGift.giftName);
-                            if (!giftObj) return null;
-                            const points = giftObj?.points || 0;
+                            const currentGift = recentGift;
+                            if (!currentGift) return null;
+                            const giftObj = GIFTS.find(g => g.name === currentGift.giftName);
+                            // Fallback for Stickers if not found in GIFTS
+                            const points = giftObj?.points || (currentGift.giftName === 'Sticker' ? 1 : 0);
+                            if (!giftObj && currentGift.giftName !== 'Sticker') return null;
                             const isGradient = points >= 100 && points < 500;
 
                             const content = (
@@ -2709,9 +2766,9 @@ export default function AudienceLiveScreen(props: Props) {
                                     }}>
                                         <Image
                                             source={
-                                                recentGift.senderAvatar
-                                                    ? (typeof recentGift.senderAvatar === 'number' ? recentGift.senderAvatar : { uri: recentGift.senderAvatar })
-                                                    : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || 'User')}&background=random` }
+                                                currentGift.senderAvatar
+                                                    ? (typeof currentGift.senderAvatar === 'number' ? currentGift.senderAvatar : { uri: currentGift.senderAvatar })
+                                                    : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(currentGift.senderName || 'User')}&background=random` }
                                             }
                                             style={{ width: '100%', height: '100%' }}
                                             resizeMode="cover"
@@ -2720,10 +2777,10 @@ export default function AudienceLiveScreen(props: Props) {
 
                                     <View style={{ marginLeft: 10, marginRight: 40 }}>
                                         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} numberOfLines={1}>
-                                            {recentGift.senderName}
+                                            {currentGift.senderName}
                                         </Text>
                                         <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '800' }}>
-                                            {t('sentA')} {recentGift.giftName}
+                                            {t('sentA')} {currentGift.giftName}
                                         </Text>
                                     </View>
 
@@ -2748,10 +2805,10 @@ export default function AudienceLiveScreen(props: Props) {
                                         }}
                                     >
                                         <Animatable.Image
-                                            key={`gift-icon-${recentGift.count}`}
+                                            key={`gift-icon-${currentGift.count}`}
                                             animation="tada"
                                             duration={1000}
-                                            source={typeof recentGift.icon === 'number' ? recentGift.icon : { uri: recentGift.icon }}
+                                            source={typeof currentGift.icon === 'number' ? currentGift.icon : { uri: currentGift.icon || '' }}
                                             style={{ width: 38, height: 38 }}
                                             resizeMode="contain"
                                         />
