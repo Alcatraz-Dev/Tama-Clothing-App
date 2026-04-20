@@ -2013,9 +2013,9 @@ export default function App() {
 
   const handleStartLive = (arg?: any) => {
     // Plan check
-    const tier = (profileData?.vendorPlan as VendorTier) || "starter";
+    const tier = (profileData?.vendorPlan as VendorTier) || (profileData?.vendorData?.tier as VendorTier) || "starter";
     const accountType =
-      (profileData?.accountType as AccountType) || "entreprise";
+      (profileData?.accountType as AccountType) || (profileData?.vendorData?.accountType as AccountType) || "entreprise";
     if (!hasFeature(tier, "liveStreaming", accountType)) {
       Alert.alert(
         t("premiumFeature") || "Premium Feature",
@@ -6779,14 +6779,15 @@ function ProfileScreen({
               {[
                 "admin",
                 "brand_owner",
+                "vendor",
                 "editor",
                 "nor_kam",
                 "support",
               ].includes(profileData?.role || "") &&
                 hasFeature(
-                  (profileData?.vendorPlan as VendorTier) || "starter",
+                  (profileData?.vendorPlan as VendorTier) || (profileData?.vendorData?.tier as VendorTier) || "starter",
                   "liveStreaming",
-                  profileData?.accountType as AccountType,
+                  (profileData?.accountType as AccountType) || (profileData?.vendorData?.accountType as AccountType) || "entreprise",
                 ) && (
                   <TouchableOpacity
                     onPress={() =>

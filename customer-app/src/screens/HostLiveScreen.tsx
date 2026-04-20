@@ -67,7 +67,6 @@ import { BlurView } from "expo-blur";
 import { db } from "../api/firebase";
 import { GIFTS, Gift } from "../config/gifts";
 import { RechargeModal } from "../components/RechargeModal";
-import { LiveStickerPicker } from "../components/live/LiveStickerPicker";
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -3103,40 +3102,293 @@ export default function HostLiveScreen(props: Props) {
       {/* TikTok Style Gift Alert Overlay - Top Left side pill */}
 
       {/* Host Gift Modal with TikTok Style Grid */}
-      {/* Host Gift Modal with TikTok Style Grid (Commented out) */}
-      {/* 
-            <Modal
-                visible={showGifts}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowGifts(false)}
-            >
-            */}
-
-      <LiveStickerPicker
+      <Modal
         visible={showGifts}
-        onClose={() => setShowGifts(false)}
-        userBalance={userBalance}
-        roomUsers={roomUsers}
-        selectedTargetUser={selectedTargetUser}
-        onSelectTargetUser={setSelectedTargetUser}
-        t={t || ((k: any) => k)}
-        onSendSticker={(sticker) => {
-          sendGift({
-            id: sticker.stickerId,
-            name: "Sticker",
-            points: 1,
-            icon: sticker.stickerImg,
-          });
-        }}
-      />
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowGifts(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowGifts(false)}
+          />
+          <View
+            style={{
+              backgroundColor: "#121218",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              height: Dimensions.get("window").height * 0.55,
+              paddingBottom: Platform.OS === "ios" ? 34 : 10,
+            }}
+          >
+            {/* Categories Bar */}
+            <View
+              style={{
+                flexDirection: "row",
+                borderBottomWidth: 1,
+                borderBottomColor: "#222",
+                paddingHorizontal: 10,
+              }}
+            >
+              {["POPULAIRE", "SPÉCIAL", "LUXE"].map((cat: any) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setGiftCategory(cat)}
+                  style={{
+                    paddingVertical: 15,
+                    paddingHorizontal: 20,
+                    borderBottomWidth: giftCategory === cat ? 2 : 0,
+                    borderBottomColor: "#FF0066",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: giftCategory === cat ? "#fff" : "#888",
+                      fontWeight: "bold",
+                      fontSize: 13,
+                    }}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-      {/* 
-            <Modal
-                visible={showGifts}
-                ... (Old logic removed from render tree but kept in file)
-            </Modal>
-            */}
+            {/* Target Selection View (Only for Host) */}
+            <View
+              style={{
+                backgroundColor: "rgba(255,255,255,0.05)",
+                paddingVertical: 10,
+                paddingHorizontal: 15,
+                borderBottomWidth: 1,
+                borderBottomColor: "#222",
+              }}
+            >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {roomUsers.map((u: any) => (
+                  <TouchableOpacity
+                    key={u.userID}
+                    onPress={() => setSelectedTargetUser(u)}
+                    style={{
+                      marginRight: 15,
+                      alignItems: "center",
+                      opacity:
+                        selectedTargetUser?.userID === u.userID ? 1 : 0.6,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        borderWidth: 2,
+                        borderColor:
+                          selectedTargetUser?.userID === u.userID
+                            ? "#FF0066"
+                            : "transparent",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <MemberAvatar
+                        userId={u.userID}
+                        userName={u.userName}
+                        defaultAvatar={u.avatarUrl}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 9,
+                        marginTop: 4,
+                        fontWeight: "600",
+                      }}
+                      numberOfLines={1}
+                    >
+                      {u.userName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Gift Grid */}
+            <FlatList
+              key={giftCategory}
+              numColumns={4}
+              data={gifts.filter((g) => {
+                if (giftCategory === "POPULAIRE") return g.points < 100;
+                if (giftCategory === "SPÉCIAL")
+                  return g.points >= 100 && g.points < 500;
+                if (giftCategory === "LUXE") return g.points >= 500;
+                return true;
+              })}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 10 }}
+              renderItem={({ item: gift }) => {
+                const isSelected = selectedGift?.id === gift.id;
+                return (
+                  <TouchableOpacity
+                    onPress={() => setSelectedGift(gift)}
+                    style={{
+                      width: "25%",
+                      aspectRatio: 0.85,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 5,
+                      marginVertical: 5,
+                      borderRadius: 12,
+                      backgroundColor: isSelected
+                        ? "rgba(255, 0, 102, 0.15)"
+                        : "transparent",
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? "#FF0066" : "transparent",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 55,
+                        height: 55,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 6,
+                      }}
+                    >
+                      <Image
+                        source={
+                          typeof gift.icon === "number"
+                            ? gift.icon
+                            : { uri: gift.icon }
+                        }
+                        style={{ width: 48, height: 48 }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
+                    >
+                      {gift.name}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 2,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: isSelected ? "#fff" : "#FFD700",
+                          fontSize: 9,
+                          fontWeight: "900",
+                        }}
+                      >
+                        {gift.points}
+                      </Text>
+                      <Coins
+                        size={8}
+                        color={isSelected ? "#fff" : "#FFD700"}
+                        style={{ marginLeft: 2 }}
+                        fill={isSelected ? "#fff" : "#FFD700"}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+
+            {/* Bottom Actions */}
+            <BlurView
+              intensity={90}
+              tint="dark"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                borderTopWidth: 1,
+                borderTopColor: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.1)",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 15,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}
+                  >
+                    {userBalance.toLocaleString()}
+                  </Text>
+                  <Coins
+                    size={12}
+                    color="#F59E0B"
+                    style={{ marginLeft: 4 }}
+                    fill="#F59E0B"
+                  />
+                  <TouchableOpacity
+                    style={{ marginLeft: 8 }}
+                    onPress={() => {
+                      setShowGifts(false);
+                      setTimeout(() => setShowRechargeModal(true), 500);
+                    }}
+                  >
+                    <PlusCircle size={16} color="#FF0066" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (selectedGift) {
+                    sendGift(selectedGift);
+                  }
+                }}
+                disabled={!selectedGift}
+                style={{
+                  backgroundColor: selectedGift
+                    ? "#FF0066"
+                    : "rgba(255,255,255,0.1)",
+                  paddingHorizontal: 28,
+                  paddingVertical: 12,
+                  borderRadius: 25,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: selectedGift ? 1 : 0.5,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "900",
+                    fontSize: 15,
+                    marginRight: 8,
+                  }}
+                >
+                  {t("send") || "ENVOYER"}
+                </Text>
+                <Send size={18} color="#fff" />
+              </TouchableOpacity>
+            </BlurView>
+          </View>
+        </View>
+      </Modal>
+
 
       {/* PINNED PRODUCT CARD OVERLAY (Matches Audience UI) */}
       {pinnedProduct && (
@@ -5076,7 +5328,7 @@ export default function HostLiveScreen(props: Props) {
           <Animatable.View animation="slideInLeft" duration={400}>
             {(() => {
               const isGradient =
-                (recentGift.points ?? 0) >= 10 || recentGift.isSticker;
+                (recentGift.points ?? 0) >= 10;
               const content = (
                 <>
                   <View

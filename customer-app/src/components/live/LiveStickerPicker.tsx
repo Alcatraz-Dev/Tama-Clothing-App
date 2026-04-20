@@ -189,7 +189,7 @@ export const LiveStickerPicker: React.FC<LiveStickerPickerProps> = ({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ alignItems: 'center' }}
             >
-              {['happy', 'sad', 'love', 'funny', 'cute', 'excited', 'angry', 'hello'].map((mood) => (
+              {['happy', 'sad', 'love', 'funny', 'cute', 'excited', 'angry', 'hello', 'party', 'wow', 'cool', 'scary', 'dance'].map((mood) => (
                 <TouchableOpacity
                   key={mood}
                   onPress={() => {
@@ -319,11 +319,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   moodBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.06)",
-    marginRight: 6,
+    marginRight: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   },
   moodText: {
     color: "#FFF",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     textTransform: "capitalize",
   },

@@ -12,7 +12,6 @@ import { FlameCounter } from '../components/FlameCounter';
 import { db } from '../api/firebase';
 import { GIFTS, Gift } from '../config/gifts';
 import { RechargeModal } from '../components/RechargeModal';
-import { LiveStickerPicker } from '../components/live/LiveStickerPicker';
 
 
 // ✅ Expo Go detection
@@ -2418,35 +2417,8 @@ export default function AudienceLiveScreen(props: Props) {
             </Modal>
 
             {/* TikTok Style Gift Modal */}
-            {/* TikTok Style Gift Modal (Old Logic Commented out) */}
-            {/* 
             <Modal
                 visible={showGifts}
-                ...
-            </Modal>
-            */}
-
-            <LiveStickerPicker
-                visible={showGifts}
-                onClose={() => setShowGifts(false)}
-                userBalance={userBalance}
-                t={t || ((k: any) => k)}
-                onSendSticker={(sticker) => {
-                    sendGift({
-                        id: sticker.stickerId,
-                        name: 'Sticker',
-                        points: 1, // Default sticker cost
-                        icon: sticker.stickerImg
-                    });
-                }}
-            />
-
-
-            {/* Legacy Gift Modal archived below */}
-            {false && (
-            <View style={{ display: 'none' }}>
-            <Modal
-                visible={false}
                 transparent={true}
                 animationType="slide"
                 onRequestClose={() => setShowGifts(false)}
@@ -2625,8 +2597,7 @@ export default function AudienceLiveScreen(props: Props) {
                     </View>
                 </View>
             </Modal>
-            </View>
-            )}
+
 
 
             {/* Chat Muted Indicator */}
