@@ -19,7 +19,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { ChevronLeft, CheckCircle2, ShieldCheck, User, Clock, RefreshCcw } from 'lucide-react-native';
 import { Theme } from '../theme';
-import { uploadToBunny } from '../utils/bunny';
+import { uploadToSanity } from '../utils/sanity';
 
 const { width, height } = Dimensions.get('window');
 const OVAL_WIDTH = width * 0.72;
@@ -131,7 +131,7 @@ export default function KYCScreen({ onBack, user, profileData, updateProfile, th
         }
         setLoading(true);
         try {
-            const selfieUrl = await uploadToBunny(capturedSelfie);
+            const selfieUrl = await uploadToSanity(capturedSelfie);
             const kycData = {
                 fullName,
                 dob,

@@ -67,6 +67,7 @@ import { BlurView } from "expo-blur";
 import { db } from "../api/firebase";
 import { GIFTS, Gift } from "../config/gifts";
 import { RechargeModal } from "../components/RechargeModal";
+import { uploadToSanity } from "../utils/sanity";
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -357,7 +358,6 @@ export default function HostLiveScreen(props: Props) {
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
   const [isUploadingPromo, setIsUploadingPromo] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(true);
-  const { uploadToBunny } = require("../utils/bunny");
 
   // ✅ Sync PK state periodically for late joiners
   // ✅ Keep refs in sync for signaling listeners
@@ -365,6 +365,18 @@ export default function HostLiveScreen(props: Props) {
   const pkStartLikesRef = useRef(0); // Baseline for PK Score
   const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
   const sessionEndedRef = useRef(false); // Track if session has been ended to prevent double-calling
+
+  // Cleanup session on unmount
+  useEffect(() => {
+    return () => {
+      if (!sessionEndedRef.current && channelId) {
+        console.log("🧹 Cleanup: Ending Firestore session on unmount");
+        LiveSessionService.endSession(channelId).catch((e) =>
+          console.error("Cleanup error:", e),
+        );
+      }
+    };
+  }, [channelId]);
   const peakViewersRef = useRef(0); // Track peak viewers for analytics
   const lastPurchaseTimeRef = useRef(0);
   const [purchaseNotification, setPurchaseNotification] = useState<{

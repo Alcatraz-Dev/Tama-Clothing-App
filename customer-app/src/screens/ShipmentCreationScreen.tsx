@@ -16,10 +16,10 @@ import { BlurView } from 'expo-blur';
 import { ArrowLeft, User, Phone, MapPin, Package, ClipboardCheck, Weight, Truck, Shield, Hash } from 'lucide-react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { createShipment, generateShippingStickerHTML } from '../utils/shipping';
-import { auth, storage } from '../api/firebase';
+import { auth } from '../api/firebase';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
 
 export default function ShipmentCreationScreen({ onBack, onComplete, t, hideHeader }: any) {
     const { colors, theme } = useAppTheme();

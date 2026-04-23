@@ -63,14 +63,14 @@ import {
   Video,
   Smile,
   Sticker,
+  Square,
   Mic,
-  MicOff,
-  Trash2,
   StopCircle,
   Play,
   Pause,
   RotateCcw,
   Search,
+  Trash2,
 } from "lucide-react-native";
 import { db } from "../api/firebase";
 import { useAppTheme } from "../context/ThemeContext";
@@ -340,8 +340,7 @@ export default function DirectMessageScreen({
       }, 100);
     } else {
       if (recordingTimer.current) clearInterval(recordingTimer.current);
-      setRecordingDuration(0);
-      setRecordingWaveform([]);
+      // Don't reset duration/waveform here as they are needed for the preview state
     }
     return () => {
       if (recordingTimer.current) clearInterval(recordingTimer.current);
@@ -820,6 +819,8 @@ export default function DirectMessageScreen({
     try {
       setIsEmojiPickerVisible(false);
       setIsRecordingCancelled(false);
+      setRecordingDuration(0);
+      setRecordingWaveform([]);
       recordingStartTime.current = Date.now();
       await AudioModule.setAudioModeAsync({
         allowsRecording: true,
@@ -1085,16 +1086,7 @@ export default function DirectMessageScreen({
   };
 
   const handleCameraCapture = () => {
-    setIsMediaModalVisible(false);
-    if (onNavigate) {
-      onNavigate("Camera", {
-        onCapture: (uri: string) => {
-          handleMediaUpload(uri);
-        },
-      });
-    } else {
-      setViewMode("camera");
-    }
+    setViewMode("camera");
   };
 
   const handleCameraResult = async (uri: string, type: "image" | "video") => {
@@ -1110,13 +1102,17 @@ export default function DirectMessageScreen({
   };
 
   const handleMediaUpload = async (uri: string) => {
+    if (!uri) return;
     setUploading(true);
     try {
       const fileType = uri.split(".").pop()?.toLowerCase();
       const isVideo = ["mp4", "mov", "avi", "mkv"].includes(fileType || "");
       const sanityUrl = await uploadToSanity(uri);
 
-      setUploading(false);
+      if (!sanityUrl) {
+        throw new Error("Upload failed to return a URL");
+      }
+
       await sendMessage(
         null,
         isVideo ? null : sanityUrl,
@@ -1124,17 +1120,32 @@ export default function DirectMessageScreen({
       );
     } catch (e) {
       console.error("Error uploading media:", e);
-      Alert.alert("Error", "Failed to upload media");
+      Alert.alert(
+        tr("Erreur", "خطأ", "Error"),
+        tr(
+          "Impossible d'envoyer le média",
+          "فشل إرسال الوسائط",
+          "Could not send media",
+        ),
+      );
     } finally {
       setUploading(false);
     }
   };
 
   const handleAudioUpload = async (uri: string, duration: number) => {
+    if (!uri) return;
     setUploading(true);
     try {
       const sanityUrl = await uploadToSanity(uri);
+
+      if (!sanityUrl) {
+        throw new Error("Audio upload failed to return a URL");
+      }
+
       await sendMessage(null, null, null, null, sanityUrl, duration);
+      setRecordedUri(null);
+      setRecordedDuration(0);
     } catch (e) {
       console.error("Error uploading audio:", e);
       Alert.alert(
@@ -2267,124 +2278,101 @@ export default function DirectMessageScreen({
             </TouchableOpacity>
           </View>
         )}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <TouchableOpacity
-            onPress={() => setIsMediaModalVisible(true)}
-            disabled={uploading || isRecording}
-            style={{
-              width: 44,
-              height: 44,
-              backgroundColor:
-                theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 12,
-              opacity: isRecording ? 0.3 : 1,
-            }}
-          >
-            {uploading ? (
-              <ActivityIndicator size="small" color={colors.blue} />
-            ) : (
-              <ImageIcon size={22} color={colors.foreground} />
-            )}
-          </TouchableOpacity>
+        {!recordedUri && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setIsMediaModalVisible(true)}
+              disabled={uploading || isRecording}
+              style={{
+                width: 44,
+                height: 44,
+                backgroundColor:
+                  theme === "dark"
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.05)",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                opacity: isRecording ? 0.3 : 1,
+              }}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color={colors.blue} />
+              ) : (
+                <Plus size={22} color={colors.foreground} />
+              )}
+            </TouchableOpacity>
 
-          {!isRecording && !recordedUri && (
-            <>
-              {/* Sticker Button - Opens Sticker Tab with search and emoji stickers */}
-              <TouchableOpacity
-                onPress={() => {
-                  setIsEmojiPickerVisible(true);
-                  setActivePickerTab("sticker");
-                }}
-                style={{
-                  width: 44,
-                  height: 44,
-                  backgroundColor:
-                    isEmojiPickerVisible && activePickerTab === "sticker"
-                      ? colors.blue + "20"
-                      : theme === "dark"
-                        ? "rgba(255,255,255,0.1)"
-                        : "rgba(0,0,0,0.05)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 12,
-                }}
-              >
-                <Sticker
-                  size={22}
-                  color={
-                    isEmojiPickerVisible && activePickerTab === "sticker"
-                      ? colors.blue
-                      : colors.foreground
-                  }
-                />
-              </TouchableOpacity>
+            {!isRecording && !recordedUri && (
+              <>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    ref={inputRef}
+                    value={inputText}
+                    onChangeText={setInputText}
+                    placeholder={tr(
+                      "Tapez votre message...",
+                      "اكتب رسالة...",
+                      "Type a message...",
+                    )}
+                    variant="ghost"
+                    multiline
+                    containerStyle={{
+                      minHeight: 44,
+                      backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+                      borderRadius: 22,
+                      paddingHorizontal: 12,
+                      borderWidth: 0,
+                    }}
+                    inputStyle={{
+                      maxHeight: 120,
+                      fontSize: 14,
+                      textAlign: language === "ar" ? "right" : "left",
+                      paddingVertical: 10,
+                      color: colors.foreground,
+                    }}
+                  />
+                </View>
 
-              <View style={{ flex: 1 }}>
-                <Input
-                  ref={inputRef}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder={tr(
-                    "Tapez votre message...",
-                    "اكتب رسالة...",
-                    "Type a message...",
-                  )}
-                  variant="ghost"
-                  multiline
-                  containerStyle={{
-                    minHeight: 44,
-                    backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+                <TouchableOpacity
+                  onPress={() => {
+                    if (inputText.trim()) {
+                      sendMessage();
+                    } else if (isRecording) {
+                      handleStopRecording(true);
+                    } else {
+                      handleStartRecording();
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (!inputText.trim() && !sending && !isRecording) {
+                      handleStartRecording();
+                    }
+                  }}
+                  disabled={sending}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    backgroundColor: isRecording ? "#EF4444" : colors.blue,
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: 22,
-                    paddingHorizontal: 12,
-                    borderWidth: 0,
                   }}
-                  inputStyle={{
-                    maxHeight: 120,
-                    fontSize: 14,
-                    textAlign: language === "ar" ? "right" : "left",
-                    paddingVertical: 10,
-                    color: colors.foreground,
-                  }}
-                />
-              </View>
-
-              <TouchableOpacity
-                onPress={inputText.trim() ? () => sendMessage() : undefined}
-                onPressIn={() => {
-                  if (!inputText.trim() && !sending) {
-                    handleStartRecording();
-                  }
-                }}
-                onPressOut={() => {
-                  if (isRecording) {
-                    handleStopRecording(true);
-                  }
-                }}
-                disabled={sending}
-                style={{
-                  width: 44,
-                  height: 44,
-                  backgroundColor: isRecording ? "#EF4444" : colors.blue,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 22,
-                }}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : inputText.trim() ? (
-                  <Send size={20} color="white" />
-                ) : isRecording ? (
-                  <Mic size={20} color="white" />
-                ) : (
-                  <Mic size={20} color="white" />
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+                >
+                  {sending ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : inputText.trim() ? (
+                    <Send size={20} color="white" />
+                  ) : isRecording ? (
+                    <Square size={20} color="white" fill="white" />
+                  ) : (
+                    <Mic size={20} color="white" />
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
       </BlurView>
 
       {/* Keyboard avoidance */}
@@ -2483,6 +2471,57 @@ export default function DirectMessageScreen({
             </View>
 
             <View style={{ gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsMediaModalVisible(false);
+                  handleCameraCapture();
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: theme === "dark" ? "#2c2c2e" : "#F2F2F7",
+                  padding: 16,
+                  borderRadius: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#3B82F6",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 15,
+                  }}
+                >
+                  <Camera size={22} color="#FFF" />
+                </View>
+                <View>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {tr("Appareil photo", "الكاميرا", "Camera")}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: 13,
+                      marginTop: 1,
+                    }}
+                  >
+                    {tr(
+                      "Prendre une photo ou vidéo",
+                      "التقاط صورة أو فيديو",
+                      "Take a photo or video",
+                    )}
+                  </Text>
+                </View>
+              </TouchableOpacity>
               <MediaPicker
                 mediaType="image"
                 onSelectionChange={(assets) => {
@@ -2590,16 +2629,15 @@ export default function DirectMessageScreen({
                       }}
                     >
                       {tr(
-                        "Partager une vidéo",
-                        "مشاركة فيديو",
-                        "Share a video",
+                        "Choisir depuis la galerie",
+                        "اختر من المعرض",
+                        "Choose from gallery",
                       )}
                     </Text>
                   </View>
                 </View>
               </MediaPicker>
 
-              {/* GIF Option */}
               <TouchableOpacity
                 onPress={() => {
                   setIsMediaModalVisible(false);
@@ -2618,13 +2656,13 @@ export default function DirectMessageScreen({
                     width: 44,
                     height: 44,
                     borderRadius: 22,
-                    backgroundColor: "#00B2FF",
+                    backgroundColor: "#10B981",
                     alignItems: "center",
                     justifyContent: "center",
                     marginRight: 15,
                   }}
                 >
-                  <Smile size={22} color="#FFF" />
+                  <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>GIF</Text>
                 </View>
                 <View>
                   <Text
@@ -2634,7 +2672,7 @@ export default function DirectMessageScreen({
                       fontWeight: "600",
                     }}
                   >
-                    {tr("GIF", "GIF", "GIF")}
+                    GIF
                   </Text>
                   <Text
                     style={{
@@ -2644,9 +2682,62 @@ export default function DirectMessageScreen({
                     }}
                   >
                     {tr(
-                      "Rechercher et envoyer des GIFs",
-                      "بحث وإرسال صور GIF",
-                      "Search and send GIFs",
+                      "Rechercher des GIFs",
+                      "البحث عن صور GIF",
+                      "Search GIFs",
+                    )}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setIsMediaModalVisible(false);
+                  setIsEmojiPickerVisible(true);
+                  setActivePickerTab("sticker");
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: theme === "dark" ? "#2c2c2e" : "#F2F2F7",
+                  padding: 16,
+                  borderRadius: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#F59E0B",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 15,
+                  }}
+                >
+                  <Sticker size={22} color="#FFF" />
+                </View>
+                <View>
+                  <Text
+                    style={{
+                      color: colors.foreground,
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {tr("Stickers", "ملصقات", "Stickers")}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: 13,
+                      marginTop: 1,
+                    }}
+                  >
+                    {tr(
+                      "Envoyer des stickers ou emojis",
+                      "إرسال ملصقات أو إيموجي",
+                      "Send stickers or emojis",
                     )}
                   </Text>
                 </View>

@@ -40,7 +40,7 @@ import {
     AdminInput,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadToBunny } from '../../utils/bunny';
+import { uploadToSanity } from '../../utils/sanity';
 
 const PRESET_COLORS = ['#FF2D55', '#007AFF', '#34C759', '#1fa7f0', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#000000', '#8E8E93'];
 
@@ -128,7 +128,9 @@ export default function AdminPromoBannersScreen({ onBack, t, profileData }: any)
         try {
             let finalImageUrl = form.imageUrl;
             if (form.imageUrl && !form.imageUrl.startsWith('http')) {
-                finalImageUrl = await uploadToBunny(form.imageUrl);
+                const uploadedUrl = await uploadToSanity(form.imageUrl);
+                if (!uploadedUrl) throw new Error('Upload failed');
+                finalImageUrl = uploadedUrl;
             }
 
             const data: any = {

@@ -61,7 +61,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { db, storage, auth } from "./src/api/firebase";
+import { db, auth } from "./src/api/firebase";
 import ShipmentCreationScreen from "./src/screens/ShipmentCreationScreen";
 import ShipmentTrackingScreen from "./src/screens/ShipmentTrackingScreen";
 import MyShipmentsScreen from "./src/screens/MyShipmentsScreen";
@@ -119,7 +119,7 @@ import * as MediaLibrary from "expo-media-library";
 import { Theme } from "./src/theme";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { uploadToBunny } from "./src/utils/bunny";
+import { uploadToSanity } from "./src/utils/sanity";
 import {
   Home,
   ShoppingBag,
@@ -271,7 +271,7 @@ import {
   getAppColors,
 } from "./src/context/ThemeContext";
 import { APP_ICON, LOGO, width, height } from "./src/constants/layout";
-import { uploadToBunny as uploadImageToCloudinary } from "./src/utils/bunny";
+import { uploadToSanity as uploadImageToCloudinary } from "./src/utils/sanity";
 import {
   registerForPushNotificationsAsync,
   sendPushNotification,
@@ -2013,9 +2013,14 @@ export default function App() {
 
   const handleStartLive = (arg?: any) => {
     // Plan check
-    const tier = (profileData?.vendorPlan as VendorTier) || (profileData?.vendorData?.tier as VendorTier) || "starter";
+    const tier =
+      (profileData?.vendorPlan as VendorTier) ||
+      (profileData?.vendorData?.tier as VendorTier) ||
+      "starter";
     const accountType =
-      (profileData?.accountType as AccountType) || (profileData?.vendorData?.accountType as AccountType) || "entreprise";
+      (profileData?.accountType as AccountType) ||
+      (profileData?.vendorData?.accountType as AccountType) ||
+      "entreprise";
     if (!hasFeature(tier, "liveStreaming", accountType)) {
       Alert.alert(
         t("premiumFeature") || "Premium Feature",
@@ -2150,7 +2155,11 @@ export default function App() {
             }
             brandId={liveStreamData?.brandId}
             collabId={liveStreamData?.collabId}
-            onClose={() => setActiveTab("Home")}
+            onClose={() => {
+              setActiveTab("Home");
+              setIsLiveHost(false);
+              setActiveLiveChannel("");
+            }}
             t={t}
             language={language}
             hostAvatar={
@@ -2170,7 +2179,10 @@ export default function App() {
               "User"
             }
             userAvatar={profileData?.avatarUrl || user?.photoURL}
-            onClose={() => setActiveTab("Home")}
+            onClose={() => {
+              setActiveTab("Home");
+              setActiveLiveChannel("");
+            }}
             t={t}
             language={language}
             profileData={profileData}
@@ -5180,6 +5192,10 @@ function ProfileScreen({
         const asset = result.assets[0];
         const isVid = asset.type === "video";
         const url = await uploadImageToCloudinary(asset.uri);
+        if (!url) {
+          setUploadingWork(false);
+          return;
+        }
 
         await addDoc(collection(db, "users", user.uid, "works"), {
           type: isVid ? "video" : "image",
@@ -6785,9 +6801,13 @@ function ProfileScreen({
                 "support",
               ].includes(profileData?.role || "") &&
                 hasFeature(
-                  (profileData?.vendorPlan as VendorTier) || (profileData?.vendorData?.tier as VendorTier) || "starter",
+                  (profileData?.vendorPlan as VendorTier) ||
+                    (profileData?.vendorData?.tier as VendorTier) ||
+                    "starter",
                   "liveStreaming",
-                  (profileData?.accountType as AccountType) || (profileData?.vendorData?.accountType as AccountType) || "entreprise",
+                  (profileData?.accountType as AccountType) ||
+                    (profileData?.vendorData?.accountType as AccountType) ||
+                    "entreprise",
                 ) && (
                   <TouchableOpacity
                     onPress={() =>
@@ -11693,12 +11713,14 @@ function SettingsScreen({
   // Step 1: list of packages
   const [profilePackages, setProfilePackages] = useState<ProfilePackage[]>([]);
   // Step 2: stickers inside the selected package (null = showing package list)
-  const [selectedPackage, setSelectedPackage] = useState<ProfilePackage | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<ProfilePackage | null>(
+    null,
+  );
   const [packageStickers, setPackageStickers] = useState<ProfileSticker[]>([]);
   // Flat search results (overrides package view when there's a query)
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [stickerLoading, setStickerLoading] = useState(false);
-  const [stickerSearchQuery, setStickerSearchQuery] = useState('');
+  const [stickerSearchQuery, setStickerSearchQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotifications] = useState(
     profileData?.settings?.notifications ?? true,
@@ -11767,19 +11789,23 @@ function SettingsScreen({
 
   // ── Stipop Profile API ──────────────────────────────────────────────
 
-
-
   /** Search across all stickers (global search) */
   const fetchStickerSearch = async (q: string) => {
     const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
-    const uid = user?.uid || 'guest';
+    const uid = user?.uid || "guest";
     if (!apiKey) return;
     setStickerLoading(true);
     try {
-      const response = await searchStickers(apiKey, { userId: uid, q, lang: 'en', countryCode: 'US', limit: 40 });
+      const response = await searchStickers(apiKey, {
+        userId: uid,
+        q,
+        lang: "en",
+        countryCode: "US",
+        limit: 40,
+      });
       setSearchResults(response.body?.stickerList || []);
     } catch (e) {
-      console.warn('fetchStickerSearch:', e);
+      console.warn("fetchStickerSearch:", e);
     } finally {
       setStickerLoading(false);
     }
@@ -11788,14 +11814,14 @@ function SettingsScreen({
   /** Step 1 — load the profile package gallery */
   const fetchProfilePackages = async () => {
     const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
-    const uid = user?.uid || 'guest';
+    const uid = user?.uid || "guest";
     if (!apiKey) return;
     setStickerLoading(true);
     try {
       const packages = await getProfilePackages(apiKey, uid, 40);
       setProfilePackages(packages);
     } catch (e) {
-      console.warn('fetchProfilePackages:', e);
+      console.warn("fetchProfilePackages:", e);
     } finally {
       setStickerLoading(false);
     }
@@ -11804,16 +11830,20 @@ function SettingsScreen({
   /** Step 2 — drill into a package */
   const fetchPackageStickers = async (pkg: ProfilePackage) => {
     const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
-    const uid = user?.uid || 'guest';
+    const uid = user?.uid || "guest";
     if (!apiKey) return;
     setStickerLoading(true);
     setSelectedPackage(pkg);
     setPackageStickers([]);
     try {
-      const stickers = await getProfilePackageStickers(apiKey, uid, pkg.packageId);
+      const stickers = await getProfilePackageStickers(
+        apiKey,
+        uid,
+        pkg.packageId,
+      );
       setPackageStickers(stickers as any);
     } catch (e) {
-      console.warn('fetchPackageStickers:', e);
+      console.warn("fetchPackageStickers:", e);
     } finally {
       setStickerLoading(false);
     }
@@ -11822,32 +11852,33 @@ function SettingsScreen({
   const handleOpenStickerPicker = async () => {
     setShowStickerPicker(true);
     setSelectedPackage(null);
-    setStickerSearchQuery('');
+    setStickerSearchQuery("");
     setSearchResults([]);
     setStickerLoading(true);
-    
+
     // Default to 'happy' stickers for instant visual joy
-    fetchStickerSearch('happy');
+    fetchStickerSearch("happy");
   };
 
   const handleSelectProfileSticker = async (sticker: any) => {
     try {
       setLoading(true);
       const apiKey = process.env.EXPO_PUBLIC_STIPOP_API_KEY;
-      const uid = user?.uid || 'guest';
+      const uid = user?.uid || "guest";
 
       // 1. Register with Stipop
       if (apiKey && sticker.stickerId) {
         try {
           await registerProfileSticker(apiKey, uid, sticker.stickerId);
         } catch (e) {
-          console.warn('registerProfileSticker failed:', e);
+          console.warn("registerProfileSticker failed:", e);
         }
       }
 
-      // 2. High quality resize + upload to Bunny.net
+      // 2. High quality resize + upload to Sanity
       const stickerUrl = getStickerWithDimensions(sticker.stickerImg, 400, 400);
-      const savedUrl = await uploadToBunny(stickerUrl);
+      const savedUrl = await uploadToSanity(stickerUrl);
+      if (!savedUrl) throw new Error('Upload failed');
 
       // 3. Save to profile
       await updateProfile({ avatarUrl: savedUrl });
@@ -11855,14 +11886,15 @@ function SettingsScreen({
       setShowStickerPicker(false);
 
       Alert.alert(
-        t('Success') || 'Success',
-        t('Profile picture updated!') || 'Profile picture updated!',
+        t("Success") || "Success",
+        t("Profile picture updated!") || "Profile picture updated!",
       );
     } catch (error) {
-      console.warn('handleSelectProfileSticker:', error);
+      console.warn("handleSelectProfileSticker:", error);
       Alert.alert(
-        t('Error') || 'Error',
-        t('Failed to update profile picture') || 'Failed to update profile picture',
+        t("Error") || "Error",
+        t("Failed to update profile picture") ||
+          "Failed to update profile picture",
       );
     } finally {
       setLoading(false);
@@ -11895,7 +11927,8 @@ function SettingsScreen({
   const uploadAvatar = async (uri: string) => {
     try {
       setUploading(true);
-      const downloadUrl = await uploadToBunny(uri);
+      const downloadUrl = await uploadToSanity(uri);
+      if (!downloadUrl) throw new Error('Upload failed');
 
       if (downloadUrl) {
         setAvatar(downloadUrl);
@@ -12145,12 +12178,21 @@ function SettingsScreen({
               ]}
             >
               {avatar ? (
-                <View style={{ width: 80, height: 80, borderRadius: 40, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    overflow: "hidden",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   <Image
                     source={{ uri: avatar }}
                     style={{
-                      width: avatar.includes('stipop.io') ? 56 : 80,
-                      height: avatar.includes('stipop.io') ? 56 : 80,
+                      width: avatar.includes("stipop.io") ? 56 : 80,
+                      height: avatar.includes("stipop.io") ? 56 : 80,
                       resizeMode: "contain",
                     }}
                   />
@@ -13086,40 +13128,82 @@ function SettingsScreen({
         transparent={true}
         onRequestClose={() => setShowStickerPicker(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: theme === 'dark' ? '#1c1c1e' : '#f2f2f7',
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            height: height * 0.75, paddingHorizontal: 16, paddingTop: 16,
-          }}>
-
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              height: height * 0.75,
+              paddingHorizontal: 16,
+              paddingTop: 16,
+            }}
+          >
             {/* Header row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 14,
+              }}
+            >
               {selectedPackage && !stickerSearchQuery ? (
-                <TouchableOpacity onPress={() => setSelectedPackage(null)} style={{ marginRight: 10, padding: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedPackage(null)}
+                  style={{ marginRight: 10, padding: 4 }}
+                >
                   <ChevronLeft size={22} color={appColors.foreground} />
                 </TouchableOpacity>
               ) : null}
-              <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: appColors.foreground }}>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: appColors.foreground,
+                }}
+              >
                 {selectedPackage && !stickerSearchQuery
                   ? selectedPackage.packageName
-                  : (t('chooseSticker') || 'Choose a Sticker')}
+                  : t("chooseSticker") || "Choose a Sticker"}
               </Text>
-              <TouchableOpacity onPress={() => setShowStickerPicker(false)} style={{ padding: 4 }}>
+              <TouchableOpacity
+                onPress={() => setShowStickerPicker(false)}
+                style={{ padding: 4 }}
+              >
                 <X size={24} color={appColors.textMuted} />
               </TouchableOpacity>
             </View>
 
             {/* Search bar */}
-            <View style={{
-              flexDirection: 'row', alignItems: 'center',
-              backgroundColor: theme === 'dark' ? '#2c2c2e' : '#fff',
-              borderRadius: 12, paddingHorizontal: 12, marginBottom: 14,
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: theme === "dark" ? "#2c2c2e" : "#fff",
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                marginBottom: 14,
+              }}
+            >
               <Search size={16} color={appColors.textMuted} />
               <TextInput
-                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: appColors.foreground }}
-                placeholder={t('searchStickers') || 'Rechercher des autocollants...'}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  paddingHorizontal: 8,
+                  fontSize: 14,
+                  color: appColors.foreground,
+                }}
+                placeholder={
+                  t("searchStickers") || "Rechercher des autocollants..."
+                }
                 placeholderTextColor={appColors.textMuted}
                 value={stickerSearchQuery}
                 onChangeText={handleStickerSearch}
@@ -13128,21 +13212,42 @@ function SettingsScreen({
               />
             </View>
             {/* ── Mood Filters (Sad, Happy, Love, Hate) ── */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 40, marginBottom: 10 }}>
-              <View style={{ flexDirection: 'row', paddingHorizontal: 16 }}>
-                {['happy', 'sad', 'love', 'hate'].map((mood) => (
-                  <TouchableOpacity 
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ height: 40, marginBottom: 10 }}
+            >
+              <View style={{ flexDirection: "row", paddingHorizontal: 16 }}>
+                {["happy", "sad", "love", "hate"].map((mood) => (
+                  <TouchableOpacity
                     key={mood}
                     onPress={() => {
                       setSelectedPackage(null);
                       setStickerSearchQuery(mood);
                       fetchStickerSearch(mood);
-                    }} 
-                    style={{ 
-                      paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, marginRight: 10,
-                      backgroundColor: stickerSearchQuery.toLowerCase() === mood ? appColors.blue : 'rgba(255,255,255,0.05)'
-                    }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: stickerSearchQuery.toLowerCase() === mood ? '#FFF' : appColors.textMuted, textTransform: 'capitalize' }}>
+                    }}
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 16,
+                      borderRadius: 20,
+                      marginRight: 10,
+                      backgroundColor:
+                        stickerSearchQuery.toLowerCase() === mood
+                          ? appColors.blue
+                          : "rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color:
+                          stickerSearchQuery.toLowerCase() === mood
+                            ? "#FFF"
+                            : appColors.textMuted,
+                        textTransform: "capitalize",
+                      }}
+                    >
                       {t(mood) || mood}
                     </Text>
                   </TouchableOpacity>
@@ -13151,79 +13256,190 @@ function SettingsScreen({
             </ScrollView>
 
             {stickerLoading ? (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
                 <ActivityIndicator size="large" color={appColors.blue} />
               </View>
             ) : (
-              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-
+              <ScrollView
+                style={{ flex: 1 }}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* ── Search results (flat sticker grid) ── */}
                 {stickerSearchQuery.trim() ? (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                     {(searchResults || []).length === 0 ? (
-                      <View style={{ width: '100%', padding: 40, alignItems: 'center' }}>
-                        <Text style={{ color: appColors.textMuted }}>{t('noStickersFound') || 'No stickers found'}</Text>
+                      <View
+                        style={{
+                          width: "100%",
+                          padding: 40,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: appColors.textMuted }}>
+                          {t("noStickersFound") || "No stickers found"}
+                        </Text>
                       </View>
-                    ) : searchResults?.map((s: any, i: number) => (
-                      <TouchableOpacity key={`sr-${i}`} onPress={() => handleSelectProfileSticker(s)}
-                        disabled={loading}
-                        style={{ width: '25%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-                        <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 200, 200) }}
-                          style={{ width: 68, height: 68, resizeMode: 'contain' }} />
-                      </TouchableOpacity>
-                    ))}
+                    ) : (
+                      searchResults?.map((s: any, i: number) => (
+                        <TouchableOpacity
+                          key={`sr-${i}`}
+                          onPress={() => handleSelectProfileSticker(s)}
+                          disabled={loading}
+                          style={{
+                            width: "25%",
+                            aspectRatio: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: 4,
+                          }}
+                        >
+                          <Image
+                            source={{
+                              uri: getStickerWithDimensions(
+                                s.stickerImg,
+                                200,
+                                200,
+                              ),
+                            }}
+                            style={{
+                              width: 68,
+                              height: 68,
+                              resizeMode: "contain",
+                            }}
+                          />
+                        </TouchableOpacity>
+                      ))
+                    )}
                   </View>
-
                 ) : selectedPackage ? (
                   /* ── Step 2: stickers inside a package ── */
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                     {(packageStickers || []).map((s, i) => (
-                      <TouchableOpacity key={`ps-${i}`} onPress={() => handleSelectProfileSticker(s)}
+                      <TouchableOpacity
+                        key={`ps-${i}`}
+                        onPress={() => handleSelectProfileSticker(s)}
                         disabled={loading}
-                        style={{ width: '25%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-                        {loading
-                          ? <ActivityIndicator size="small" color={appColors.blue} />
-                          : <Image source={{ uri: getStickerWithDimensions(s.stickerImg, 200, 200) }}
-                              style={{ width: 68, height: 68, resizeMode: 'contain' }} />}
+                        style={{
+                          width: "25%",
+                          aspectRatio: 1,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 4,
+                        }}
+                      >
+                        {loading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={appColors.blue}
+                          />
+                        ) : (
+                          <Image
+                            source={{
+                              uri: getStickerWithDimensions(
+                                s.stickerImg,
+                                200,
+                                200,
+                              ),
+                            }}
+                            style={{
+                              width: 68,
+                              height: 68,
+                              resizeMode: "contain",
+                            }}
+                          />
+                        )}
                       </TouchableOpacity>
                     ))}
                     {(packageStickers || []).length === 0 && (
-                      <View style={{ width: '100%', padding: 30, alignItems: 'center' }}>
-                        <Text style={{ color: appColors.textMuted }}>{t('noStickersFound') || 'No stickers in this pack'}</Text>
+                      <View
+                        style={{
+                          width: "100%",
+                          padding: 30,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: appColors.textMuted }}>
+                          {t("noStickersFound") || "No stickers in this pack"}
+                        </Text>
                       </View>
                     )}
                   </View>
-
                 ) : (
                   /* ── Step 1: package thumbnail grid ── */
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                     {profilePackages.map((pkg, i) => (
-                      <TouchableOpacity key={`pkg-${i}`} onPress={() => fetchPackageStickers(pkg)}
-                        style={{ width: '33.33%', padding: 8, alignItems: 'center' }}>
-                        <View style={{
-                          width: 88, height: 88, borderRadius: 16, overflow: 'hidden',
-                          backgroundColor: theme === 'dark' ? '#2c2c2e' : '#e5e5ea',
-                          marginBottom: 6,
-                        }}>
-                          <Image source={{ uri: pkg.packageImg }}
-                            style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                      <TouchableOpacity
+                        key={`pkg-${i}`}
+                        onPress={() => fetchPackageStickers(pkg)}
+                        style={{
+                          width: "33.33%",
+                          padding: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 88,
+                            height: 88,
+                            borderRadius: 16,
+                            overflow: "hidden",
+                            backgroundColor:
+                              theme === "dark" ? "#2c2c2e" : "#e5e5ea",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <Image
+                            source={{ uri: pkg.packageImg }}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              resizeMode: "cover",
+                            }}
+                          />
                         </View>
-                        <Text numberOfLines={1} style={{ fontSize: 11, color: appColors.foreground, textAlign: 'center' }}>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 11,
+                            color: appColors.foreground,
+                            textAlign: "center",
+                          }}
+                        >
                           {pkg.packageName}
                         </Text>
-                        <Text numberOfLines={1} style={{ fontSize: 10, color: appColors.textMuted, textAlign: 'center' }}>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 10,
+                            color: appColors.textMuted,
+                            textAlign: "center",
+                          }}
+                        >
                           {pkg.category}
                         </Text>
                       </TouchableOpacity>
                     ))}
                     {profilePackages.length === 0 && (
-                      <View style={{ width: '100%', padding: 40, alignItems: 'center' }}>
-                        <Text style={{ color: appColors.textMuted }}>{t('noStickersFound') || 'No sticker packs found'}</Text>
+                      <View
+                        style={{
+                          width: "100%",
+                          padding: 40,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: appColors.textMuted }}>
+                          {t("noStickersFound") || "No sticker packs found"}
+                        </Text>
                       </View>
                     )}
                   </View>
                 )}
-
               </ScrollView>
             )}
           </View>
@@ -17296,7 +17512,8 @@ function StatCard({ label, value, icon: Icon, color }: any) {
 
 // --- REUSABLE UPLOAD FUNCTION ---
 const uploadToCloudinary = async (uri: string) => {
-  return await uploadImageToCloudinary(uri);
+  const url = await uploadImageToCloudinary(uri);
+  return url || "";
 };
 
 // --- HELPER FOR SAFE STRING RENDERING ---

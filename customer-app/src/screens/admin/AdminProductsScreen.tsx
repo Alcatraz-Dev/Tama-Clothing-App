@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
-import { uploadToBunny } from '../../utils/bunny';
+import { uploadToSanity } from '../../utils/sanity';
 import { AdminHeader } from '../../components/admin/AdminUI';
 import { getFeatureValue, VendorTier } from '../../utils/planAccessControl';
 
@@ -529,10 +529,16 @@ export default function AdminProductsScreen({ onBack, t, profileData, language =
 
         setUploading(true);
         try {
-            const uploadedImages = await Promise.all(images.map(img => uploadToBunny(img)));
+            const uploadedImagesResults = await Promise.all(images.map(img => uploadToSanity(img)));
+            const uploadedImages = uploadedImagesResults.filter((img): img is string => img !== null);
+            
+            if (uploadedImages.length === 0 && images.length > 0) throw new Error('Image upload failed');
+
             let finalVideoUrl = videoUrl;
             if (videoUrl && !videoUrl.startsWith('http')) {
-                finalVideoUrl = await uploadToBunny(videoUrl);
+                const uploadedVideo = await uploadToSanity(videoUrl);
+                if (!uploadedVideo) throw new Error('Video upload failed');
+                finalVideoUrl = uploadedVideo;
             }
             const data = {
                 name: { fr: nameFr, 'ar-tn': nameAr, en: nameEn },

@@ -13,6 +13,7 @@ import {
 import {
   Camera as CameraIcon,
   Grid3X3,
+  Image as ImageIcon,
   Settings,
   SwitchCamera,
   Timer,
@@ -72,6 +73,7 @@ export interface CameraProps {
   onClose?: () => void;
   onCapture?: ({ type, uri, cameraHeight }: CaptureSuccess) => void;
   onVideoCapture?: ({ type, uri, cameraHeight }: CaptureSuccess) => void;
+  onGalleryPress?: () => void;
 }
 
 export interface CameraRef {
@@ -95,6 +97,7 @@ export const Camera = forwardRef<CameraRef, CameraProps>(
       maxVideoDuration = 60,
       timerOptions = [0, 3, 10],
       facing: initialFacing = 'back',
+      onGalleryPress,
     },
     ref
   ) => {
@@ -674,6 +677,15 @@ export const Camera = forwardRef<CameraRef, CameraProps>(
                     )}
                   </View>
                   <View style={styles.bottomControls}>
+                    {onGalleryPress && (
+                      <TouchableOpacity
+                        style={[styles.sideActionButton, { position: 'absolute', left: 20 }]}
+                        onPress={onGalleryPress}
+                        activeOpacity={0.7}
+                      >
+                        <ImageIcon size={24} color={textColor} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                       style={[
                         styles.captureButton,
@@ -816,12 +828,20 @@ const styles = StyleSheet.create({
   bottomControls: {
     position: 'absolute',
     bottom: 40,
-    left: 20,
-    right: 20,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+  },
+  sideActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   controlButton: {
     width: 48,

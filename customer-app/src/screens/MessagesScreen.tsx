@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { width as SCREEN_WIDTH } from '@/constants/layout';
 import { useAppTheme } from '@/context/ThemeContext';
-import { uploadToBunny } from '@/utils/bunny';
+import { uploadToSanity } from '@/utils/sanity';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -226,13 +226,14 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
         const asset = assets[0];
         setUploading(true);
         try {
-            // Upload to Bunny
-            const bunnyUrl = await uploadToBunny(asset.uri);
+            // Upload to Sanity
+            const sanityUrl = await uploadToSanity(asset.uri);
+            if (!sanityUrl) throw new Error('Upload failed');
 
             const reelId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const reelData = {
                 id: reelId,
-                url: bunnyUrl,
+                url: sanityUrl,
                 type: asset.type,
                 text: '',
                 createdAt: serverTimestamp(),

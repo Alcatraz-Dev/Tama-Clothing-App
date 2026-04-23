@@ -13,12 +13,12 @@ import MapView, { Marker, Circle, Polyline, PROVIDER_GOOGLE } from 'react-native
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, MapPin, Navigation, Package, Phone, Clock, Check, X, Camera, QrCode } from 'lucide-react-native';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db, storage } from '../../api/firebase';
+import { db } from '../../api/firebase';
 import { useLocation } from '../../hooks/useLocation';
 import { DeliveryOrder, getDeliveryStatusColor, calculateDistance, isWithinRadius, Coordinates } from '../../types/delivery';
 import { deliveryService } from '../../services/deliveryService';
 import { updateShipmentStatus } from '../../utils/shipping';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadToSanity } from '../../utils/sanity';
 import QRScanner from '../../components/QRScanner';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -244,13 +244,8 @@ export default function DriverDeliveryScreen({
       let finalProofUrl = null;
 
       if (newStatus === 'delivered' && proofPhoto) {
-        setIsUpdating(true);
-        // Upload photo to storage
-        const response = await fetch(proofPhoto);
-        const blob = await response.blob();
-        const photoRef = ref(storage, `delivery_proofs/${activeOrder.trackingId || activeOrder.id}_${Date.now()}.jpg`);
-        await uploadBytes(photoRef, blob);
-        finalProofUrl = await getDownloadURL(photoRef);
+        // Upload photo to Sanity
+        finalProofUrl = await uploadToSanity(proofPhoto);
       }
 
       await updateShipmentStatus(

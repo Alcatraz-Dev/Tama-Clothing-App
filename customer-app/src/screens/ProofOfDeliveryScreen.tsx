@@ -12,8 +12,7 @@ import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { ArrowLeft, Camera as CameraIcon, CheckCircle, RefreshCcw, Send } from 'lucide-react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { updateShipmentStatus } from '../utils/shipping';
-import { storage } from '../api/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { uploadToSanity } from '../utils/sanity';
 
 export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t }: any) {
     const { colors, theme } = useAppTheme();
@@ -53,12 +52,8 @@ export default function ProofOfDeliveryScreen({ shipment, onBack, onComplete, t 
         if (!photo) return;
         setLoading(true);
         try {
-            // Upload photo to storage
-            const response = await fetch(photo.uri);
-            const blob = await response.blob();
-            const photoRef = ref(storage, `delivery_proofs/${shipment.trackingId}.jpg`);
-            await uploadBytes(photoRef, blob);
-            const proofUrl = await getDownloadURL(photoRef);
+            // Upload photo to Sanity
+            const proofUrl = await uploadToSanity(photo.uri);
 
             // Update shipment status
             await updateShipmentStatus(shipment.id, shipment.trackingId, 'Delivered', {

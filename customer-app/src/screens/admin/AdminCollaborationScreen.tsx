@@ -23,7 +23,7 @@ import { Theme } from '../../theme';
 import { AdminHeader } from '../../components/admin/AdminUI';
 import * as ImagePicker from 'expo-image-picker';
 
-import { uploadToBunny } from '../../utils/bunny';
+import { uploadToSanity } from '../../utils/sanity';
 
 interface Collaboration {
     id: string;
@@ -199,8 +199,8 @@ export default function AdminCollaborationScreen({ onBack, t, theme }: AdminColl
         setSubmitting(true);
         setUploading(true);
         try {
-            const uploadedImageUrl = await uploadToBunny(imageUrl);
-            const uploadedCoverImageUrl = coverImageUrl ? await uploadToBunny(coverImageUrl) : null;
+            const uploadedImageUrl = await uploadToSanity(imageUrl);
+            const uploadedCoverImageUrl = coverImageUrl ? await uploadToSanity(coverImageUrl) : null;
 
             const data = {
                 name,

@@ -41,7 +41,7 @@ import {
     EmptyState,
     AdminHeader,
 } from '../../components/admin/AdminUI';
-import { uploadToBunny } from '../../utils/bunny';
+import { uploadToSanity } from '../../utils/sanity';
 import { getSafeString } from '../../utils/helpers';
 
 const { width } = Dimensions.get('window');
@@ -86,7 +86,9 @@ export default function AdminBannersScreen({ onBack, t, profileData }: any) {
         try {
             let imgUrl = image;
             if (image && !image.startsWith('http')) {
-                imgUrl = await uploadToBunny(image);
+                const uploadedUrl = await uploadToSanity(image);
+                if (!uploadedUrl) throw new Error('Upload failed');
+                imgUrl = uploadedUrl;
             }
 
             const data = {

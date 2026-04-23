@@ -1,10 +1,9 @@
 import { createClient } from "@sanity/client";
 import { SANITY_CONFIG } from "../config/api";
+import { Buffer } from 'buffer';
 
 // NOTE: For uploads, you typically need an editor token.
-// Since one wasn't provided, we'll try to use it without if possible (only if the dataset is public and has allow-write, which is rare)
-// OR the user will provide one later.
-const SANITY_TOKEN = process.env.EXPO_PUBLIC_SANITY_TOKEN; // FILL THIS WITH YOUR SANITY WRITE TOKEN
+const SANITY_TOKEN = process.env.EXPO_PUBLIC_SANITY_TOKEN;
 
 export const sanityClient = createClient({
   projectId: SANITY_CONFIG.projectId,
@@ -19,30 +18,55 @@ export const sanityClient = createClient({
  * Uploads a file (image or video) to Sanity
  */
 export const uploadToSanity = async (uri: string) => {
-  if (!uri || uri.includes("cdn.sanity.io") || uri.includes("b-cdn.net")) return uri;
+  if (!uri) return null;
+  if (uri.includes("cdn.sanity.io") || uri.includes("b-cdn.net")) return uri;
 
   try {
+    // Ensure URI has file:// prefix if it's a local path and doesn't have it
+    let fileUri = uri;
+    if (!fileUri.startsWith('file://') && !fileUri.startsWith('http')) {
+      fileUri = `file://${fileUri}`;
+    }
+
     // Determine asset type
-    const extension = uri.split(".").pop()?.toLowerCase() || "";
-    const isVideo = ["mp4", "mov", "avi", "mkv", "webm", "3gp"].includes(
+    const extension = fileUri.split(".").pop()?.toLowerCase() || "jpg";
+    const isFile = ["mp4", "mov", "avi", "mkv", "webm", "3gp", "m4a", "wav", "mp3", "amr"].includes(
       extension,
     );
-    const assetType = isVideo ? "file" : "image";
+    const assetType = isFile ? "file" : "image";
 
-    // Read file
-    const response = await fetch(uri);
+    console.log(`Uploading ${assetType} to Sanity: ${fileUri}`);
+
+    // Read file using fetch (most reliable way in RN to get a blob from local URI)
+    const response = await fetch(fileUri);
     const blob = await response.blob();
+    
+    // Convert blob to arrayBuffer then to Buffer
+    // This is safer than using File class which might have issues in some Expo versions
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+    });
+    const buffer = Buffer.from(arrayBuffer);
 
+    // Get proper content type
+    let contentType = isFile 
+      ? (["m4a", "wav", "mp3", "amr"].includes(extension) ? `audio/${extension}` : `video/${extension}`)
+      : `image/${extension === "jpg" ? "jpeg" : extension}`;
+    
     // Upload to Sanity
-    const asset = await sanityClient.assets.upload(assetType, blob, {
+    const asset = await sanityClient.assets.upload(assetType, buffer, {
       filename: `upload-${Date.now()}.${extension}`,
-      contentType: blob.type,
+      contentType: contentType,
     });
 
     // Return the URL
+    console.log("Sanity upload successful:", asset.url);
     return asset.url;
   } catch (error) {
-    console.error("Sanity upload error:", error);
+    console.error("Sanity upload error details:", error);
     throw error;
   }
 };

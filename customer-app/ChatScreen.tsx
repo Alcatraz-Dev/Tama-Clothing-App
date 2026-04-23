@@ -24,7 +24,7 @@ import { Image, Modal } from 'react-native';
 import { db } from './src/api/firebase';
 import { getDocs, where, getDoc, doc } from 'firebase/firestore';
 import UniversalVideoPlayer from './src/components/common/UniversalVideoPlayer';
-import { uploadToBunny } from './src/utils/bunny';
+import { uploadToSanity } from './src/utils/sanity';
 import { MediaPicker, MediaAsset } from './src/components/ui/media-picker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -485,7 +485,8 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
         try {
             // Determine if it's a video
             const isVideo = forcedType === 'video' || ['mp4', 'mov', 'avi', 'mkv'].includes(uri.split('.').pop()?.toLowerCase() || '');
-            const bunnyUrl = await uploadToBunny(uri);
+            const mediaUrl = await uploadToSanity(uri);
+            if (!mediaUrl) throw new Error('Upload failed');
 
             const messagesRef = collection(db, 'chats', chatId, 'messages');
             const messageData: any = {
@@ -497,9 +498,9 @@ export default function ChatScreen({ onBack, onNavigate, user, t, theme, colors,
             };
 
             if (isVideo) {
-                messageData.videoUrl = bunnyUrl;
+                messageData.videoUrl = mediaUrl;
             } else {
-                messageData.imageUrl = bunnyUrl;
+                messageData.imageUrl = mediaUrl;
             }
 
             await addDoc(messagesRef, messageData);

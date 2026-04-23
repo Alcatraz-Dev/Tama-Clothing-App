@@ -48,7 +48,7 @@ import {
   AdminInput,
   AdminHeader,
 } from "../../components/admin/AdminUI";
-import { uploadToBunny } from "../../utils/bunny";
+import { uploadToSanity } from "../../utils/sanity";
 import { getName, translateCategory } from "../../utils/translationHelpers";
 import { getSafeString } from "../../utils/helpers";
 
@@ -126,7 +126,7 @@ export default function AdminAdsScreen({
     if (!titleFr || !url) return Alert.alert(t("error"), t("mediaRequired"));
     setUploading(true);
     try {
-      const mediaUrl = url.startsWith("http") ? url : await uploadToBunny(url);
+      const mediaUrl = url.startsWith("http") ? url : await uploadToSanity(url);
       const data: any = {
         title: { fr: titleFr, "ar-tn": titleAr, en: titleEn },
         description: { fr: descFr, "ar-tn": descAr, en: descEn },

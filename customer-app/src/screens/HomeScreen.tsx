@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { BlurView, BlurTargetView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback } from 'react';
 import {
     collection,
     getDocs,
@@ -134,6 +135,7 @@ export default function HomeScreen({
         outputRange: [0, 1],
         extrapolate: 'clamp',
     });
+
 
     useEffect(() => {
         fetchData();

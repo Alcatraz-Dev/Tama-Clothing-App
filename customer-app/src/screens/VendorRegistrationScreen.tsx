@@ -22,7 +22,7 @@ import { doc, updateDoc, serverTimestamp, collection, addDoc, query, where, getD
 import { db } from '../api/firebase';
 import { ChevronLeft, Upload, CheckCircle2, XCircle, Clock, Building2, Store, Star, Zap, Shield, ArrowRight, ArrowDown, ArrowUp, Instagram, Facebook, Phone, Mail, MapPin, FileText, Download, RefreshCw, AlertTriangle, CreditCard } from 'lucide-react-native';
 import { Theme } from '../theme';
-import { uploadToBunny } from '../utils/bunny';
+import { uploadToSanity } from '../utils/sanity';
 
 // Vendor Tier Types
 export type VendorTier = 'starter' | 'basic' | 'professional' | 'premium' | 'enterprise' | 'ultimate';
@@ -610,7 +610,7 @@ export default function VendorRegistrationScreen({
 
     // Upload image to cloud
     const uploadImage = async (uri: string): Promise<string> => {
-        return uploadToBunny(uri);
+        return uploadToSanity(uri);
     };
 
     // Pick image for document
