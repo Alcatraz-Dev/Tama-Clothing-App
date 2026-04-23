@@ -190,7 +190,7 @@ export default function HomeScreen({
             const adsSnap = await getDocs(collection(db, 'ads'));
             setAds(adsSnap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter((a: any) => a.isActive !== false)
+                .filter((a: any) => a.isActive !== false && a.status === 'approved')
                 .sort((a: any, b: any) => (a.order || 0) - (b.order || 0)));
 
             // Flash Sale

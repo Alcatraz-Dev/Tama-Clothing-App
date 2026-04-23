@@ -1752,4 +1752,11 @@ export const fr = {
   notifVendorAppliedBody: "Votre demande de vendeur est en cours d'examen.",
   notifGiftEarnedTitle: "Cadeau gagné !",
   notifGiftEarnedBody: "Vous venez de recevoir un nouveau cadeau !",
+  approvalPending: "Campagne soumise pour approbation",
+  adApproved: "Campagne approuvée",
+  adRejected: "Campagne rejetée",
+  enterRejectionReason: "Entrez la raison du rejet...",
+  pendingAds: "PUBS EN ATTENTE",
+  allAds: "TOUTES LES PUBS",
+  confirmReject: "Rejeter cette campagne ?",
 };

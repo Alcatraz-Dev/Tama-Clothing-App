@@ -1,455 +1,824 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    Image,
-    ScrollView,
-    Alert,
-    Dimensions,
-    StyleSheet,
-    Animated,
-    Modal,
-    ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Alert,
+  Dimensions,
+  StyleSheet,
+  Animated,
+  Modal,
+  ActivityIndicator,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-    ChevronLeft,
-    Plus,
-    Settings,
-    Trash2,
-    Camera,
-    X,
-    Video as VideoIcon,
-    Image as ImageIcon,
-} from 'lucide-react-native';
+  ChevronLeft,
+  Plus,
+  Settings,
+  Trash2,
+  Camera,
+  X,
+  Video as VideoIcon,
+  Image as ImageIcon,
+  CheckCircle2,
+} from "lucide-react-native";
 import {
-    collection,
-    getDocs,
-    addDoc,
-    updateDoc,
-    deleteDoc,
-    doc,
-    serverTimestamp,
-} from 'firebase/firestore';
-import * as ImagePicker from 'expo-image-picker';
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+import * as ImagePicker from "expo-image-picker";
 
 import UniversalVideoPlayer from "../../components/common/UniversalVideoPlayer";
-import { db } from '../../api/firebase';
-import { useAppTheme } from '../../context/ThemeContext';
+import { db } from "../../api/firebase";
+import { useAppTheme } from "../../context/ThemeContext";
 import {
-    AdminCard,
-    SectionLabel,
-    InputLabel,
-    EmptyState,
-    AdminChip,
-    AdminInput,
-    AdminHeader,
-} from '../../components/admin/AdminUI';
-import { uploadToBunny } from '../../utils/bunny';
-import { getName, translateCategory } from '../../utils/translationHelpers';
-import { getSafeString } from '../../utils/helpers';
+  AdminCard,
+  SectionLabel,
+  InputLabel,
+  EmptyState,
+  AdminChip,
+  AdminInput,
+  AdminHeader,
+} from "../../components/admin/AdminUI";
+import { uploadToBunny } from "../../utils/bunny";
+import { getName, translateCategory } from "../../utils/translationHelpers";
+import { getSafeString } from "../../utils/helpers";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
-export default function AdminAdsScreen({ onBack, t, profileData, language = 'fr' }: any) {
-    const { colors, theme } = useAppTheme();
-    const insets = useSafeAreaInsets();
-    const isDark = theme === 'dark';
-    const isBrandOwner = profileData?.role === 'brand_owner';
-    const myBrandId = profileData?.brandId;
+export default function AdminAdsScreen({
+  onBack,
+  t,
+  profileData,
+  language = "fr",
+}: any) {
+  const { colors, theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const isDark = theme === "dark";
+  const isAdmin =
+    profileData?.role === "admin" || profileData?.role === "support";
+  const isBrandOwner = profileData?.role === "brand_owner";
+  const myBrandId = profileData?.brandId;
 
-    const [ads, setAds] = useState<any[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
-    const [categories, setCategories] = useState<any[]>([]);
-    const [modalVisible, setModalVisible] = useState(false);
-    const [editingAd, setEditingAd] = useState<any>(null);
-    const [titleFr, setTitleFr] = useState('');
-    const [titleAr, setTitleAr] = useState('');
-    const [titleEn, setTitleEn] = useState('');
-    const [descFr, setDescFr] = useState('');
-    const [descAr, setDescAr] = useState('');
-    const [descEn, setDescEn] = useState('');
-    const [type, setType] = useState('image');
-    const [url, setUrl] = useState('');
-    const [targetType, setTargetType] = useState('none');
-    const [targetId, setTargetId] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const scrollY = useRef(new Animated.Value(0)).current;
+  const [ads, setAds] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingAd, setEditingAd] = useState<any>(null);
+  const [titleFr, setTitleFr] = useState("");
+  const [titleAr, setTitleAr] = useState("");
+  const [titleEn, setTitleEn] = useState("");
+  const [descFr, setDescFr] = useState("");
+  const [descAr, setDescAr] = useState("");
+  const [descEn, setDescEn] = useState("");
+  const [type, setType] = useState("image");
+  const [url, setUrl] = useState("");
+  const [targetType, setTargetType] = useState("none");
+  const [targetId, setTargetId] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
-    useEffect(() => {
-        fetchAds();
-        fetchTargets();
-    }, []);
+  useEffect(() => {
+    fetchAds();
+    fetchTargets();
+  }, []);
 
-    const fetchAds = async () => {
-        try {
-            const snap = await getDocs(collection(db, 'ads'));
-            const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setAds(isBrandOwner && myBrandId ? all.filter((a: any) => a.brandId === myBrandId) : all);
-        } catch (err) {
-            console.error(err);
-        }
-    };
+  const fetchAds = async () => {
+    try {
+      const snap = await getDocs(collection(db, "ads"));
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setAds(
+        isBrandOwner && myBrandId
+          ? all.filter((a: any) => a.brandId === myBrandId)
+          : all,
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-    const fetchTargets = async () => {
-        try {
-            const pSnap = await getDocs(collection(db, 'products'));
-            const allProducts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setProducts(isBrandOwner && myBrandId ? allProducts.filter((p: any) => p.brandId === myBrandId) : allProducts);
+  const fetchTargets = async () => {
+    try {
+      const pSnap = await getDocs(collection(db, "products"));
+      const allProducts = pSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setProducts(
+        isBrandOwner && myBrandId
+          ? allProducts.filter((p: any) => p.brandId === myBrandId)
+          : allProducts,
+      );
 
-            const cSnap = await getDocs(collection(db, 'categories'));
-            setCategories(cSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-            console.error(err);
-        }
-    };
+      const cSnap = await getDocs(collection(db, "categories"));
+      setCategories(cSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-    const handleSave = async () => {
-        if (!titleFr || !url) return Alert.alert(t('error'), t('mediaRequired'));
-        setUploading(true);
-        try {
-            const mediaUrl = url.startsWith('http') ? url : await uploadToBunny(url);
-            const data: any = {
-                title: { fr: titleFr, "ar-tn": titleAr, en: titleEn },
-                description: { fr: descFr, "ar-tn": descAr, en: descEn },
-                type,
-                url: mediaUrl,
-                targetType,
-                targetId,
-                updatedAt: serverTimestamp()
-            };
-            if (isBrandOwner && myBrandId) data.brandId = myBrandId;
+  const handleSave = async () => {
+    if (!titleFr || !url) return Alert.alert(t("error"), t("mediaRequired"));
+    setUploading(true);
+    try {
+      const mediaUrl = url.startsWith("http") ? url : await uploadToBunny(url);
+      const data: any = {
+        title: { fr: titleFr, "ar-tn": titleAr, en: titleEn },
+        description: { fr: descFr, "ar-tn": descAr, en: descEn },
+        type,
+        url: mediaUrl,
+        targetType,
+        targetId,
+        status: isAdmin ? "approved" : "pending",
+        updatedAt: serverTimestamp(),
+      };
+      if (isBrandOwner && myBrandId) data.brandId = myBrandId;
 
-            if (editingAd) {
-                await updateDoc(doc(db, 'ads', editingAd.id), data);
-            } else {
-                await addDoc(collection(db, 'ads'), { ...data, createdAt: serverTimestamp() });
-            }
-            setModalVisible(false);
-            fetchAds();
-            resetForm();
-        } catch (error) {
-            Alert.alert(t('error'), t('failedToSave'));
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const handleDelete = async (id: string) => {
-        Alert.alert(t('delete'), t('areYouSure'), [
-            { text: t('cancel') },
-            {
-                text: t('delete'),
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await deleteDoc(doc(db, 'ads', id));
-                        fetchAds();
-                    } catch (error) {
-                        Alert.alert('Error', 'Failed to delete ad');
-                    }
-                }
-            }
-        ]);
-    };
-
-    const resetForm = () => {
-        setEditingAd(null);
-        setTitleFr('');
-        setTitleAr('');
-        setTitleEn('');
-        setDescFr('');
-        setDescAr('');
-        setDescEn('');
-        setType('image');
-        setUrl('');
-        setTargetType('none');
-        setTargetId('');
-    };
-
-    const openEdit = (ad: any) => {
-        setEditingAd(ad);
-        setTitleFr(ad.title?.fr || (typeof ad.title === 'string' ? ad.title : ''));
-        setTitleAr(ad.title?.['ar-tn'] || '');
-        setTitleEn(ad.title?.en || '');
-        setDescFr(ad.description?.fr || '');
-        setDescAr(ad.description?.['ar-tn'] || '');
-        setDescEn(ad.description?.en || '');
-        setType(ad.type || 'image');
-        setUrl(ad.url || '');
-        setTargetType(ad.targetType || (ad.link ? 'category' : 'none'));
-        setTargetId(ad.targetId || ad.link || '');
-        setModalVisible(true);
-    };
-
-    const pickMedia = async () => {
-        const r = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: type === 'video' ? ['videos'] : ['images'],
-            allowsEditing: true,
-            quality: 0.5
+      if (editingAd) {
+        await updateDoc(doc(db, "ads", editingAd.id), data);
+      } else {
+        await addDoc(collection(db, "ads"), {
+          ...data,
+          createdAt: serverTimestamp(),
         });
-        if (!r.canceled) setUrl(r.assets[0].uri);
-    };
+      }
+      setModalVisible(false);
+      fetchAds();
+      resetForm();
+      Alert.alert(
+        t("successTitle") || "Success",
+        isAdmin
+          ? t("adApproved") || "Campaign saved & approved"
+          : t("approvalPending") || "Campaign submitted for approval",
+      );
+    } catch (error) {
+      Alert.alert(t("error"), t("failedToSave"));
+    } finally {
+      setUploading(false);
+    }
+  };
 
-    return (
-        <View style={[sc.root, { backgroundColor: colors.background }]}>
-            <AdminHeader
-                title={t('adsCampaigns')}
-                onBack={onBack}
-                rightElement={
-                    <TouchableOpacity
-                        onPress={() => { resetForm(); setModalVisible(true); }}
-                        style={[sc.addBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F2F7' }]}
-                    >
-                        <Plus size={20} color={colors.foreground} />
-                    </TouchableOpacity>
-                }
-            />
+  const handleApprove = async (ad: any) => {
+    try {
+      await updateDoc(doc(db, "ads", ad.id), {
+        status: "approved",
+        updatedAt: serverTimestamp(),
+      });
+      fetchAds();
+      Alert.alert(
+        t("successTitle") || "Approved",
+        t("adApproved") || "Campaign approved!",
+      );
+    } catch (e) {
+      Alert.alert(t("error"), t("updateFailed") || "Failed to approve");
+    }
+  };
 
-            <Animated.FlatList
-                data={ads}
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: false }
-                )}
-                scrollEventThrottle={16}
-                contentContainerStyle={[sc.listContent, { paddingTop: insets.top + 80 }]}
-                ListEmptyComponent={<EmptyState message={t('noCampaigns')} />}
-                renderItem={({ item }) => (
-                    <AdminCard style={sc.adCard}>
-                        <View style={[sc.adMediaWrap, { borderColor: colors.border }]}>
-                            {item.type === 'video' ? (
-                                <UniversalVideoPlayer
-                                    source={{ uri: item.url }}
-                                    style={sc.adMedia}
-                                    isMuted
-                                    shouldPlay
-                                    isLooping
-                                    resizeMode="cover"
-                                />
-                            ) : (
-                                <Image source={{ uri: item.url }} style={sc.adMedia} />
-                            )}
-                            <View style={[sc.typeBadge, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-                                {item.type === 'video' ? <VideoIcon size={10} color="#FFF" /> : <ImageIcon size={10} color="#FFF" />}
-                                <Text style={sc.typeBadgeText}>{item.type.toUpperCase()}</Text>
-                            </View>
-                        </View>
-                        <View style={sc.adInfo}>
-                            <Text style={[sc.adTitle, { color: colors.foreground }]} numberOfLines={2}>
-                                {getSafeString(item.title)}
-                            </Text>
-                            <Text style={[sc.adDesc, { color: colors.textMuted }]} numberOfLines={1}>
-                                {getSafeString(item.description)}
-                            </Text>
-                        </View>
-                        <View style={sc.actions}>
-                            <TouchableOpacity onPress={() => openEdit(item)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
-                                <Settings size={18} color={colors.foreground} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={[sc.actionBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)' }]}>
-                                <Trash2 size={18} color="#FF3B30" />
-                            </TouchableOpacity>
-                        </View>
-                    </AdminCard>
-                )}
-            />
-
-            <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-                <View style={[sc.modalRoot, { backgroundColor: theme === 'dark' ? '#0A0A0F' : '#FAFAFA' }]}>
-                    <View style={[sc.modalHeader, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderBottomColor: colors.border }]}>
-                        <TouchableOpacity onPress={() => setModalVisible(false)} style={sc.modalCloseBtn}>
-                            <X size={20} color={colors.foreground} />
-                        </TouchableOpacity>
-                        <Text style={[sc.modalTitle, { color: colors.foreground }]}>
-                            {editingAd ? t('editAd').toUpperCase() : t('newAd').toUpperCase()}
-                        </Text>
-                        <TouchableOpacity onPress={handleSave} disabled={uploading}>
-                            {uploading ? <ActivityIndicator size="small" color={colors.foreground} /> : (
-                                <Text style={[sc.modalSaveText, { color: colors.foreground }]}>{t('save').toUpperCase()}</Text>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView contentContainerStyle={sc.modalContent}>
-                        <View style={sc.typeSelector}>
-                            <AdminChip
-                                label={t('images').toUpperCase()}
-                                selected={type === 'image'}
-                                onPress={() => setType('image')}
-                                style={{ flex: 1 } as any}
-                            />
-                            <AdminChip
-                                label={t('video').toUpperCase()}
-                                selected={type === 'video'}
-                                onPress={() => setType('video')}
-                                style={{ flex: 1 } as any}
-                            />
-                        </View>
-
-                        <TouchableOpacity onPress={pickMedia} style={[sc.mediaPicker, { backgroundColor: theme === 'dark' ? '#121218' : 'white', borderColor: colors.border, borderStyle: url ? 'solid' : 'dashed' }]}>
-                            {url ? (
-                                type === 'video' ? (
-                                    <UniversalVideoPlayer source={{ uri: url }} style={sc.pickerMedia} isMuted shouldPlay resizeMode="cover" />
-                                ) : (
-                                    <Image source={{ uri: url }} style={sc.pickerMedia} />
-                                )
-                            ) : (
-                                <View style={sc.pickerPlaceholder}>
-                                    <Camera size={32} color={colors.textMuted} />
-                                    <Text style={[sc.pickerText, { color: colors.textMuted }]}>
-                                        {t(type === 'image' ? 'uploadImage' : 'uploadVideo').toUpperCase()}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-
-                        <AdminInput
-                            label={t('campaignTitle').toUpperCase() + " (FR)"}
-                            value={titleFr}
-                            onChangeText={setTitleFr}
-                            placeholder={t('campaignTitle') + ' (FR)'}
-                        />
-
-                        <AdminInput
-                            label={t('campaignTitle').toUpperCase() + " (EN)"}
-                            value={titleEn}
-                            onChangeText={setTitleEn}
-                            placeholder={t('campaignTitle') + ' (EN)'}
-                        />
-
-                        <AdminInput
-                            label={t('campaignTitle').toUpperCase() + " (AR)"}
-                            value={titleAr}
-                            onChangeText={setTitleAr}
-                            placeholder={t('campaignTitle') + ' (AR)'}
-                            textAlign="right"
-                        />
-
-                        <AdminInput
-                            label={t('description').toUpperCase() + " (FR)"}
-                            value={descFr}
-                            onChangeText={setDescFr}
-                            placeholder={t('description') + ' (FR)'}
-                        />
-
-                        <AdminInput
-                            label={t('description').toUpperCase() + " (EN)"}
-                            value={descEn}
-                            onChangeText={setDescEn}
-                            placeholder={t('description') + ' (EN)'}
-                        />
-
-                        <AdminInput
-                            label={t('description').toUpperCase() + " (AR)"}
-                            value={descAr}
-                            onChangeText={setDescAr}
-                            placeholder={t('description') + ' (AR)'}
-                            textAlign="right"
-                        />
-
-                        <SectionLabel text={t('targetAction').toUpperCase()} style={{ marginBottom: 15 }} />
-                        <View style={sc.targetSelector}>
-                            {['none', 'product', 'category'].map(act => (
-                                <AdminChip
-                                    key={act}
-                                    label={t('target' + act.charAt(0).toUpperCase() + act.slice(1)).toUpperCase()}
-                                    selected={targetType === act}
-                                    onPress={() => setTargetType(act)}
-                                    style={{ flex: 1 } as any}
-                                />
-                            ))}
-                        </View>
-
-                        {targetType === 'product' && (
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sc.targetList}>
-                                {products.map(p => (
-                                    <TouchableOpacity
-                                        key={p.id}
-                                        onPress={() => setTargetId(p.id)}
-                                        style={[sc.targetItem, {
-                                            backgroundColor: targetId === p.id ? (theme === 'dark' ? '#1A1A24' : '#F0F0F3') : 'transparent',
-                                            borderColor: targetId === p.id ? colors.foreground : colors.border
-                                        }]}
-                                    >
-                                        <Image source={{ uri: p.mainImage }} style={sc.targetImg} />
-                                        <Text style={[sc.targetName, { color: colors.foreground }]} numberOfLines={1}>
-                                            {getName(p.name, language)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        )}
-
-                        {targetType === 'category' && (
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sc.targetList}>
-                                {categories.map(c => (
-                                    <TouchableOpacity
-                                        key={c.id}
-                                        onPress={() => setTargetId(c.id)}
-                                        style={[sc.targetCatItem, {
-                                            backgroundColor: targetId === c.id ? colors.foreground : (theme === 'dark' ? '#1A1A24' : 'white'),
-                                            borderColor: targetId === c.id ? colors.foreground : colors.border
-                                        }]}
-                                    >
-                                        <Text style={[sc.targetCatText, { color: targetId === c.id ? (theme === 'dark' ? '#000' : '#FFF') : colors.foreground }]}>
-                                            {translateCategory(getName(c.name, language), language)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        )}
-                    </ScrollView>
-                </View>
-            </Modal>
-        </View>
+  const handleReject = async (ad: any) => {
+    Alert.alert(
+      t("reject") || "Reject",
+      t("confirmReject") || "Reject this campaign?",
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("reject") || "Reject",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, "ads", ad.id), {
+                status: "rejected",
+                updatedAt: serverTimestamp(),
+              });
+              fetchAds();
+            } catch (e) {
+              Alert.alert(t("error"), t("updateFailed") || "Failed to reject");
+            }
+          },
+        },
+      ],
     );
+  };
+
+  const handleDelete = async (id: string) => {
+    Alert.alert(t("delete"), t("areYouSure"), [
+      { text: t("cancel") },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, "ads", id));
+            fetchAds();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete ad");
+          }
+        },
+      },
+    ]);
+  };
+
+  const resetForm = () => {
+    setEditingAd(null);
+    setTitleFr("");
+    setTitleAr("");
+    setTitleEn("");
+    setDescFr("");
+    setDescAr("");
+    setDescEn("");
+    setType("image");
+    setUrl("");
+    setTargetType("none");
+    setTargetId("");
+  };
+
+  const openEdit = (ad: any) => {
+    setEditingAd(ad);
+    setTitleFr(ad.title?.fr || (typeof ad.title === "string" ? ad.title : ""));
+    setTitleAr(ad.title?.["ar-tn"] || "");
+    setTitleEn(ad.title?.en || "");
+    setDescFr(ad.description?.fr || "");
+    setDescAr(ad.description?.["ar-tn"] || "");
+    setDescEn(ad.description?.en || "");
+    setType(ad.type || "image");
+    setUrl(ad.url || "");
+    setTargetType(ad.targetType || (ad.link ? "category" : "none"));
+    setTargetId(ad.targetId || ad.link || "");
+    setModalVisible(true);
+  };
+
+  const pickMedia = async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: type === "video" ? ["videos"] : ["images"],
+      allowsEditing: true,
+      quality: 0.5,
+    });
+    if (!r.canceled) setUrl(r.assets[0].uri);
+  };
+
+  return (
+    <View style={[sc.root, { backgroundColor: colors.background }]}>
+      <AdminHeader
+        title={t("adsCampaigns")}
+        onBack={onBack}
+        rightElement={
+          <TouchableOpacity
+            onPress={() => {
+              resetForm();
+              setModalVisible(true);
+            }}
+            style={[
+              sc.addBtn,
+              {
+                backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#F2F2F7",
+              },
+            ]}
+          >
+            <Plus size={20} color={colors.foreground} />
+          </TouchableOpacity>
+        }
+      />
+
+      <Animated.FlatList
+        data={ads}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          sc.listContent,
+          { paddingTop: insets.top + 80 },
+        ]}
+        ListEmptyComponent={<EmptyState message={t("noCampaigns")} />}
+        renderItem={({ item }) => {
+          const isPending = item.status === "pending" || !item.status;
+          const isRejected = item.status === "rejected";
+          const statusColor = isPending
+            ? "#FF9500"
+            : isRejected
+              ? "#FF3B30"
+              : "#34C759";
+          const statusLabel = isPending
+            ? t("pending") || "PENDING"
+            : isRejected
+              ? t("rejected") || "REJECTED"
+              : t("approved") || "APPROVED";
+          return (
+            <AdminCard style={sc.adCard}>
+              <View style={[sc.adMediaWrap, { borderColor: colors.border }]}>
+                {item.type === "video" ? (
+                  <UniversalVideoPlayer
+                    source={{ uri: item.url }}
+                    style={sc.adMedia}
+                    isMuted
+                    shouldPlay
+                    isLooping
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Image source={{ uri: item.url }} style={sc.adMedia} />
+                )}
+                <View
+                  style={[sc.typeBadge, { backgroundColor: "rgba(0,0,0,0.6)" }]}
+                >
+                  {item.type === "video" ? (
+                    <VideoIcon size={10} color="#FFF" />
+                  ) : (
+                    <ImageIcon size={10} color="#FFF" />
+                  )}
+                  <Text style={sc.typeBadgeText}>
+                    {item.type.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              <View style={sc.adInfo}>
+                <Text
+                  style={[sc.adTitle, { color: colors.foreground }]}
+                  numberOfLines={2}
+                >
+                  {getSafeString(item.title)}
+                </Text>
+                <Text
+                  style={[sc.adDesc, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {getSafeString(item.description)}
+                </Text>
+                <View
+                  style={[
+                    sc.statusBadge,
+                    { backgroundColor: statusColor + "22" },
+                  ]}
+                >
+                  <Text style={[sc.statusBadgeText, { color: statusColor }]}>
+                    {statusLabel}
+                  </Text>
+                </View>
+              </View>
+              <View style={sc.actions}>
+                {isAdmin && isPending && (
+                  <TouchableOpacity
+                    onPress={() => handleApprove(item)}
+                    style={[
+                      sc.actionBtn,
+                      { backgroundColor: "rgba(52,199,89,0.15)" },
+                    ]}
+                  >
+                    <CheckCircle2 size={18} color="#34C759" />
+                  </TouchableOpacity>
+                )}
+                {isAdmin && isPending && (
+                  <TouchableOpacity
+                    onPress={() => handleReject(item)}
+                    style={[
+                      sc.actionBtn,
+                      { backgroundColor: "rgba(255,59,48,0.12)" },
+                    ]}
+                  >
+                    <X size={18} color="#FF3B30" />
+                  </TouchableOpacity>
+                )}
+                {(!isAdmin || !isPending) && (
+                  <TouchableOpacity
+                    onPress={() => openEdit(item)}
+                    style={[
+                      sc.actionBtn,
+                      {
+                        backgroundColor:
+                          theme === "dark"
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.04)",
+                      },
+                    ]}
+                  >
+                    <Settings size={18} color={colors.foreground} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => handleDelete(item.id)}
+                  style={[
+                    sc.actionBtn,
+                    {
+                      backgroundColor:
+                        theme === "dark"
+                          ? "rgba(255,59,48,0.15)"
+                          : "rgba(255,59,48,0.1)",
+                    },
+                  ]}
+                >
+                  <Trash2 size={18} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+            </AdminCard>
+          );
+        }}
+      />
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View
+          style={[
+            sc.modalRoot,
+            { backgroundColor: theme === "dark" ? "#0A0A0F" : "#FAFAFA" },
+          ]}
+        >
+          <View
+            style={[
+              sc.modalHeader,
+              {
+                backgroundColor: theme === "dark" ? "#121218" : "white",
+                borderBottomColor: colors.border,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={sc.modalCloseBtn}
+            >
+              <X size={20} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={[sc.modalTitle, { color: colors.foreground }]}>
+              {editingAd ? t("editAd").toUpperCase() : t("newAd").toUpperCase()}
+            </Text>
+            <TouchableOpacity onPress={handleSave} disabled={uploading}>
+              {uploading ? (
+                <ActivityIndicator size="small" color={colors.foreground} />
+              ) : (
+                <Text style={[sc.modalSaveText, { color: colors.foreground }]}>
+                  {t("save").toUpperCase()}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={sc.modalContent}>
+            <View style={sc.typeSelector}>
+              <AdminChip
+                label={t("images").toUpperCase()}
+                selected={type === "image"}
+                onPress={() => setType("image")}
+                style={{ flex: 1 } as any}
+              />
+              <AdminChip
+                label={t("video").toUpperCase()}
+                selected={type === "video"}
+                onPress={() => setType("video")}
+                style={{ flex: 1 } as any}
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={pickMedia}
+              style={[
+                sc.mediaPicker,
+                {
+                  backgroundColor: theme === "dark" ? "#121218" : "white",
+                  borderColor: colors.border,
+                  borderStyle: url ? "solid" : "dashed",
+                },
+              ]}
+            >
+              {url ? (
+                type === "video" ? (
+                  <UniversalVideoPlayer
+                    source={{ uri: url }}
+                    style={sc.pickerMedia}
+                    isMuted
+                    shouldPlay
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Image source={{ uri: url }} style={sc.pickerMedia} />
+                )
+              ) : (
+                <View style={sc.pickerPlaceholder}>
+                  <Camera size={32} color={colors.textMuted} />
+                  <Text style={[sc.pickerText, { color: colors.textMuted }]}>
+                    {t(
+                      type === "image" ? "uploadImage" : "uploadVideo",
+                    ).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <AdminInput
+              label={t("campaignTitle").toUpperCase() + " (FR)"}
+              value={titleFr}
+              onChangeText={setTitleFr}
+              placeholder={t("campaignTitle") + " (FR)"}
+            />
+
+            <AdminInput
+              label={t("campaignTitle").toUpperCase() + " (EN)"}
+              value={titleEn}
+              onChangeText={setTitleEn}
+              placeholder={t("campaignTitle") + " (EN)"}
+            />
+
+            <AdminInput
+              label={t("campaignTitle").toUpperCase() + " (AR)"}
+              value={titleAr}
+              onChangeText={setTitleAr}
+              placeholder={t("campaignTitle") + " (AR)"}
+              textAlign="right"
+            />
+
+            <AdminInput
+              label={t("description").toUpperCase() + " (FR)"}
+              value={descFr}
+              onChangeText={setDescFr}
+              placeholder={t("description") + " (FR)"}
+            />
+
+            <AdminInput
+              label={t("description").toUpperCase() + " (EN)"}
+              value={descEn}
+              onChangeText={setDescEn}
+              placeholder={t("description") + " (EN)"}
+            />
+
+            <AdminInput
+              label={t("description").toUpperCase() + " (AR)"}
+              value={descAr}
+              onChangeText={setDescAr}
+              placeholder={t("description") + " (AR)"}
+              textAlign="right"
+            />
+
+            <SectionLabel
+              text={t("targetAction").toUpperCase()}
+              style={{ marginBottom: 15 }}
+            />
+            <View style={sc.targetSelector}>
+              {["none", "product", "category"].map((act) => (
+                <AdminChip
+                  key={act}
+                  label={t(
+                    "target" + act.charAt(0).toUpperCase() + act.slice(1),
+                  ).toUpperCase()}
+                  selected={targetType === act}
+                  onPress={() => setTargetType(act)}
+                  style={{ flex: 1 } as any}
+                />
+              ))}
+            </View>
+
+            {targetType === "product" && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={sc.targetList}
+              >
+                {products.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setTargetId(p.id)}
+                    style={[
+                      sc.targetItem,
+                      {
+                        backgroundColor:
+                          targetId === p.id
+                            ? theme === "dark"
+                              ? "#1A1A24"
+                              : "#F0F0F3"
+                            : "transparent",
+                        borderColor:
+                          targetId === p.id ? colors.foreground : colors.border,
+                      },
+                    ]}
+                  >
+                    <Image source={{ uri: p.mainImage }} style={sc.targetImg} />
+                    <Text
+                      style={[sc.targetName, { color: colors.foreground }]}
+                      numberOfLines={1}
+                    >
+                      {getName(p.name, language)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {targetType === "category" && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={sc.targetList}
+              >
+                {categories.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => setTargetId(c.id)}
+                    style={[
+                      sc.targetCatItem,
+                      {
+                        backgroundColor:
+                          targetId === c.id
+                            ? colors.foreground
+                            : theme === "dark"
+                              ? "#1A1A24"
+                              : "white",
+                        borderColor:
+                          targetId === c.id ? colors.foreground : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        sc.targetCatText,
+                        {
+                          color:
+                            targetId === c.id
+                              ? theme === "dark"
+                                ? "#000"
+                                : "#FFF"
+                              : colors.foreground,
+                        },
+                      ]}
+                    >
+                      {translateCategory(getName(c.name, language), language)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
+  );
 }
 
 const sc = StyleSheet.create({
-    root: { flex: 1 },
-    hdr: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 },
-    hdrRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
-    hdrTitle: { flex: 1, fontSize: 20, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
-    backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    hSep: { height: StyleSheet.hairlineWidth },
-    addBtn: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    listContent: { padding: 20, paddingBottom: 120, paddingTop: 10 },
-    adCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 24, marginBottom: 16 },
-    adMediaWrap: { width: 115, height: 75, borderRadius: 18, overflow: 'hidden', borderWidth: 1 },
-    adMedia: { width: '100%', height: '100%' },
-    typeBadge: { position: 'absolute', bottom: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
-    typeBadgeText: { color: 'white', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
-    adInfo: { flex: 1, marginLeft: 18 },
-    adTitle: { fontWeight: '900', fontSize: 16, letterSpacing: -0.2 },
-    adDesc: { fontSize: 13, marginTop: 4, opacity: 0.8 },
-    actions: { gap: 10, marginLeft: 12 },
-    actionBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1 },
+  hdr: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
+    zIndex: 100,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  hdrRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  hdrTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    textAlign: "center",
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  hSep: { height: StyleSheet.hairlineWidth },
+  addBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listContent: { padding: 20, paddingBottom: 120, paddingTop: 10 },
+  adCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 24,
+    marginBottom: 16,
+  },
+  adMediaWrap: {
+    width: 115,
+    height: 75,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+  },
+  adMedia: { width: "100%", height: "100%" },
+  typeBadge: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  typeBadgeText: {
+    color: "white",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  adInfo: { flex: 1, marginLeft: 18 },
+  adTitle: { fontWeight: "900", fontSize: 16, letterSpacing: -0.2 },
+  adDesc: { fontSize: 13, marginTop: 4, opacity: 0.8 },
+  statusBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  statusBadgeText: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  actions: { gap: 10, marginLeft: 12 },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    modalRoot: { flex: 1 },
-    modalHeader: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1 },
-    modalCloseBtn: { padding: 4 },
-    modalTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    modalSaveText: { fontSize: 10, fontWeight: '900', color: '#007AFF' },
-    modalContent: { padding: 25 },
+  modalRoot: { flex: 1 },
+  modalHeader: {
+    height: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  modalCloseBtn: { padding: 4 },
+  modalTitle: { fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  modalSaveText: { fontSize: 10, fontWeight: "900", color: "#007AFF" },
+  modalContent: { padding: 25 },
 
-    typeSelector: { flexDirection: 'row', gap: 10, marginBottom: 25 },
-    mediaPicker: { width: '100%', height: 200, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 25, borderWidth: 1.5, overflow: 'hidden' },
-    pickerMedia: { width: '100%', height: '100%' },
-    pickerPlaceholder: { alignItems: 'center', gap: 10 },
-    pickerText: { fontSize: 10, fontWeight: '800' },
+  typeSelector: { flexDirection: "row", gap: 10, marginBottom: 25 },
+  mediaPicker: {
+    width: "100%",
+    height: 200,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 25,
+    borderWidth: 1.5,
+    overflow: "hidden",
+  },
+  pickerMedia: { width: "100%", height: "100%" },
+  pickerPlaceholder: { alignItems: "center", gap: 10 },
+  pickerText: { fontSize: 10, fontWeight: "800" },
 
-    inputWrap: { marginBottom: 20 },
-    input: { height: 52, borderRadius: 14, paddingHorizontal: 15, borderWidth: 1, fontSize: 14, fontWeight: '600' },
-    textArea: { height: 100, paddingVertical: 12, textAlignVertical: 'top' },
+  inputWrap: { marginBottom: 20 },
+  input: {
+    height: 52,
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  textArea: { height: 100, paddingVertical: 12, textAlignVertical: "top" },
 
-    targetSelector: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-    targetList: { marginBottom: 25 },
-    targetItem: { width: 100, marginRight: 12, padding: 10, borderRadius: 16, borderWidth: 1, alignItems: 'center' },
-    targetImg: { width: '100%', aspectRatio: 1, borderRadius: 10, marginBottom: 6 },
-    targetName: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
-    targetCatItem: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginRight: 10, borderWidth: 1 },
-    targetCatText: { fontSize: 12, fontWeight: '600' }
+  targetSelector: { flexDirection: "row", gap: 10, marginBottom: 20 },
+  targetList: { marginBottom: 25 },
+  targetItem: {
+    width: 100,
+    marginRight: 12,
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  targetImg: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  targetName: { fontSize: 9, fontWeight: "700", textAlign: "center" },
+  targetCatItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+  },
+  targetCatText: { fontSize: 12, fontWeight: "600" },
 });
