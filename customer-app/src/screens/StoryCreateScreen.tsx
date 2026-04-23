@@ -881,27 +881,20 @@ export default function StoryCreateScreen({
         {renderMediaPicker()}
         
         {/* GIF Picker Integration */}
-        {isGifPickerVisible && (
-          <Modal
-            visible={isGifPickerVisible}
-            animationType="slide"
-            onRequestClose={() => setIsGifPickerVisible(false)}
-          >
-            <GifPicker
-              onClose={() => setIsGifPickerVisible(false)}
-              onGifSelect={(gifUrl) => {
-                setIsGifPickerVisible(false);
-                handleMediaSelect([{
-                  id: Date.now().toString(),
-                  uri: gifUrl,
-                  type: "image",
-                  width: 400,
-                  height: 400
-                }]);
-              }}
-            />
-          </Modal>
-        )}
+        <GifPicker
+          visible={isGifPickerVisible}
+          onClose={() => setIsGifPickerVisible(false)}
+          onGifSelect={(gifUrl) => {
+            setIsGifPickerVisible(false);
+            handleMediaSelect([{
+              id: Date.now().toString(),
+              uri: gifUrl,
+              type: "image",
+              width: 400,
+              height: 400
+            }]);
+          }}
+        />
       </View>
     );
   }

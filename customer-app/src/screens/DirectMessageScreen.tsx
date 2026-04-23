@@ -179,6 +179,7 @@ export default function DirectMessageScreen({
   const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const previewPlayer = useAudioPlayer(recordedUri);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -289,12 +290,19 @@ export default function DirectMessageScreen({
     }
   }, [activePickerTab, fetchStickers, stipopStickers.length]);
 
-  // Handle sticker search
+  // Handle sticker search with debouncing
   const handleStickerSearch = useCallback(
     (query: string) => {
       setStickerSearchQuery(query);
       setStickerPageNumber(1);
-      fetchStickers(query, 1, false);
+
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+      }
+
+      searchTimeout.current = setTimeout(() => {
+        fetchStickers(query, 1, false);
+      }, 500);
     },
     [fetchStickers],
   );
@@ -1727,7 +1735,7 @@ export default function DirectMessageScreen({
           style={{ flex: 1 }}
           contentContainerStyle={{
             paddingTop: insets.top + 74,
-            paddingBottom: insets.bottom + 90,
+            paddingBottom: 20, // Reduced as input is now in flex flow
           }}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() =>
@@ -1795,17 +1803,14 @@ export default function DirectMessageScreen({
       <BlurView
         intensity={Platform.OS === "ios" ? 90 : 100}
         tint={theme === "dark" ? "dark" : "light"}
-        blurMethod="dimezisBlurView"
+        blurMethod={Platform.OS === "android" ? "none" : undefined}
         style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
           paddingHorizontal: 16,
           paddingTop: 8,
           paddingBottom: insets.bottom + 8,
           borderTopWidth: 0.5,
           borderTopColor: colors.border,
+          backgroundColor: theme === "dark" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)",
         }}
       >
         {replyingTo && (
@@ -2303,9 +2308,24 @@ export default function DirectMessageScreen({
               )}
             </TouchableOpacity>
 
-            {!isRecording && !recordedUri && (
-              <>
-                <View style={{ flex: 1 }}>
+            {!recordedUri && (
+              <View style={{ flex: 1, justifyContent: "center" }}>
+                {isRecording ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#EF4444" }} />
+                    <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "600", width: 45 }}>
+                      {recordedDuration.toFixed(1)}s
+                    </Text>
+                    <View style={{ flex: 1, height: 24, justifyContent: "center" }}>
+                      <AudioWaveform
+                        data={recordedWaveform}
+                        height={16}
+                        activeColor="#EF4444"
+                        inactiveColor="#EF444440"
+                      />
+                    </View>
+                  </View>
+                ) : (
                   <Input
                     ref={inputRef}
                     value={inputText}
@@ -2332,104 +2352,78 @@ export default function DirectMessageScreen({
                       color: colors.foreground,
                     }}
                   />
-                </View>
+                )}
+              </View>
+            )}
 
-                <TouchableOpacity
-                  onPress={() => {
-                    if (inputText.trim()) {
-                      sendMessage();
-                    } else if (isRecording) {
-                      handleStopRecording(true);
-                    } else {
-                      handleStartRecording();
-                    }
-                  }}
-                  onLongPress={() => {
-                    if (!inputText.trim() && !sending && !isRecording) {
-                      handleStartRecording();
-                    }
-                  }}
-                  disabled={sending}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    backgroundColor: isRecording ? "#EF4444" : colors.blue,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 22,
-                  }}
-                >
-                  {sending ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : inputText.trim() ? (
-                    <Send size={20} color="white" />
-                  ) : isRecording ? (
-                    <Square size={20} color="white" fill="white" />
-                  ) : (
-                    <Mic size={20} color="white" />
-                  )}
-                </TouchableOpacity>
-              </>
+            {!recordedUri && (
+              <TouchableOpacity
+                onPress={() => {
+                  if (inputText.trim()) {
+                    sendMessage();
+                  } else if (isRecording) {
+                    handleStopRecording(true);
+                  } else {
+                    handleStartRecording();
+                  }
+                }}
+                onLongPress={() => {
+                  if (!inputText.trim() && !sending && !isRecording) {
+                    handleStartRecording();
+                  }
+                }}
+                disabled={sending}
+                style={{
+                  width: 44,
+                  height: 44,
+                  backgroundColor: isRecording ? "#EF4444" : colors.blue,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 22,
+                }}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : inputText.trim() ? (
+                  <Send size={20} color="white" />
+                ) : isRecording ? (
+                  <Square size={20} color="white" fill="white" />
+                ) : (
+                  <Mic size={20} color="white" />
+                )}
+              </TouchableOpacity>
             )}
           </View>
         )}
       </BlurView>
 
-      {/* Keyboard avoidance */}
-      <AvoidKeyboard />
-
-      {/* Modals */}
-      <Modal
-        visible={!!fullScreenImage}
-        transparent
-        onRequestClose={() => setFullScreenImage(null)}
-      >
+      {/* Media Choice Overlay - State-based rendering to avoid nested modals */}
+      {isMediaModalVisible && (
         <View
-          style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}
-        >
-          <TouchableOpacity
-            style={{
-              position: "absolute",
-              top: insets.top + 10,
-              right: 20,
-              zIndex: 10,
-            }}
-            onPress={() => setFullScreenImage(null)}
-          >
-            <X size={32} color="white" />
-          </TouchableOpacity>
-          {fullScreenImage && (
-            <Image
-              source={{ uri: fullScreenImage }}
-              style={{ width: "100%", height: "80%" }}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
-
-      {/* Media Choice Modal - like ChatScreen */}
-      <Modal
-        visible={isMediaModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsMediaModalVisible(false)}
-      >
-        <TouchableOpacity
           style={{
-            flex: 1,
+            position: "absolute",
+            top: -insets.top,
+            bottom: -insets.bottom,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
             backgroundColor: "rgba(0,0,0,0.6)",
             justifyContent: "flex-end",
           }}
-          onPress={() => setIsMediaModalVisible(false)}
-          activeOpacity={1}
         >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => setIsMediaModalVisible(false)}
+            activeOpacity={1}
+          >
+            <View style={{ flex: 1 }} />
+          </TouchableOpacity>
           <View
             style={{
               backgroundColor: theme === "dark" ? "#1c1c1e" : "#FFF",
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              paddingBottom: 40,
+              paddingBottom: insets.bottom + 20,
               paddingHorizontal: 20,
             }}
           >
@@ -2441,35 +2435,10 @@ export default function DirectMessageScreen({
                 borderRadius: 2,
                 alignSelf: "center",
                 marginTop: 12,
+                marginBottom: 20,
               }}
             />
-
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginTop: 15,
-                marginBottom: 25,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.foreground,
-                  fontSize: 19,
-                  fontWeight: "700",
-                }}
-              >
-                {tr("Choisir un média", "اختر وسائط", "Choose media")}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setIsMediaModalVisible(false)}
-                style={{ padding: 4 }}
-              >
-                <X size={24} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
+            
             <View style={{ gap: 12 }}>
               <TouchableOpacity
                 onPress={() => {
@@ -2561,7 +2530,7 @@ export default function DirectMessageScreen({
                         fontWeight: "600",
                       }}
                     >
-                      {tr("Photo", "صورة", "Photo")}
+                      {tr("Images", "صور", "Images")}
                     </Text>
                     <Text
                       style={{
@@ -2744,7 +2713,40 @@ export default function DirectMessageScreen({
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Keyboard avoidance */}
+      <AvoidKeyboard />
+
+      {/* Modals */}
+      <Modal
+        visible={!!fullScreenImage}
+        transparent
+        onRequestClose={() => setFullScreenImage(null)}
+      >
+        <View
+          style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}
+        >
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: insets.top + 10,
+              right: 20,
+              zIndex: 10,
+            }}
+            onPress={() => setFullScreenImage(null)}
+          >
+            <X size={32} color="white" />
+          </TouchableOpacity>
+          {fullScreenImage && (
+            <Image
+              source={{ uri: fullScreenImage }}
+              style={{ width: "100%", height: "80%" }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
       </Modal>
 
       {/* GIF Picker Modal */}
