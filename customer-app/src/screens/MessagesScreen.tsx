@@ -24,17 +24,16 @@ import {
     where
 } from 'firebase/firestore';
 import {
-    Camera,
-    ChevronLeft,
-    Image as ImageIcon,
-    MessageCircle,
-    Plus,
-    Search,
-    Shield,
     Trash2,
     Video,
-    X
+    X,
+    Camera as CameraIcon,
+    ChevronLeft,
+    Image as ImageIcon,
+    Plus,
+    MessageCircle
 } from 'lucide-react-native';
+import { Camera as CameraUI } from '@/components/ui/camera';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     ActivityIndicator,
@@ -100,6 +99,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
     const [searchQuery, setSearchQuery] = useState('');
     const [reels, setReels] = useState<any[]>([]);
     const [isReelModalVisible, setIsReelModalVisible] = useState(false);
+    const [viewMode, setViewMode] = useState<'list' | 'camera'>('list');
 
     useEffect(() => {
         cacheRef.current = usersCache;
@@ -263,6 +263,21 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
         }
     };
 
+    const handleCameraCapture = () => {
+        setViewMode('camera');
+    };
+
+    const handleCameraResult = async (uri: string, type: 'image' | 'video') => {
+        setViewMode('list');
+        handleMediaSelection([{
+            id: Date.now().toString(),
+            uri,
+            type: type as any,
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT
+        }]);
+    };
+
     const filteredChats = chats.filter(chat => {
         const otherId = chat.participants.find((id: string) => id !== user.uid);
         const data = usersCache[otherId] || chat.participantData?.[otherId] || {};
@@ -300,6 +315,18 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         }}
                     >
                         <ChevronLeft size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setIsReelModalVisible(true)}
+                        activeOpacity={0.7}
+                        style={{
+                            marginRight: 16,
+                            padding: 8,
+                            borderRadius: 12,
+                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'
+                        }}
+                    >
+                        <CameraIcon size={24} color={colors.foreground} />
                     </TouchableOpacity>
                     {/* Removed Camera Icon from Header */}
                     <View>
@@ -403,7 +430,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                     {/* Your Reel / Create Button */}
                                     <View style={{ alignItems: 'center', marginRight: 20 }}>
                                         <TouchableOpacity
-                                            onPress={() => onNavigate?.('StoryCreate')}
+                                            onPress={() => setIsReelModalVisible(true)}
                                         >
                                             <View style={{ position: 'relative' }}>
                                                 <Avatar
@@ -628,6 +655,219 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         )}
                     />
                 </>
+            )}
+
+            {/* Media Choice Overlay */}
+            {isReelModalVisible && (
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 2000,
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    justifyContent: 'flex-end'
+                }}>
+                    <TouchableOpacity 
+                        style={{ flex: 1 }} 
+                        onPress={() => setIsReelModalVisible(false)} 
+                        activeOpacity={1}
+                    >
+                        <View style={{ flex: 1 }} />
+                    </TouchableOpacity>
+                    <Animatable.View 
+                        animation="slideInUp"
+                        duration={300}
+                        style={{
+                            backgroundColor: colors.background,
+                            borderTopLeftRadius: 24,
+                            borderTopRightRadius: 24,
+                            paddingBottom: insets.bottom + 20,
+                            paddingHorizontal: 20,
+                        }}
+                    >
+                        <View style={{
+                            width: 40,
+                            height: 4,
+                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                            borderRadius: 2,
+                            alignSelf: 'center',
+                            marginTop: 12,
+                            marginBottom: 20,
+                        }} />
+                        
+                        <View style={{ gap: 12 }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsReelModalVisible(false);
+                                    handleCameraCapture();
+                                }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                    padding: 16,
+                                    borderRadius: 16,
+                                }}
+                            >
+                                <View style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 22,
+                                    backgroundColor: colors.blue,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginRight: 15,
+                                }}>
+                                    <CameraIcon size={22} color="white" />
+                                </View>
+                                <View>
+                                    <Text variant="subtitle" style={{ fontWeight: '600' }}>
+                                        {tr('Appareil photo', 'الكاميرا', 'Camera')}
+                                    </Text>
+                                    <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                        {tr('Prendre une photo ou vidéo', 'التقاط صورة أو فيديو', 'Take a photo or video')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            <MediaPicker
+                                mediaType="image"
+                                onSelectionChange={(assets) => {
+                                    if (assets.length > 0) {
+                                        setIsReelModalVisible(false);
+                                        handleMediaSelection(assets);
+                                    }
+                                }}
+                            >
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                    padding: 16,
+                                    borderRadius: 16,
+                                }}>
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: '#A855F7',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 15,
+                                    }}>
+                                        <ImageIcon size={22} color="white" />
+                                    </View>
+                                    <View>
+                                        <Text variant="subtitle" style={{ fontWeight: '600' }}>
+                                            {tr('Images', 'صور', 'Images')}
+                                        </Text>
+                                        <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                            {tr('Choisir depuis la galerie', 'اختر من المعرض', 'Choose from gallery')}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </MediaPicker>
+
+                            <MediaPicker
+                                mediaType="video"
+                                onSelectionChange={(assets) => {
+                                    if (assets.length > 0) {
+                                        setIsReelModalVisible(false);
+                                        handleMediaSelection(assets);
+                                    }
+                                }}
+                            >
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                    padding: 16,
+                                    borderRadius: 16,
+                                }}>
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: '#FF2D55',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 15,
+                                    }}>
+                                        <Video size={22} color="white" />
+                                    </View>
+                                    <View>
+                                        <Text variant="subtitle" style={{ fontWeight: '600' }}>
+                                            {tr('Vidéo', 'فيديو', 'Video')}
+                                        </Text>
+                                        <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                            {tr('Choisir une vidéo', 'اختر فيديو', 'Choose a video')}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </MediaPicker>
+
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsReelModalVisible(false);
+                                    onNavigate?.('StoryCreate');
+                                }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: colors.accent + '15',
+                                    padding: 16,
+                                    borderRadius: 16,
+                                    marginTop: 4,
+                                }}
+                            >
+                                <View style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 22,
+                                    backgroundColor: colors.accent,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginRight: 15,
+                                }}>
+                                    <Plus size={22} color="white" />
+                                </View>
+                                <View>
+                                    <Text variant="subtitle" style={{ fontWeight: '600', color: colors.accent }}>
+                                        {tr('Éditeur de Story', 'محرر القصة', 'Story Editor')}
+                                    </Text>
+                                    <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                        {tr('Ajouter du texte, musique...', 'أضف نصاً ، موسيقى...', 'Add text, music...')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </Animatable.View>
+                </View>
+            )}
+
+            {/* Camera Overlay */}
+            {viewMode === 'camera' && (
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 3000,
+                    backgroundColor: 'black'
+                }}>
+                    <CameraUI
+                        onClose={() => setViewMode('list')}
+                        onCapture={({ uri }) => handleCameraResult(uri, 'image')}
+                        onVideoCapture={({ uri }) => handleCameraResult(uri, 'video')}
+                        onGalleryPress={() => {
+                            setViewMode('list');
+                            setIsReelModalVisible(true);
+                        }}
+                    />
+                </View>
             )}
 
         </SafeAreaView>

@@ -10,7 +10,6 @@ import {
   Animated,
   TextInput,
   PanResponder,
-  Modal,
 } from "react-native";
 import { Text } from "../components/ui/text";
 import { Avatar } from "../components/ui/avatar";
@@ -248,18 +247,28 @@ export default function StoryCreateScreen({
   };
 
   const renderMediaPicker = () => {
+    if (!isMediaModalVisible) return null;
+
     return (
-      <Modal
-        visible={isMediaModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setIsMediaModalVisible(false)}
+      <View
+        style={{
+          position: "absolute",
+          top: -insets.top,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "flex-end",
+        }}
       >
         <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
-          activeOpacity={1}
+          style={{ flex: 1 }}
           onPress={() => setIsMediaModalVisible(false)}
-        />
+          activeOpacity={1}
+        >
+          <View style={{ flex: 1 }} />
+        </TouchableOpacity>
         <View
           style={{
             backgroundColor: isDark ? "#121212" : "#FFF",
@@ -504,7 +513,7 @@ export default function StoryCreateScreen({
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </View>
     );
   };
 
@@ -904,21 +913,18 @@ export default function StoryCreateScreen({
       {renderPreview()}
 
       {/* Full-screen MusicPicker modal */}
-      <Modal
-        visible={showMusicPicker}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setShowMusicPicker(false)}
-      >
-        <MusicPicker
-          initialTrack={selectedMusic}
-          onClose={() => setShowMusicPicker(false)}
-          onSelect={(track) => {
-            setSelectedMusic(track);
-            setShowMusicPicker(false);
-          }}
-        />
-      </Modal>
+      {showMusicPicker && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 200, backgroundColor: "#000" }]}>
+          <MusicPicker
+            initialTrack={selectedMusic}
+            onClose={() => setShowMusicPicker(false)}
+            onSelect={(track) => {
+              setSelectedMusic(track);
+              setShowMusicPicker(false);
+            }}
+          />
+        </View>
+      )}
 
       {/* Stipop Story Sticker Picker */}
       <StoryStickerPicker
