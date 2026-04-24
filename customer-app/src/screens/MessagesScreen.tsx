@@ -31,7 +31,10 @@ import {
     ChevronLeft,
     Image as ImageIcon,
     Plus,
-    MessageCircle
+    MessageCircle,
+    Search,
+    Shield,
+    Sticker
 } from 'lucide-react-native';
 import { Camera as CameraUI } from '@/components/ui/camera';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -299,11 +302,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                 borderBottomWidth: 1,
                 borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
             }}>
-                <Animatable.View 
-                    animation="fadeInLeft" 
-                    duration={400}
-                    style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-                >
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                     <TouchableOpacity
                         onPress={() => onBack?.()}
                         activeOpacity={0.7}
@@ -316,19 +315,6 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                     >
                         <ChevronLeft size={24} color={colors.foreground} />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setIsReelModalVisible(true)}
-                        activeOpacity={0.7}
-                        style={{
-                            marginRight: 16,
-                            padding: 8,
-                            borderRadius: 12,
-                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'
-                        }}
-                    >
-                        <CameraIcon size={24} color={colors.foreground} />
-                    </TouchableOpacity>
-                    {/* Removed Camera Icon from Header */}
                     <View>
                         <Text variant="title" style={{ fontSize: 28, fontWeight: '800', letterSpacing: -0.5 }}>
                             Messages
@@ -337,9 +323,19 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                             {chats.length} {chats.length === 1 ? 'conversation' : 'conversations'}
                         </Text>
                     </View>
-                </Animatable.View>
-                {/* Removed Camera Icon from Header */}
-                <View style={{ width: 44 }} />
+                </View>
+
+                <TouchableOpacity
+                    onPress={() => setIsReelModalVisible(true)}
+                    activeOpacity={0.7}
+                    style={{
+                        padding: 8,
+                        borderRadius: 12,
+                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'
+                    }}
+                >
+                    <CameraIcon size={24} color={colors.foreground} />
+                </TouchableOpacity>
             </View>
 
             {/* Enhanced Search Bar */}
@@ -419,7 +415,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         data={filteredChats}
                         keyExtractor={(item) => item.id}
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{ paddingBottom: 20 }}
+                        contentContainerStyle={{ paddingBottom: 120 }}
                         ListHeaderComponent={() => (
                             <Animatable.View animation="fadeIn" duration={400} style={{ marginBottom: 20 }}>
                             <ScrollView
@@ -430,7 +426,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                     {/* Your Reel / Create Button */}
                                     <View style={{ alignItems: 'center', marginRight: 20 }}>
                                         <TouchableOpacity
-                                            onPress={() => setIsReelModalVisible(true)}
+                                            onPress={() => onNavigate?.('StoryCreate')}
                                         >
                                             <View style={{ position: 'relative' }}>
                                                 <Avatar
@@ -683,7 +679,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                             backgroundColor: colors.background,
                             borderTopLeftRadius: 24,
                             borderTopRightRadius: 24,
-                            paddingBottom: insets.bottom + 20,
+                            paddingBottom: insets.bottom + 100,
                             paddingHorizontal: 20,
                         }}
                     >
@@ -698,39 +694,44 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                         }} />
                         
                         <View style={{ gap: 12 }}>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setIsReelModalVisible(false);
-                                    handleCameraCapture();
+                            <MediaPicker
+                                camera={true}
+                                mediaType="all"
+                                onSelectionChange={(assets) => {
+                                    if (assets.length > 0) {
+                                        setIsReelModalVisible(false);
+                                        handleMediaSelection(assets);
+                                    }
                                 }}
-                                style={{
+                            >
+                                <View style={{
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
                                     padding: 16,
                                     borderRadius: 16,
-                                }}
-                            >
-                                <View style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: 22,
-                                    backgroundColor: colors.blue,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginRight: 15,
                                 }}>
-                                    <CameraIcon size={22} color="white" />
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: colors.blue,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 15,
+                                    }}>
+                                        <CameraIcon size={22} color="white" />
+                                    </View>
+                                    <View>
+                                        <Text variant="subtitle" style={{ fontWeight: '600' }}>
+                                            {tr('Appareil photo', 'الكاميرا', 'Camera')}
+                                        </Text>
+                                        <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                            {tr('Prendre une photo ou vidéo', 'التقاط صورة أو فيديو', 'Take a photo or video')}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text variant="subtitle" style={{ fontWeight: '600' }}>
-                                        {tr('Appareil photo', 'الكاميرا', 'Camera')}
-                                    </Text>
-                                    <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
-                                        {tr('Prendre une photo ou vidéo', 'التقاط صورة أو فيديو', 'Take a photo or video')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                            </MediaPicker>
 
                             <MediaPicker
                                 mediaType="image"
@@ -842,6 +843,80 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                     </Text>
                                 </View>
                             </TouchableOpacity>
+
+                            <View style={{ height: 12 }} />
+
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                {/* GIF Option */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setIsReelModalVisible(false);
+                                        onNavigate?.('StoryCreate', { initialMode: 'gif' });
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                                        padding: 16,
+                                        borderRadius: 16,
+                                    }}
+                                >
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: '#10B981',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 15,
+                                    }}>
+                                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>GIF</Text>
+                                    </View>
+                                    <View>
+                                        <Text variant="subtitle" style={{ fontWeight: '600' }}>GIF</Text>
+                                        <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                            {tr('Rechercher', 'بحث', 'Search')}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                {/* Sticker Option */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setIsReelModalVisible(false);
+                                        onNavigate?.('StoryCreate', { initialMode: 'sticker' });
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                                        padding: 16,
+                                        borderRadius: 16,
+                                    }}
+                                >
+                                    <View style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 22,
+                                        backgroundColor: '#F59E0B',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 15,
+                                    }}>
+                                        <Sticker size={22} color="#FFF" />
+                                    </View>
+                                    <View>
+                                        <Text variant="subtitle" style={{ fontWeight: '600' }}>
+                                            {tr('Stickers', 'ملصقات', 'Stickers')}
+                                        </Text>
+                                        <Text variant="caption" style={{ color: colors.textMuted, marginTop: 1 }}>
+                                            {tr('Ajouter', 'إضافة', 'Add')}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </Animatable.View>
                 </View>

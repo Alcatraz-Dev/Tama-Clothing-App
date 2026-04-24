@@ -54,6 +54,7 @@ interface StoryCreateScreenProps {
   onPublish: (story: any) => void;
   t: (key: string) => string;
   theme: "light" | "dark";
+  initialMode?: 'gif' | 'sticker';
 }
 
 const FILTERS: { id: FilterType; name: string; colors: [string, string] }[] = [
@@ -93,6 +94,7 @@ export default function StoryCreateScreen({
   onPublish,
   t,
   theme,
+  initialMode,
 }: StoryCreateScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(
@@ -130,6 +132,17 @@ export default function StoryCreateScreen({
       // Animation for picker
     }
   }, [isMediaModalVisible, media]);
+
+  useEffect(() => {
+    if (initialMode === 'gif') {
+      setIsMediaModalVisible(false);
+      setIsGifPickerVisible(true);
+    } else if (initialMode === 'sticker') {
+      setIsMediaModalVisible(false);
+      setIsEmojiPickerVisible(true);
+      setActivePickerTab("sticker");
+    }
+  }, [initialMode]);
 
   const handleMediaSelect = (assets: MediaAsset[]) => {
     if (assets.length > 0) {
@@ -275,7 +288,7 @@ export default function StoryCreateScreen({
             borderTopLeftRadius: 25,
             borderTopRightRadius: 25,
             padding: 20,
-            paddingBottom: insets.bottom + 20,
+            paddingBottom: insets.bottom + 100,
           }}
         >
           <View
@@ -292,10 +305,11 @@ export default function StoryCreateScreen({
           <Text
             style={{
               color: isDark ? "#FFF" : "#000",
-              fontSize: 20,
-              fontWeight: "700",
+              fontSize: 24,
+              fontWeight: "800",
               textAlign: "center",
               marginBottom: 5,
+              letterSpacing: -0.5
             }}
           >
             {t("Create Story") || "Create Story"}
@@ -313,45 +327,52 @@ export default function StoryCreateScreen({
           
           <View style={{ gap: 12 }}>
             {/* Camera Option */}
-            <TouchableOpacity
-              onPress={() => {
-                setIsMediaModalVisible(false);
-                setViewMode("camera");
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
-                padding: 16,
-                borderRadius: 16,
+            <MediaPicker
+              camera={true}
+              mediaType="all"
+              onSelectionChange={(assets) => {
+                if (assets && assets.length > 0) {
+                  setIsMediaModalVisible(false);
+                  handleMediaSelect(assets);
+                }
               }}
             >
               <View
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "#3B82F6",
+                  flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 15,
+                  backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
+                  padding: 16,
+                  borderRadius: 16,
+                  width: '100%',
                 }}
               >
-                <Camera size={22} color="#FFF" />
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#3B82F6",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 15,
+                  }}
+                >
+                  <Camera size={22} color="#FFF" />
+                </View>
+                <View>
+                  <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
+                    {t("Appareil photo") || "Appareil photo"}
+                  </Text>
+                  <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
+                    {t("Prendre une photo ou vidéo") || "Prendre une photo ou vidéo"}
+                  </Text>
+                </View>
               </View>
-              <View>
-                <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
-                  {t("Camera") || "Camera"}
-                </Text>
-                <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
-                  {t("Take a photo or video") || "Take a photo or video"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            </MediaPicker>
 
             {/* Photo Gallery Option */}
             <MediaPicker
-              gallery={true}
               mediaType="image"
               onSelectionChange={(assets) => {
                 if (assets && assets.length > 0) {
@@ -364,7 +385,7 @@ export default function StoryCreateScreen({
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
+                  backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
                   padding: 16,
                   borderRadius: 16,
                   width: '100%',
@@ -385,10 +406,10 @@ export default function StoryCreateScreen({
                 </View>
                 <View>
                   <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
-                    {t("Photos") || "Photos"}
+                    {t("Images") || "Images"}
                   </Text>
                   <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
-                    {t("Choose from Gallery") || "Choose from Gallery"}
+                    {t("Choisir depuis la galerie") || "Choisir depuis la galerie"}
                   </Text>
                 </View>
               </View>
@@ -396,7 +417,6 @@ export default function StoryCreateScreen({
 
             {/* Video Gallery Option */}
             <MediaPicker
-              gallery={true}
               mediaType="video"
               onSelectionChange={(assets) => {
                 if (assets && assets.length > 0) {
@@ -409,7 +429,7 @@ export default function StoryCreateScreen({
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
+                  backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
                   padding: 16,
                   borderRadius: 16,
                   width: '100%',
@@ -430,87 +450,91 @@ export default function StoryCreateScreen({
                 </View>
                 <View>
                   <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
-                    {t("Videos") || "Videos"}
+                    {t("Vidéo") || "Vidéo"}
                   </Text>
                   <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
-                    {t("Choose from Gallery") || "Choose from Gallery"}
+                    {t("Choisir une vidéo") || "Choisir une vidéo"}
                   </Text>
                 </View>
               </View>
             </MediaPicker>
 
-            {/* GIF Option */}
-            <TouchableOpacity
-              onPress={() => {
-                setIsMediaModalVisible(false);
-                setIsGifPickerVisible(true);
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
-                padding: 16,
-                borderRadius: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "#10B981",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 15,
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+                {/* GIF Option */}
+                <TouchableOpacity
+                onPress={() => {
+                    setIsMediaModalVisible(false);
+                    setIsGifPickerVisible(true);
                 }}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>GIF</Text>
-              </View>
-              <View>
-                <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>GIF</Text>
-                <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
-                  {t("Search and share GIFs") || "Search and share GIFs"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
+                    padding: 16,
+                    borderRadius: 16,
+                }}
+                >
+                <View
+                    style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#10B981",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 15,
+                    }}
+                >
+                    <Text style={{ color: "#FFF", fontWeight: "bold", fontSize: 12 }}>GIF</Text>
+                </View>
+                <View>
+                    <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>GIF</Text>
+                    <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
+                    {t("Rechercher") || "Rechercher"}
+                    </Text>
+                </View>
+                </TouchableOpacity>
 
-            {/* Sticker Option */}
-            <TouchableOpacity
-              onPress={() => {
-                setIsMediaModalVisible(false);
-                setIsEmojiPickerVisible(true);
-                setActivePickerTab("sticker");
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
-                padding: 16,
-                borderRadius: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "#F59E0B",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 15,
+                {/* Sticker Option */}
+                <TouchableOpacity
+                onPress={() => {
+                    setIsMediaModalVisible(false);
+                    setIsEmojiPickerVisible(true);
+                    setActivePickerTab("sticker");
                 }}
-              >
-                <Sticker size={22} color="#FFF" />
-              </View>
-              <View>
-                <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
-                  {t("Stickers") || "Stickers"}
-                </Text>
-                <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
-                  {t("Add stickers to your story") || "Add stickers to your story"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)",
+                    padding: 16,
+                    borderRadius: 16,
+                }}
+                >
+                <View
+                    style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#F59E0B",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 15,
+                    }}
+                >
+                    <Sticker size={22} color="#FFF" />
+                </View>
+                <View>
+                    <Text style={{ color: isDark ? "#FFF" : "#000", fontSize: 16, fontWeight: "600" }}>
+                    {t("Stickers") || "Stickers"}
+                    </Text>
+                    <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", fontSize: 13, marginTop: 1 }}>
+                    {t("Ajouter") || "Ajouter"}
+                    </Text>
+                </View>
+                </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
