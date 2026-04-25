@@ -3,8 +3,6 @@
  * Integration with Flouci (Tunisian Payment Gateway)
  */
 
-const axios = require("axios");
-
 // Flouci API Configuration
 const FLOUCI_API_BASE = "https://developers.flouci.com/api/v2";
 const PUBLIC_KEY = process.env.FLOUCI_PUBLIC_KEY || "YOUR_FLOUCI_PUBLIC_KEY";
@@ -19,9 +17,13 @@ const PRIVATE_KEY = process.env.FLOUCI_PRIVATE_KEY || "YOUR_FLOUCI_PRIVATE_KEY";
  */
 async function generatePayment(amount, trackingId, clientId) {
   try {
-    const response = await axios.post(
-      `${FLOUCI_API_BASE}/generate_payment`,
-      {
+    const response = await fetch(`${FLOUCI_API_BASE}/generate_payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${PUBLIC_KEY}:${PRIVATE_KEY}`
+      },
+      body: JSON.stringify({
         amount: amount.toString(),
         developer_tracking_id: trackingId,
         accept_card: true,
@@ -29,34 +31,23 @@ async function generatePayment(amount, trackingId, clientId) {
         fail_link: "tama-clothing://payment-fail",
         webhook: "https://your-api-domain.com/api/payment/flouci/webhook",
         client_id: clientId,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${PUBLIC_KEY}:${PRIVATE_KEY}`,
-        },
-      },
-    );
+      }),
+    });
 
-    if (response.data && response.data.result && response.data.result.success) {
+    const data = await response.json();
+
+    if (data && data.result && data.result.success) {
       return {
         success: true,
-        payment_id: response.data.result.payment_id,
-        link: response.data.result.link,
+        payment_id: data.result.payment_id,
+        link: data.result.link,
       };
     } else {
-      throw new Error(
-        response.data.message || "Failed to generate payment link",
-      );
+      throw new Error(data.message || "Failed to generate payment link");
     }
   } catch (error) {
-    console.error(
-      "Flouci generatePayment error:",
-      error.response?.data || error.message,
-    );
-    throw new Error(
-      error.response?.data?.message || "Error communicating with Flouci",
-    );
+    console.error("Flouci generatePayment error:", error.message);
+    throw new Error("Error communicating with Flouci: " + error.message);
   }
 }
 
@@ -67,31 +58,28 @@ async function generatePayment(amount, trackingId, clientId) {
  */
 async function verifyPayment(paymentId) {
   try {
-    const response = await axios.get(
-      `${FLOUCI_API_BASE}/verify_payment/${paymentId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${PUBLIC_KEY}:${PRIVATE_KEY}`,
-        },
+    const response = await fetch(`${FLOUCI_API_BASE}/verify_payment/${paymentId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${PUBLIC_KEY}:${PRIVATE_KEY}`
       },
-    );
+    });
 
-    if (response.data && response.data.success) {
+    const data = await response.json();
+
+    if (data && data.success) {
       return {
         success: true,
-        status: response.data.result.status,
-        amount: response.data.result.amount,
-        trackingId: response.data.result.developer_tracking_id,
+        status: data.result.status,
+        amount: data.result.amount,
+        trackingId: data.result.developer_tracking_id,
       };
     } else {
-      throw new Error("Failed to verify payment");
+      throw new Error(data.message || "Failed to verify payment");
     }
   } catch (error) {
-    console.error(
-      "Flouci verifyPayment error:",
-      error.response?.data || error.message,
-    );
-    throw new Error("Error verifying payment with Flouci");
+    console.error("Flouci verifyPayment error:", error.message);
+    throw new Error("Error verifying payment with Flouci: " + error.message);
   }
 }
 

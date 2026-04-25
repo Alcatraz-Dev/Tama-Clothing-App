@@ -65,7 +65,17 @@ import { KeyboardAvoidingView, Platform, Keyboard } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 
-const API_BASE_URL = "http://YOUR_LOCAL_IP:5001/api/payment"; // Replace with real URL in production
+import Constants from "expo-constants";
+
+// Auto-detect local backend IP for physical devices/emulators
+const getApiBaseUrl = () => {
+  const debuggerHost = Constants.expoConfig?.hostUri || "";
+  const ip = debuggerHost.split(":")[0];
+  if (!ip) return "http://localhost:5001/api/payment";
+  return `http://${ip}:5001/api/payment`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 const RECHARGE_PACKAGES = [
   { id: "1", coins: 100, price: 3.0, priceDisplay: "3.00 TND", bonus: 0 },
   { id: "2", coins: 550, price: 15.0, priceDisplay: "15.00 TND", bonus: 50 },
