@@ -67,8 +67,13 @@ import * as Linking from "expo-linking";
 
 import Constants from "expo-constants";
 
+// Production Vercel URL
+const PRODUCTION_API_URL = "https://backend-bey3a.vercel.app/api/payment";
+
 // Auto-detect local backend IP for physical devices/emulators
 const getApiBaseUrl = () => {
+  if (!__DEV__) return PRODUCTION_API_URL;
+  
   const debuggerHost = Constants.expoConfig?.hostUri || "";
   const ip = debuggerHost.split(":")[0];
   if (!ip) return "http://localhost:5001/api/payment";
