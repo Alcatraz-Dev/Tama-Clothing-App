@@ -119,9 +119,15 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
 
   const centerOnTreasure = () => {
     let target = null;
-    if (currentTargetId) {
+    
+    if (participation?.progress?.currentLocationId) {
+       target = treasureLocations.find(l => l.id === participation.progress.currentLocationId);
+    }
+    
+    if (!target && currentTargetId) {
       target = treasureLocations.find(l => l.id === currentTargetId);
     } 
+    
     if (!target) {
        const undiscovered = treasureLocations.filter(loc => !isDiscovered(loc.id));
        if (undiscovered.length > 0 && userLocation) {
@@ -542,8 +548,10 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
             return (
               <React.Fragment key={loc.id}>
                 <Marker
+                  key={`marker-${loc.id}-${isCurrentTarget}-${distance < 500}-${discovered}`}
                   coordinate={{ latitude: loc.coordinates.latitude, longitude: loc.coordinates.longitude }}
                   onPress={() => setSelectedLocation(loc)}
+                  tracksViewChanges={isCurrentTarget || distance < 500}
                 >
                   {discovered ? (
                     <Animatable.View animation="fadeIn" style={styles.discoveredMarker}>
@@ -696,13 +704,12 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                 </BlurView>
               )}
 
-              {participation && (participation.inventory?.lives || 0) > 0 && (
+              {participation && typeof participation.inventory?.lives === 'number' && (
                 <BlurView intensity={40} tint={theme === 'dark' ? 'dark' : 'light'} style={[styles.blurPill, { marginLeft: 8 }]}>
-                   <View style={{ flexDirection: 'row', gap: 3 }}>
-                     {Array.from({ length: Math.min(3, participation.inventory?.lives || 0) }).map((_, i) => (
-                       <Heart key={i} size={14} color="#EF4444" fill="#EF4444" />
-                     ))}
-                   </View>
+                   <Heart size={14} color="#EF4444" fill="#EF4444" />
+                   <Text style={[styles.titleText, { color: colors.foreground, marginLeft: 6 }]}>
+                     {participation.inventory.lives}/3
+                   </Text>
                 </BlurView>
               )}
             </View>
@@ -727,13 +734,6 @@ const TreasureMapScreen: React.FC<TreasureMapScreenProps> = ({
                 <User size={24} color={colors.foreground} />
               </TouchableOpacity>
 
-              {/* Debug Boom Button */}
-              <TouchableOpacity 
-                style={[styles.circularButton, { marginTop: 15, backgroundColor: 'rgba(239, 68, 68, 0.8)' }]} 
-                onPress={() => triggerBoomEffect(false, 2)}
-              >
-                <BombIcon size={24} color="#FFF" />
-              </TouchableOpacity>
             </Animatable.View>
 
             {/* Central Menu Button - Recenter on Treasure */}

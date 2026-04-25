@@ -34,14 +34,10 @@ import {
   Map as MapIcon,
   ShoppingBag,
   ShoppingCart,
-  Bomb,
-  Trash2,
-  Key,
 } from "lucide-react-native";
 import { treasureHuntService, Campaign } from "@/services/TreasureHuntService";
 import { useAppTheme } from "@/context/ThemeContext";
 import { Timestamp } from "firebase/firestore";
-import * as Location from 'expo-location';
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.82;
@@ -65,7 +61,6 @@ const TreasureHuntHomeScreen: React.FC<{
   const [refreshing, setRefreshing] = useState(false);
   const [userStats, setUserStats] = useState<any>(null);
   const [userParticipations, setUserParticipations] = useState<any[]>([]);
-  const [addingDemo, setAddingDemo] = useState(false);
   const [countdown, setCountdown] = useState<{ [key: string]: number }>({});
   const [endCountdown, setEndCountdown] = useState<{ [key: string]: number }>(
     {},
@@ -99,93 +94,6 @@ const TreasureHuntHomeScreen: React.FC<{
     } finally {
       setLoading(false);
       setRefreshing(false);
-    }
-  };
-
-  const handleCreateDemo = async () => {
-    if (!userId) return;
-    try {
-      setAddingDemo(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Permission to access location was denied');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      await treasureHuntService.createDemoLocation(
-        userId, 
-        location.coords.latitude, 
-        location.coords.longitude
-      );
-      alert('Demo Treasure added at your location! Open map to test.');
-      fetchCampaigns();
-    } catch (err: any) {
-      alert(err.message || 'Failed to add demo treasure');
-    } finally {
-      setAddingDemo(false);
-    }
-  };
-
-  const handleCreateDemoLeaderboard = async () => {
-    try {
-      setAddingDemo(true);
-      await treasureHuntService.createDemoLeaderboard();
-      alert('Demo Leaderboard data generated! Check the trophy screen.');
-    } catch (err: any) {
-      alert(err.message || 'Failed to generate leaderboard data');
-    } finally {
-      setAddingDemo(false);
-    }
-  };
-
-  const handleCreateDemoKey = async () => {
-    try {
-      setAddingDemo(true);
-      const loc = await Location.getCurrentPositionAsync({});
-      await treasureHuntService.createDemoKey(userId, loc.coords.latitude, loc.coords.longitude);
-      alert(t('demoKeyAdded') || 'Demo Key added at your location! Open map to collect it.');
-    } catch (err: any) {
-      alert(err.message || 'Failed to add demo key');
-    } finally {
-      setAddingDemo(false);
-    }
-  };
-
-  const handleDeleteDemos = async () => {
-    try {
-      setAddingDemo(true);
-      const crossout = await treasureHuntService.deleteDemoLocations();
-      const crossoutBombs = await treasureHuntService.deleteDemoBombs();
-      const crossoutLeaderboard = await treasureHuntService.deleteDemoLeaderboard();
-      alert(`Deleted ${crossout} treasures, ${crossoutBombs} bombs, and ${crossoutLeaderboard} leaderboard entries.`);
-      fetchCampaigns();
-    } catch (err: any) {
-      alert('Failed to delete demos');
-    } finally {
-      setAddingDemo(false);
-    }
-  };
-
-  const handleCreateDemoBomb = async () => {
-    if (!userId) return;
-    try {
-      setAddingDemo(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-
-      const location = await Location.getCurrentPositionAsync({});
-      await treasureHuntService.createDemoBomb(
-        userId, 
-        location.coords.latitude, 
-        location.coords.longitude
-      );
-      alert('Demo Bomb added nearby! Open map to test.');
-      fetchCampaigns();
-    } catch (err: any) {
-      alert('Failed to add demo bomb');
-    } finally {
-      setAddingDemo(false);
     }
   };
 
@@ -490,85 +398,6 @@ const TreasureHuntHomeScreen: React.FC<{
               </Text>
             </View>
           </LinearGradient>
-        </Animatable.View>
-
-        {/* Testing Demo Section */}
-        <Animatable.View animation="fadeInUp" delay={200} style={styles.demoSection}>
-          <TouchableOpacity 
-            onPress={handleCreateDemo} 
-            disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: colors.primary, flex: 1, marginRight: 8 }]}
-          >
-            {addingDemo ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <>
-                <MapPin size={18} color={colors.primary} />
-                <Text style={[styles.demoButtonText, { color: colors.primary }]}>
-                  {t("treasureHuntAddDemo") || "Add Test"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            onPress={handleCreateDemoBomb} 
-            disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: '#FFA500', flex: 1, marginRight: 8, backgroundColor: 'rgba(255, 165, 0, 0.05)' }]}
-          >
-            {addingDemo ? (
-              <ActivityIndicator size="small" color="#FFA500" />
-            ) : (
-              <>
-                <Bomb size={18} color="#FFA500" />
-                <Text style={[styles.demoButtonText, { color: '#FFA500' }]}>
-                  {t("treasureHuntAddBomb") || "Add Bomb"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            onPress={handleCreateDemoKey} 
-            disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: '#10B981', flex: 1, marginRight: 8, backgroundColor: 'rgba(16, 185, 129, 0.05)' }]}
-          >
-            {addingDemo ? (
-              <ActivityIndicator size="small" color="#10B981" />
-            ) : (
-              <>
-                <Key size={18} color="#10B981" />
-                <Text style={[styles.demoButtonText, { color: '#10B981' }]}>
-                  {t("addDemoKey") || "Add Key"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            onPress={handleCreateDemoLeaderboard} 
-            disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: '#8B5CF6', flex: 1, marginRight: 8, backgroundColor: 'rgba(139, 92, 246, 0.05)' }]}
-          >
-            {addingDemo ? (
-              <ActivityIndicator size="small" color="#8B5CF6" />
-            ) : (
-              <>
-                <Trophy size={18} color="#8B5CF6" />
-                <Text style={[styles.demoButtonText, { color: '#8B5CF6' }]}>
-                  {t("treasureHuntAddLeaderboard") || "Add Board"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            onPress={handleDeleteDemos} 
-            disabled={addingDemo}
-            style={[styles.demoButton, { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', paddingHorizontal: 12 }]}
-          >
-            <Trash2 size={16} color="#EF4444" />
-          </TouchableOpacity>
         </Animatable.View>
 
         <View style={styles.sectionHeader}>
@@ -1205,28 +1034,6 @@ const styles = StyleSheet.create({
     width: 1,
     height: 15,
     backgroundColor: "rgba(0,0,0,0.1)",
-  },
-  demoSection: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  demoButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(79, 70, 229, 0.05)',
-  },
-  demoButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginLeft: 8,
   },
 });
 
