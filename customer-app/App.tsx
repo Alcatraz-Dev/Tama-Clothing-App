@@ -6383,39 +6383,39 @@ function ProfileScreen({
                 <LinearGradient
                   colors={
                     theme === "dark"
-                      ? ["#1A1A24", "#0D0D14"]
-                      : ["#FFFFFF", "#F9F9FB"]
+                      ? ["#12121A", "#08080C"]
+                      : ["#FFFFFF", "#F2F2F7"]
                   }
                   style={{
-                    borderRadius: 28,
+                    borderRadius: 32,
                     padding: 24,
-                    borderWidth: 1,
+                    borderWidth: 1.5,
                     borderColor:
                       theme === "dark"
-                        ? "rgba(255,255,255,0.05)"
+                        ? "rgba(255,255,255,0.08)"
                         : "rgba(0,0,0,0.05)",
                     shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 20,
-                    elevation: 5,
+                    shadowOffset: { width: 0, height: 12 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 24,
+                    elevation: 8,
                   }}
                 >
                   <View
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
-                      marginBottom: 24,
+                      marginBottom: 28,
                     }}
                   >
                     <View>
                       <Text
                         style={{
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: "900",
                           color: colors.textMuted,
-                          letterSpacing: 1.5,
-                          marginBottom: 8,
+                          letterSpacing: 2,
+                          marginBottom: 10,
                         }}
                       >
                         {tr(
@@ -6429,9 +6429,10 @@ function ProfileScreen({
                       >
                         <Text
                           style={{
-                            fontSize: 32,
+                            fontSize: 36,
                             fontWeight: "900",
                             color: colors.foreground,
+                            letterSpacing: -1,
                           }}
                         >
                           {(
@@ -6439,23 +6440,29 @@ function ProfileScreen({
                             (profileData?.wallet?.diamonds || 0)
                           ).toLocaleString()}
                         </Text>
-                        <Sparkles
-                          size={20}
-                          color="#F59E0B"
-                          style={{ marginLeft: 12 }}
-                        />
+                        <View style={{ 
+                          marginLeft: 15, 
+                          backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                          padding: 8, 
+                          borderRadius: 12 
+                        }}>
+                          <Sparkles
+                            size={18}
+                            color="#F59E0B"
+                          />
+                        </View>
                       </View>
                     </View>
                     <TouchableOpacity
                       onPress={() => setActiveTab("Wallet")}
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
                         backgroundColor:
                           theme === "dark"
-                            ? "rgba(255,255,255,0.05)"
-                            : "rgba(0,0,0,0.05)",
+                            ? "#000"
+                            : "#F2F2F7",
                         alignItems: "center",
                         justifyContent: "center",
                         borderWidth: 1,
@@ -6465,7 +6472,7 @@ function ProfileScreen({
                             : "rgba(0,0,0,0.05)",
                       }}
                     >
-                      <Wallet size={22} color={colors.foreground} />
+                      <Wallet size={20} color={colors.foreground} strokeWidth={2.5} />
                     </TouchableOpacity>
                   </View>
 

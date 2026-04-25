@@ -492,38 +492,56 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
 
     const renderHeader = () => (
         <View style={styles.headerContainer}>
-            <LinearGradient
-                colors={isDark ? ['#1A1A1A', '#000'] : ['#F5F5F5', '#FFF']}
-                style={[StyleSheet.absoluteFill, { borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }]}
-            />
+            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={theme} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)' }]} />
 
             <View style={[styles.navBar, { paddingTop: insets.top + 10 }]}>
-                <TouchableOpacity onPress={onBack} style={[styles.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-                    <ChevronLeft size={24} color={colors.foreground} />
+                <TouchableOpacity 
+                    onPress={onBack} 
+                    style={[styles.backBtn, { 
+                        backgroundColor: isDark ? '#000' : '#F2F2F7',
+                        width: 42,
+                        height: 42,
+                        borderRadius: 21,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }]}
+                >
+                    <ChevronLeft size={22} color={colors.foreground} strokeWidth={2.5} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.foreground }]}>{tr('My Wallet', 'Mon Portefeuille', 'محفظتي')}</Text>
+
+                <Text style={[styles.headerTitle, { 
+                    color: colors.foreground, 
+                    fontSize: 16, 
+                    fontWeight: '900', 
+                    letterSpacing: 1.5 
+                }]}>
+                    {tr('MY WALLET', 'MON PORTEFEUILLE', 'محفظتي')}
+                </Text>
+
                 <TouchableOpacity
                     onPress={async () => {
                         if (isRefreshing) return;
                         setIsRefreshing(true);
-
-                        // Start animation
                         Animated.timing(rotation, {
                             toValue: 1,
                             duration: 1000,
                             useNativeDriver: true,
                         }).start();
-
-                        // Actual data pull
                         await fetchTransactions();
-
-                        // Wait for animation to finish
                         setTimeout(() => {
                             rotation.setValue(0);
                             setIsRefreshing(false);
                         }, 1000);
                     }}
-                    style={[styles.backBtn, { backgroundColor: 'transparent' }]}
+                    style={[styles.backBtn, { 
+                        backgroundColor: isDark ? '#000' : '#F2F2F7',
+                        width: 42,
+                        height: 42,
+                        borderRadius: 21,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }]}
                 >
                     <Animated.View style={{
                         transform: [{
@@ -533,7 +551,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                             })
                         }]
                     }}>
-                        <RefreshCw size={22} color={colors.foreground} />
+                        <RefreshCw size={20} color={colors.foreground} strokeWidth={2.5} />
                     </Animated.View>
                 </TouchableOpacity>
             </View>
@@ -543,44 +561,75 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     colors={activeTab === 'recharge' ? ['#F59E0B', '#D97706'] : ['#8B5CF6', '#7C3AED']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.balanceCard}
+                    style={[styles.balanceCard, {
+                        borderRadius: 28,
+                        shadowColor: activeTab === 'recharge' ? '#F59E0B' : '#8B5CF6',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 15,
+                        elevation: 10,
+                    }]}
                 >
-                    <View>
-                        <Text style={styles.balanceLabel}>{activeTab === 'recharge' ? tr('Coin Balance', 'Solde de Pièces', 'رصيد العملات') : tr('Diamond Balance', 'Solde de Diamants', 'رصيد الجواهر')}</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.balanceLabel, { letterSpacing: 1.5, opacity: 0.9, fontSize: 11, fontWeight: '900' }]}>
+                            {activeTab === 'recharge' ? tr('COIN BALANCE', 'SOLDE DE PIÈCES', 'رصيد العملات') : tr('DIAMOND BALANCE', 'SOLDE DE DIAMANTS', 'رصيد الجواهر')}
+                        </Text>
                         <View style={styles.balanceRow}>
-                            {activeTab === 'recharge' ? <Coins size={28} color="#FFF" style={{ marginRight: 8 }} /> : <Gem size={28} color="#FFF" style={{ marginRight: 8 }} />}
-                            <Text style={styles.balanceAmount}>
+                            {activeTab === 'recharge' ? <Coins size={32} color="#FFF" style={{ marginRight: 12 }} /> : <Gem size={32} color="#FFF" style={{ marginRight: 12 }} />}
+                            <Text style={[styles.balanceAmount, { fontSize: 38, fontWeight: '900', letterSpacing: -1 }]}>
                                 {activeTab === 'recharge' ? Math.max(0, coinBalance).toLocaleString() : Math.max(0, diamondBalance).toLocaleString()}
                             </Text>
                         </View>
                         {activeTab === 'earnings' && (
-                            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '600' }}>
-                                ≈ {Math.max(0, (diamondBalance * DIAMOND_TO_TND_RATE)).toFixed(2)} TND
-                            </Text>
+                            <View style={{ 
+                                backgroundColor: 'rgba(255,255,255,0.2)', 
+                                alignSelf: 'flex-start',
+                                paddingHorizontal: 12,
+                                paddingVertical: 4,
+                                borderRadius: 12,
+                                marginTop: 10
+                            }}>
+                                <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '900' }}>
+                                    ≈ {Math.max(0, (diamondBalance * DIAMOND_TO_TND_RATE)).toFixed(2)} TND
+                                </Text>
+                            </View>
                         )}
                     </View>
 
-                    <View style={styles.walletIconContainer}>
-                        <Wallet size={32} color="rgba(255,255,255,0.8)" />
+                    <View style={[styles.walletIconContainer, { opacity: 0.3 }]}>
+                        <Wallet size={48} color="#FFF" />
                     </View>
 
-                    <View style={[styles.decorativeCircle, { top: -20, right: -20, width: 100, height: 100 }]} />
-                    <View style={[styles.decorativeCircle, { bottom: -40, left: -20, width: 80, height: 80 }]} />
+                    <View style={[styles.decorativeCircle, { top: -40, right: -40, width: 140, height: 140, backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+                    <View style={[styles.decorativeCircle, { bottom: -60, left: -40, width: 120, height: 120, backgroundColor: 'rgba(255,255,255,0.05)' }]} />
                 </LinearGradient>
             </View>
 
-            <View style={[styles.tabContainer, { backgroundColor: isDark ? '#111' : '#E5E5EA' }]}>
+            <View style={[styles.tabContainer, { 
+                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                marginHorizontal: 20,
+                borderRadius: 20,
+                padding: 4
+            }]}>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'recharge' && { backgroundColor: colors.card }]}
+                    style={[styles.tab, activeTab === 'recharge' && { backgroundColor: isDark ? '#FFF' : '#000', borderRadius: 16 }]}
                     onPress={() => setActiveTab('recharge')}
                 >
-                    <Text style={[styles.tabText, { color: activeTab === 'recharge' ? colors.foreground : colors.textMuted }]}>{tr('Recharge', 'Recharger', 'شحن')}</Text>
+                    <Text style={[styles.tabText, { 
+                        color: activeTab === 'recharge' ? (isDark ? '#000' : '#FFF') : colors.textMuted,
+                        fontWeight: '900',
+                        fontSize: 12
+                    }]}>{tr('RECHARGE', 'RECHARGER', 'شحن')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'earnings' && { backgroundColor: colors.card }]}
+                    style={[styles.tab, activeTab === 'earnings' && { backgroundColor: isDark ? '#FFF' : '#000', borderRadius: 16 }]}
                     onPress={() => setActiveTab('earnings')}
                 >
-                    <Text style={[styles.tabText, { color: activeTab === 'earnings' ? colors.foreground : colors.textMuted }]}>{tr('Earnings', 'Gains', 'المرابيح')}</Text>
+                    <Text style={[styles.tabText, { 
+                        color: activeTab === 'earnings' ? (isDark ? '#000' : '#FFF') : colors.textMuted,
+                        fontWeight: '900',
+                        fontSize: 12
+                    }]}>{tr('EARNINGS', 'GAINS', 'المرابيح')}</Text>
                 </TouchableOpacity>
             </View>
         </View >
