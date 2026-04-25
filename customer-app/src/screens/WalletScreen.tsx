@@ -8,6 +8,7 @@ import { Theme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, setDoc, increment, serverTimestamp, collection, query, orderBy, limit, onSnapshot, addDoc, getDocs, where, runTransaction, arrayUnion, arrayRemove, deleteDoc, documentId } from 'firebase/firestore';
 import { db } from '../api/firebase';
+import { getName } from '../utils/translationHelpers';
 import { KeyboardAvoidingView, Platform, Keyboard } from "react-native";
 const RECHARGE_PACKAGES = [
     { id: '1', coins: 100, price: 3.00, priceDisplay: '3.00 TND', bonus: 0 },
@@ -342,7 +343,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     recipientId: selectedUserForTransfer.uid,
                     recipientName: selectedUserForTransfer.fullName,
                     recipientAvatar: selectedUserForTransfer.avatarUrl || '',
-                    description: `Transfer to ${selectedUserForTransfer.fullName}`,
+                    description: `Transfer to ${getName(selectedUserForTransfer.fullName, language)}`,
                     timestamp: serverTimestamp(),
                     status: 'completed'
                 });
@@ -358,7 +359,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                     senderId: user.uid,
                     senderName: profileData?.fullName || 'Anonymous',
                     senderAvatar: profileData?.avatarUrl || '',
-                    description: `Transfer from ${profileData?.fullName || 'User'}`,
+                    description: `Transfer from ${getName(profileData?.fullName, language) || 'User'}`,
                     timestamp: serverTimestamp(),
                     status: 'completed'
                 });
@@ -1133,7 +1134,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                                 )}
                                                             </View>
                                                             <View style={{ marginLeft: 12 }}>
-                                                                <Text style={[styles.userNameText, { color: colors.foreground }]}>{u.fullName}</Text>
+                                                                <Text style={[styles.userNameText, { color: colors.foreground }]}>{getName(u.fullName, language)}</Text>
                                                                 <Text style={{ fontSize: 11, color: colors.textMuted }}>{u.email}</Text>
                                                             </View>
                                                         </View>
@@ -1166,13 +1167,13 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                                             )}
                                                         </View>
                                                         <View style={{ marginLeft: 12 }}>
-                                                            <Text style={[styles.userNameText, { color: colors.foreground }]}>{u.fullName}</Text>
+                                                            <Text style={[styles.userNameText, { color: colors.foreground }]}>{getName(u.fullName, language)}</Text>
                                                             <Text style={{ fontSize: 11, color: colors.textMuted }}>{u.email}</Text>
                                                         </View>
                                                     </View>
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                                         <TouchableOpacity
-                                                            onPress={() => handleDeleteFriend(u.uid, u.fullName)}
+                                                            onPress={() => handleDeleteFriend(u.uid, getName(u.fullName, language))}
                                                             style={{
                                                                 width: 32,
                                                                 height: 32,
@@ -1243,7 +1244,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                             <User size={40} color={colors.textMuted} />
                                         )}
                                     </View>
-                                    <Text style={[styles.selectedUserName, { color: colors.foreground }]}>{selectedUserForTransfer.fullName}</Text>
+                                    <Text style={[styles.selectedUserName, { color: colors.foreground }]}>{getName(selectedUserForTransfer.fullName, language)}</Text>
                                     <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>{selectedUserForTransfer.email}</Text>
 
                                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 30 }}>
@@ -1267,7 +1268,7 @@ export default function WalletScreen({ onBack, theme, t, profileData, user, lang
                                         {profileData?.friends?.includes(selectedUserForTransfer.uid) ? (
                                             <TouchableOpacity
                                                 style={[styles.profileActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}
-                                                onPress={() => handleDeleteFriend(selectedUserForTransfer.uid, selectedUserForTransfer.fullName)}
+                                                onPress={() => handleDeleteFriend(selectedUserForTransfer.uid, getName(selectedUserForTransfer.fullName, language))}
                                             >
                                                 <Trash size={18} color="#EF4444" />
                                                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444', marginLeft: 8 }}>{tr('Unfriend', 'Supprimer', 'نحي الصاحب')}</Text>

@@ -154,5 +154,6 @@ export const colorNameToHex = (color: string): string => {
 export const translateCategory = (cat: string, currentLang: string) => {
   if (!cat) return '';
   const key = cat.toLowerCase();
-  return Translations[currentLang]?.[key] || cat;
+  const translations: any = Translations;
+  return translations[currentLang]?.[key] || cat;
 };

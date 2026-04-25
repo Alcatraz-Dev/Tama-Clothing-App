@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, JSX, useCallback } from "react";
 import { GifPicker } from "@/components/ui/gif-picker";
+import { TypingIndicator } from "@/components/common/TypingIndicator";
 
 // Import Stipop sticker service
 import {
@@ -72,6 +73,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react-native";
+import { getName } from "../utils/translationHelpers";
 import { db } from "../api/firebase";
 import { useAppTheme } from "../context/ThemeContext";
 import { uploadToSanity } from "../utils/sanity";
@@ -180,6 +182,11 @@ export default function DirectMessageScreen({
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const previewPlayer = useAudioPlayer(recordedUri);
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Online / typing presence state
+  const [isTargetOnline, setIsTargetOnline] = useState(false);
+  const [isTargetTyping, setIsTargetTyping] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -771,6 +778,50 @@ export default function DirectMessageScreen({
 
     return () => unsubscribe();
   }, [chatId, user?.uid]);
+
+  // Subscribe to target user presence + typing
+  useEffect(() => {
+    if (!chatId || !targetUser?.uid) return;
+    const chatDocRef = doc(db, "direct_chats", chatId);
+    const unsubPresence = onSnapshot(chatDocRef, (snap) => {
+      const data = snap.data() || {};
+      setIsTargetOnline(data[`isOnline_${targetUser.uid}`] === true);
+      setIsTargetTyping(data[`isTyping_${targetUser.uid}`] === true);
+    });
+    return () => unsubPresence();
+  }, [chatId, targetUser?.uid]);
+
+  // Broadcast own online + typing status
+  useEffect(() => {
+    if (!chatId || !user?.uid) return;
+    const chatDocRef = doc(db, "direct_chats", chatId);
+    // Mark as online
+    setDoc(chatDocRef, { [`isOnline_${user.uid}`]: true }, { merge: true }).catch(() => {});
+    return () => {
+      // Mark as offline on unmount
+      setDoc(chatDocRef, { [`isOnline_${user.uid}`]: false, [`isTyping_${user.uid}`]: false }, { merge: true }).catch(() => {});
+    };
+  }, [chatId, user?.uid]);
+
+  // Typing broadcast: write isTyping_uid on every input change
+  useEffect(() => {
+    if (!chatId || !user?.uid) return;
+    const chatDocRef = doc(db, "direct_chats", chatId);
+    if (inputText.length > 0) {
+      setDoc(chatDocRef, { [`isTyping_${user.uid}`]: true }, { merge: true }).catch(() => {});
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      typingTimeout.current = setTimeout(() => {
+        setDoc(chatDocRef, { [`isTyping_${user.uid}`]: false }, { merge: true }).catch(() => {});
+      }, 2500);
+    } else {
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      setDoc(chatDocRef, { [`isTyping_${user.uid}`]: false }, { merge: true }).catch(() => {});
+    }
+    return () => {
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    };
+  }, [inputText, chatId, user?.uid]);
+
   const handleEmojiSelect = (emoji: string) => {
     setInputText((prev) => prev + emoji);
     Haptics.selectionAsync();
@@ -906,7 +957,7 @@ export default function DirectMessageScreen({
     try {
       const messagesRef = collection(db, "direct_chats", chatId, "messages");
       const senderName =
-        currentUserData?.fullName ||
+        getName(currentUserData?.fullName, language) ||
         currentUserData?.displayName ||
         user.displayName ||
         "User";
@@ -967,7 +1018,7 @@ export default function DirectMessageScreen({
               photo: currentUserData?.avatarUrl || user.photoURL || null,
             },
             [targetUser.uid]: {
-              name: targetUser.fullName || targetUser.displayName || "User",
+              name: getName(targetUser.fullName, language) || targetUser.displayName || "User",
               photo: targetUser.avatarUrl || targetUser.photoURL || null,
             },
           },
@@ -1553,25 +1604,22 @@ export default function DirectMessageScreen({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Modern Blue Header - Consistent with App Theme */}
+      {/* Header */}
       <View
         style={[
-          { paddingTop: insets.top + 10, height: insets.top + 64 },
+          { paddingTop: insets.top, height: insets.top + 64 },
           {
             position: "absolute",
             top: 0,
             left: 0,
             right: 0,
             zIndex: 100,
-            overflow: "hidden",
+            backgroundColor: colors.card,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
           },
         ]}
       >
-        <BlurView
-          intensity={80}
-          tint={theme ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
-        />
         <View
           style={{
             flexDirection: "row",
@@ -1587,10 +1635,7 @@ export default function DirectMessageScreen({
               onPress={onBack}
               style={[
                 {
-                  backgroundColor:
-                    theme === "dark"
-                      ? "rgba(255,255,255,0.1)"
-                      : "rgba(0,0,0,0.05)",
+                  backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
                   width: 40,
                   height: 40,
                   borderRadius: 20,
@@ -1618,24 +1663,29 @@ export default function DirectMessageScreen({
                       targetUser?.photo
                     }
                     size={44}
-                    fallback={(targetUser?.fullName ||
+                    fallback={(
+                      getName(targetUser?.fullName, language) ||
                       targetUser?.displayName ||
                       targetUser?.name ||
-                      "U")[0].toUpperCase()}
+                      "U"
+                    )[0].toUpperCase()}
                   />
-                  <View
-                    style={{
-                      position: "absolute",
-                      bottom: 1,
-                      right: 1,
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: "#31A24C",
-                      borderWidth: 2,
-                      borderColor: colors.background,
-                    }}
-                  />
+                  {/* Online dot — only shown when actually online */}
+                  {isTargetOnline && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        bottom: 1,
+                        right: 1,
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: "#31A24C",
+                        borderWidth: 2,
+                        borderColor: colors.background,
+                      }}
+                    />
+                  )}
                 </View>
                 <View style={{ marginLeft: 12 }}>
                   <Text
@@ -1646,31 +1696,46 @@ export default function DirectMessageScreen({
                     }}
                   >
                     {[
-                      targetUser?.fullName,
+                      getName(targetUser?.fullName, language),
                       targetUser?.displayName,
                       targetUser?.name,
                     ].find((n) => n) || "User"}
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: "#31A24C",
-                        marginRight: 6,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        color: colors.textMuted,
-                        fontSize: 13,
-                        opacity: 0.8,
-                      }}
-                    >
-                      {tr("En ligne", "متصل", "Online")}
-                    </Text>
-                  </View>
+                  {/* Typing indicator or Online status */}
+                  {isTargetTyping ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text
+                        style={{
+                          color: colors.accent,
+                          fontSize: 13,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {tr("En train d'écrire", "يكتب", "typing")}
+                      </Text>
+                      <TypingIndicator color={colors.accent} size={4} />
+                    </View>
+                  ) : isTargetOnline ? (
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: "#31A24C",
+                          marginRight: 5,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: colors.textMuted,
+                          fontSize: 13,
+                        }}
+                      >
+                        {tr("En ligne", "متصل", "Online")}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </TouchableOpacity>
@@ -1783,7 +1848,7 @@ export default function DirectMessageScreen({
                   }}
                 >
                   {tr("Dites bonjour à", "قل مرحباً لـ", "Say hello to")}{" "}
-                  {targetUser.fullName ||
+                  {getName(targetUser.fullName, language) ||
                     targetUser.displayName ||
                     "your friend"}
                   !

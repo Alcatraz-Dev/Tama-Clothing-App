@@ -55,6 +55,7 @@ import {
 import { db } from '../api/firebase';
 import * as Animatable from 'react-native-animatable';
 import { sendPushNotification } from '../utils/notifications';
+import { getName } from '../utils/translationHelpers';
 
 const { width } = Dimensions.get('window');
 
@@ -358,10 +359,10 @@ export default function FriendsScreen({ onBack, user, profileData, theme, t, lan
                 </View>
                 <View style={styles.userDetails}>
                     <Text style={[styles.userName, { color: colors.foreground }]} numberOfLines={1}>
-                        {item.fullName || item.senderName || item.receiverName}
+                        {getName(item.fullName || item.senderName || item.receiverName, language)}
                     </Text>
                     <Text style={[styles.userStatus, { color: colors.textMuted }]} numberOfLines={1}>
-                        {type === 'friend' ? tr('En ligne', 'En ligne', 'متصل') : (item.bio || tr('Membre Bey3a', 'Membre Bey3a', 'عضو بيعة'))}
+                        {type === 'friend' ? tr('En ligne', 'En ligne', 'متصل') : (getName(item.bio, language) || tr('Membre Bey3a', 'Membre Bey3a', 'عضو بيعة'))}
                     </Text>
                 </View>
             </TouchableOpacity>

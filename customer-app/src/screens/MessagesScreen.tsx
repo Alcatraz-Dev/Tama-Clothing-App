@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { width as SCREEN_WIDTH } from '@/constants/layout';
 import { useAppTheme } from '@/context/ThemeContext';
 import { uploadToSanity } from '@/utils/sanity';
+import { getName } from '@/utils/translationHelpers';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -59,7 +60,9 @@ import { MediaPicker, MediaAsset } from '@/components/ui/media-picker';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate, t, tr }: any) {
+import { TypingIndicator } from '@/components/common/TypingIndicator';
+
+export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate, t, tr, language }: any) {
     const { theme } = useAppTheme();
     const insets = useSafeAreaInsets();
 
@@ -245,7 +248,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                 reactions: {},
                 commentsCount: 0,
                 totalLikes: 0,
-                userName: user.displayName || user.fullName || 'User',
+                userName: user.displayName || getName(user.fullName, language) || 'User',
                 userPhoto: user.avatarUrl || user.photoURL || '',
             };
 
@@ -285,7 +288,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
     const filteredChats = chats.filter(chat => {
         const otherId = chat.participants.find((id: string) => id !== user.uid);
         const data = usersCache[otherId] || chat.participantData?.[otherId] || {};
-        const name = (data.name || data.fullName || data.displayName || '').toLowerCase();
+        const name = (data.name || getName(data.fullName, language) || data.displayName || '').toLowerCase();
         return name.includes(searchQuery.toLowerCase());
     });
 
@@ -477,7 +480,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                         const p = usersCache[r.userId] || {};
                                                         return {
                                                             ...r,
-                                                            userName: p.displayName || p.fullName || p.name || r.userName || 'User',
+                                                            userName: p.displayName || getName(p.fullName, language) || p.name || r.userName || 'User',
                                                             userPhoto: getAvatarSource(p) || r.userPhoto || null
                                                         };
                                                     });
@@ -526,7 +529,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                     )}
                                                 </View>
                                                 <Text variant="caption" numberOfLines={1} style={{ textAlign: 'center', marginTop: 8, fontSize: 12, fontWeight: '500', width: 70 }}>
-                                                    {profile.displayName || profile.fullName || 'User'}
+                                                    {getName(profile.fullName, language) || profile.displayName || 'User'}
                                                 </Text>
                                             </TouchableOpacity>
                                         );
@@ -571,19 +574,21 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                         <Avatar
                                             source={getAvatarSource(otherData)}
                                             size={60}
-                                            fallback={(otherData.displayName || otherData.fullName || otherData.name || 'A').charAt(0).toUpperCase()}
+                                            fallback={(getName(otherData.fullName, language) || otherData.displayName || otherData.name || 'A').charAt(0).toUpperCase()}
                                         />
-                                        <View style={{
-                                            position: 'absolute',
-                                            bottom: 2,
-                                            right: 2,
-                                            width: 14,
-                                            height: 14,
-                                            borderRadius: 7,
-                                            backgroundColor: '#31A24C',
-                                            borderWidth: 2,
-                                            borderColor: colors.background
-                                        }} />
+                                        {item[`isOnline_${otherId}`] && (
+                                            <View style={{
+                                                position: 'absolute',
+                                                bottom: 2,
+                                                right: 2,
+                                                width: 14,
+                                                height: 14,
+                                                borderRadius: 7,
+                                                backgroundColor: '#31A24C',
+                                                borderWidth: 2,
+                                                borderColor: colors.background
+                                            }} />
+                                        )}
                                     </View>
 
                                     <View style={{ flex: 1, marginLeft: 16 }}>
@@ -593,7 +598,7 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                 fontSize: 17,
                                                 color: colors.foreground
                                             }}>
-                                                {otherData.name || otherData.fullName || otherData.displayName}
+                                                {getName(otherData.fullName, language) || otherData.name || otherData.displayName}
                                             </Text>
                                             <Text variant="caption" style={{ color: unread > 0 ? colors.accent : colors.textMuted, fontSize: 12, fontWeight: unread > 0 ? '600' : '400' }}>
                                                 {item.lastMessageTime?.toDate ? item.lastMessageTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -607,7 +612,16 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
                                                 fontWeight: unread > 0 ? '600' : '400',
                                                 opacity: unread > 0 ? 1 : 0.8
                                             }}>
-                                                {item.lastMessage}
+                                                {item[`isTyping_${otherId}`] ? (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                        <Text style={{ color: colors.accent, fontStyle: 'italic', fontSize: 14, fontWeight: '600', marginRight: 4 }}>
+                                                            {tr('En train d\'écrire', 'يكتب', 'Typing')}
+                                                        </Text>
+                                                        <TypingIndicator color={colors.accent} />
+                                                    </View>
+                                                ) : (
+                                                    item.lastMessage
+                                                )}
                                             </Text>
                                             {unread > 0 && (
                                                 <View style={{

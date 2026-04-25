@@ -30,6 +30,7 @@ import { ref, onValue, off } from 'firebase/database';
 import { deliveryService } from '../services/deliveryService';
 import { Delivery, GeoPoint, Driver } from '../types/delivery';
 import { openInNativeMaps, openAddressInNativeMaps } from '../utils/shipping';
+import { getName } from '../utils/translationHelpers';
 import * as Location from 'expo-location';
 import { useRef } from 'react';
 
@@ -39,6 +40,7 @@ interface EnhancedShipmentTrackingProps {
     delivery: Delivery;
     onClose?: () => void;
     t: (key: string) => string;
+    language: string;
 }
 
 const STATUS_STEPS = [
@@ -54,6 +56,7 @@ export function EnhancedShipmentTracking({
     delivery,
     onClose,
     t,
+    language,
 }: EnhancedShipmentTrackingProps) {
     const { colors, theme } = useAppTheme();
     const [driverLocation, setDriverLocation] = useState<GeoPoint | null>(null);
@@ -244,7 +247,7 @@ export function EnhancedShipmentTracking({
                     </View>
                     <View style={styles.driverInfo}>
                         <Text style={[styles.driverName, { color: colors.foreground }]}>
-                            {driverData.fullName || translate('driverAssigned')}
+                            {getName(driverData.fullName, language) || translate('driverAssigned')}
                         </Text>
                         <View style={styles.driverRating}>
                             <Star size={14} color="#F59E0B" fill="#F59E0B" />

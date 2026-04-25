@@ -11,6 +11,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Gift, Zap, MapPin, Truck, RefreshCw } from 'lucide-react-native';
+import Svg, { Text as SvgText, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 const APP_ICON = require('../../assets/logo.png');
 const { width } = Dimensions.get('window');
@@ -105,9 +106,26 @@ export default function FidelityCard({ points, isCompleted, index, isDark, t }: 
                         {tr('fidelityCard', 'LOYALTY CARD')} #{index}
                     </Text>
                     {isCompleted && (
-                        <View style={styles.completedBadge}>
-                            <Zap size={10} color="#000" fill="#000" />
-                            <Text style={styles.completedText}>{tr('completed', 'COMPLETED')}</Text>
+                        <View style={{ height: 20, justifyContent: 'center' }}>
+                            <Svg height="20" width="80">
+                                <Defs>
+                                    <SvgGradient id="completedGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <Stop offset="0%" stopColor="#00FF9D" />
+                                        <Stop offset="100%" stopColor="#00CC7E" />
+                                    </SvgGradient>
+                                </Defs>
+                                <SvgText
+                                    fill="url(#completedGrad)"
+                                    fontSize="10"
+                                    fontWeight="900"
+                                    x="100%"
+                                    y="15"
+                                    textAnchor="end"
+                                    letterSpacing="1"
+                                >
+                                    {tr('completed', 'COMPLETED')}
+                                </SvgText>
+                            </Svg>
                         </View>
                     )}
                 </View>

@@ -2444,6 +2444,7 @@ export default function App() {
             onNavigate={handleTabChange}
             t={t}
             tr={tr}
+            language={language}
           />
         );
       case "DirectMessage":
@@ -2946,6 +2947,7 @@ export default function App() {
             trackingId={activeTrackingId}
             onBack={() => setActiveTab(previousTab || "Profile")}
             t={t}
+            language={language}
           />
         );
       case "MyShipments":
@@ -3167,6 +3169,7 @@ export default function App() {
             allReels={activeTabParams?.allReels}
             onClose={() => setActiveTab("Messages")}
             t={t}
+            language={language}
             theme={theme}
             user={user}
           />

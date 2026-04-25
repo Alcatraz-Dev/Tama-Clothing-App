@@ -65,13 +65,13 @@ const STATUS_STEPS = [
 ];
 
 // Helper function to get name from multi-language object or string
-function getItemName(val: any): string {
+function getItemName(val: any, lang: string = 'fr'): string {
     if (!val) return '';
     if (typeof val === 'string') return val;
-    return val.fr || val.en || val['ar-tn'] || Object.values(val)[0] || '';
+    return val[lang] || val.fr || val.en || val['ar-tn'] || Object.values(val)[0] || '';
 }
 
-export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
+export default function ShipmentTrackingScreen({ trackingId, onBack, t, language }: any) {
     const { colors, theme } = useAppTheme();
     const mapRef = useRef<MapView>(null);
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -735,7 +735,7 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                         </View>
                                     )}
                                     <View style={styles.driverInfo}>
-                                        <Text style={[styles.driverName, { color: colors.foreground }]}>{driverProfile?.name || driverProfile?.fullName || shipment.driverName || shipment.driver?.name || shipment.driver?.fullName || translate('driver_default_name')}</Text>
+                                        <Text style={[styles.driverName, { color: colors.foreground }]}>{getItemName(driverProfile?.name, language) || getItemName(driverProfile?.fullName, language) || getItemName(shipment.driverName, language) || getItemName(shipment.driver?.name, language) || getItemName(shipment.driver?.fullName, language) || t('driver_default_name')}</Text>
                                         <View style={styles.driverRating}>
                                             <Star size={14} color="#FBBF24" fill="#FBBF24" />
                                             <Text style={[styles.ratingText, { color: colors.textMuted }]}>{driverProfile?.rating?.toFixed(1) || shipment.driverRating || '4.9'} ({shipment.driverDeliveries || '120'} {translate('deliveries')})</Text>
@@ -791,10 +791,10 @@ export default function ShipmentTrackingScreen({ trackingId, onBack, t }: any) {
                                     {(shipment.items || shipment.products || shipment.orderItems || shipment.articles || shipment.order?.items || shipment.orderData?.items || []).map((item: any, index: number) => {
                                         // Handle both object items and string items
                                         const isStringItem = typeof item === 'string';
-                                        const itemName = isStringItem ? item : getItemName(item.name || item.title || item.productName || item.product?.name);
+                                        const itemName = isStringItem ? item : getItemName(item.name || item.title || item.productName || item.product?.name, language);
                                         const itemImage = isStringItem ? null : (item.image || item.mainImage || item.productImage || item.thumbnail || item.img);
-                                        const itemColor = isStringItem ? null : getItemName(item.selectedColor || item.color);
-                                        const itemSize = isStringItem ? null : getItemName(item.selectedSize || item.size);
+                                        const itemColor = isStringItem ? null : getItemName(item.selectedColor || item.color, language);
+                                        const itemSize = isStringItem ? null : getItemName(item.selectedSize || item.size, language);
                                         const itemQty = isStringItem ? 1 : (item.quantity || 1);
                                         const itemPrice = isStringItem ? null : (item.discountPrice || item.salePrice || item.discountedPrice || item.price || item.itemPrice);
                                         const itemOriginalPrice = isStringItem ? null : (item.price || item.itemPrice);

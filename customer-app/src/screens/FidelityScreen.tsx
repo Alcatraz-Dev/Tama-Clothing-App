@@ -7,6 +7,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import FidelityCard from '../components/FidelityCard';
 import { Gift, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Text as SvgText, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
 
@@ -79,10 +80,10 @@ export default function FidelityScreen({ onBack, onNavigate, user, t, theme }: F
 
     // --- VIP Tiers Logic ---
     const getVipTier = (count: number) => {
-        if (count >= 50) return { id: 'platinum', name: 'Platinum', icon: '👑', color: ['#E5E4E2', '#B4B4B4'] as [string, string], next: null as null, min: 50 };
-        if (count >= 30) return { id: 'gold', name: 'Gold', icon: '✨', color: ['#FFDF00', '#D4AF37'] as [string, string], next: { min: 50, name: 'Platinum' } as { min: number; name: string } | null, min: 30 };
-        if (count >= 10) return { id: 'silver', name: 'Silver', icon: '💎', color: ['#C0C0C0', '#808080'] as [string, string], next: { min: 30, name: 'Gold' } as { min: number; name: string } | null, min: 10 };
-        return { id: 'bronze', name: 'Bronze', icon: '🛡️', color: ['#CD7F32', '#8B4513'] as [string, string], next: { min: 10, name: 'Silver' } as { min: number; name: string } | null, min: 0 };
+        if (count >= 50) return { id: 'platinum', name: 'Platinum', color: ['#E5E4E2', '#B4B4B4'] as [string, string], next: null as null, min: 50 };
+        if (count >= 30) return { id: 'gold', name: 'Gold', color: ['#FFDF00', '#D4AF37'] as [string, string], next: { min: 50, name: 'Platinum' } as { min: number; name: string } | null, min: 30 };
+        if (count >= 10) return { id: 'silver', name: 'Silver', color: ['#C0C0C0', '#808080'] as [string, string], next: { min: 30, name: 'Gold' } as { min: number; name: string } | null, min: 10 };
+        return { id: 'bronze', name: 'Bronze', color: ['#CD7F32', '#8B4513'] as [string, string], next: { min: 10, name: 'Silver' } as { min: number; name: string } | null, min: 0 };
     };
     const currentTier = getVipTier(ordersCount);
     let progress = 1;
@@ -127,15 +128,27 @@ export default function FidelityScreen({ onBack, onNavigate, user, t, theme }: F
 
                     {/* VIP Tiers Visual */}
                     <View style={styles.tierContainer}>
-                        <LinearGradient
-                            colors={currentTier.color}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.tierBadge}
-                        >
-                            <Text style={styles.tierIcon}>{currentTier.icon}</Text>
-                            <Text style={styles.tierName}>{currentTier.name} VIP</Text>
-                        </LinearGradient>
+                        <View style={{ height: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
+                            <Svg height="40" width="300">
+                                <Defs>
+                                    <SvgGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <Stop offset="0%" stopColor={currentTier.color[0]} />
+                                        <Stop offset="100%" stopColor={currentTier.color[1]} />
+                                    </SvgGradient>
+                                </Defs>
+                                <SvgText
+                                    fill="url(#textGrad)"
+                                    fontSize="24"
+                                    fontWeight="900"
+                                    x="50%"
+                                    y="30"
+                                    textAnchor="middle"
+                                    letterSpacing="1"
+                                >
+                                    {currentTier.name.toUpperCase()} VIP
+                                </SvgText>
+                            </Svg>
+                        </View>
                         
                         <View style={styles.progressWrapper}>
                             <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#333' : '#EEE' }]}>
@@ -295,27 +308,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(128,128,128,0.1)',
         marginBottom: 10,
-    },
-    tierBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginBottom: 16,
-    },
-    tierIcon: {
-        fontSize: 16,
-        marginRight: 8,
-    },
-    tierName: {
-        color: '#FFF',
-        fontWeight: '900',
-        fontSize: 16,
-        letterSpacing: 1,
-        textShadowColor: 'rgba(0,0,0,0.3)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
     },
     progressWrapper: {
         width: '100%',

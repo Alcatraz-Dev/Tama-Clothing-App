@@ -40,6 +40,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../api/firebase';
 import { useAppTheme } from '../../context/ThemeContext';
+import { getName } from '../../utils/translationHelpers';
 import * as Animatable from 'react-native-animatable';
 import {
     AdminCard,
@@ -331,7 +332,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                                 <Text style={[sc.userName, { color: isBanned ? '#EF4444' : colors.foreground }]}>
-                                                    {item.fullName || 'Unknown'}
+                                                    {getName(item.fullName, language) || 'Unknown'}
                                                 </Text>
                                                 {(item.role === 'brand_owner' || item.role === 'nor_kam' || item.role === 'editor' || item.role === 'partner') && item.brandName && (
                                                     <View style={[sc.roleTag, { backgroundColor: colors.accent }]}>
@@ -459,7 +460,7 @@ export default function AdminUsersScreen({ onBack, t, language }: any) {
                             <View style={[sc.modalAvatar, { backgroundColor: theme === 'dark' ? '#1A1A24' : '#F2F2F7' }]}>
                                 <UsersIcon size={32} color={colors.foreground} />
                             </View>
-                            <Text style={[sc.modalUserName, { color: colors.foreground }]}>{selectedUser?.fullName}</Text>
+                            <Text style={[sc.modalUserName, { color: colors.foreground }]}>{getName(selectedUser?.fullName, language)}</Text>
                             <Text style={[sc.modalUserEmail, { color: colors.textMuted }]}>{selectedUser?.email}</Text>
                         </View>
 

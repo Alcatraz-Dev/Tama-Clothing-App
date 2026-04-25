@@ -227,7 +227,7 @@ export default function UserBadge({
                           <Text
                             style={{ color: themeColor, fontWeight: "bold" }}
                           >
-                            {userProfile.fullName?.[0] || "?"}
+                            {getName(userProfile.fullName).charAt(0).toUpperCase() || "?"}
                           </Text>
                         </View>
                       )}
@@ -253,7 +253,7 @@ export default function UserBadge({
                         numberOfLines={1}
                         adjustsFontSizeToFit
                       >
-                        {userProfile.fullName.toUpperCase()}
+                        {getName(userProfile.fullName).toUpperCase()}
                       </Text>
                     </View>
                   </View>
@@ -285,7 +285,7 @@ export default function UserBadge({
                       numberOfLines={1}
                       adjustsFontSizeToFit
                     >
-                      {(userProfile.fullName || "User").toUpperCase()}
+                      {getName(userProfile.fullName || "User").toUpperCase()}
                     </Text>
                     <View
                       style={[

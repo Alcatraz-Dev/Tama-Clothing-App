@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../api/firebase';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { getName } from '../utils/translationHelpers';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ interface StoryDetailScreenProps {
     t: (key: string) => string;
     theme: 'light' | 'dark';
     user?: any;
+    language: string;
 }
 
 // Animated music disc component
@@ -72,7 +74,8 @@ export default function StoryDetailScreen({
     onDelete,
     t,
     theme,
-    user
+    user,
+    language
 }: StoryDetailScreenProps) {
     const insets = useSafeAreaInsets();
     const [currentIndex, setCurrentIndex] = useState(
@@ -316,11 +319,11 @@ export default function StoryDetailScreen({
                         <Avatar
                             source={currentReel.userPhoto}
                             size={38}
-                            fallback={currentReel.userName?.[0] || 'U'}
+                            fallback={getName(currentReel.userName, language)?.[0] || 'U'}
                             style={{ borderWidth: 2, borderColor: '#FFF' }}
                         />
                         <View style={{ marginLeft: 10 }}>
-                            <Text style={styles.userName}>{currentReel.userName}</Text>
+                            <Text style={styles.userName}>{getName(currentReel.userName, language)}</Text>
                             <Text style={styles.timestamp}>
                                 {currentReel.createdAt?.toDate
                                     ? currentReel.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
