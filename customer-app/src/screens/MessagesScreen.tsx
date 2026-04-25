@@ -48,6 +48,7 @@ import {
     Pressable,
     ScrollView,
     StyleSheet,
+    TextInput,
     TouchableOpacity,
     View,
     Animated as AnimatedValue
@@ -340,26 +341,25 @@ export default function MessagesScreen({ user, onBack, onSelectChat, onNavigate,
 
             {/* Enhanced Search Bar */}
             <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-                <Animatable.View 
-                    animation="fadeInUp" 
+                <Animatable.View
+                    animation="fadeInUp"
                     duration={400}
                     delay={150}
                 >
-                    <Input
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        placeholder={tr('Rechercher un contact...', 'بحث عن جهة اتصال...', 'Search a contact...')}
-                        icon={Search}
-                        variant="filled"
-                        containerStyle={{
-                            backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                            borderRadius: 16,
-                            borderWidth: 0,
-                            height: 50
-                        }}
-                        inputStyle={{ fontSize: 15, color: colors.foreground, fontWeight: '500' }}
-                        placeholderTextColor={colors.textMuted}
-                    />
+                    <View style={[
+                        styles.searchBox,
+                        { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }
+                    ]}>
+                        <Search size={18} color={colors.textMuted} />
+                        <TextInput
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            placeholder={tr('Rechercher un contact...', 'بحث عن جهة اتصال...', 'Search a contact...')}
+                            placeholderTextColor={colors.textMuted}
+                            style={[styles.searchInput, { color: colors.foreground }]}
+                            underlineColorAndroid="transparent"
+                        />
+                    </View>
                 </Animatable.View>
             </View>
 
@@ -975,7 +975,20 @@ const styles = StyleSheet.create({
         left: 0,
         bottom: 0,
         borderRadius: 2,
-    }
+    },
+    searchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        height: 50,
+        borderRadius: 16,
+        gap: 10,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: '500',
+    },
 });
 
 

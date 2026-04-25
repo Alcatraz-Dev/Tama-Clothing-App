@@ -14999,13 +14999,11 @@ function ShopScreen({
               {
                 backgroundColor:
                   theme === "dark"
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(0,0,0,0.03)",
+                    ? "#1C1C1E"
+                    : "#F2F2F7",
                 borderColor: isSearchFocused
                   ? colors.foreground
-                  : theme === "dark"
-                    ? "rgba(255,255,255,0.1)"
-                    : "rgba(0,0,0,0.05)",
+                  : "transparent",
                 borderWidth: 1,
                 flexDirection: "row",
                 alignItems: "center",
@@ -15013,11 +15011,10 @@ function ShopScreen({
                 marginBottom: 12,
                 height: 50,
                 borderRadius: 25,
-                elevation: 5,
                 shadowColor: colors.foreground,
                 shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: isSearchFocused ? 0.2 : 0,
-                shadowRadius: isSearchFocused ? 10 : 0,
+                shadowOpacity: isSearchFocused ? 0.15 : 0,
+                shadowRadius: isSearchFocused ? 8 : 0,
               },
             ]}
           >
@@ -15040,6 +15037,7 @@ function ShopScreen({
               onChangeText={setSearch}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
+              underlineColorAndroid="transparent"
             />
           </View>
 
