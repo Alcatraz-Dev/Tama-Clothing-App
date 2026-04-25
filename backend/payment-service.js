@@ -6,15 +6,24 @@ const admin = require('firebase-admin');
 // Initialize Firestore
 let db = null;
 try {
-  const serviceAccount = require('./serviceAccountKey.json');
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+  } else {
+    const serviceAccount = require('./serviceAccountKey.json');
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
   }
   db = admin.firestore();
 } catch (error) {
-  console.error('Firebase Admin initialization error:', error);
+  console.error('Firebase Admin initialization error:', error.message);
 }
 
 // ============================================================================

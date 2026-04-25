@@ -41,16 +41,28 @@ app.use(bodyParser.json());
 // Initialize Firebase Admin
 let db = null;
 try {
-  const serviceAccount = require('./serviceAccountKey.json');
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+    console.log('✅ Firebase Admin initialized via environment variable');
+  } else {
+    const serviceAccount = require('./serviceAccountKey.json');
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+    console.log('✅ Firebase Admin initialized via serviceAccountKey.json');
+  }
   db = admin.firestore();
-  console.log('✅ Firebase Admin initialized successfully');
 } catch (error) {
   console.error('❌ CRITICAL: Firebase Admin could not be initialized.');
-  console.error('Reason: serviceAccountKey.json is missing or invalid.');
-  console.log('Action: Please add serviceAccountKey.json to the backend folder.');
+  console.error('Reason:', error.message);
+  console.log('Action: For local development, add serviceAccountKey.json. For production, set FIREBASE_SERVICE_ACCOUNT environment variable.');
 }
 
 // Routes
@@ -232,6 +244,10 @@ app.get('/api/brands', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
