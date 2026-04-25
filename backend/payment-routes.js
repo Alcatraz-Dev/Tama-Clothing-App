@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentService = require('./payment-service');
+const flouciService = require('./flouci-service');
 
 // ============================================================================
 // DELIVERY FEE
@@ -247,6 +248,114 @@ router.get('/vendor-commission/:vendorId', async (req, res) => {
   } catch (error) {
     console.error('Error getting vendor commission:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// FLOOCI PAYMENTS (Tunisia)
+// ============================================================================
+
+/**
+ * POST /api/payment/flouci/generate
+ * Generate a Flouci payment link
+ */
+router.post('/flouci/generate', async (req, res) => {
+  try {
+    const { amount, trackingId, clientId, pack, userId } = req.body;
+    
+    if (!amount || !trackingId || !userId || !pack) {
+      return res.status(400).json({ error: 'Missing required fields (amount, trackingId, userId, pack)' });
+    }
+    
+    const result = await flouciService.generatePayment(amount, trackingId, clientId);
+    
+    if (result.success) {
+      // Store pending payment info for later verification
+      // Use the payment_id as the document ID
+      const admin = require('firebase-admin');
+      const db = admin.firestore();
+      await db.collection('pending_payments').doc(result.payment_id).set({
+        userId,
+        pack,
+        trackingId,
+        amount,
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/payment/flouci/verify/:paymentId
+ * Verify a Flouci payment and update wallet
+ */
+router.get('/flouci/verify/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const result = await flouciService.verifyPayment(paymentId);
+    
+    if (result.success && result.status === 'SUCCESS') {
+      const admin = require('firebase-admin');
+      const db = admin.firestore();
+      
+      // 1. Get the pending payment info
+      const paymentRef = db.collection('pending_payments').doc(paymentId);
+      const paymentDoc = await paymentRef.get();
+      
+      if (!paymentDoc.exists) {
+        return res.status(404).json({ error: 'Payment record not found' });
+      }
+      
+      const paymentData = paymentDoc.data();
+      
+      if (paymentData.status === 'completed') {
+        return res.json({ success: true, status: 'SUCCESS', alreadyProcessed: true });
+      }
+      
+      // 2. Recharge the user's wallet
+      await paymentService.rechargeUserWallet(
+        paymentData.userId,
+        paymentData.pack,
+        paymentId
+      );
+      
+      // 3. Mark payment as completed
+      await paymentRef.update({ 
+        status: 'completed',
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      res.json({ ...result, success: true });
+    } else {
+      res.json(result);
+    }
+  } catch (error) {
+    console.error('Flouci verification error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/payment/flouci/webhook
+ * Webhook for Flouci payment notifications
+ */
+router.post('/flouci/webhook', async (req, res) => {
+  try {
+    const { payment_id, status, amount, developer_tracking_id } = req.body;
+    console.log(`[Flouci Webhook] Received update for ${payment_id}: ${status}`);
+    
+    // Logic to update database asynchronously could go here
+    // But since the app verifies immediately, this is mostly for redundancy
+    
+    res.status(200).send('Webhook received');
+  } catch (error) {
+    console.error('Flouci webhook error:', error);
+    res.status(500).send('Webhook failed');
   }
 });
 

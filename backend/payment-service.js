@@ -629,6 +629,52 @@ async function reverseVendorPayout(orderId, split) {
 }
 
 // ============================================================================
+/**
+ * Recharge a customer's wallet with coins
+ * @param {string} userId - User ID
+ * @param {Object} pack - { coins, bonus, price, priceDisplay }
+ * @param {string} paymentId - Flouci payment ID
+ * @returns {Promise<Object>} - { success: true }
+ */
+async function rechargeUserWallet(userId, pack, paymentId) {
+  try {
+    const userRef = db.collection('users').doc(userId);
+    
+    // Use a transaction to ensure atomicity
+    await db.runTransaction(async (t) => {
+      const userDoc = await t.get(userRef);
+      if (!userDoc.exists) throw new Error('User not found');
+      
+      const currentWallet = userDoc.data().wallet || { coins: 0, diamonds: 0 };
+      const totalNewCoins = (pack.coins || 0) + (pack.bonus || 0);
+      
+      // Update user wallet
+      t.update(userRef, {
+        'wallet.coins': admin.firestore.FieldValue.increment(totalNewCoins)
+      });
+      
+      // Record transaction
+      const txRef = userRef.collection('transactions').doc();
+      t.set(txRef, {
+        type: 'recharge',
+        amountCoins: totalNewCoins,
+        currency: 'coins',
+        price: pack.price,
+        priceDisplay: pack.priceDisplay,
+        description: `Coin Pack Purchase via Flouci (${pack.coins} + ${pack.bonus} Bonus)`,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'completed',
+        paymentId: paymentId
+      });
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error recharging user wallet:', error);
+    throw error;
+  }
+}
+
 // WALLET OPERATIONS
 // ============================================================================
 
@@ -713,6 +759,7 @@ module.exports = {
   // Wallet
   getWalletBalance,
   getTransactionHistory,
+  rechargeUserWallet,
   
   // Constants
   PAYMENT_STATUS,
