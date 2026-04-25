@@ -11856,7 +11856,7 @@ function SettingsScreen({
   const handleOpenStickerPicker = async () => {
     setShowStickerPicker(true);
     setSelectedPackage(null);
-    setStickerSearchQuery("");
+    setStickerSearchQuery("happy");
     setSearchResults([]);
     setStickerLoading(true);
 
@@ -13383,9 +13383,10 @@ function SettingsScreen({
             {stickerLoading ? (
               <View
                 style={{
-                  flex: 1,
+                  height: 200,
                   justifyContent: "center",
                   alignItems: "center",
+                  marginTop: 10,
                 }}
               >
                 <ActivityIndicator size="large" color={appColors.blue} />
