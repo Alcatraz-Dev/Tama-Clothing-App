@@ -11713,6 +11713,7 @@ function SettingsScreen({
 
   // Profile Sticker Picker State
   const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
   // Step 1: list of packages
   const [profilePackages, setProfilePackages] = useState<ProfilePackage[]>([]);
   // Step 2: stickers inside the selected package (null = showing package list)
@@ -11881,7 +11882,7 @@ function SettingsScreen({
       // 2. High quality resize + upload to Sanity
       const stickerUrl = getStickerWithDimensions(sticker.stickerImg, 400, 400);
       const savedUrl = await uploadToSanity(stickerUrl);
-      if (!savedUrl) throw new Error('Upload failed');
+      if (!savedUrl) throw new Error("Upload failed");
 
       // 3. Save to profile
       await updateProfile({ avatarUrl: savedUrl });
@@ -11931,7 +11932,7 @@ function SettingsScreen({
     try {
       setUploading(true);
       const downloadUrl = await uploadToSanity(uri);
-      if (!downloadUrl) throw new Error('Upload failed');
+      if (!downloadUrl) throw new Error("Upload failed");
 
       if (downloadUrl) {
         setAvatar(downloadUrl);
@@ -12210,38 +12211,13 @@ function SettingsScreen({
                 {
                   backgroundColor: appColors.foreground,
                   borderColor: appColors.background,
+                  right: 0,
                 },
               ]}
-              onPress={handlePickImage}
-              disabled={uploading}
+              onPress={() => setShowAvatarOptions(true)}
               activeOpacity={0.8}
             >
-              {uploading ? (
-                <ActivityIndicator
-                  size="small"
-                  color={theme === "dark" ? "#000" : "#FFF"}
-                />
-              ) : (
-                <Camera size={14} color={theme === "dark" ? "#000" : "#FFF"} />
-              )}
-            </TouchableOpacity>
-            {/* Sticker Button for Profile Picture */}
-            <TouchableOpacity
-              onPress={handleOpenStickerPicker}
-              style={{
-                position: "absolute",
-                bottom: 0,
-                right: 40,
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: appColors.foreground,
-                borderColor: appColors.background,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Sticker size={14} color={theme === "dark" ? "#000" : "#FFF"} />
+              <Edit size={16} color={theme === "dark" ? "#000" : "#FFF"} />
             </TouchableOpacity>
           </View>
           <Text
@@ -12257,6 +12233,120 @@ function SettingsScreen({
             {t("changeAvatar")}
           </Text>
         </View>
+
+        {/* Avatar Options Modal */}
+        <Modal
+          visible={showAvatarOptions}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAvatarOptions(false)}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            activeOpacity={1}
+            onPress={() => setShowAvatarOptions(false)}
+          >
+            <View
+              style={{
+                width: "80%",
+                backgroundColor: appColors.background,
+                borderRadius: 24,
+                padding: 20,
+                borderWidth: 1,
+                borderColor: appColors.border,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "900",
+                  color: appColors.foreground,
+                  textAlign: "center",
+                  marginBottom: 20,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                {t("changeAvatar")}
+              </Text>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 15,
+                  borderRadius: 16,
+                  backgroundColor: theme === "dark" ? "#17171F" : "#F2F2F7",
+                  marginBottom: 10,
+                }}
+                onPress={() => {
+                  setShowAvatarOptions(false);
+                  handlePickImage();
+                }}
+              >
+                <Camera size={20} color={appColors.foreground} />
+                <Text
+                  style={{
+                    marginLeft: 12,
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: appColors.foreground,
+                  }}
+                >
+                  {t("fromGallery") || "Galerie"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 15,
+                  borderRadius: 16,
+                  backgroundColor: theme === "dark" ? "#17171F" : "#F2F2F7",
+                }}
+                onPress={() => {
+                  setShowAvatarOptions(false);
+                  handleOpenStickerPicker();
+                }}
+              >
+                <Sticker size={20} color={appColors.foreground} />
+                <Text
+                  style={{
+                    marginLeft: 12,
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: appColors.foreground,
+                  }}
+                >
+                  {t("chooseSticker") || "Autocollants"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ marginTop: 20, padding: 10 }}
+                onPress={() => setShowAvatarOptions(false)}
+              >
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: appColors.textMuted,
+                    fontWeight: "800",
+                    fontSize: 12,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {t("cancel")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {/* Personal Info Section */}
         <View
@@ -13143,9 +13233,10 @@ function SettingsScreen({
               backgroundColor: theme === "dark" ? "#1c1c1e" : "#f2f2f7",
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              height: height * 0.75,
+              maxHeight: height * 0.8,
               paddingHorizontal: 16,
-              paddingTop: 16,
+              paddingTop: 10,
+              paddingBottom: 20,
             }}
           >
             {/* Header row */}
@@ -13153,7 +13244,7 @@ function SettingsScreen({
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                marginBottom: 14,
+                marginBottom: 8,
               }}
             >
               {selectedPackage && !stickerSearchQuery ? (
@@ -13192,7 +13283,8 @@ function SettingsScreen({
                 backgroundColor: theme === "dark" ? "#2c2c2e" : "#fff",
                 borderRadius: 12,
                 paddingHorizontal: 12,
-                marginBottom: 14,
+                marginBottom: 4,
+                marginTop: 4,
               }}
             >
               <Search size={16} color={appColors.textMuted} />
@@ -13218,10 +13310,40 @@ function SettingsScreen({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ height: 40, marginBottom: 10 }}
+              style={{ height: 36, marginBottom: 0, flexGrow: 0 }}
+              contentContainerStyle={{
+                alignItems: "center",
+                paddingHorizontal: 16,
+              }}
             >
-              <View style={{ flexDirection: "row", paddingHorizontal: 16 }}>
-                {["happy", "sad", "love", "hate"].map((mood) => (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                {[
+                  "happy",
+                  "sad",
+                  "love",
+                  "hate",
+                  "angry",
+                  "cute",
+                  "funny",
+                  "cool",
+                  "wow",
+                  "party",
+                  "hello",
+                  "bye",
+                  "thanks",
+                  "sorry",
+                  "yes",
+                  "no",
+                  "omw",
+                  "sleep",
+                  "eat",
+                  "work",
+                ].map((mood) => (
                   <TouchableOpacity
                     key={mood}
                     onPress={() => {
@@ -13270,7 +13392,8 @@ function SettingsScreen({
               </View>
             ) : (
               <ScrollView
-                style={{ flex: 1 }}
+                style={{ flex: 0, maxHeight: height * 0.6 }}
+                contentContainerStyle={{ paddingBottom: 40 }}
                 showsVerticalScrollIndicator={false}
               >
                 {/* ── Search results (flat sticker grid) ── */}
@@ -15000,10 +15123,7 @@ function ShopScreen({
             style={[
               styles.searchBar,
               {
-                backgroundColor:
-                  theme === "dark"
-                    ? "#1C1C1E"
-                    : "#F2F2F7",
+                backgroundColor: theme === "dark" ? "#1C1C1E" : "#F2F2F7",
                 borderColor: isSearchFocused
                   ? colors.foreground
                   : "transparent",
