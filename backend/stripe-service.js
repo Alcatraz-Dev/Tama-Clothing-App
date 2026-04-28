@@ -18,7 +18,9 @@ async function createPaymentIntent(amountCents, currency = 'usd', metadata = {})
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(amountCents),
     currency,
-    payment_method_types: ['card'],
+    automatic_payment_methods: {
+      enabled: true,
+    },
     metadata,
   });
 
@@ -63,7 +65,7 @@ function constructWebhookEvent(rawBody, signature) {
  */
 async function createCheckoutSession(amountCents, currency = 'usd', metadata = {}, successUrl, cancelUrl) {
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ['card'],
+    ui_mode: 'hosted',
     line_items: [
       {
         price_data: {

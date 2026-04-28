@@ -42,7 +42,13 @@ app.use(bodyParser.json());
 let db = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    let saString = process.env.FIREBASE_SERVICE_ACCOUNT;
+    // Remove potential outer quotes if the string was pasted with them
+    if (saString.startsWith('"') && saString.endsWith('"')) {
+      saString = saString.substring(1, saString.length - 1);
+    }
+    // Ensure escaped newlines are handled correctly
+    const serviceAccount = JSON.parse(saString.replace(/\\n/g, '\n'));
     if (!admin.apps.length) {
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)

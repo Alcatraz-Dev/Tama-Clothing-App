@@ -10,6 +10,7 @@
  */
 
 const crypto = require('crypto');
+const admin = require('firebase-admin');
 
 // ── Supported coins ─────────────────────────────────────────────────────────
 const SUPPORTED_COINS = {

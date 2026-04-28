@@ -268,11 +268,27 @@ router.post('/stripe/create-intent', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
     }
 
-    const multiplier = currency.toLowerCase() === 'tnd' ? 1000 : 100;
+    let finalAmount = amount;
+    let finalCurrency = currency.toLowerCase();
+
+    // Convert TND to EUR for Stripe processing
+    if (finalCurrency === 'tnd') {
+      finalAmount = amount / 3.4;
+      finalCurrency = 'eur';
+    }
+
+    const multiplier = finalCurrency === 'tnd' ? 1000 : 100;
     const result = await stripeService.createPaymentIntent(
-      Math.round(amount * multiplier), // convert to smallest currency unit
-      currency,
-      { userId, packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
+      Math.round(finalAmount * multiplier), // convert to smallest currency unit
+      finalCurrency,
+      { 
+        userId, 
+        packCoins: String(pack.coins), 
+        packBonus: String(pack.bonus), 
+        priceDisplay: pack.priceDisplay,
+        originalAmount: String(amount),
+        originalCurrency: currency
+      }
     );
 
     // Store pending payment in Firestore
@@ -307,11 +323,28 @@ router.post('/stripe/checkout', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
     }
 
-    const multiplier = currency.toLowerCase() === 'tnd' ? 1000 : 100;
+    let finalAmount = amount;
+    let finalCurrency = currency.toLowerCase();
+
+    // Convert TND to EUR for Stripe processing
+    if (finalCurrency === 'tnd') {
+      finalAmount = amount / 3.4;
+      finalCurrency = 'eur';
+    }
+
+    const multiplier = finalCurrency === 'tnd' ? 1000 : 100;
     const session = await stripeService.createCheckoutSession(
-      Math.round(amount * multiplier), // smallest currency unit
-      currency,
-      { userId, packCoins: String(pack.coins), packBonus: String(pack.bonus), priceDisplay: pack.priceDisplay, packName: `${pack.coins + pack.bonus} Coins Pack` },
+      Math.round(finalAmount * multiplier), // smallest currency unit
+      finalCurrency,
+      { 
+        userId, 
+        packCoins: String(pack.coins), 
+        packBonus: String(pack.bonus), 
+        priceDisplay: pack.priceDisplay, 
+        packName: `${pack.coins + pack.bonus} Coins Pack`,
+        originalAmount: String(amount),
+        originalCurrency: currency
+      },
     );
 
     // Store a pending payment record keyed by session ID
