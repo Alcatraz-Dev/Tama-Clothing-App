@@ -131,6 +131,7 @@ export default function WalletScreen({
   const isDark = theme === "dark";
   const colors = isDark ? Theme.dark.colors : Theme.light.colors;
   const insets = useSafeAreaInsets();
+  const isAdmin = profileData?.isAdmin || profileData?.role === "admin";
   const [activeTab, setActiveTab] = useState<"recharge" | "earnings">(
     "recharge",
   );
@@ -175,7 +176,7 @@ export default function WalletScreen({
   const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!profileData?.isAdmin) return;
+    if (!isAdmin) return;
 
     const q = query(
       collection(db, "crypto_invoices"),
@@ -192,7 +193,7 @@ export default function WalletScreen({
     });
 
     return () => unsubscribe();
-  }, [profileData?.isAdmin]);
+  }, [isAdmin]);
 
   const handleConfirmCryptoPayment = async (invoiceId: string) => {
     try {
@@ -1462,95 +1463,6 @@ export default function WalletScreen({
           </View>
         </TouchableOpacity>
 
-        {profileData?.isAdmin && adminInvoices.length > 0 && (
-          <View
-            style={{
-              marginTop: 24,
-              padding: 16,
-              backgroundColor: "rgba(239, 68, 68, 0.1)",
-              borderRadius: 20,
-              borderStyle: "dashed",
-              borderWidth: 2,
-              borderColor: "rgba(239, 68, 68, 0.3)",
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 15,
-              }}
-            >
-              <Text
-                style={{ fontSize: 16, fontWeight: "900", color: "#EF4444" }}
-              >
-                ADMIN: PENDING CRYPTO
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#EF4444",
-                  borderRadius: 10,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  marginLeft: 10,
-                }}
-              >
-                <Text
-                  style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}
-                >
-                  {adminInvoices.length}
-                </Text>
-              </View>
-            </View>
-            {adminInvoices.map((inv) => (
-              <View
-                key={inv.id}
-                style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  backgroundColor: colors.card,
-                  borderRadius: 16,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: "rgba(100,100,100,0.1)",
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontWeight: "800",
-                      color: colors.foreground,
-                      fontSize: 15,
-                    }}
-                  >
-                    {inv.coinAmount} {inv.coin}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: colors.textMuted }}>
-                    User: {inv.userId.substring(0, 8)}...
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleConfirmCryptoPayment(inv.id)}
-                  style={{
-                    backgroundColor: "#10B981",
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text
-                    style={{ color: "#FFF", fontWeight: "900", fontSize: 12 }}
-                  >
-                    CONFIRM
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
         <Text
           style={[
             styles.sectionTitle,
@@ -1954,6 +1866,133 @@ export default function WalletScreen({
           </>
         ) : (
           renderEarnings()
+        )}
+
+        {isAdmin && (
+          <View
+            style={{
+              marginTop: 24,
+              padding: 16,
+              marginHorizontal: 20,
+              backgroundColor: "rgba(239, 68, 68, 0.05)",
+              borderRadius: 20,
+              borderStyle: "dashed",
+              borderWidth: 2,
+              borderColor: "rgba(239, 68, 68, 0.3)",
+              marginBottom: 40,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 15,
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "900", color: "#EF4444" }}
+                >
+                  ADMIN: CRYPTO VERIFICATION
+                </Text>
+                {adminInvoices.length > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: "#EF4444",
+                      borderRadius: 10,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      marginLeft: 10,
+                    }}
+                  >
+                    <Text
+                      style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}
+                    >
+                      {adminInvoices.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert("Admin", "Crypto verification list is live.");
+                }}
+              >
+                <RefreshCw size={16} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+
+            {adminInvoices.length === 0 ? (
+              <View
+                style={{
+                  padding: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Check size={24} color="rgba(239, 68, 68, 0.4)" />
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: 12,
+                    marginTop: 8,
+                    fontWeight: "600",
+                  }}
+                >
+                  No pending crypto payments found
+                </Text>
+              </View>
+            ) : (
+              adminInvoices.map((inv) => (
+                <View
+                  key={inv.id}
+                  style={{
+                    marginBottom: 12,
+                    padding: 12,
+                    backgroundColor: colors.card,
+                    borderRadius: 16,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(100,100,100,0.1)",
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontWeight: "800",
+                        color: colors.foreground,
+                        fontSize: 15,
+                      }}
+                    >
+                      {inv.coinAmount} {inv.coin}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                      User ID: {inv.userId}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleConfirmCryptoPayment(inv.id)}
+                    style={{
+                      backgroundColor: "#10B981",
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text
+                      style={{ color: "#FFF", fontWeight: "900", fontSize: 12 }}
+                    >
+                      CONFIRM
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
         )}
       </ScrollView>
 
