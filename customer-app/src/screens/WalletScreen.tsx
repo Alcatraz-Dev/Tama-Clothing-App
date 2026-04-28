@@ -72,7 +72,7 @@ import Constants from "expo-constants";
 const PRODUCTION_API_URL = "https://backend-bey3a.vercel.app/api/payment";
 
 // Switch this to true if you want to test with your LOCAL backend
-const USE_LOCAL_BACKEND = true;
+const USE_LOCAL_BACKEND = false;
 
 // Auto-detect local backend IP for physical devices/emulators
 const getApiBaseUrl = () => {
