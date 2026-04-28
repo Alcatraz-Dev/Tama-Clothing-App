@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import {
     ArrowLeft,
-    TrendingUp,
     Clock,
     CheckCircle,
     XCircle,
@@ -21,6 +20,10 @@ import {
     Package,
     AlertCircle,
     Wallet,
+    Smartphone,
+    Building2,
+    MapPin,
+    ChevronRight,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
@@ -29,11 +32,10 @@ import {
     subscribeToWallet,
     subscribeToTransactions,
     getOrCreateWallet,
-    calculateOrderFinancials,
     requestWithdrawal,
     type Wallet as WalletType,
     type CODTransaction,
-    COMMISSION_RATES,
+    type WithdrawalMethod,
 } from '../services/codFinancialService';
 
 interface BrandRevenueScreenProps {
@@ -142,30 +144,85 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
     const [refreshing, setRefreshing] = useState(false);
     const [walletId, setWalletId] = useState<string | null>(null);
     const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+    const [withdrawStep, setWithdrawStep] = useState<'method' | 'details'>('method');
+    const [withdrawMethod, setWithdrawMethod] = useState<WithdrawalMethod | null>(null);
     const [withdrawAmount, setWithdrawAmount] = useState('');
+    // Flouci
+    const [flouciPhone, setFlouciPhone] = useState('');
+    // Bank
+    const [iban, setIban] = useState('');
+    const [bankName, setBankName] = useState('');
+    // Post
+    const [postFullName, setPostFullName] = useState('');
+    const [postAddress, setPostAddress] = useState('');
+    const [postPostal, setPostPostal] = useState('');
+    const [postCity, setPostCity] = useState('');
     const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
 
     const uid = auth.currentUser?.uid;
     const brandId = profileData?.brandId || uid || '';
     const brandName = profileData?.brandName || profileData?.displayName || 'Brand';
 
+    const resetWithdrawModal = () => {
+        setWithdrawModalVisible(false);
+        setWithdrawStep('method');
+        setWithdrawMethod(null);
+        setWithdrawAmount('');
+        setFlouciPhone('');
+        setIban('');
+        setBankName('');
+        setPostFullName('');
+        setPostAddress('');
+        setPostPostal('');
+        setPostCity('');
+    };
+
     const handleWithdraw = async () => {
         const amount = parseFloat(withdrawAmount);
         if (isNaN(amount) || amount <= 0) {
-            Alert.alert(t('error') || 'Error', t('invalidAmount') || 'Invalid amount');
+            Alert.alert(t('error') || 'Error', 'Enter a valid amount');
+            return;
+        }
+        if (amount < 10) {
+            Alert.alert(t('error') || 'Error', 'Minimum withdrawal is 10.00 TND');
             return;
         }
         if (!wallet || amount > wallet.balance) {
-            Alert.alert(t('error') || 'Error', t('insufficientBalance') || 'Insufficient balance');
+            Alert.alert(t('error') || 'Error', 'Insufficient balance');
+            return;
+        }
+
+        // Validate method fields
+        if (withdrawMethod === 'flouci' && !flouciPhone.trim()) {
+            Alert.alert(t('error') || 'Error', 'Please enter your Flouci phone number');
+            return;
+        }
+        if (withdrawMethod === 'bank_transfer' && (!iban.trim() || !bankName.trim())) {
+            Alert.alert(t('error') || 'Error', 'Please enter your IBAN and bank name');
+            return;
+        }
+        if (withdrawMethod === 'post_office' && (!postFullName.trim() || !postAddress.trim() || !postPostal.trim() || !postCity.trim())) {
+            Alert.alert(t('error') || 'Error', 'Please fill all postal delivery fields');
             return;
         }
 
         setSubmittingWithdraw(true);
         try {
-            await requestWithdrawal(wallet.id, brandId, amount);
-            Alert.alert(t('success') || 'Success', t('withdrawalRequested') || 'Withdrawal requested successfully');
-            setWithdrawModalVisible(false);
-            setWithdrawAmount('');
+            const details: any = { method: withdrawMethod };
+            if (withdrawMethod === 'flouci') details.flouciPhone = flouciPhone.trim();
+            if (withdrawMethod === 'bank_transfer') { details.iban = iban.trim(); details.bankName = bankName.trim(); }
+            if (withdrawMethod === 'post_office') {
+                details.fullName = postFullName.trim();
+                details.address = postAddress.trim();
+                details.postalCode = postPostal.trim();
+                details.city = postCity.trim();
+            }
+            await requestWithdrawal(wallet.id, brandId, amount, details);
+            Alert.alert(
+                t('success') || 'Success',
+                'Withdrawal request sent!\nAdmin will process it shortly.',
+            );
+            resetWithdrawModal();
         } catch (e: any) {
             console.error('Withdrawal error', e);
             Alert.alert(t('error') || 'Error', e.message);
@@ -201,8 +258,6 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
         };
     }, [brandId]);
 
-    // Demo financials for the info card
-    const demoFinancials = calculateOrderFinancials(100, 8);
 
     if (loading) {
         return (
@@ -315,29 +370,6 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                     />
                 </View>
 
-                {/* COD Commission Info Card */}
-                <View style={[styles.infoCard, {
-                    backgroundColor: isDark ? '#111118' : '#FFF',
-                    borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                }]}>
-                    <View style={styles.infoCardHeader}>
-                        <TrendingUp size={16} color={colors.accent} />
-                        <Text style={[styles.infoCardTitle, { color: colors.foreground }]}>
-                            {t('commissionBreakdown') || 'Commission Breakdown (Example 100 TND Order)'}
-                        </Text>
-                    </View>
-                    {[
-                        { label: t('orderTotal') || 'Order Total', value: `${demoFinancials.codAmount.toFixed(2)} TND`, color: colors.foreground },
-                        { label: t('deliveryFeeLabel') || 'Delivery Fee', value: `-${demoFinancials.deliveryFee.toFixed(2)} TND`, color: '#EF4444' },
-                        { label: t('platformCommission') || `Platform Commission (${(COMMISSION_RATES.platform * 100).toFixed(0)}%)`, value: `-${demoFinancials.platformCommission.toFixed(2)} TND`, color: '#EF4444' },
-                        { label: t('brandRevenue') || 'Your Revenue', value: `${demoFinancials.brandRevenue.toFixed(2)} TND`, color: '#10B981' },
-                    ].map((row, i) => (
-                        <View key={i} style={[styles.infoRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderBottomWidth: i < 3 ? 1 : 0 }]}>
-                            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{row.label}</Text>
-                            <Text style={[styles.infoValue, { color: row.color }]}>{row.value}</Text>
-                        </View>
-                    ))}
-                </View>
 
                 {/* Transaction History */}
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
@@ -367,36 +399,182 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                 )}
             </ScrollView>
 
-            <Modal visible={withdrawModalVisible} animationType="slide" transparent={true}>
-                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
-                        <Text style={[styles.modalTitle, { color: colors.foreground }]}>{t('withdrawFunds') || 'Withdraw Funds'}</Text>
-                        <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-                            {t('availableBalance') || 'Available:'} {(wallet?.balance ?? 0).toFixed(2)} TND
-                        </Text>
+            {/* ─── Withdrawal Modal ─── */}
+            <Modal visible={withdrawModalVisible} animationType="slide" transparent>
+                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#13121F' : '#FFF', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
 
-                        <TextInput
-                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
-                            placeholder={t('enterAmount') || 'Enter amount'}
-                            placeholderTextColor={colors.textMuted}
-                            keyboardType="numeric"
-                            value={withdrawAmount}
-                            onChangeText={setWithdrawAmount}
-                            autoFocus
-                        />
-
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn, { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} onPress={() => setWithdrawModalVisible(false)} disabled={submittingWithdraw}>
-                                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>{t('cancel') || 'Cancel'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.modalBtn, styles.submitBtn, { opacity: submittingWithdraw ? 0.6 : 1 }]} onPress={handleWithdraw} disabled={submittingWithdraw}>
-                                {submittingWithdraw ? (
-                                    <ActivityIndicator size="small" color="#FFF" />
-                                ) : (
-                                    <Text style={[styles.modalBtnText, { color: '#FFF' }]}>{t('confirm') || 'Confirm'}</Text>
-                                )}
+                        {/* Title row */}
+                        <View style={styles.modalHeaderRow}>
+                            {withdrawStep === 'details' && (
+                                <TouchableOpacity onPress={() => setWithdrawStep('method')} style={styles.modalBackBtn}>
+                                    <ArrowLeft size={18} color={colors.foreground} />
+                                </TouchableOpacity>
+                            )}
+                            <Text style={[styles.modalTitle, { color: colors.foreground, flex: 1 }]}>
+                                {withdrawStep === 'method' ? (t('chooseMethod') || 'Choose Method') : (t('withdrawFunds') || 'Withdraw Funds')}
+                            </Text>
+                            <TouchableOpacity onPress={resetWithdrawModal}>
+                                <XCircle size={20} color={colors.textMuted} />
                             </TouchableOpacity>
                         </View>
+
+                        <Text style={[styles.modalSubtitle, { color: colors.textMuted, marginBottom: 16 }]}>
+                            {t('availableBalance') || 'Available:'} <Text style={{ color: '#10B981', fontWeight: '800' }}>{(wallet?.balance ?? 0).toFixed(2)} TND</Text>{'  ·  Min: 10 TND'}
+                        </Text>
+
+                        {/* ── STEP 1: Method Picker ── */}
+                        {withdrawStep === 'method' && (
+                            <View style={{ gap: 10 }}>
+                                {([
+                                    { key: 'flouci' as WithdrawalMethod, label: 'Flouci', sub: 'Transfer via Flouci wallet', icon: Smartphone, color: '#6C63FF' },
+                                    { key: 'bank_transfer' as WithdrawalMethod, label: t('bankTransfer') || 'Bank Transfer', sub: 'Enter your IBAN', icon: Building2, color: '#10B981' },
+                                    { key: 'post_office' as WithdrawalMethod, label: t('postOffice') || 'La Poste', sub: 'Receive by postal delivery', icon: MapPin, color: '#F59E0B' },
+                                ] as const).map(({ key, label, sub, icon: Icon, color }) => (
+                                    <TouchableOpacity
+                                        key={key}
+                                        style={[styles.methodRow, {
+                                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                            borderColor: withdrawMethod === key ? color : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'),
+                                            borderWidth: withdrawMethod === key ? 2 : 1,
+                                        }]}
+                                        onPress={() => { setWithdrawMethod(key); setWithdrawStep('details'); }}
+                                    >
+                                        <View style={[styles.methodIcon, { backgroundColor: color + '20' }]}>
+                                            <Icon size={20} color={color} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.methodLabel, { color: colors.foreground }]}>{label}</Text>
+                                            <Text style={[styles.methodSub, { color: colors.textMuted }]}>{sub}</Text>
+                                        </View>
+                                        <ChevronRight size={16} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+
+                        {/* ── STEP 2: Amount + Method Details ── */}
+                        {withdrawStep === 'details' && (
+                            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }}>
+                                {/* Amount */}
+                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Montant (TND)</Text>
+                                <TextInput
+                                    style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                    placeholder="Ex: 150"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="numeric"
+                                    value={withdrawAmount}
+                                    onChangeText={setWithdrawAmount}
+                                    autoFocus
+                                />
+
+                                {/* Flouci fields */}
+                                {withdrawMethod === 'flouci' && (
+                                    <>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Numéro Flouci (téléphone)</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                            placeholder="Ex: +216 2X XXX XXX"
+                                            placeholderTextColor={colors.textMuted}
+                                            keyboardType="phone-pad"
+                                            value={flouciPhone}
+                                            onChangeText={setFlouciPhone}
+                                        />
+                                    </>
+                                )}
+
+                                {/* Bank fields */}
+                                {withdrawMethod === 'bank_transfer' && (
+                                    <>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Nom de la banque</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                            placeholder="Ex: BNA, STB, Attijari..."
+                                            placeholderTextColor={colors.textMuted}
+                                            value={bankName}
+                                            onChangeText={setBankName}
+                                        />
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>IBAN</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)', fontFamily: 'monospace' }]}
+                                            placeholder="TN59 XXXX XXXX XXXX XXXX XXXX"
+                                            placeholderTextColor={colors.textMuted}
+                                            autoCapitalize="characters"
+                                            value={iban}
+                                            onChangeText={setIban}
+                                        />
+                                    </>
+                                )}
+
+                                {/* Post Office fields */}
+                                {withdrawMethod === 'post_office' && (
+                                    <>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Nom complet</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                            placeholder="Prénom Nom"
+                                            placeholderTextColor={colors.textMuted}
+                                            value={postFullName}
+                                            onChangeText={setPostFullName}
+                                        />
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Adresse</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                            placeholder="Rue, N°, Quartier..."
+                                            placeholderTextColor={colors.textMuted}
+                                            multiline
+                                            numberOfLines={2}
+                                            value={postAddress}
+                                            onChangeText={setPostAddress}
+                                        />
+                                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Code postal</Text>
+                                                <TextInput
+                                                    style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                                    placeholder="1000"
+                                                    placeholderTextColor={colors.textMuted}
+                                                    keyboardType="numeric"
+                                                    value={postPostal}
+                                                    onChangeText={setPostPostal}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1.6 }}>
+                                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Ville</Text>
+                                                <TextInput
+                                                    style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
+                                                    placeholder="Tunis"
+                                                    placeholderTextColor={colors.textMuted}
+                                                    value={postCity}
+                                                    onChangeText={setPostCity}
+                                                />
+                                            </View>
+                                        </View>
+                                    </>
+                                )}
+
+                                {/* Actions */}
+                                <View style={[styles.modalActions, { marginTop: 8 }]}>
+                                    <TouchableOpacity
+                                        style={[styles.modalBtn, styles.cancelBtn, { borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)' }]}
+                                        onPress={resetWithdrawModal}
+                                        disabled={submittingWithdraw}
+                                    >
+                                        <Text style={[styles.modalBtnText, { color: colors.foreground }]}>{t('cancel') || 'Annuler'}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modalBtn, styles.submitBtn, { opacity: submittingWithdraw ? 0.6 : 1 }]}
+                                        onPress={handleWithdraw}
+                                        disabled={submittingWithdraw}
+                                    >
+                                        {submittingWithdraw
+                                            ? <ActivityIndicator size="small" color="#FFF" />
+                                            : <Text style={[styles.modalBtnText, { color: '#FFF' }]}>{t('confirm') || 'Confirmer'}</Text>
+                                        }
+                                    </TouchableOpacity>
+                                </View>
+                            </ScrollView>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -501,32 +679,39 @@ const styles = StyleSheet.create({
     emptyText: { fontSize: 15, fontWeight: '700' },
     emptySubText: { fontSize: 12, fontWeight: '500', textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 },
 
-    // Withdrawal Modal & Button
+    // Withdrawal Button
     withdrawBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFF',
-        paddingVertical: 12,
-        borderRadius: 12,
-        marginTop: 18,
-        gap: 8,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: '#FFF', paddingVertical: 12, borderRadius: 12, marginTop: 18, gap: 8,
     },
     withdrawBtnText: { fontSize: 14, fontWeight: '800' },
+    // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalContent: {
-        borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        padding: 24, paddingBottom: 40, borderTopWidth: 1,
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        padding: 24, paddingBottom: 48, borderTopWidth: 1,
     },
-    modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 6 },
-    modalSubtitle: { fontSize: 14, fontWeight: '600', marginBottom: 20 },
+    modalHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    modalBackBtn: { padding: 4 },
+    modalTitle: { fontSize: 17, fontWeight: '800' },
+    modalSubtitle: { fontSize: 13, fontWeight: '600' },
+    // Method picker
+    methodRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        padding: 14, borderRadius: 16,
+    },
+    methodIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    methodLabel: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+    methodSub: { fontSize: 11, fontWeight: '500' },
+    // Fields
+    fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, marginBottom: 6, marginTop: 4 },
     input: {
-        height: 54, borderWidth: 1, borderRadius: 12,
-        paddingHorizontal: 16, fontSize: 16, fontWeight: '600',
-        marginBottom: 24,
+        height: 50, borderWidth: 1, borderRadius: 12,
+        paddingHorizontal: 14, fontSize: 15, fontWeight: '600',
+        marginBottom: 14,
     },
     modalActions: { flexDirection: 'row', gap: 12 },
-    modalBtn: { flex: 1, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    modalBtn: { flex: 1, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     cancelBtn: { borderWidth: 1 },
     submitBtn: { backgroundColor: '#6C63FF' },
     modalBtnText: { fontSize: 15, fontWeight: '700' },

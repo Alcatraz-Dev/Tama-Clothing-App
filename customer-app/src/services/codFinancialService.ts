@@ -368,26 +368,45 @@ export async function getAllBrandRevenues(): Promise<{ brandId: string; brandNam
 
 // ─── Withdrawal Requests ─────────────────────────────────────────────────────
 
+export type WithdrawalMethod = 'flouci' | 'bank_transfer' | 'post_office';
+
+export interface WithdrawalDetails {
+    method: WithdrawalMethod;
+    // Flouci
+    flouciPhone?: string;
+    // Bank Transfer
+    iban?: string;
+    bankName?: string;
+    // Post Office
+    fullName?: string;
+    address?: string;
+    postalCode?: string;
+    city?: string;
+}
+
 export interface WithdrawalRequest {
     id?: string;
     brandId: string;
     walletId: string;
     amount: number;
     status: 'pending' | 'approved' | 'rejected';
-    bankDetails?: string;
+    method: WithdrawalMethod;
+    details: WithdrawalDetails;
     requestedAt: any;
     processedAt?: any;
+    adminNote?: string;
 }
 
 /**
  * Creates a withdrawal request and immediately deducts funds from the wallet balance.
- * Logs a 'withdrawal' transaction.
+ * Supports flouci, bank_transfer and post_office payout methods.
+ * Logs an immutable 'withdrawal' transaction.
  */
 export async function requestWithdrawal(
     walletId: string,
     brandId: string,
     amount: number,
-    bankDetails?: string
+    details: WithdrawalDetails,
 ): Promise<void> {
     if (amount <= 0) throw new Error('Invalid amount');
 
@@ -405,33 +424,35 @@ export async function requestWithdrawal(
         // Deduct from available balance
         firestoreTx.update(walletRef, {
             balance: increment(-amount),
+            totalWithdrawn: increment(amount),
             updatedAt: serverTimestamp(),
         });
 
-        // 1. Create the withdrawal request for Admin review
+        // 1. Withdrawal request (for Admin review)
         const requestRef = doc(collection(db, 'withdrawal_requests'));
         firestoreTx.set(requestRef, {
             brandId,
             walletId,
             amount,
             status: 'pending',
-            bankDetails: bankDetails || '',
+            method: details.method,
+            details,
             requestedAt: serverTimestamp(),
-        });
+        } as Omit<WithdrawalRequest, 'id'>);
 
-        // 2. Create the immutable transaction log
+        // 2. Immutable transaction log
         const txRef = doc(collection(db, 'transactions'));
         firestoreTx.set(txRef, {
-            orderId: requestRef.id, // reference the request
+            orderId: requestRef.id,
             brandId,
             brandWalletId: walletId,
-            deliveryCompanyId: 'platform', // Dummy value for withdrawal
+            deliveryCompanyId: 'platform',
             codAmount: 0,
             productPrice: 0,
             deliveryFee: 0,
             deliveryCommission: 0,
             platformCommission: 0,
-            brandRevenue: -amount, // Negative to indicate debit
+            brandRevenue: -amount,
             type: 'withdrawal',
             status: 'pending',
             createdAt: serverTimestamp(),
