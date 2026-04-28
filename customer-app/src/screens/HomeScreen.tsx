@@ -498,6 +498,8 @@ export default function HomeScreen({
                         />
                     </View>
 
+
+
                     {/* Collections Section */}
                     <View style={styles.modernSection}>
                         <View style={styles.sectionHeader}>
@@ -641,6 +643,48 @@ export default function HomeScreen({
                         </ScrollView>
                     </View>
 
+                    {/* Promo Banners */}
+                    {promoBanners.length > 0 && (
+                        <View style={{ marginTop: 10, marginBottom: 20 }}>
+                            <FlatList
+                                ref={promoRef}
+                                data={promoBanners}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                keyExtractor={item => item.id}
+                                snapToInterval={width - 40 + 15}
+                                decelerationRate="fast"
+                                snapToAlignment="start"
+                                contentContainerStyle={{ paddingLeft: 20 }}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        onPress={() => onNavigate('Shop')}
+                                        activeOpacity={0.9}
+                                        style={{ width: width - 40, marginRight: 15 }}
+                                    >
+                                        <View style={[styles.promoBannerCard, { backgroundColor: item.backgroundColor || '#FF2D55' }]}>
+                                            {item.imageUrl && (
+                                                <Image source={{ uri: item.imageUrl }} style={styles.promoBannerImg} resizeMode="cover" />
+                                            )}
+                                            <LinearGradient
+                                                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                                                style={StyleSheet.absoluteFill}
+                                            />
+                                            <View style={styles.promoBannerContent}>
+                                                <Text variant="heading" style={{ color: '#FFF', fontSize: 24, letterSpacing: -0.5, marginBottom: 4 }}>
+                                                    {item.title?.toUpperCase()}
+                                                </Text>
+                                                <Text variant="body" style={{ color: '#FFF', opacity: 0.9, fontSize: 13 }}>
+                                                    {item.description}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    )}
+
                     {/* Community Section */}
                     <View style={[styles.modernSection, { paddingBottom: 20 }]}>
                         <Text variant="heading" style={{ textAlign: 'center', marginBottom: 20, letterSpacing: 2 }}>{t('ourSelection')}</Text>
@@ -733,4 +777,9 @@ const styles = StyleSheet.create({
     adMedia: { width: '100%', height: '100%', position: 'absolute' },
     adContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: 'rgba(0,0,0,0.3)' },
     adBtn: { marginTop: 10, alignSelf: 'flex-start', borderBottomWidth: 1, borderBottomColor: 'white' },
+
+    // Promo Banners
+    promoBannerCard: { height: 180, borderRadius: 25, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+    promoBannerImg: { width: '100%', height: '100%', position: 'absolute' },
+    promoBannerContent: { position: 'absolute', bottom: 20, left: 20, right: 20 },
 });
