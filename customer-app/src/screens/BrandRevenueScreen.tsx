@@ -440,8 +440,8 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                                 {([
                                     { key: 'stripe' as WithdrawalMethod, label: 'Stripe', sub: 'Payout to your Stripe account', icon: CreditCard, color: '#6772E5' },
                                     { key: 'crypto' as WithdrawalMethod, label: 'Crypto', sub: 'USDT, BTC, ETH & more', icon: Coins, color: '#F7931A' },
-                                    { key: 'bank_transfer' as WithdrawalMethod, label: t('bankTransfer') || 'Bank Transfer', sub: 'Enter your IBAN', icon: Building2, color: '#10B981' },
-                                    { key: 'post_office' as WithdrawalMethod, label: t('postOffice') || 'La Poste', sub: 'Receive by postal delivery', icon: MapPin, color: '#F59E0B' },
+                                    { key: 'bank_transfer' as WithdrawalMethod, label: t('bankTransfer') === 'bankTransfer' || !t('bankTransfer') ? 'Bank Transfer / تحويل بنكي' : t('bankTransfer'), sub: 'Enter your IBAN', icon: Building2, color: '#10B981' },
+                                    { key: 'post_office' as WithdrawalMethod, label: t('postOffice') === 'postOffice' || !t('postOffice') ? 'La Poste / البريد' : t('postOffice'), sub: 'Receive by postal delivery', icon: MapPin, color: '#F59E0B' },
                                 ] as const).map(({ key, label, sub, icon: Icon, color }) => (
                                     <TouchableOpacity
                                         key={key}

@@ -72,7 +72,7 @@ import Constants from "expo-constants";
 const PRODUCTION_API_URL = "https://backend-bey3a.vercel.app/api/payment";
 
 // Switch this to true if you want to test with your LOCAL backend
-const USE_LOCAL_BACKEND = false;
+const USE_LOCAL_BACKEND = true;
 
 // Auto-detect local backend IP for physical devices/emulators
 const getApiBaseUrl = () => {
@@ -291,10 +291,10 @@ export default function WalletScreen({
         body: JSON.stringify({
           userId: user.uid,
           coin: coin,
-          amountUSD: selectedPackage.price,
-          meta: {
-            packCoins: selectedPackage.coins,
-            packBonus: selectedPackage.bonus,
+          amountUSD: Number((selectedPackage.price / 3.1).toFixed(2)), // convert TND to USD
+          pack: {
+            coins: selectedPackage.coins,
+            bonus: selectedPackage.bonus,
             priceDisplay: selectedPackage.priceDisplay,
           },
         }),
@@ -328,8 +328,8 @@ export default function WalletScreen({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: pack.price,          // in TND/USD (backend converts to cents)
-          currency: "usd",
+          amount: Number((pack.price / 3.4).toFixed(2)), // convert TND to EUR (approx 1 EUR = 3.4 TND)
+          currency: "eur",
           userId: user.uid,
           pack: {
             coins: pack.coins,
@@ -354,8 +354,8 @@ export default function WalletScreen({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: pack.price,
-          currency: "usd",
+          amount: Number((pack.price / 3.4).toFixed(2)),
+          currency: "eur",
           userId: user.uid,
           pack: {
             coins: pack.coins,
@@ -3479,14 +3479,15 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalContent: {
     width: "100%",
-    flex: 1,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 5,
     paddingBottom: 20,
+    maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",

@@ -268,8 +268,9 @@ router.post('/stripe/create-intent', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
     }
 
+    const multiplier = currency.toLowerCase() === 'tnd' ? 1000 : 100;
     const result = await stripeService.createPaymentIntent(
-      Math.round(amount * 100), // convert to cents
+      Math.round(amount * multiplier), // convert to smallest currency unit
       currency,
       { userId, packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
     );
@@ -306,8 +307,9 @@ router.post('/stripe/checkout', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
     }
 
+    const multiplier = currency.toLowerCase() === 'tnd' ? 1000 : 100;
     const session = await stripeService.createCheckoutSession(
-      Math.round(amount * 100), // cents
+      Math.round(amount * multiplier), // smallest currency unit
       currency,
       { userId, packCoins: String(pack.coins), packBonus: String(pack.bonus), priceDisplay: pack.priceDisplay, packName: `${pack.coins + pack.bonus} Coins Pack` },
     );
@@ -422,7 +424,7 @@ router.post('/crypto/create-invoice', async (req, res) => {
       meta: { packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
     });
 
-    res.json({ success: true, ...invoice });
+    res.json({ success: true, invoice });
   } catch (error) {
     console.error('Crypto create-invoice error:', error);
     res.status(500).json({ error: error.message });
