@@ -763,6 +763,7 @@ const styles = StyleSheet.create({
     modalBtn: { flex: 1, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     cancelBtn: { borderWidth: 1 },
     submitBtn: { backgroundColor: '#6C63FF' },
+    modalBtnText: { fontSize: 15, fontWeight: '700' },
     coinChip: {
         paddingHorizontal: 12, paddingVertical: 6,
         borderRadius: 20, borderWidth: 1.5,
@@ -770,3 +771,4 @@ const styles = StyleSheet.create({
     fieldNote: { fontSize: 11, fontWeight: '500', lineHeight: 16, marginTop: -8, marginBottom: 12 },
 
 });
+

@@ -34,6 +34,7 @@ import {
   Check,
   ChevronRight,
   Trash,
+  Info,
 } from "lucide-react-native";
 import * as Animatable from "react-native-animatable";
 import { BlurView } from "expo-blur";
@@ -161,6 +162,15 @@ export default function WalletScreen({
     "search" | "friends" | "requests"
   >("search");
 
+  // Recharge selection states
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  
+  // Crypto invoice states
+  const [showCryptoInvoice, setShowCryptoInvoice] = useState(false);
+  const [cryptoInvoiceData, setCryptoInvoiceData] = useState<any>(null);
+  const [selectedCryptoCoin, setSelectedCryptoCoin] = useState<string | null>(null);
+
   const fetchTransactions = async () => {
     if (!user?.uid) return;
     try {
@@ -257,18 +267,58 @@ export default function WalletScreen({
   const coinBalance = profileData?.wallet?.coins || 0;
   const diamondBalance = profileData?.wallet?.diamonds || 0;
 
-  const handleRecharge = async (pack: any) => {
+  const initiateRecharge = (pack: any) => {
     if (!user?.uid) {
       Alert.alert(
         "Error",
-        tr(
-          "Please log in to recharge.",
-          "Veuillez vous connecter pour recharger.",
-          "أمان ادخل للكونط باش تشحن رصيدك.",
-        ),
+        tr("Please log in to recharge.", "Veuillez vous connecter pour recharger.", "أمان ادخل للكونط باش تشحن رصيدك.")
       );
       return;
     }
+    setSelectedPackage(pack);
+    setShowPaymentMethodModal(true);
+  };
+
+  const handleCryptoCheckout = async (coin: string) => {
+    setShowPaymentMethodModal(false);
+    if (!selectedPackage || !user?.uid) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/crypto/create-invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          coin: coin,
+          amountUSD: selectedPackage.price,
+          meta: {
+            packCoins: selectedPackage.coins,
+            packBonus: selectedPackage.bonus,
+            priceDisplay: selectedPackage.priceDisplay,
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success || !data.invoice) {
+        throw new Error(data.error || "Failed to create crypto invoice");
+      }
+
+      setCryptoInvoiceData(data.invoice);
+      setShowCryptoInvoice(true);
+    } catch (error: any) {
+      console.error("Crypto Recharge error:", error);
+      Alert.alert(tr("Error", "Erreur", "غلطة"), error.message || "Failed to generate crypto invoice.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStripeCheckout = async () => {
+    setShowPaymentMethodModal(false);
+    const pack = selectedPackage;
+    if (!pack || !user?.uid) return;
 
     try {
       setLoading(true);
@@ -1116,7 +1166,7 @@ export default function WalletScreen({
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             activeOpacity={0.7}
-            onPress={() => handleRecharge(pack)}
+            onPress={() => initiateRecharge(pack)}
             disabled={loading}
           >
             <View style={styles.coinIconWrapper}>
@@ -3021,6 +3071,178 @@ export default function WalletScreen({
                     </TouchableOpacity>
                   </View>
                 </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Method Selection Modal */}
+      <Modal
+        visible={showPaymentMethodModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaymentMethodModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                {tr("Select Payment Method", "Mode de paiement", "اختار طريقة الدفع")}
+              </Text>
+              <TouchableOpacity onPress={() => setShowPaymentMethodModal(false)}>
+                <X size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ paddingHorizontal: 24, paddingVertical: 20 }}>
+              <TouchableOpacity
+                style={[styles.transactionItem, { backgroundColor: isDark ? "#333" : "#F9FAFB", padding: 16, borderRadius: 16, marginBottom: 12, borderBottomWidth: 0 }]}
+                onPress={handleStripeCheckout}
+              >
+                <View style={[styles.coinIconWrapper, { backgroundColor: "rgba(99, 102, 241, 0.12)" }]}>
+                  <CreditCard size={24} color="#6366F1" />
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={[styles.transactionTitle, { color: colors.foreground }]}>Stripe (Credit/Debit Card)</Text>
+                  <Text style={[styles.transactionDate, { color: colors.textMuted }]}>{tr("Instant payment", "Paiement instantané", "دفع حيني")}</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: "600", marginBottom: 12, marginTop: 8 }}>
+                {tr("Pay with Cryptocurrency", "Payer avec crypto", "خلص بالكريبتو")}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.transactionItem, { backgroundColor: isDark ? "#333" : "#F9FAFB", padding: 16, borderRadius: 16, marginBottom: 12, borderBottomWidth: 0 }]}
+                onPress={() => handleCryptoCheckout("USDT_TRC20")}
+              >
+                <View style={[styles.coinIconWrapper, { backgroundColor: "rgba(34, 197, 94, 0.12)" }]}>
+                  <Text style={{fontWeight: 'bold', color: '#22C55E'}}>USDT</Text>
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={[styles.transactionTitle, { color: colors.foreground }]}>Tether (USDT TRC-20)</Text>
+                  <Text style={[styles.transactionDate, { color: colors.textMuted }]}>Tron Network (Fast, Low Fee)</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.transactionItem, { backgroundColor: isDark ? "#333" : "#F9FAFB", padding: 16, borderRadius: 16, marginBottom: 12, borderBottomWidth: 0 }]}
+                onPress={() => handleCryptoCheckout("USDT_ERC20")}
+              >
+                <View style={[styles.coinIconWrapper, { backgroundColor: "rgba(34, 197, 94, 0.12)" }]}>
+                  <Text style={{fontWeight: 'bold', color: '#22C55E'}}>USDT</Text>
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={[styles.transactionTitle, { color: colors.foreground }]}>Tether (USDT ERC-20)</Text>
+                  <Text style={[styles.transactionDate, { color: colors.textMuted }]}>Ethereum Network</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.transactionItem, { backgroundColor: isDark ? "#333" : "#F9FAFB", padding: 16, borderRadius: 16, marginBottom: 12, borderBottomWidth: 0 }]}
+                onPress={() => handleCryptoCheckout("BTC")}
+              >
+                <View style={[styles.coinIconWrapper, { backgroundColor: "rgba(245, 158, 11, 0.12)" }]}>
+                  <Text style={{fontWeight: 'bold', color: '#F59E0B'}}>BTC</Text>
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={[styles.transactionTitle, { color: colors.foreground }]}>Bitcoin (BTC)</Text>
+                  <Text style={[styles.transactionDate, { color: colors.textMuted }]}>Bitcoin Network</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.transactionItem, { backgroundColor: isDark ? "#333" : "#F9FAFB", padding: 16, borderRadius: 16, marginBottom: 40, borderBottomWidth: 0 }]}
+                onPress={() => handleCryptoCheckout("ETH")}
+              >
+                <View style={[styles.coinIconWrapper, { backgroundColor: "rgba(99, 102, 241, 0.12)" }]}>
+                  <Text style={{fontWeight: 'bold', color: '#6366F1'}}>ETH</Text>
+                </View>
+                <View style={styles.transactionInfo}>
+                  <Text style={[styles.transactionTitle, { color: colors.foreground }]}>Ethereum (ETH)</Text>
+                  <Text style={[styles.transactionDate, { color: colors.textMuted }]}>Ethereum Network</Text>
+                </View>
+                <ChevronRight size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Crypto Invoice Details Modal */}
+      <Modal
+        visible={showCryptoInvoice}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCryptoInvoice(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card, minHeight: "70%" }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                {tr("Complete Payment", "Effectuer le paiement", "كمّل الدفع")}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCryptoInvoice(false)}>
+                <X size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {cryptoInvoiceData && (
+              <ScrollView style={{ paddingHorizontal: 24, paddingVertical: 20 }}>
+                <View style={{ alignItems: "center", marginBottom: 24 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 14, marginBottom: 8 }}>
+                    {tr("Send exactly:", "Envoyer exactement :", "ابعت بالضبط:")}
+                  </Text>
+                  <Text style={{ color: colors.foreground, fontSize: 28, fontWeight: "900" }}>
+                    {cryptoInvoiceData.coinAmount} {cryptoInvoiceData.coin}
+                  </Text>
+                  <Text style={{ color: colors.primary, fontSize: 13, marginTop: 4, fontWeight: "600" }}>
+                    Network: {cryptoInvoiceData.network}
+                  </Text>
+                </View>
+
+                <View style={{ backgroundColor: isDark ? "#2A2A2A" : "#F3F4F6", padding: 16, borderRadius: 16, marginBottom: 24 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 4 }}>
+                    {tr("To Address:", "À l'adresse :", "للأدريسة هذي:")}
+                  </Text>
+                  <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: "600", marginBottom: 12 }} selectable>
+                    {cryptoInvoiceData.walletAddress}
+                  </Text>
+                  
+                  <TouchableOpacity
+                    style={{ backgroundColor: colors.primary, paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
+                    onPress={() => {
+                      Alert.alert(tr("Copied", "Copié", "تم النسخ"), tr("Address copied to clipboard", "Adresse copiée dans le presse-papiers", "تم نسخ الأدريسة"));
+                    }}
+                  >
+                    <Text style={{ color: "#FFF", fontWeight: "700" }}>{tr("Copy Address", "Copier l'adresse", "انسخ الأدريسة")}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.infoBox}>
+                  <Info size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                  <Text style={{ color: colors.foreground, flex: 1, fontSize: 13, lineHeight: 18 }}>
+                    {tr(
+                      "After sending the exact amount, your balance will be updated automatically once the transaction is confirmed on the blockchain. This usually takes 5-15 minutes.",
+                      "Après avoir envoyé le montant exact, votre solde sera mis à jour automatiquement une fois la transaction confirmée sur la blockchain. Cela prend généralement 5 à 15 minutes.",
+                      "بعد ما تبعت المبلغ بالضبط، الرصيد متاعك باش يتصب آلياً بعد ما تتأكد العملية في البلوكتشين. عادة تاخو 5 لـ 15 دقيقة."
+                    )}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { backgroundColor: "rgba(100,100,100,0.1)", marginTop: 10, marginBottom: 40 }]}
+                  onPress={() => setShowCryptoInvoice(false)}
+                >
+                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>
+                    {tr("I have completed the transfer", "J'ai effectué le transfert", "كمّلت الدفع")}
+                  </Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
           </View>
