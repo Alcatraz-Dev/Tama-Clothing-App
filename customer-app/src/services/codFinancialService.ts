@@ -368,12 +368,15 @@ export async function getAllBrandRevenues(): Promise<{ brandId: string; brandNam
 
 // ─── Withdrawal Requests ─────────────────────────────────────────────────────
 
-export type WithdrawalMethod = 'flouci' | 'bank_transfer' | 'post_office';
+export type WithdrawalMethod = 'stripe' | 'bank_transfer' | 'post_office' | 'crypto';
 
 export interface WithdrawalDetails {
     method: WithdrawalMethod;
-    // Flouci
-    flouciPhone?: string;
+    // Stripe payout
+    stripeEmail?: string;        // Stripe-linked email or Connect account
+    // Crypto payout
+    cryptoCoin?: string;         // e.g. 'USDT_TRC20', 'BTC', 'ETH'
+    cryptoAddress?: string;      // Vendor's crypto wallet address
     // Bank Transfer
     iban?: string;
     bankName?: string;

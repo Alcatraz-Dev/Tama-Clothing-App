@@ -20,7 +20,8 @@ import {
     Package,
     AlertCircle,
     Wallet,
-    Smartphone,
+    CreditCard,
+    Coins,
     Building2,
     MapPin,
     ChevronRight,
@@ -147,8 +148,11 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
     const [withdrawStep, setWithdrawStep] = useState<'method' | 'details'>('method');
     const [withdrawMethod, setWithdrawMethod] = useState<WithdrawalMethod | null>(null);
     const [withdrawAmount, setWithdrawAmount] = useState('');
-    // Flouci
-    const [flouciPhone, setFlouciPhone] = useState('');
+    // Stripe
+    const [stripeEmail, setStripeEmail] = useState('');
+    // Crypto
+    const [cryptoCoin, setCryptoCoin] = useState('USDT_TRC20');
+    const [cryptoAddress, setCryptoAddress] = useState('');
     // Bank
     const [iban, setIban] = useState('');
     const [bankName, setBankName] = useState('');
@@ -168,7 +172,9 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
         setWithdrawStep('method');
         setWithdrawMethod(null);
         setWithdrawAmount('');
-        setFlouciPhone('');
+        setStripeEmail('');
+        setCryptoCoin('USDT_TRC20');
+        setCryptoAddress('');
         setIban('');
         setBankName('');
         setPostFullName('');
@@ -192,9 +198,13 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
             return;
         }
 
-        // Validate method fields
-        if (withdrawMethod === 'flouci' && !flouciPhone.trim()) {
-            Alert.alert(t('error') || 'Error', 'Please enter your Flouci phone number');
+        // Per-method validation
+        if (withdrawMethod === 'stripe' && !stripeEmail.trim()) {
+            Alert.alert(t('error') || 'Error', 'Please enter your Stripe-linked email');
+            return;
+        }
+        if (withdrawMethod === 'crypto' && (!cryptoAddress.trim() || !cryptoCoin)) {
+            Alert.alert(t('error') || 'Error', 'Please enter your crypto wallet address');
             return;
         }
         if (withdrawMethod === 'bank_transfer' && (!iban.trim() || !bankName.trim())) {
@@ -209,7 +219,8 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
         setSubmittingWithdraw(true);
         try {
             const details: any = { method: withdrawMethod };
-            if (withdrawMethod === 'flouci') details.flouciPhone = flouciPhone.trim();
+            if (withdrawMethod === 'stripe') details.stripeEmail = stripeEmail.trim();
+            if (withdrawMethod === 'crypto') { details.cryptoCoin = cryptoCoin; details.cryptoAddress = cryptoAddress.trim(); }
             if (withdrawMethod === 'bank_transfer') { details.iban = iban.trim(); details.bankName = bankName.trim(); }
             if (withdrawMethod === 'post_office') {
                 details.fullName = postFullName.trim();
@@ -427,7 +438,8 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                         {withdrawStep === 'method' && (
                             <View style={{ gap: 10 }}>
                                 {([
-                                    { key: 'flouci' as WithdrawalMethod, label: 'Flouci', sub: 'Transfer via Flouci wallet', icon: Smartphone, color: '#6C63FF' },
+                                    { key: 'stripe' as WithdrawalMethod, label: 'Stripe', sub: 'Payout to your Stripe account', icon: CreditCard, color: '#6772E5' },
+                                    { key: 'crypto' as WithdrawalMethod, label: 'Crypto', sub: 'USDT, BTC, ETH & more', icon: Coins, color: '#F7931A' },
                                     { key: 'bank_transfer' as WithdrawalMethod, label: t('bankTransfer') || 'Bank Transfer', sub: 'Enter your IBAN', icon: Building2, color: '#10B981' },
                                     { key: 'post_office' as WithdrawalMethod, label: t('postOffice') || 'La Poste', sub: 'Receive by postal delivery', icon: MapPin, color: '#F59E0B' },
                                 ] as const).map(({ key, label, sub, icon: Icon, color }) => (
@@ -468,18 +480,55 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                                     autoFocus
                                 />
 
-                                {/* Flouci fields */}
-                                {withdrawMethod === 'flouci' && (
+                                {/* Stripe fields */}
+                                {withdrawMethod === 'stripe' && (
                                     <>
-                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Numéro Flouci (téléphone)</Text>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Stripe Account Email</Text>
                                         <TextInput
                                             style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}
-                                            placeholder="Ex: +216 2X XXX XXX"
+                                            placeholder="your@email.com"
                                             placeholderTextColor={colors.textMuted}
-                                            keyboardType="phone-pad"
-                                            value={flouciPhone}
-                                            onChangeText={setFlouciPhone}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            value={stripeEmail}
+                                            onChangeText={setStripeEmail}
                                         />
+                                        <Text style={[styles.fieldNote, { color: colors.textMuted }]}>
+                                            {'Admin will initiate a Stripe transfer to this email. Make sure it is linked to a Stripe account.'}
+                                        </Text>
+                                    </>
+                                )}
+
+                                {/* Crypto fields */}
+                                {withdrawMethod === 'crypto' && (
+                                    <>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Cryptocurrency</Text>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                                            {(['USDT_TRC20', 'USDT_ERC20', 'BTC', 'ETH'] as const).map((coin) => (
+                                                <TouchableOpacity
+                                                    key={coin}
+                                                    onPress={() => setCryptoCoin(coin)}
+                                                    style={[styles.coinChip, {
+                                                        backgroundColor: cryptoCoin === coin ? '#F7931A' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'),
+                                                        borderColor: cryptoCoin === coin ? '#F7931A' : 'transparent',
+                                                    }]}
+                                                >
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: cryptoCoin === coin ? '#FFF' : colors.textMuted }}>{coin.replace('_', ' ')}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Your Wallet Address</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)', fontFamily: 'monospace', fontSize: 12 }]}
+                                            placeholder={cryptoCoin === 'BTC' ? '1A1zP1eP5QGefi...' : '0x71C7656EC7ab...'}
+                                            placeholderTextColor={colors.textMuted}
+                                            autoCapitalize="none"
+                                            value={cryptoAddress}
+                                            onChangeText={setCryptoAddress}
+                                        />
+                                        <Text style={[styles.fieldNote, { color: '#F59E0B' }]}>
+                                            {'⚠ Double-check your address. Crypto transfers are irreversible.'}
+                                        </Text>
                                     </>
                                 )}
 
@@ -714,5 +763,10 @@ const styles = StyleSheet.create({
     modalBtn: { flex: 1, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     cancelBtn: { borderWidth: 1 },
     submitBtn: { backgroundColor: '#6C63FF' },
-    modalBtnText: { fontSize: 15, fontWeight: '700' },
+    coinChip: {
+        paddingHorizontal: 12, paddingVertical: 6,
+        borderRadius: 20, borderWidth: 1.5,
+    },
+    fieldNote: { fontSize: 11, fontWeight: '500', lineHeight: 16, marginTop: -8, marginBottom: 12 },
+
 });

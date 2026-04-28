@@ -4,7 +4,8 @@
 const express = require('express');
 const router = express.Router();
 const paymentService = require('./payment-service');
-const flouciService = require('./flouci-service');
+const stripeService = require('./stripe-service');
+const cryptoService = require('./crypto-service');
 
 // ============================================================================
 // DELIVERY FEE
@@ -252,111 +253,223 @@ router.get('/vendor-commission/:vendorId', async (req, res) => {
 });
 
 // ============================================================================
-// FLOOCI PAYMENTS (Tunisia)
+// STRIPE PAYMENTS
 // ============================================================================
 
 /**
- * POST /api/payment/flouci/generate
- * Generate a Flouci payment link
+ * POST /api/payment/stripe/create-intent
+ * Create a Stripe PaymentIntent for a coin pack purchase
+ * Body: { amount, currency, userId, pack }
  */
-router.post('/flouci/generate', async (req, res) => {
+router.post('/stripe/create-intent', async (req, res) => {
   try {
-    const { amount, trackingId, clientId, pack, userId } = req.body;
-    
-    if (!amount || !trackingId || !userId || !pack) {
-      return res.status(400).json({ error: 'Missing required fields (amount, trackingId, userId, pack)' });
+    const { amount, currency = 'usd', userId, pack } = req.body;
+    if (!amount || !userId || !pack) {
+      return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
     }
-    
-    const result = await flouciService.generatePayment(amount, trackingId, clientId);
-    
+
+    const result = await stripeService.createPaymentIntent(
+      Math.round(amount * 100), // convert to cents
+      currency,
+      { userId, packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
+    );
+
+    // Store pending payment in Firestore
+    const admin = require('firebase-admin');
+    const db = admin.firestore();
+    await db.collection('pending_payments').doc(result.paymentIntentId).set({
+      userId,
+      pack,
+      amount,
+      currency,
+      status: 'pending',
+      provider: 'stripe',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ success: true, clientSecret: result.clientSecret, paymentIntentId: result.paymentIntentId });
+  } catch (error) {
+    console.error('Stripe create-intent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/payment/stripe/checkout
+ * Create a Stripe Checkout Session (hosted payment page) for a coin pack
+ * Body: { amount, currency, userId, pack }
+ */
+router.post('/stripe/checkout', async (req, res) => {
+  try {
+    const { amount, currency = 'usd', userId, pack } = req.body;
+    if (!amount || !userId || !pack) {
+      return res.status(400).json({ error: 'Missing required fields: amount, userId, pack' });
+    }
+
+    const session = await stripeService.createCheckoutSession(
+      Math.round(amount * 100), // cents
+      currency,
+      { userId, packCoins: String(pack.coins), packBonus: String(pack.bonus), priceDisplay: pack.priceDisplay, packName: `${pack.coins + pack.bonus} Coins Pack` },
+    );
+
+    // Store a pending payment record keyed by session ID
+    const admin = require('firebase-admin');
+    const db = admin.firestore();
+    await db.collection('pending_payments').doc(session.sessionId).set({
+      userId,
+      pack,
+      amount,
+      currency,
+      status: 'pending',
+      provider: 'stripe_checkout',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ success: true, url: session.url, sessionId: session.sessionId });
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+/**
+ * POST /api/payment/stripe/verify/:paymentIntentId
+ * Verify a Stripe PaymentIntent and credit wallet if succeeded
+ */
+router.post('/stripe/verify/:paymentIntentId', async (req, res) => {
+  try {
+    const { paymentIntentId } = req.params;
+    const result = await stripeService.verifyPaymentIntent(paymentIntentId);
+
     if (result.success) {
-      // Store pending payment info for later verification
-      // Use the payment_id as the document ID
       const admin = require('firebase-admin');
       const db = admin.firestore();
-      await db.collection('pending_payments').doc(result.payment_id).set({
-        userId,
-        pack,
-        trackingId,
-        amount,
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+
+      const paymentRef = db.collection('pending_payments').doc(paymentIntentId);
+      const paymentDoc = await paymentRef.get();
+      if (!paymentDoc.exists) return res.status(404).json({ error: 'Payment record not found' });
+
+      const paymentData = paymentDoc.data();
+      if (paymentData.status === 'completed') {
+        return res.json({ success: true, status: 'succeeded', alreadyProcessed: true });
+      }
+
+      await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, paymentIntentId);
+      await paymentRef.update({ status: 'completed', verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+      res.json({ success: true, status: 'succeeded' });
+    } else {
+      res.json({ success: false, status: result.status });
     }
-    
+  } catch (error) {
+    console.error('Stripe verify error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/payment/stripe/webhook
+ * Stripe webhook — auto-completes PaymentIntents
+ */
+router.post('/stripe/webhook', require('express').raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const sig = req.headers['stripe-signature'];
+    const event = stripeService.constructWebhookEvent(req.body, sig);
+
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      const admin = require('firebase-admin');
+      const db = admin.firestore();
+
+      const paymentRef = db.collection('pending_payments').doc(pi.id);
+      const paymentDoc = await paymentRef.get();
+
+      if (paymentDoc.exists && paymentDoc.data().status !== 'completed') {
+        const paymentData = paymentDoc.data();
+        await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, pi.id);
+        await paymentRef.update({ status: 'completed', verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+      }
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+});
+
+// ============================================================================
+// CRYPTO PAYMENTS
+// ============================================================================
+
+/**
+ * POST /api/payment/crypto/create-invoice
+ * Creates a crypto payment invoice with platform wallet address
+ * Body: { userId, coin, amountUSD, pack }
+ */
+router.post('/crypto/create-invoice', async (req, res) => {
+  try {
+    const { userId, coin, amountUSD, pack } = req.body;
+    if (!userId || !coin || !amountUSD || !pack) {
+      return res.status(400).json({ error: 'Missing required fields: userId, coin, amountUSD, pack' });
+    }
+
+    const invoice = await cryptoService.createCryptoInvoice({
+      userId,
+      coin,
+      amountUSD,
+      meta: { packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
+    });
+
+    res.json({ success: true, ...invoice });
+  } catch (error) {
+    console.error('Crypto create-invoice error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/payment/crypto/verify/:invoiceId
+ * Check the status of a crypto invoice
+ */
+router.get('/crypto/verify/:invoiceId', async (req, res) => {
+  try {
+    const result = await cryptoService.verifyCryptoInvoice(req.params.invoiceId);
     res.json(result);
   } catch (error) {
+    console.error('Crypto verify error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * GET /api/payment/flouci/verify/:paymentId
- * Verify a Flouci payment and update wallet
+ * POST /api/payment/crypto/confirm/:invoiceId
+ * Admin or webhook confirms receipt of crypto payment
+ * Body: { txHash } (optional)
  */
-router.get('/flouci/verify/:paymentId', async (req, res) => {
+router.post('/crypto/confirm/:invoiceId', async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const result = await flouciService.verifyPayment(paymentId);
-    
-    if (result.success && result.status === 'SUCCESS') {
-      const admin = require('firebase-admin');
-      const db = admin.firestore();
-      
-      // 1. Get the pending payment info
-      const paymentRef = db.collection('pending_payments').doc(paymentId);
-      const paymentDoc = await paymentRef.get();
-      
-      if (!paymentDoc.exists) {
-        return res.status(404).json({ error: 'Payment record not found' });
-      }
-      
-      const paymentData = paymentDoc.data();
-      
-      if (paymentData.status === 'completed') {
-        return res.json({ success: true, status: 'SUCCESS', alreadyProcessed: true });
-      }
-      
-      // 2. Recharge the user's wallet
-      await paymentService.rechargeUserWallet(
-        paymentData.userId,
-        paymentData.pack,
-        paymentId
-      );
-      
-      // 3. Mark payment as completed
-      await paymentRef.update({ 
-        status: 'completed',
-        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      res.json({ ...result, success: true });
-    } else {
-      res.json(result);
-    }
+    const { txHash } = req.body;
+    const result = await cryptoService.confirmCryptoInvoice(req.params.invoiceId, txHash);
+    res.json(result);
   } catch (error) {
-    console.error('Flouci verification error:', error);
+    console.error('Crypto confirm error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/payment/flouci/webhook
- * Webhook for Flouci payment notifications
+ * GET /api/payment/crypto/supported-coins
+ * Returns the list of accepted cryptocurrencies and platform wallet addresses
  */
-router.post('/flouci/webhook', async (req, res) => {
-  try {
-    const { payment_id, status, amount, developer_tracking_id } = req.body;
-    console.log(`[Flouci Webhook] Received update for ${payment_id}: ${status}`);
-    
-    // Logic to update database asynchronously could go here
-    // But since the app verifies immediately, this is mostly for redundancy
-    
-    res.status(200).send('Webhook received');
-  } catch (error) {
-    console.error('Flouci webhook error:', error);
-    res.status(500).send('Webhook failed');
-  }
+router.get('/crypto/supported-coins', (req, res) => {
+  const coins = Object.entries(cryptoService.SUPPORTED_COINS).map(([key, val]) => ({
+    key,
+    ...val,
+    walletAddress: cryptoService.PLATFORM_WALLETS[key] || null,
+  }));
+  res.json({ success: true, coins });
 });
 
 // ============================================================================

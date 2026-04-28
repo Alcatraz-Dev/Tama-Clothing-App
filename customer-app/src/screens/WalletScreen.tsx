@@ -273,18 +273,13 @@ export default function WalletScreen({
     try {
       setLoading(true);
 
-      // 1. Generate Flouci payment link via backend
-      // Note: amount is in Millimes (1 TND = 1000)
-      const amountInMillimes = pack.price * 1000;
-      const trackingId = `recharge_${user.uid}_${Date.now()}`;
-
-      const response = await fetch(`${API_BASE_URL}/flouci/generate`, {
+      // 1. Create a Stripe PaymentIntent via backend
+      const response = await fetch(`${API_BASE_URL}/stripe/create-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: amountInMillimes,
-          trackingId,
-          clientId: user.email || user.uid,
+          amount: pack.price,          // in TND/USD (backend converts to cents)
+          currency: "usd",
           userId: user.uid,
           pack: {
             coins: pack.coins,
@@ -297,23 +292,46 @@ export default function WalletScreen({
 
       const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error || "Failed to generate payment link");
+      if (!data.success || !data.paymentIntentId) {
+        throw new Error(data.error || "Failed to create payment");
       }
 
-      // 2. Open Flouci payment page
+      // 2. Open Stripe Checkout in the in-app browser
+      //    The backend can optionally return a checkoutUrl for full Stripe Checkout
+      //    If only clientSecret is returned, you'd need @stripe/stripe-react-native.
+      //    Here we use a hosted Checkout page via the backend's /stripe/checkout endpoint.
+      const checkoutResponse = await fetch(`${API_BASE_URL}/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: pack.price,
+          currency: "usd",
+          userId: user.uid,
+          pack: {
+            coins: pack.coins,
+            bonus: pack.bonus,
+            price: pack.price,
+            priceDisplay: pack.priceDisplay,
+          },
+        }),
+      });
+
+      const checkoutData = await checkoutResponse.json();
+
+      if (!checkoutData.success || !checkoutData.url) {
+        throw new Error(checkoutData.error || "Failed to create checkout session");
+      }
+
       const result = await WebBrowser.openAuthSessionAsync(
-        data.link,
+        checkoutData.url,
         "tama-clothing://payment-success",
       );
 
       if (result.type === "success") {
-        const url = result.url;
-        const { queryParams } = Linking.parse(url);
-        const paymentId = queryParams?.payment_id as string;
-
-        if (paymentId) {
-          await verifyAndCompletePayment(paymentId);
+        const { queryParams } = Linking.parse(result.url || "");
+        const sessionId = queryParams?.session_id as string;
+        if (sessionId) {
+          await verifyAndCompletePayment(sessionId);
         }
       } else {
         setLoading(false);
@@ -333,15 +351,16 @@ export default function WalletScreen({
     }
   };
 
-  const verifyAndCompletePayment = async (paymentId: string) => {
+  const verifyAndCompletePayment = async (sessionIdOrIntentId: string) => {
     try {
-      // 3. Verify payment with Flouci via backend
-      // The backend now handles the wallet update automatically upon success
-      const response = await fetch(`${API_BASE_URL}/flouci/verify/${paymentId}`);
+      // Verify Stripe payment via backend; backend credits wallet on success
+      const response = await fetch(`${API_BASE_URL}/stripe/verify/${sessionIdOrIntentId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
       const data = await response.json();
 
-      if (data.success && data.status === "SUCCESS") {
-
+      if (data.success && data.status === "succeeded") {
         Alert.alert(
           tr("Success", "Succès", "مبروك"),
           tr(
