@@ -485,7 +485,7 @@ router.get('/crypto/verify/:invoiceId', async (req, res) => {
  */
 router.post('/crypto/confirm/:invoiceId', async (req, res) => {
   try {
-    const { txHash } = req.body;
+    const { txHash } = req.body || {};
     const result = await cryptoService.confirmCryptoInvoice(req.params.invoiceId, txHash);
     res.json(result);
   } catch (error) {
