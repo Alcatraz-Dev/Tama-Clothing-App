@@ -645,7 +645,13 @@ export default function HomeScreen({
 
                     {/* Promo Banners */}
                     {promoBanners.length > 0 && (
-                        <View style={{ marginTop: 10, marginBottom: 20 }}>
+                        <View style={[styles.modernSection, { marginTop: 10 }]}>
+                            <View style={styles.sectionHeader}>
+                                <View>
+                                    <Text variant="heading" style={{ letterSpacing: 4, fontSize: 13 }}>{t('promotions')}</Text>
+                                    <View style={{ width: 15, height: 2, backgroundColor: accentColor, marginTop: 4 }} />
+                                </View>
+                            </View>
                             <FlatList
                                 ref={promoRef}
                                 data={promoBanners}
@@ -657,11 +663,21 @@ export default function HomeScreen({
                                 snapToAlignment="start"
                                 contentContainerStyle={{ paddingLeft: 20 }}
                                 renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        onPress={() => onNavigate('Shop')}
-                                        activeOpacity={0.9}
-                                        style={{ width: width - 40, marginRight: 15 }}
-                                    >
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (item.targetAction === 'PRODUCT' && item.targetProduct) {
+                                            const prod = featured.find((p: any) => p.id === item.targetProduct) || 
+                                                         { id: item.targetProduct };
+                                            onProductPress(prod);
+                                        } else if (item.targetAction === 'CATEGORY' && item.targetCategory) {
+                                            onNavigate('Shop', { categoryId: item.targetCategory });
+                                        } else {
+                                            onNavigate('Shop');
+                                        }
+                                    }}
+                                    activeOpacity={0.9}
+                                    style={{ width: width - 40, marginRight: 15 }}
+                                >
                                         <View style={[styles.promoBannerCard, { backgroundColor: item.backgroundColor || '#FF2D55' }]}>
                                             {item.imageUrl && (
                                                 <Image source={{ uri: item.imageUrl }} style={styles.promoBannerImg} resizeMode="cover" />
