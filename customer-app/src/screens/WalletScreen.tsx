@@ -35,6 +35,13 @@ import {
   ChevronRight,
   Trash,
   Info,
+  Building2,
+  MapPin,
+  ArrowLeft,
+  XCircle,
+  Hexagon,
+  Landmark,
+  Mail,
 } from "lucide-react-native";
 import * as Animatable from "react-native-animatable";
 import { BlurView } from "expo-blur";
@@ -65,6 +72,17 @@ import { getName } from "../utils/translationHelpers";
 import { KeyboardAvoidingView, Platform, Keyboard } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import {
+  requestWithdrawal,
+  WithdrawalMethod,
+  WithdrawalDetails,
+  approveWithdrawal,
+  rejectWithdrawal,
+  performExchange,
+  performTransfer,
+  getOrCreateWallet,
+  subscribeToWallet,
+} from "../services/codFinancialService";
 
 import Constants from "expo-constants";
 
@@ -131,15 +149,43 @@ export default function WalletScreen({
   const isDark = theme === "dark";
   const colors = isDark ? Theme.dark.colors : Theme.light.colors;
   const insets = useSafeAreaInsets();
-  const isAdmin = profileData?.isAdmin === true || profileData?.role === "admin";
+  const isAdmin =
+    profileData?.isAdmin === true || profileData?.role === "admin";
   // DEBUG: Remove after confirming admin visibility works
-  console.log("[WalletScreen] isAdmin:", isAdmin, "| role:", profileData?.role, "| isAdmin field:", profileData?.isAdmin);
+  console.log(
+    "[WalletScreen] isAdmin:",
+    isAdmin,
+    "| role:",
+    profileData?.role,
+    "| isAdmin field:",
+    profileData?.isAdmin,
+  );
   const [activeTab, setActiveTab] = useState<"recharge" | "earnings">(
     "recharge",
   );
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<"method" | "details">(
+    "method",
+  );
+  const [withdrawMethod, setWithdrawMethod] = useState<any>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  // Stripe
+  const [stripeEmail, setStripeEmail] = useState("");
+  // Crypto
+  const [cryptoCoin, setCryptoCoin] = useState("USDT_TRC20");
+  const [cryptoAddress, setCryptoAddress] = useState("");
+  // Bank
+  const [iban, setIban] = useState("");
+  const [bankName, setBankName] = useState("");
+  // Post
+  const [postFullName, setPostFullName] = useState("");
+  const [postAddress, setPostAddress] = useState("");
+  const [postPostal, setPostPostal] = useState("");
+  const [postCity, setPostCity] = useState("");
+  const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
   const [exchangeType, setExchangeType] = useState<
     "diamondsToCoins" | "coinsToDiamonds"
   >("diamondsToCoins");
@@ -176,7 +222,38 @@ export default function WalletScreen({
     null,
   );
   const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
+  const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
+  const [adminPanelTab, setAdminPanelTab] = useState<
+    "crypto" | "withdrawals"
+  >("crypto");
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  const [wallet, setWallet] = useState<any | null>(null);
+  const [walletId, setWalletId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    let unsubWallet: (() => void) | null = null;
+
+    (async () => {
+      // Get or create customer wallet
+      const wId = await getOrCreateWallet(
+        user.uid,
+        "customer",
+        profileData?.fullName || user.email,
+      );
+      setWalletId(wId);
+
+      unsubWallet = subscribeToWallet(user.uid, "customer", (w: any) => {
+        setWallet(w);
+      });
+    })();
+
+    return () => {
+      unsubWallet?.();
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -198,7 +275,10 @@ export default function WalletScreen({
         rawInvoices.map(async (inv: any) => {
           try {
             const userSnap = await getDocs(
-              query(collection(db, "users"), where(documentId(), "==", inv.userId))
+              query(
+                collection(db, "users"),
+                where(documentId(), "==", inv.userId),
+              ),
             );
             if (!userSnap.empty) {
               const userData = userSnap.docs[0].data();
@@ -214,7 +294,7 @@ export default function WalletScreen({
             }
           } catch (_) {}
           return { ...inv, _user: null };
-        })
+        }),
       );
 
       setAdminInvoices(enriched);
@@ -222,6 +302,109 @@ export default function WalletScreen({
 
     return () => unsubscribe();
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const q = query(
+      collection(db, "withdrawal_requests"),
+      where("status", "==", "pending"),
+      orderBy("requestedAt", "desc"),
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const rawReqs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Enrich with user profile data
+      const enriched = await Promise.all(
+        rawReqs.map(async (req: any) => {
+          try {
+            const userId = req.actorId;
+            const userSnap = await getDocs(
+              query(collection(db, "users"), where(documentId(), "==", userId)),
+            );
+            if (!userSnap.empty) {
+              const userData = userSnap.docs[0].data();
+              return {
+                ...req,
+                _user: {
+                  fullName: userData.fullName || "Unknown",
+                  email: userData.email || "",
+                  avatarUrl: userData.avatarUrl || null,
+                  phone: userData.phone || "",
+                },
+              };
+            }
+          } catch (_) {}
+          return { ...req, _user: null };
+        }),
+      );
+
+      setAdminWithdrawals(enriched);
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+
+  const handleApproveWithdrawal = async (requestId: string) => {
+    try {
+      setLoading(true);
+      await approveWithdrawal(requestId);
+      Alert.alert(t("success"), "Withdrawal request approved successfully");
+    } catch (error: any) {
+      Alert.alert(t("error"), error.message || "Failed to approve request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectWithdrawal = async (requestId: string) => {
+    Alert.prompt(
+      tr("Reject Request", "Rejeter la demande", "رفض الطلب"),
+      tr(
+        "Please enter the reason for rejection:",
+        "Veuillez entrer la raison du rejet :",
+        "حط سبب الرفض :",
+      ),
+      async (reason) => {
+        if (!reason) {
+          Alert.alert(
+            tr("Error", "Erreur", "غلطة"),
+            tr(
+              "A reason is required to reject a request",
+              "Une raison est requise pour rejeter une demande",
+              "لازم تحط سبب باش ترفض",
+            ),
+          );
+          return;
+        }
+        try {
+          setLoading(true);
+          await rejectWithdrawal(requestId, reason);
+          Alert.alert(
+            tr("Success", "Succès", "سلكت"),
+            tr(
+              "Withdrawal request rejected",
+              "Demande de retrait rejetée",
+              "تم رفض الطلب",
+            ),
+          );
+        } catch (error: any) {
+          Alert.alert(
+            tr("Error", "Erreur", "غلطة"),
+            error.message || "Failed to reject request",
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+      "plain-text",
+    );
+  };
 
   const handleConfirmCryptoPayment = async (invoiceId: string) => {
     try {
@@ -430,9 +613,6 @@ export default function WalletScreen({
       }
 
       // 2. Open Stripe Checkout in the in-app browser
-      //    The backend can optionally return a checkoutUrl for full Stripe Checkout
-      //    If only clientSecret is returned, you'd need @stripe/stripe-react-native.
-      //    Here we use a hosted Checkout page via the backend's /stripe/checkout endpoint.
       const checkoutResponse = await fetch(`${API_BASE_URL}/stripe/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -486,6 +666,133 @@ export default function WalletScreen({
     }
   };
 
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr(
+          "Please enter a valid amount",
+          "Veuillez entrer un montant valide",
+          "حط مبلغ صحيح",
+        ),
+      );
+      return;
+    }
+    if (amount < 50) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr(
+          "Minimum withdrawal is 50 TND",
+          "Le retrait minimum est de 50 TND",
+          "أقل مبلغ تجبدو هو 50 دت",
+        ),
+      );
+      return;
+    }
+    if (amount > diamondBalance * DIAMOND_TO_TND_RATE) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr("Insufficient balance", "Solde insuffisant", "ماعندكش رصيد كافي"),
+      );
+      return;
+    }
+
+    // Per-method validation
+    if (withdrawMethod === "stripe" && !stripeEmail.trim()) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        "Please enter your Stripe email",
+      );
+      return;
+    }
+    if (withdrawMethod === "crypto" && (!cryptoAddress.trim() || !cryptoCoin)) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        "Please enter your crypto wallet address",
+      );
+      return;
+    }
+    if (
+      withdrawMethod === "bank_transfer" &&
+      (!iban.trim() || !bankName.trim())
+    ) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        "Please enter your IBAN and bank name",
+      );
+      return;
+    }
+    if (
+      withdrawMethod === "post_office" &&
+      (!postFullName.trim() ||
+        !postAddress.trim() ||
+        !postPostal.trim() ||
+        !postCity.trim())
+    ) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        "Please fill all postal delivery fields",
+      );
+      return;
+    }
+
+    setSubmittingWithdraw(true);
+    try {
+      const details: WithdrawalDetails = {
+        method: withdrawMethod,
+        stripeEmail:
+          withdrawMethod === "stripe" ? stripeEmail.trim() : undefined,
+        cryptoCoin: withdrawMethod === "crypto" ? cryptoCoin : undefined,
+        cryptoAddress:
+          withdrawMethod === "crypto" ? cryptoAddress.trim() : undefined,
+        iban: withdrawMethod === "bank_transfer" ? iban.trim() : undefined,
+        bankName:
+          withdrawMethod === "bank_transfer" ? bankName.trim() : undefined,
+        fullName:
+          withdrawMethod === "post_office" ? postFullName.trim() : undefined,
+        address:
+          withdrawMethod === "post_office" ? postAddress.trim() : undefined,
+        postalCode:
+          withdrawMethod === "post_office" ? postPostal.trim() : undefined,
+        city: withdrawMethod === "post_office" ? postCity.trim() : undefined,
+      };
+
+      await requestWithdrawal(wallet.id, user.uid, amount, details, "customer");
+
+      Alert.alert(
+        tr("Success", "Succès", "تمت العملية"),
+        tr(
+          "Withdrawal request submitted successfully for admin verification",
+          "Demande de retrait soumise avec succès pour vérification admin",
+          "طلب الجبدان تبعث بنجاح للمراجعة",
+        ),
+      );
+      setWithdrawModalVisible(false);
+      resetWithdrawFields();
+    } catch (error: any) {
+      console.error("[WalletScreen] Withdrawal error:", error);
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        error.message || "Withdrawal failed",
+      );
+    } finally {
+      setSubmittingWithdraw(false);
+    }
+  };
+
+  const resetWithdrawFields = () => {
+    setWithdrawAmount("");
+    setStripeEmail("");
+    setCryptoAddress("");
+    setIban("");
+    setBankName("");
+    setPostFullName("");
+    setPostAddress("");
+    setPostPostal("");
+    setPostCity("");
+  };
+
   const verifyAndCompletePayment = async (sessionIdOrIntentId: string) => {
     try {
       // Verify Stripe payment via backend; backend credits wallet on success
@@ -533,7 +840,7 @@ export default function WalletScreen({
   };
 
   const handleConfirmExchange = async () => {
-    if (!user?.uid || !exchangeAmount) return;
+    if (!user?.uid || !exchangeAmount || !walletId) return;
     const amount = parseInt(exchangeAmount);
     if (isNaN(amount) || amount <= 0) {
       Alert.alert(
@@ -559,66 +866,39 @@ export default function WalletScreen({
 
     setLoading(true);
     try {
-      const userRef = doc(db, "users", user.uid);
+      const fromCurrency =
+        exchangeType === "diamondsToCoins" ? "diamonds" : "coins";
+      const toCurrency =
+        exchangeType === "diamondsToCoins" ? "coins" : "diamonds";
 
-      if (exchangeType === "diamondsToCoins") {
-        // Diamonds to Coins (1:1)
-        await setDoc(
-          userRef,
-          {
-            wallet: {
-              diamonds: increment(-amount),
-              coins: increment(amount),
-            },
-          },
-          { merge: true },
-        );
-
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-          type: "exchange",
-          amountDiamonds: amount,
-          amountCoins: amount,
-          description: `Diamonds to Coins Exchange`,
-          timestamp: serverTimestamp(),
-          status: "completed",
-        });
-      } else {
-        // Coins to Diamonds (1:0.7, 30% loss)
-        const resultDiamonds = Math.ceil(amount * 0.7);
-        await setDoc(
-          userRef,
-          {
-            wallet: {
-              coins: increment(-amount),
-              diamonds: increment(resultDiamonds),
-            },
-          },
-          { merge: true },
-        );
-
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-          type: "exchange",
-          amountCoins: amount,
-          amountDiamonds: resultDiamonds,
-          description: `Coins to Diamonds Exchange (30% fee)`,
-          timestamp: serverTimestamp(),
-          status: "completed",
-        });
+      // Calculate toAmount based on rules
+      let toAmount = amount;
+      if (fromCurrency === "coins" && toCurrency === "diamonds") {
+        toAmount = Math.ceil(amount * 0.7); // 30% fee
       }
+
+      await performExchange(
+        user.uid,
+        walletId,
+        fromCurrency,
+        toCurrency,
+        amount,
+        toAmount
+      );
 
       setShowExchangeModal(false);
       setExchangeAmount("");
       Alert.alert(
-        tr("Success", "Succès", "سلكت!"),
+        tr("Success", "Succès", "سلكت"),
         tr(
-          "Exchange completed successfully!",
-          "Échange terminé avec succès !",
-          "التبادل صار بنجاح!",
+          "Exchange completed successfully.",
+          "Échange effectué avec succès.",
+          "تم التبادل بنجاح.",
         ),
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Exchange Error:", error);
-      Alert.alert("Error", "Exchange failed");
+      Alert.alert("Error", error.message || "Exchange failed");
     } finally {
       setLoading(false);
     }
@@ -652,7 +932,8 @@ export default function WalletScreen({
   };
 
   const handleTransfer = async () => {
-    if (!user?.uid || !selectedUserForTransfer || !transferAmount) return;
+    if (!user?.uid || !selectedUserForTransfer || !transferAmount || !walletId)
+      return;
 
     // Check if mutual friends
     const isFriend = profileData?.friends?.includes(
@@ -694,69 +975,29 @@ export default function WalletScreen({
 
     setLoading(true);
     try {
-      await runTransaction(db, async (transaction) => {
-        const meRef = doc(db, "users", user.uid);
-        const themRef = doc(db, "users", selectedUserForTransfer.uid);
+      // Get recipient wallet
+      const recipientWalletId = await getOrCreateWallet(
+        selectedUserForTransfer.uid,
+        "customer",
+        selectedUserForTransfer.fullName,
+      );
 
-        // Check balances again inside transaction
-        const meDoc = await transaction.get(meRef);
-        const currentBalance = meDoc.data()?.wallet?.[transferType] || 0;
-
-        if (currentBalance < amount) {
-          throw new Error("Insufficient balance");
-        }
-
-        // Update my wallet
-        transaction.update(meRef, {
-          [`wallet.${transferType}`]: increment(-amount),
-        });
-
-        // Update their wallet
-        transaction.update(themRef, {
-          [`wallet.${transferType}`]: increment(amount),
-        });
-
-        // Record transaction for ME
-        const myTxRef = doc(collection(db, "users", user.uid, "transactions"));
-        transaction.set(myTxRef, {
-          type: "transfer_sent",
-          amount: amount,
-          currency: transferType,
-          amountCoins: transferType === "coins" ? amount : 0,
-          amountDiamonds: transferType === "diamonds" ? amount : 0,
-          recipientId: selectedUserForTransfer.uid,
-          recipientName: selectedUserForTransfer.fullName,
-          recipientAvatar: selectedUserForTransfer.avatarUrl || "",
-          description: `Transfer to ${getName(selectedUserForTransfer.fullName, language)}`,
-          timestamp: serverTimestamp(),
-          status: "completed",
-        });
-
-        // Record transaction for THEM
-        const theirTxRef = doc(
-          collection(db, "users", selectedUserForTransfer.uid, "transactions"),
-        );
-        transaction.set(theirTxRef, {
-          type: "transfer_received",
-          amount: amount,
-          currency: transferType,
-          amountCoins: transferType === "coins" ? amount : 0,
-          amountDiamonds: transferType === "diamonds" ? amount : 0,
-          senderId: user.uid,
-          senderName: profileData?.fullName || "Anonymous",
-          senderAvatar: profileData?.avatarUrl || "",
-          description: `Transfer from ${getName(profileData?.fullName, language) || "User"}`,
-          timestamp: serverTimestamp(),
-          status: "completed",
-        });
-      });
+      await performTransfer(
+        user.uid,
+        walletId,
+        selectedUserForTransfer.uid,
+        recipientWalletId,
+        selectedUserForTransfer.fullName,
+        amount,
+        transferType
+      );
 
       Alert.alert(
-        tr("Success", "Succès", "سلكت!"),
+        tr("Success", "Succès", "سلكت"),
         tr(
-          "Transfer completed successfully!",
-          "Transfert réussi !",
-          "التحويل صار بنجاح!",
+          "Transfer completed successfully.",
+          "Transfert effectué avec succès.",
+          "تم التحويل بنجاح.",
         ),
       );
       setShowTransferModal(false);
@@ -764,9 +1005,9 @@ export default function WalletScreen({
       setSelectedUserForTransfer(null);
       setTransferSearchQuery("");
       setTransferSearchResults([]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Transfer Error:", error);
-      Alert.alert("Error", "Transfer failed");
+      Alert.alert("Error", error.message || "Transfer failed");
     } finally {
       setLoading(false);
     }
@@ -1324,70 +1565,8 @@ export default function WalletScreen({
               },
             ]}
             onPress={() => {
-              const amountTND = parseFloat(tndValue);
-              if (amountTND < 50) {
-                Alert.alert(
-                  tr("Minimum Amount", "Montant Minimum", "أقل مبلغ"),
-                  tr(
-                    "The minimum withdrawal amount is 50.00 TND.",
-                    "Le montant minimum de retrait est de 50,00 TND.",
-                    "أقل مبلغ تنجم تجبدو هو 50 دينار.",
-                  ),
-                );
-                return;
-              }
-              Alert.alert(
-                tr("Confirm Withdrawal", "Confirmer le Retrait", "أكد الجبدان"),
-                tr(
-                  `Do you want to request a withdrawal for ${tndValue} TND?`,
-                  `Voulez-vous demander un retrait de ${tndValue} TND ?`,
-                  `تحب تجبد ${tndValue} دينار؟`,
-                ),
-                [
-                  { text: tr("Cancel", "Annuler", "بطل"), style: "cancel" },
-                  {
-                    text: tr("Request", "Demander", "أعمل طلب"),
-                    onPress: async () => {
-                      setLoading(true);
-                      try {
-                        const userRef = doc(db, "users", user.uid);
-                        await setDoc(
-                          userRef,
-                          {
-                            wallet: { diamonds: 0 },
-                          },
-                          { merge: true },
-                        );
-
-                        await addDoc(
-                          collection(db, "users", user.uid, "transactions"),
-                          {
-                            type: "withdrawal",
-                            amountTND: parseFloat(tndValue),
-                            amountDiamonds: diamondBalance,
-                            description: `Withdrawal Request`,
-                            timestamp: serverTimestamp(),
-                            status: "pending",
-                          },
-                        );
-
-                        Alert.alert(
-                          tr("Success", "Succès", "سلكت!"),
-                          tr(
-                            "Withdrawal request sent",
-                            "Demande de retrait envoyée",
-                            "طلب الجبدان تبعث",
-                          ),
-                        );
-                      } catch (error) {
-                        Alert.alert("Error", "Withdrawal request failed");
-                      } finally {
-                        setLoading(false);
-                      }
-                    },
-                  },
-                ],
-              );
+              setWithdrawModalVisible(true);
+              setWithdrawStep("method");
             }}
           >
             <View
@@ -1837,6 +2016,52 @@ export default function WalletScreen({
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
+                }}
+              >
+                <Text
+                  style={[styles.transactionDate, { color: colors.textMuted }]}
+                >
+                  {tx.createdAt?.toDate
+                    ? tx.createdAt.toDate().toLocaleDateString()
+                    : new Date().toLocaleDateString()}
+                </Text>
+                {tx.type === "withdrawal" && tx.status && (
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      backgroundColor:
+                        tx.status === "pending"
+                          ? "rgba(245, 158, 11, 0.1)"
+                          : tx.status === "approved"
+                            ? "rgba(16, 185, 129, 0.1)"
+                            : "rgba(239, 68, 68, 0.1)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "800",
+                        color:
+                          tx.status === "pending"
+                            ? "#F59E0B"
+                            : tx.status === "approved"
+                              ? "#10B981"
+                              : "#EF4444",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {tx.status}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginTop: 2,
                 }}
               >
@@ -1897,7 +2122,6 @@ export default function WalletScreen({
         ) : (
           renderEarnings()
         )}
-
       </ScrollView>
 
       {/* Floating Admin Button */}
@@ -1906,39 +2130,43 @@ export default function WalletScreen({
           onPress={() => setShowAdminPanel(true)}
           style={{
             position: "absolute",
-            bottom: insets.bottom + 80,
+            bottom: insets.bottom + 100, // Pushed up further to avoid tab bar overlap
             right: 20,
             backgroundColor: "#EF4444",
-            borderRadius: 30,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            flexDirection: "row",
+            width: 50,
+            height: 50,
+            borderRadius: 25,
             alignItems: "center",
+            justifyContent: "center",
             shadowColor: "#EF4444",
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.5,
             shadowRadius: 8,
             elevation: 8,
-            gap: 8,
+            zIndex: 999,
           }}
         >
-          <RefreshCw size={16} color="#FFF" />
-          <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 13 }}>
-            CRYPTO VERIFY
-          </Text>
-          {adminInvoices.length > 0 && (
+          <RefreshCw size={24} color="#FFF" />
+          {adminInvoices.length + adminWithdrawals.length > 0 && (
             <View
               style={{
+                position: "absolute",
+                top: -5,
+                right: -5,
                 backgroundColor: "#FFF",
                 borderRadius: 10,
                 paddingHorizontal: 6,
                 paddingVertical: 2,
                 minWidth: 20,
                 alignItems: "center",
+                borderWidth: 2,
+                borderColor: "#EF4444",
               }}
             >
-              <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "900" }}>
-                {adminInvoices.length}
+              <Text
+                style={{ color: "#EF4444", fontSize: 10, fontWeight: "900" }}
+              >
+                {adminInvoices.length + adminWithdrawals.length}
               </Text>
             </View>
           )}
@@ -1957,12 +2185,19 @@ export default function WalletScreen({
           <View
             style={[
               styles.modalContent,
-              { backgroundColor: isDark ? "#1C1C1E" : "#FFF", maxHeight: "80%" },
+              {
+                backgroundColor: isDark ? "#1C1C1E" : "#FFF",
+                maxHeight: "90%",
+                minHeight: 600,
+                paddingBottom: insets.bottom,
+              },
             ]}
           >
             {/* Header */}
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
                 <View
                   style={{
                     backgroundColor: "rgba(239,68,68,0.1)",
@@ -1973,247 +2208,480 @@ export default function WalletScreen({
                   <RefreshCw size={18} color="#EF4444" />
                 </View>
                 <View>
-                  <Text style={{ color: "#EF4444", fontWeight: "900", fontSize: 16 }}>
-                    CRYPTO VERIFICATION
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    Admin Panel
-                  </Text>
-                </View>
-                {adminInvoices.length > 0 && (
-                  <View
+                  <Text
                     style={{
-                      backgroundColor: "#EF4444",
-                      borderRadius: 10,
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
+                      color: "#EF4444",
+                      fontWeight: "900",
+                      fontSize: 16,
                     }}
                   >
-                    <Text style={{ color: "#FFF", fontSize: 11, fontWeight: "900" }}>
-                      {adminInvoices.length} pending
-                    </Text>
-                  </View>
-                )}
+                    ADMIN VERIFICATION
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    Approve or reject transactions
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity onPress={() => setShowAdminPanel(false)}>
                 <X size={24} color={colors.foreground} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 4 }}>
-              {adminInvoices.length === 0 ? (
-                <View
+            {/* Admin Tabs */}
+            <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                <TouchableOpacity
+                  onPress={() => setAdminPanelTab("crypto")}
                   style={{
-                    padding: 40,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
                     alignItems: "center",
-                    justifyContent: "center",
+                    backgroundColor:
+                      adminPanelTab === "crypto"
+                        ? "rgba(239,68,68,0.1)"
+                        : "transparent",
+                    borderWidth: 1,
+                    borderColor:
+                      adminPanelTab === "crypto" ? "#EF4444" : colors.border,
                   }}
                 >
-                  <Check size={40} color="rgba(239, 68, 68, 0.3)" />
                   <Text
                     style={{
-                      color: colors.textMuted,
-                      fontSize: 14,
-                      marginTop: 12,
-                      fontWeight: "600",
+                      color:
+                        adminPanelTab === "crypto"
+                          ? "#EF4444"
+                          : colors.textMuted,
+                      fontWeight: "800",
+                      fontSize: 11,
                     }}
                   >
-                    No pending crypto payments
+                    RECHARGES ({adminInvoices.length})
                   </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
-                    All clear! ✓
-                  </Text>
-                </View>
-              ) : (
-                adminInvoices.map((inv) => (
-                  <View
-                    key={inv.id}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setAdminPanelTab("withdrawals")}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor:
+                      adminPanelTab === "withdrawals"
+                        ? "rgba(239,68,68,0.1)"
+                        : "transparent",
+                    borderWidth: 1,
+                    borderColor:
+                      adminPanelTab === "withdrawals"
+                        ? "#EF4444"
+                        : colors.border,
+                  }}
+                >
+                  <Text
                     style={{
-                      marginBottom: 14,
-                      borderRadius: 18,
-                      overflow: "hidden",
-                      borderWidth: 1,
-                      borderColor: "rgba(239,68,68,0.15)",
+                      color:
+                        adminPanelTab === "withdrawals"
+                          ? "#EF4444"
+                          : colors.textMuted,
+                      fontWeight: "800",
+                      fontSize: 11,
                     }}
                   >
-                    {/* User Info Header */}
-                    <View
+                    WITHDRAWALS ({adminWithdrawals.length})
+                  </Text>
+                </TouchableOpacity>
+
+              </ScrollView>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ paddingHorizontal: 4 }}
+            >
+              {adminPanelTab === "crypto" ? (
+                adminInvoices.length === 0 ? (
+                  <View
+                    style={{
+                      padding: 40,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Check size={40} color="rgba(239, 68, 68, 0.3)" />
+                    <Text
                       style={{
-                        backgroundColor: isDark ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.05)",
-                        padding: 12,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                        borderBottomWidth: 1,
-                        borderBottomColor: "rgba(239,68,68,0.1)",
+                        color: colors.textMuted,
+                        fontSize: 14,
+                        marginTop: 12,
+                        fontWeight: "600",
                       }}
                     >
-                      {/* Avatar */}
-                      {inv._user?.avatarUrl ? (
-                        <Image
-                          source={{ uri: inv._user.avatarUrl }}
-                          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: "rgba(239,68,68,0.3)" }}
-                        />
-                      ) : (
-                        <View
+                      No pending crypto payments
+                    </Text>
+                  </View>
+                ) : (
+                  adminInvoices.map((inv) => (
+                    <View
+                      key={inv.id}
+                      style={{
+                        marginBottom: 14,
+                        borderRadius: 18,
+                        overflow: "hidden",
+                        borderWidth: 1,
+                        borderColor: "rgba(239,68,68,0.15)",
+                      }}
+                    >
+                      {/* Render Invoice Card */}
+                      <View
+                        style={{
+                          backgroundColor: isDark
+                            ? "rgba(239,68,68,0.08)"
+                            : "rgba(239,68,68,0.05)",
+                          padding: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: "rgba(239,68,68,0.1)",
+                        }}
+                      >
+                        {inv._user?.avatarUrl ? (
+                          <Image
+                            source={{ uri: inv._user.avatarUrl }}
+                            style={{ width: 44, height: 44, borderRadius: 22 }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 22,
+                              backgroundColor: "rgba(239,68,68,0.15)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <User size={22} color="#EF4444" />
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontWeight: "800",
+                              color: colors.foreground,
+                              fontSize: 15,
+                            }}
+                          >
+                            {inv._user?.fullName || "Unknown"}
+                          </Text>
+                          {inv._user?.email && (
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                              {inv._user.email}
+                            </Text>
+                          )}
+                          {inv._user?.phone && (
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                              {inv._user.phone}
+                            </Text>
+                          )}
+                          <Text
+                            style={{ fontSize: 11, color: colors.textMuted }}
+                          >
+                            {inv.coin} Payment
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ padding: 14 }}>
+                        <Text
                           style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            backgroundColor: "rgba(239,68,68,0.15)",
-                            alignItems: "center",
-                            justifyContent: "center",
+                            fontWeight: "900",
+                            color: colors.foreground,
+                            fontSize: 20,
                           }}
                         >
-                          <User size={22} color="#EF4444" />
-                        </View>
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: "800", color: colors.foreground, fontSize: 15 }}>
-                          {inv._user?.fullName || "Unknown User"}
+                          {inv.coinAmount} {inv.coin}
                         </Text>
-                        {inv._user?.email ? (
-                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
-                            {inv._user.email}
+                        <TouchableOpacity
+                          onPress={() => handleConfirmCryptoPayment(inv.id)}
+                          style={{
+                            backgroundColor: "#10B981",
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            alignItems: "center",
+                            marginTop: 12,
+                          }}
+                        >
+                          <Text style={{ color: "#FFF", fontWeight: "900" }}>
+                            CONFIRM PAYMENT
                           </Text>
-                        ) : null}
-                        {inv._user?.phone ? (
-                          <Text style={{ fontSize: 11, color: colors.textMuted }}>
-                            📞 {inv._user.phone}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View
-                        style={{
-                          backgroundColor: "rgba(245,158,11,0.12)",
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ color: "#F59E0B", fontSize: 11, fontWeight: "700" }}>
-                          PENDING
-                        </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-
-                    {/* Payment Details */}
-                    <View
+                  ))
+                )
+              ) : adminPanelTab === "withdrawals" ? (
+                adminWithdrawals.length === 0 ? (
+                  <View
+                    style={{
+                      padding: 40,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <TrendingUp size={40} color="rgba(239, 68, 68, 0.3)" />
+                    <Text
                       style={{
-                        padding: 14,
-                        backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                        color: colors.textMuted,
+                        fontSize: 14,
+                        marginTop: 12,
+                        fontWeight: "600",
                       }}
                     >
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <View>
-                          <Text style={{ fontWeight: "900", color: colors.foreground, fontSize: 20 }}>
-                            {inv.coinAmount} {inv.coin}
+                      No pending withdrawal requests
+                    </Text>
+                  </View>
+                ) : (
+                  adminWithdrawals.map((req) => (
+                    <View
+                      key={req.id}
+                      style={{
+                        marginBottom: 14,
+                        borderRadius: 18,
+                        overflow: "hidden",
+                        borderWidth: 1,
+                        borderColor: "rgba(239,68,68,0.15)",
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: isDark
+                            ? "rgba(239,68,68,0.08)"
+                            : "rgba(239,68,68,0.05)",
+                          padding: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: "rgba(239,68,68,0.1)",
+                        }}
+                      >
+                        {req._user?.avatarUrl ? (
+                          <Image
+                            source={{ uri: req._user.avatarUrl }}
+                            style={{ width: 44, height: 44, borderRadius: 22 }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 22,
+                              backgroundColor: "rgba(239,68,68,0.15)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <User size={22} color="#EF4444" />
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontWeight: "800",
+                              color: colors.foreground,
+                              fontSize: 15,
+                            }}
+                          >
+                            {req._user?.fullName || "Unknown"}
                           </Text>
-                          {inv.amountUSD ? (
-                            <Text style={{ fontSize: 13, color: "#10B981", fontWeight: "700", marginTop: 2 }}>
-                              ${inv.amountUSD} USD
+                          {req._user?.email && (
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                              {req._user.email}
                             </Text>
-                          ) : null}
+                          )}
+                          {req._user?.phone && (
+                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                              {req._user.phone}
+                            </Text>
+                          )}
+                          <Text
+                            style={{ fontSize: 11, color: colors.textMuted }}
+                          >
+                            UID: {req.userId}
+                          </Text>
+                          <Text
+                            style={{ fontSize: 11, color: colors.textMuted }}
+                          >
+                            {req.method.toUpperCase()} Withdrawal
+                          </Text>
                         </View>
-                        {(() => {
-                          const totalCoins = (inv.pack?.coins || 0) + (inv.pack?.bonus || 0) || 
-                                           (inv.meta?.packCoins || 0) + (inv.meta?.packBonus || 0);
-                          if (!totalCoins) return null;
-                          return (
-                            <View
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text
+                            style={{
+                              fontWeight: "900",
+                              color: "#EF4444",
+                              fontSize: 18,
+                            }}
+                          >
+                            -{req.amount.toFixed(2)} TND
+                          </Text>
+                          <Text
+                            style={{
+                              fontWeight: "700",
+                              color: "#8B5CF6",
+                              fontSize: 12,
+                            }}
+                          >
+                            ={(req.amount * 100).toLocaleString()} Diamonds
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ padding: 14 }}>
+                        {req.method === "crypto" && (
+                          <View
+                            style={{
+                              marginBottom: 12,
+                              padding: 10,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "rgba(0,0,0,0.03)",
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Text
                               style={{
-                                backgroundColor: isDark ? "rgba(245,158,11,0.1)" : "rgba(245,158,11,0.08)",
-                                padding: 10,
-                                borderRadius: 12,
-                                alignItems: "center",
+                                fontSize: 12,
+                                color: colors.foreground,
+                                marginBottom: 4,
                               }}
                             >
-                              <Text style={{ color: "#F59E0B", fontSize: 13, fontWeight: "900" }}>
-                                {totalCoins}
+                              Coin:{" "}
+                              <Text
+                                style={{ fontWeight: "800", color: "#F59E0B" }}
+                              >
+                                {req.details?.cryptoCoin}
                               </Text>
-                              <Text style={{ color: "#F59E0B", fontSize: 9, fontWeight: "700" }}>COINS TOTAL</Text>
-                            </View>
-                          );
-                        })()}
+                            </Text>
+                            <Text
+                              style={{ fontSize: 12, color: colors.foreground }}
+                            >
+                              Address:{" "}
+                              <Text style={{ fontWeight: "700" }}>
+                                {req.details?.cryptoAddress}
+                              </Text>
+                            </Text>
+                          </View>
+                        )}
+                        {req.method === "bank_transfer" && (
+                          <View
+                            style={{
+                              marginBottom: 12,
+                              padding: 10,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "rgba(0,0,0,0.03)",
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: colors.foreground,
+                                marginBottom: 4,
+                              }}
+                            >
+                              Bank:{" "}
+                              <Text style={{ fontWeight: "800" }}>
+                                {req.details?.bankName}
+                              </Text>
+                            </Text>
+                            <Text
+                              style={{ fontSize: 12, color: colors.foreground }}
+                            >
+                              IBAN:{" "}
+                              <Text style={{ fontWeight: "700" }}>
+                                {req.details?.iban}
+                              </Text>
+                            </Text>
+                          </View>
+                        )}
+                        {req.method === "post_office" && (
+                          <View
+                            style={{
+                              marginBottom: 12,
+                              padding: 10,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "rgba(0,0,0,0.03)",
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: colors.foreground,
+                                marginBottom: 4,
+                              }}
+                            >
+                              Recipient:{" "}
+                              <Text style={{ fontWeight: "800" }}>
+                                {req.details?.fullName}
+                              </Text>
+                            </Text>
+                            <Text
+                              style={{ fontSize: 12, color: colors.foreground }}
+                            >
+                              Address:{" "}
+                              <Text style={{ fontWeight: "700" }}>
+                                {req.details?.address},{" "}
+                                {req.details?.postalCode} {req.details?.city}
+                              </Text>
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          <TouchableOpacity
+                            onPress={() => handleRejectWithdrawal(req.id)}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 12,
+                              borderRadius: 12,
+                              alignItems: "center",
+                              borderWidth: 1,
+                              borderColor: "#EF4444",
+                            }}
+                          >
+                            <Text
+                              style={{ color: "#EF4444", fontWeight: "800" }}
+                            >
+                              REJECT
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleApproveWithdrawal(req.id)}
+                            style={{
+                              flex: 1.5,
+                              paddingVertical: 12,
+                              borderRadius: 12,
+                              alignItems: "center",
+                              backgroundColor: "#10B981",
+                            }}
+                          >
+                            <Text style={{ color: "#FFF", fontWeight: "800" }}>
+                              APPROVE
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-
-                      {/* UID Row */}
-                      <View
-                        style={{
-                          backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-                          padding: 10,
-                          borderRadius: 10,
-                          marginBottom: 6,
-                        }}
-                      >
-                        <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 2 }}>
-                          USER ID
-                        </Text>
-                        <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "monospace", fontWeight: "600" }}>
-                          {inv.userId}
-                        </Text>
-                      </View>
-
-                      {/* Invoice ID Row */}
-                      <View
-                        style={{
-                          backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-                          padding: 10,
-                          borderRadius: 10,
-                          marginBottom: 12,
-                        }}
-                      >
-                        <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 2 }}>
-                          INVOICE ID
-                        </Text>
-                        <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "monospace" }}>
-                          {inv.id}
-                        </Text>
-                        {inv.createdAt?.toDate ? (
-                          <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>
-                            🕐 {inv.createdAt.toDate().toLocaleString()}
-                          </Text>
-                        ) : null}
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => {
-                          Alert.alert(
-                            "Confirm Payment",
-                            `Credit ${
-                              (inv.pack?.coins || 0) + (inv.pack?.bonus || 0) || 
-                              (inv.meta?.packCoins || 0) + (inv.meta?.packBonus || 0)
-                            } coins to ${inv._user?.fullName || inv.userId}?`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "✓ Confirm",
-                                style: "destructive",
-                                onPress: () => handleConfirmCryptoPayment(inv.id),
-                              },
-                            ]
-                          );
-                        }}
-                        style={{
-                          backgroundColor: "#10B981",
-                          paddingVertical: 13,
-                          borderRadius: 12,
-                          alignItems: "center",
-                          flexDirection: "row",
-                          justifyContent: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <Check size={16} color="#FFF" />
-                        <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 14 }}>
-                          CONFIRM PAYMENT
-                        </Text>
-                      </TouchableOpacity>
                     </View>
-                  </View>
-                ))
-              )}
-              <View style={{ height: 20 }} />
+                  ))
+                )
+              ) : null}
+              <View style={{ height: 40 }} />
             </ScrollView>
           </View>
         </View>
@@ -2227,7 +2695,11 @@ export default function WalletScreen({
         onRequestClose={() => setShowExchangeModal(false)}
       >
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}>
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView
+            intensity={20}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
@@ -2238,8 +2710,8 @@ export default function WalletScreen({
               styles.modalContent,
               {
                 backgroundColor: isDark ? "#1C1C1E" : "#FFF",
-                maxHeight: keyboardOpen ? "95%" : "82%",
-                minHeight: 560,
+                maxHeight: "95%",
+                minHeight: 750,
                 paddingBottom: insets.bottom + 20,
               },
             ]}
@@ -2591,11 +3063,11 @@ export default function WalletScreen({
                   style={[
                     styles.confirmBtn,
                     {
-                      backgroundColor: loading
-                        ? colors.textMuted
-                        : exchangeType === "diamondsToCoins"
+                      backgroundColor:
+                        exchangeType === "diamondsToCoins"
                           ? "#8B5CF6"
                           : "#F59E0B",
+                      opacity: loading || !exchangeAmount ? 0.5 : 1,
                       height: 50,
                     },
                   ]}
@@ -2641,8 +3113,8 @@ export default function WalletScreen({
               styles.modalContent,
               {
                 backgroundColor: isDark ? "#1C1C1E" : "#FFF",
-                maxHeight: keyboardOpen ? "97%" : "78%",
-                minHeight: 400,
+                maxHeight: "95%",
+                minHeight: 750,
                 paddingBottom: insets.bottom + 20,
               },
             ]}
@@ -2819,7 +3291,9 @@ export default function WalletScreen({
                       )}
                     </View>
 
-                    <ScrollView style={{ marginTop: 10, paddingHorizontal: 20 }}>
+                    <ScrollView
+                      style={{ marginTop: 10, paddingHorizontal: 20 }}
+                    >
                       {transferSearchResults.length === 0 &&
                       transferSearchQuery.length >= 2 &&
                       !isSearching ? (
@@ -2842,7 +3316,10 @@ export default function WalletScreen({
                             key={u.uid}
                             style={[
                               styles.userListItem,
-                              { borderBottomColor: colors.border },
+                              {
+                                borderBottomColor: colors.border,
+                                paddingVertical: 16,
+                              },
                             ]}
                             onPress={() => setSelectedUserForTransfer(u)}
                           >
@@ -2862,22 +3339,33 @@ export default function WalletScreen({
                                   <User size={20} color={colors.textMuted} />
                                 )}
                               </View>
-                              <View style={{ marginLeft: 12 }}>
+                              <View style={{ marginLeft: 12, flex: 1 }}>
                                 <Text
                                   style={[
                                     styles.userNameText,
-                                    { color: colors.foreground },
+                                    { color: colors.foreground, fontSize: 16 },
                                   ]}
                                 >
                                   {getName(u.fullName, language)}
                                 </Text>
                                 <Text
                                   style={{
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     color: colors.textMuted,
+                                    marginTop: 2,
                                   }}
                                 >
                                   {u.email}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 10,
+                                    color: colors.textMuted,
+                                    marginTop: 4,
+                                    opacity: 0.7,
+                                  }}
+                                >
+                                  ID: {u.uid}
                                 </Text>
                               </View>
                             </View>
@@ -3411,16 +3899,15 @@ export default function WalletScreen({
                       style={[
                         styles.confirmBtn,
                         {
-                          backgroundColor:
+                          backgroundColor: colors.info,
+                          opacity:
                             loading ||
                             !transferAmount ||
                             !profileData?.friends?.includes(
                               selectedUserForTransfer.uid,
                             )
-                              ? isDark
-                                ? "rgba(255,255,255,0.05)"
-                                : "rgba(0,0,0,0.05)"
-                              : colors.info,
+                              ? 0.5
+                              : 1,
                           marginTop: 30,
                           height: 56,
                         },
@@ -3504,6 +3991,601 @@ export default function WalletScreen({
             )}
           </View>
         </View>
+      </Modal>
+
+      {/* Withdrawal Modal */}
+      <Modal
+        visible={withdrawModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setWithdrawModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: colors.card,
+                maxHeight: "95%",
+                minHeight: "50%",
+                paddingBottom: insets.bottom + 20,
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {withdrawStep === "details" && (
+                  <TouchableOpacity
+                    onPress={() => setWithdrawStep("method")}
+                    style={{ marginRight: 15 }}
+                  >
+                    <ArrowLeft size={24} color={colors.foreground} />
+                  </TouchableOpacity>
+                )}
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                  {tr("Withdraw Funds", "Retirer des fonds", "اجبد فلوسك")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setWithdrawModalVisible(false);
+                  setWithdrawStep("method");
+                }}
+              >
+                <X size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ paddingHorizontal: 24, paddingVertical: 20 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+            >
+              {withdrawStep === "method" ? (
+                <>
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      {
+                        color: colors.foreground,
+                        fontSize: 16,
+                        marginBottom: 20,
+                      },
+                    ]}
+                  >
+                    {tr(
+                      "Choose amount to withdraw",
+                      "Choisir le montant à retirer",
+                      "قداش تحب تجبد",
+                    )}
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: isDark
+                          ? "rgba(255,255,255,0.05)"
+                          : "#F9FAFB",
+                        marginBottom: 10,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      style={[styles.modalInput, { color: colors.foreground }]}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={withdrawAmount}
+                      onChangeText={setWithdrawAmount}
+                    />
+                    <Text
+                      style={{
+                        fontWeight: "800",
+                        color: colors.foreground,
+                        marginRight: 10,
+                      }}
+                    >
+                      TND
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setWithdrawAmount((diamondBalance * DIAMOND_TO_TND_RATE).toString())
+                      }
+                    >
+                      <Text
+                        style={{ color: colors.primary, fontWeight: "700" }}
+                      >
+                        MAX
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: 12,
+                      marginBottom: 30,
+                    }}
+                  >
+                    {tr(
+                      "Available balance:",
+                      "Solde disponible :",
+                      "الرصيد المتوفر:",
+                    )}{" "}
+                    {(diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)} TND
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      {
+                        color: colors.foreground,
+                        fontSize: 16,
+                        marginBottom: 15,
+                      },
+                    ]}
+                  >
+                    {tr(
+                      "Select withdrawal method",
+                      "Choisir le mode de retrait",
+                      "اختار كفاش تحب تجبد",
+                    )}
+                  </Text>
+
+                  <View style={{ gap: 12 }}>
+                    {[
+                      {
+                        id: "stripe",
+                        name: "Stripe",
+                        icon: CreditCard,
+                        color: "#6366F1",
+                      },
+                      {
+                        id: "crypto",
+                        name: "Crypto",
+                        icon: Hexagon,
+                        color: "#F59E0B",
+                      },
+                      {
+                        id: "bank_transfer",
+                        name: "Bank Transfer",
+                        icon: Landmark,
+                        color: "#10B981",
+                      },
+                      {
+                        id: "post_office",
+                        name: "Post Office",
+                        icon: Mail,
+                        color: "#EF4444",
+                      },
+                    ].map((method) => (
+                      <TouchableOpacity
+                        key={method.id}
+                        style={[
+                          styles.transactionItem,
+                          {
+                            backgroundColor:
+                              withdrawMethod === method.id
+                                ? isDark
+                                  ? "rgba(59, 130, 246, 0.1)"
+                                  : "rgba(59, 130, 246, 0.05)"
+                                : isDark
+                                  ? "#333"
+                                  : "#F9FAFB",
+                            padding: 16,
+                            borderRadius: 16,
+                            borderBottomWidth: 0,
+                            borderWidth: 1.5,
+                            borderColor:
+                              withdrawMethod === method.id
+                                ? colors.primary
+                                : "transparent",
+                          },
+                        ]}
+                        onPress={() => setWithdrawMethod(method.id as any)}
+                      >
+                        <View
+                          style={[
+                            styles.coinIconWrapper,
+                            {
+                              backgroundColor: `${method.color}20`,
+                              marginBottom: 0,
+                            },
+                          ]}
+                        >
+                          <method.icon size={24} color={method.color} />
+                        </View>
+                        <View style={styles.transactionInfo}>
+                          <Text
+                            style={[
+                              styles.transactionTitle,
+                              { color: colors.foreground },
+                            ]}
+                          >
+                            {method.name}
+                          </Text>
+                        </View>
+                        {withdrawMethod === method.id && (
+                          <Check size={20} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.confirmBtn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity:
+                          !withdrawAmount || parseFloat(withdrawAmount) < 50
+                            ? 0.5
+                            : 1,
+                        marginTop: 30,
+                      },
+                    ]}
+                    onPress={() => setWithdrawStep("details")}
+                    disabled={
+                      !withdrawAmount || parseFloat(withdrawAmount) < 50
+                    }
+                  >
+                    <Text style={styles.confirmBtnText}>
+                      {tr("Next Step", "Étape suivante", "تعدى للي بعدو")}
+                    </Text>
+                  </TouchableOpacity>
+                  {parseFloat(withdrawAmount) < 50 && withdrawAmount !== "" && (
+                    <Text
+                      style={{
+                        color: "#EF4444",
+                        fontSize: 12,
+                        textAlign: "center",
+                        marginTop: 10,
+                      }}
+                    >
+                      {tr(
+                        "Minimum withdrawal is 50 TND",
+                        "Le retrait minimum est de 50 TND",
+                        "أقل مبلغ تجبدو هو 50 دت",
+                      )}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      {
+                        color: colors.foreground,
+                        fontSize: 16,
+                        marginBottom: 20,
+                      },
+                    ]}
+                  >
+                    {tr(
+                      "Enter withdrawal details",
+                      "Saisir les détails du retrait",
+                      "حط المعلومات",
+                    )}
+                  </Text>
+
+                  {withdrawMethod === "stripe" && (
+                    <View style={{ gap: 15 }}>
+                      <Text
+                        style={[styles.inputLabel, { color: colors.textMuted }]}
+                      >
+                        {tr("Stripe Email", "Email Stripe", "إيميل سترايب")}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder="email@example.com"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="email-address"
+                        value={stripeEmail}
+                        onChangeText={setStripeEmail}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  )}
+
+                  {withdrawMethod === "crypto" && (
+                    <View style={{ gap: 15 }}>
+                      <Text
+                        style={[styles.inputLabel, { color: colors.textMuted }]}
+                      >
+                        {tr("Select Coin", "Choisir la pièce", "اختار العملة")}
+                      </Text>
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        {["USDT", "BTC", "ETH"].map((c) => (
+                          <TouchableOpacity
+                            key={c}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 12,
+                              borderRadius: 12,
+                              backgroundColor:
+                                cryptoCoin === c
+                                  ? colors.primary
+                                  : isDark
+                                    ? "#333"
+                                    : "#EEE",
+                              alignItems: "center",
+                            }}
+                            onPress={() => setCryptoCoin(c as any)}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  cryptoCoin === c ? "#FFF" : colors.foreground,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {c}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: colors.textMuted, marginTop: 10 },
+                        ]}
+                      >
+                        {tr(
+                          "Wallet Address",
+                          "Adresse du portefeuille",
+                          "أدريسة المحفظة",
+                        )}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder="0x..."
+                        placeholderTextColor={colors.textMuted}
+                        value={cryptoAddress}
+                        onChangeText={setCryptoAddress}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  )}
+
+                  {withdrawMethod === "bank_transfer" && (
+                    <View style={{ gap: 15 }}>
+                      <Text
+                        style={[styles.inputLabel, { color: colors.textMuted }]}
+                      >
+                        {tr("Bank Name", "Nom de la banque", "اسم البانكا")}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder={tr(
+                          "Example: BIAT",
+                          "Ex: BIAT",
+                          "مثال: BIAT",
+                        )}
+                        placeholderTextColor={colors.textMuted}
+                        value={bankName}
+                        onChangeText={setBankName}
+                      />
+
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: colors.textMuted, marginTop: 10 },
+                        ]}
+                      >
+                        {tr("IBAN / RIB", "IBAN / RIB", "الريب")}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder="TN..."
+                        placeholderTextColor={colors.textMuted}
+                        value={iban}
+                        onChangeText={setIban}
+                        autoCapitalize="characters"
+                      />
+                    </View>
+                  )}
+
+                  {withdrawMethod === "post_office" && (
+                    <View style={{ gap: 15 }}>
+                      <Text
+                        style={[styles.inputLabel, { color: colors.textMuted }]}
+                      >
+                        {tr("Full Name", "Nom Complet", "الاسم الكامل")}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder="Alcatraz Dev"
+                        placeholderTextColor={colors.textMuted}
+                        value={postFullName}
+                        onChangeText={setPostFullName}
+                      />
+
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: colors.textMuted, marginTop: 10 },
+                        ]}
+                      >
+                        {tr(
+                          "Delivery Address",
+                          "Adresse de livraison",
+                          "العنوان",
+                        )}
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.modalInput,
+                          {
+                            color: colors.foreground,
+                            backgroundColor: isDark
+                              ? "rgba(255,255,255,0.05)"
+                              : "#F9FAFB",
+                            padding: 15,
+                            borderRadius: 12,
+                            height: 54,
+                          },
+                        ]}
+                        placeholder="Street, City..."
+                        placeholderTextColor={colors.textMuted}
+                        value={postAddress}
+                        onChangeText={setPostAddress}
+                      />
+
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.inputLabel,
+                              { color: colors.textMuted, marginTop: 10 },
+                            ]}
+                          >
+                            {tr(
+                              "Postal Code",
+                              "Code Postal",
+                              "الترقيم البريدي",
+                            )}
+                          </Text>
+                          <TextInput
+                            style={[
+                              styles.modalInput,
+                              {
+                                color: colors.foreground,
+                                backgroundColor: isDark
+                                  ? "rgba(255,255,255,0.05)"
+                                  : "#F9FAFB",
+                                padding: 15,
+                                borderRadius: 12,
+                                height: 54,
+                              },
+                            ]}
+                            placeholder="4000"
+                            placeholderTextColor={colors.textMuted}
+                            keyboardType="numeric"
+                            value={postPostal}
+                            onChangeText={setPostPostal}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.inputLabel,
+                              { color: colors.textMuted, marginTop: 10 },
+                            ]}
+                          >
+                            {tr("City", "Ville", "الولاية")}
+                          </Text>
+                          <TextInput
+                            style={[
+                              styles.modalInput,
+                              {
+                                color: colors.foreground,
+                                backgroundColor: isDark
+                                  ? "rgba(255,255,255,0.05)"
+                                  : "#F9FAFB",
+                                padding: 15,
+                                borderRadius: 12,
+                                height: 54,
+                              },
+                            ]}
+                            placeholder="Sousse"
+                            placeholderTextColor={colors.textMuted}
+                            value={postCity}
+                            onChangeText={setPostCity}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.confirmBtn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: submittingWithdraw ? 0.5 : 1,
+                        marginTop: 40,
+                      },
+                    ]}
+                    onPress={handleWithdraw}
+                    disabled={submittingWithdraw}
+                  >
+                    {submittingWithdraw ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text style={styles.confirmBtnText}>
+                        {tr(
+                          "Confirm Withdrawal",
+                          "Confirmer le retrait",
+                          "أكد الجبدان",
+                        )}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Payment Method Selection Modal */}

@@ -49,7 +49,7 @@ export const COMMISSION_RATES = {
 } as const;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-export type WalletType = 'brand' | 'delivery' | 'platform';
+export type WalletType = 'brand' | 'delivery' | 'platform' | 'customer';
 
 export interface Wallet {
     id: string;
@@ -59,6 +59,8 @@ export interface Wallet {
     pendingBalance: number;  // funds awaiting COD confirmation
     totalEarned: number;
     totalWithdrawn: number;
+    diamonds?: number;
+    totalWithdrawnTND?: number;
     type: WalletType;
     currency: 'TND';
     createdAt: any;
@@ -389,12 +391,42 @@ export interface WithdrawalDetails {
 
 export interface WithdrawalRequest {
     id?: string;
-    brandId: string;
+    actorId: string;          // brandId or userId
+    actorType: WalletType;
     walletId: string;
     amount: number;
     status: 'pending' | 'approved' | 'rejected';
     method: WithdrawalMethod;
     details: WithdrawalDetails;
+    requestedAt: any;
+    processedAt?: any;
+    adminNote?: string;
+}
+
+export interface ExchangeRequest {
+    id?: string;
+    userId: string;
+    walletId: string;
+    fromCurrency: 'coins' | 'diamonds';
+    toCurrency: 'coins' | 'diamonds';
+    fromAmount: number;
+    toAmount: number;
+    status: 'pending' | 'approved' | 'rejected';
+    requestedAt: any;
+    processedAt?: any;
+    adminNote?: string;
+}
+
+export interface TransferRequest {
+    id?: string;
+    senderId: string;
+    senderWalletId: string;
+    recipientId: string;
+    recipientWalletId: string;
+    recipientName: string;
+    amount: number;
+    currency: 'coins' | 'diamonds';
+    status: 'pending' | 'approved' | 'rejected';
     requestedAt: any;
     processedAt?: any;
     adminNote?: string;
@@ -407,9 +439,10 @@ export interface WithdrawalRequest {
  */
 export async function requestWithdrawal(
     walletId: string,
-    brandId: string,
+    actorId: string,
     amount: number,
     details: WithdrawalDetails,
+    actorType: WalletType = 'brand'
 ): Promise<void> {
     if (amount <= 0) throw new Error('Invalid amount');
 
@@ -420,21 +453,35 @@ export async function requestWithdrawal(
         if (!walletSnap.exists()) throw new Error('Wallet not found');
 
         const wallet = walletSnap.data() as Wallet;
-        if (wallet.balance < amount) {
-            throw new Error('Insufficient balance');
-        }
 
-        // Deduct from available balance
-        firestoreTx.update(walletRef, {
-            balance: increment(-amount),
-            totalWithdrawn: increment(amount),
-            updatedAt: serverTimestamp(),
-        });
+        if (actorType === 'customer') {
+            const diamondAmount = amount * 100; // 1 diamond = 0.01 TND
+            if ((wallet.diamonds || 0) < diamondAmount) {
+                throw new Error('Insufficient diamond balance');
+            }
+            firestoreTx.update(walletRef, {
+                diamonds: increment(-diamondAmount),
+                totalWithdrawnTND: increment(amount),
+                updatedAt: serverTimestamp(),
+            });
+        } else {
+            if (wallet.balance < amount) {
+                throw new Error('Insufficient balance');
+            }
+            // Deduct from available balance
+            firestoreTx.update(walletRef, {
+                balance: increment(-amount),
+                totalWithdrawn: increment(amount),
+                updatedAt: serverTimestamp(),
+            });
+        }
 
         // 1. Withdrawal request (for Admin review)
         const requestRef = doc(collection(db, 'withdrawal_requests'));
         firestoreTx.set(requestRef, {
-            brandId,
+            actorId,
+            actorType,
+            brandId: actorId, // backwards compatibility for existing admin filters
             walletId,
             amount,
             status: 'pending',
@@ -447,7 +494,9 @@ export async function requestWithdrawal(
         const txRef = doc(collection(db, 'transactions'));
         firestoreTx.set(txRef, {
             orderId: requestRef.id,
-            brandId,
+            actorId,
+            actorType,
+            brandId: actorId, // backwards compatibility
             brandWalletId: walletId,
             deliveryCompanyId: 'platform',
             codAmount: 0,
@@ -462,4 +511,194 @@ export async function requestWithdrawal(
         });
     });
 }
+
+/**
+ * Admin: Approve a withdrawal request.
+ * Marks the request as approved and completes the transaction log.
+ */
+export async function approveWithdrawal(requestId: string, adminNote?: string): Promise<void> {
+    const requestRef = doc(db, 'withdrawal_requests', requestId);
+    const requestSnap = await getDoc(requestRef);
+    if (!requestSnap.exists()) throw new Error('Withdrawal request not found');
+
+    const request = requestSnap.data() as WithdrawalRequest;
+    if (request.status !== 'pending') throw new Error('Request is already processed');
+
+    await runTransaction(db, async (firestoreTx) => {
+        // 1. Update request status
+        firestoreTx.update(requestRef, {
+            status: 'approved',
+            processedAt: serverTimestamp(),
+            adminNote: adminNote ?? 'Approved by Admin',
+        });
+
+        // 2. Find and complete the related transaction
+        const txQ = query(
+            collection(db, 'transactions'),
+            where('orderId', '==', requestId),
+            where('type', '==', 'withdrawal'),
+            limit(1)
+        );
+        const txSnap = await getDocs(txQ);
+        if (!txSnap.empty) {
+            const txRef = doc(db, 'transactions', txSnap.docs[0].id);
+            firestoreTx.update(txRef, {
+                status: 'completed',
+                completedAt: serverTimestamp(),
+            });
+        }
+    });
+}
+
+/**
+ * Admin: Reject a withdrawal request.
+ * Marks the request as rejected, adds back the funds to the wallet, and cancels the transaction log.
+ */
+export async function rejectWithdrawal(requestId: string, adminNote: string): Promise<void> {
+    const requestRef = doc(db, 'withdrawal_requests', requestId);
+    const requestSnap = await getDoc(requestRef);
+    if (!requestSnap.exists()) throw new Error('Withdrawal request not found');
+
+    const request = requestSnap.data() as WithdrawalRequest;
+    if (request.status !== 'pending') throw new Error('Request is already processed');
+
+    await runTransaction(db, async (firestoreTx) => {
+        // 1. Update request status
+        firestoreTx.update(requestRef, {
+            status: 'rejected',
+            processedAt: serverTimestamp(),
+            adminNote: adminNote ?? 'Rejected by Admin',
+        });
+
+        // 2. Add back funds to the wallet
+        const walletRef = doc(db, 'wallets', request.walletId);
+        firestoreTx.update(walletRef, {
+            balance: increment(request.amount),
+            totalWithdrawn: increment(-request.amount),
+            updatedAt: serverTimestamp(),
+        });
+
+        // 3. Find and mark transaction as failed/rejected
+        const txQ = query(
+            collection(db, 'transactions'),
+            where('orderId', '==', requestId),
+            where('type', '==', 'withdrawal'),
+            limit(1)
+        );
+        const txSnap = await getDocs(txQ);
+        if (!txSnap.empty) {
+            const txRef = doc(db, 'transactions', txSnap.docs[0].id);
+            firestoreTx.update(txRef, {
+                status: 'failed',
+                notes: `Rejected: ${adminNote}`,
+                completedAt: serverTimestamp(),
+            });
+        }
+    });
+}
+
+/**
+ * Perform an instant currency exchange (coins <-> diamonds).
+ */
+export async function performExchange(
+    userId: string,
+    walletId: string,
+    fromCurrency: 'coins' | 'diamonds',
+    toCurrency: 'coins' | 'diamonds',
+    fromAmount: number,
+    toAmount: number
+): Promise<void> {
+    await runTransaction(db, async (firestoreTx) => {
+        const walletRef = doc(db, 'wallets', walletId);
+        const walletSnap = await firestoreTx.get(walletRef);
+
+        if (!walletSnap.exists()) throw new Error('Wallet not found');
+
+        const walletData = walletSnap.data();
+        const currentFromBalance = (walletData as any)[fromCurrency] || 0;
+
+        if (currentFromBalance < fromAmount) {
+            throw new Error('Insufficient balance');
+        }
+
+        // Update balances
+        firestoreTx.update(walletRef, {
+            [fromCurrency]: increment(-fromAmount),
+            [toCurrency]: increment(toAmount),
+            updatedAt: serverTimestamp(),
+        });
+
+        // Log transaction
+        const txRef = doc(collection(db, 'transactions'));
+        firestoreTx.set(txRef, {
+            userId,
+            walletId,
+            fromCurrency,
+            toCurrency,
+            fromAmount,
+            toAmount,
+            type: 'exchange',
+            status: 'completed',
+            createdAt: serverTimestamp(),
+            completedAt: serverTimestamp(),
+        });
+    });
+}
+
+/**
+ * Perform an instant peer-to-peer transfer.
+ */
+export async function performTransfer(
+    senderId: string,
+    senderWalletId: string,
+    recipientId: string,
+    recipientWalletId: string,
+    recipientName: string,
+    amount: number,
+    currency: 'coins' | 'diamonds'
+): Promise<void> {
+    await runTransaction(db, async (firestoreTx) => {
+        const senderWalletRef = doc(db, 'wallets', senderWalletId);
+        const recipientWalletRef = doc(db, 'wallets', recipientWalletId);
+
+        const senderSnap = await firestoreTx.get(senderWalletRef);
+        if (!senderSnap.exists()) throw new Error('Sender wallet not found');
+
+        const senderData = senderSnap.data();
+        const senderBalance = (senderData as any)[currency] || 0;
+
+        if (senderBalance < amount) {
+            throw new Error('Insufficient balance');
+        }
+
+        // Deduct from sender
+        firestoreTx.update(senderWalletRef, {
+            [currency]: increment(-amount),
+            updatedAt: serverTimestamp(),
+        });
+
+        // Add to recipient
+        firestoreTx.update(recipientWalletRef, {
+            [currency]: increment(amount),
+            updatedAt: serverTimestamp(),
+        });
+
+        // Log transaction
+        const txRef = doc(collection(db, 'transactions'));
+        firestoreTx.set(txRef, {
+            senderId,
+            senderWalletId,
+            recipientId,
+            recipientWalletId,
+            recipientName,
+            amount,
+            currency,
+            type: 'transfer',
+            status: 'completed',
+            createdAt: serverTimestamp(),
+            completedAt: serverTimestamp(),
+        });
+    });
+}
+
 
