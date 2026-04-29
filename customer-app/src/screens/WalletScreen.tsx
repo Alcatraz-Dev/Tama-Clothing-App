@@ -131,7 +131,9 @@ export default function WalletScreen({
   const isDark = theme === "dark";
   const colors = isDark ? Theme.dark.colors : Theme.light.colors;
   const insets = useSafeAreaInsets();
-  const isAdmin = profileData?.isAdmin || profileData?.role === "admin";
+  const isAdmin = profileData?.isAdmin === true || profileData?.role === "admin";
+  // DEBUG: Remove after confirming admin visibility works
+  console.log("[WalletScreen] isAdmin:", isAdmin, "| role:", profileData?.role, "| isAdmin field:", profileData?.isAdmin);
   const [activeTab, setActiveTab] = useState<"recharge" | "earnings">(
     "recharge",
   );
@@ -174,6 +176,7 @@ export default function WalletScreen({
     null,
   );
   const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -184,12 +187,37 @@ export default function WalletScreen({
       orderBy("createdAt", "desc"),
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const invoices = snapshot.docs.map((doc) => ({
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const rawInvoices = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setAdminInvoices(invoices);
+
+      // Enrich with user profile data
+      const enriched = await Promise.all(
+        rawInvoices.map(async (inv: any) => {
+          try {
+            const userSnap = await getDocs(
+              query(collection(db, "users"), where(documentId(), "==", inv.userId))
+            );
+            if (!userSnap.empty) {
+              const userData = userSnap.docs[0].data();
+              return {
+                ...inv,
+                _user: {
+                  fullName: userData.fullName || "Unknown",
+                  email: userData.email || "",
+                  avatarUrl: userData.avatarUrl || null,
+                  phone: userData.phone || "",
+                },
+              };
+            }
+          } catch (_) {}
+          return { ...inv, _user: null };
+        })
+      );
+
+      setAdminInvoices(enriched);
     });
 
     return () => unsubscribe();
@@ -202,6 +230,8 @@ export default function WalletScreen({
         `${API_BASE_URL}/crypto/confirm/${invoiceId}`,
         {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
         },
       );
       const result = await response.json();
@@ -1868,34 +1898,88 @@ export default function WalletScreen({
           renderEarnings()
         )}
 
-        {isAdmin && (
-          <View
-            style={{
-              marginTop: 24,
-              padding: 16,
-              marginHorizontal: 20,
-              backgroundColor: "rgba(239, 68, 68, 0.05)",
-              borderRadius: 20,
-              borderStyle: "dashed",
-              borderWidth: 2,
-              borderColor: "rgba(239, 68, 68, 0.3)",
-              marginBottom: 40,
-            }}
-          >
+      </ScrollView>
+
+      {/* Floating Admin Button */}
+      {isAdmin && (
+        <TouchableOpacity
+          onPress={() => setShowAdminPanel(true)}
+          style={{
+            position: "absolute",
+            bottom: insets.bottom + 80,
+            right: 20,
+            backgroundColor: "#EF4444",
+            borderRadius: 30,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            shadowColor: "#EF4444",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.5,
+            shadowRadius: 8,
+            elevation: 8,
+            gap: 8,
+          }}
+        >
+          <RefreshCw size={16} color="#FFF" />
+          <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 13 }}>
+            CRYPTO VERIFY
+          </Text>
+          {adminInvoices.length > 0 && (
             <View
               style={{
-                flexDirection: "row",
+                backgroundColor: "#FFF",
+                borderRadius: 10,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                minWidth: 20,
                 alignItems: "center",
-                marginBottom: 15,
-                justifyContent: "space-between",
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "900", color: "#EF4444" }}
+              <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "900" }}>
+                {adminInvoices.length}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* Admin Crypto Verification Panel */}
+      <Modal
+        visible={showAdminPanel}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAdminPanel(false)}
+      >
+        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: isDark ? "#1C1C1E" : "#FFF", maxHeight: "80%" },
+            ]}
+          >
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    backgroundColor: "rgba(239,68,68,0.1)",
+                    padding: 8,
+                    borderRadius: 12,
+                  }}
                 >
-                  ADMIN: CRYPTO VERIFICATION
-                </Text>
+                  <RefreshCw size={18} color="#EF4444" />
+                </View>
+                <View>
+                  <Text style={{ color: "#EF4444", fontWeight: "900", fontSize: 16 }}>
+                    CRYPTO VERIFICATION
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    Admin Panel
+                  </Text>
+                </View>
                 {adminInvoices.length > 0 && (
                   <View
                     style={{
@@ -1903,113 +1987,261 @@ export default function WalletScreen({
                       borderRadius: 10,
                       paddingHorizontal: 8,
                       paddingVertical: 2,
-                      marginLeft: 10,
                     }}
                   >
-                    <Text
-                      style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}
-                    >
-                      {adminInvoices.length}
+                    <Text style={{ color: "#FFF", fontSize: 11, fontWeight: "900" }}>
+                      {adminInvoices.length} pending
                     </Text>
                   </View>
                 )}
               </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  Alert.alert("Admin", "Crypto verification list is live.");
-                }}
-              >
-                <RefreshCw size={16} color="#EF4444" />
+              <TouchableOpacity onPress={() => setShowAdminPanel(false)}>
+                <X size={24} color={colors.foreground} />
               </TouchableOpacity>
             </View>
 
-            {adminInvoices.length === 0 ? (
-              <View
-                style={{
-                  padding: 20,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Check size={24} color="rgba(239, 68, 68, 0.4)" />
-                <Text
-                  style={{
-                    color: colors.textMuted,
-                    fontSize: 12,
-                    marginTop: 8,
-                    fontWeight: "600",
-                  }}
-                >
-                  No pending crypto payments found
-                </Text>
-              </View>
-            ) : (
-              adminInvoices.map((inv) => (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 4 }}>
+              {adminInvoices.length === 0 ? (
                 <View
-                  key={inv.id}
                   style={{
-                    marginBottom: 12,
-                    padding: 12,
-                    backgroundColor: colors.card,
-                    borderRadius: 16,
-                    flexDirection: "row",
-                    justifyContent: "space-between",
+                    padding: 40,
                     alignItems: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(100,100,100,0.1)",
+                    justifyContent: "center",
                   }}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontWeight: "800",
-                        color: colors.foreground,
-                        fontSize: 15,
-                      }}
-                    >
-                      {inv.coinAmount} {inv.coin}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: colors.textMuted }}>
-                      User ID: {inv.userId}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleConfirmCryptoPayment(inv.id)}
+                  <Check size={40} color="rgba(239, 68, 68, 0.3)" />
+                  <Text
                     style={{
-                      backgroundColor: "#10B981",
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      borderRadius: 12,
+                      color: colors.textMuted,
+                      fontSize: 14,
+                      marginTop: 12,
+                      fontWeight: "600",
                     }}
                   >
-                    <Text
-                      style={{ color: "#FFF", fontWeight: "900", fontSize: 12 }}
-                    >
-                      CONFIRM
-                    </Text>
-                  </TouchableOpacity>
+                    No pending crypto payments
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>
+                    All clear! ✓
+                  </Text>
                 </View>
-              ))
-            )}
+              ) : (
+                adminInvoices.map((inv) => (
+                  <View
+                    key={inv.id}
+                    style={{
+                      marginBottom: 14,
+                      borderRadius: 18,
+                      overflow: "hidden",
+                      borderWidth: 1,
+                      borderColor: "rgba(239,68,68,0.15)",
+                    }}
+                  >
+                    {/* User Info Header */}
+                    <View
+                      style={{
+                        backgroundColor: isDark ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.05)",
+                        padding: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "rgba(239,68,68,0.1)",
+                      }}
+                    >
+                      {/* Avatar */}
+                      {inv._user?.avatarUrl ? (
+                        <Image
+                          source={{ uri: inv._user.avatarUrl }}
+                          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: "rgba(239,68,68,0.3)" }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: "rgba(239,68,68,0.15)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <User size={22} color="#EF4444" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: "800", color: colors.foreground, fontSize: 15 }}>
+                          {inv._user?.fullName || "Unknown User"}
+                        </Text>
+                        {inv._user?.email ? (
+                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+                            {inv._user.email}
+                          </Text>
+                        ) : null}
+                        {inv._user?.phone ? (
+                          <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                            📞 {inv._user.phone}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View
+                        style={{
+                          backgroundColor: "rgba(245,158,11,0.12)",
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: "#F59E0B", fontSize: 11, fontWeight: "700" }}>
+                          PENDING
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Payment Details */}
+                    <View
+                      style={{
+                        padding: 14,
+                        backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <View>
+                          <Text style={{ fontWeight: "900", color: colors.foreground, fontSize: 20 }}>
+                            {inv.coinAmount} {inv.coin}
+                          </Text>
+                          {inv.amountUSD ? (
+                            <Text style={{ fontSize: 13, color: "#10B981", fontWeight: "700", marginTop: 2 }}>
+                              ${inv.amountUSD} USD
+                            </Text>
+                          ) : null}
+                        </View>
+                        {(() => {
+                          const totalCoins = (inv.pack?.coins || 0) + (inv.pack?.bonus || 0) || 
+                                           (inv.meta?.packCoins || 0) + (inv.meta?.packBonus || 0);
+                          if (!totalCoins) return null;
+                          return (
+                            <View
+                              style={{
+                                backgroundColor: isDark ? "rgba(245,158,11,0.1)" : "rgba(245,158,11,0.08)",
+                                padding: 10,
+                                borderRadius: 12,
+                                alignItems: "center",
+                              }}
+                            >
+                              <Text style={{ color: "#F59E0B", fontSize: 13, fontWeight: "900" }}>
+                                {totalCoins}
+                              </Text>
+                              <Text style={{ color: "#F59E0B", fontSize: 9, fontWeight: "700" }}>COINS TOTAL</Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
+
+                      {/* UID Row */}
+                      <View
+                        style={{
+                          backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                          padding: 10,
+                          borderRadius: 10,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 2 }}>
+                          USER ID
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "monospace", fontWeight: "600" }}>
+                          {inv.userId}
+                        </Text>
+                      </View>
+
+                      {/* Invoice ID Row */}
+                      <View
+                        style={{
+                          backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                          padding: 10,
+                          borderRadius: 10,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 2 }}>
+                          INVOICE ID
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.foreground, fontFamily: "monospace" }}>
+                          {inv.id}
+                        </Text>
+                        {inv.createdAt?.toDate ? (
+                          <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>
+                            🕐 {inv.createdAt.toDate().toLocaleString()}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          Alert.alert(
+                            "Confirm Payment",
+                            `Credit ${
+                              (inv.pack?.coins || 0) + (inv.pack?.bonus || 0) || 
+                              (inv.meta?.packCoins || 0) + (inv.meta?.packBonus || 0)
+                            } coins to ${inv._user?.fullName || inv.userId}?`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "✓ Confirm",
+                                style: "destructive",
+                                onPress: () => handleConfirmCryptoPayment(inv.id),
+                              },
+                            ]
+                          );
+                        }}
+                        style={{
+                          backgroundColor: "#10B981",
+                          paddingVertical: 13,
+                          borderRadius: 12,
+                          alignItems: "center",
+                          flexDirection: "row",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Check size={16} color="#FFF" />
+                        <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 14 }}>
+                          CONFIRM PAYMENT
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
 
       {/* Exchange Modal */}
       <Modal
         visible={showExchangeModal}
         transparent={true}
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowExchangeModal(false)}
       >
-        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.modalOverlay}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}>
+          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowExchangeModal(false)}
+          />
           <View
             style={[
               styles.modalContent,
-              { maxHeight: keyboardOpen ? "95%" : "65%" },
-              { backgroundColor: isDark ? "#1C1C1E" : "#FFF" },
+              {
+                backgroundColor: isDark ? "#1C1C1E" : "#FFF",
+                maxHeight: keyboardOpen ? "95%" : "82%",
+                minHeight: 560,
+                paddingBottom: insets.bottom + 20,
+              },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -2028,7 +2260,11 @@ export default function WalletScreen({
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ paddingBottom: 20 }}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 16,
+                  paddingBottom: 30,
+                }}
               >
                 <View style={styles.exchangeSelector}>
                   <TouchableOpacity
@@ -2389,18 +2625,25 @@ export default function WalletScreen({
         animationType="slide"
         onRequestClose={() => setShowTransferModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}>
           <BlurView
-            intensity={30}
+            intensity={20}
             tint="dark"
             style={StyleSheet.absoluteFill}
+          />
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowTransferModal(false)}
           />
           <View
             style={[
               styles.modalContent,
               {
                 backgroundColor: isDark ? "#1C1C1E" : "#FFF",
-                maxHeight: keyboardOpen ? "97%" : "75%",
+                maxHeight: keyboardOpen ? "97%" : "78%",
+                minHeight: 400,
+                paddingBottom: insets.bottom + 20,
               },
             ]}
           >
@@ -2428,8 +2671,8 @@ export default function WalletScreen({
                   style={[
                     styles.tabContainer,
                     {
-                      marginHorizontal: 24,
-                      marginTop: 10,
+                      marginHorizontal: 20,
+                      marginTop: 14,
                       padding: 3,
                       height: 44,
                       backgroundColor: isDark
@@ -2552,6 +2795,7 @@ export default function WalletScreen({
                             ? "rgba(255,255,255,0.05)"
                             : "rgba(0,0,0,0.05)",
                           marginTop: 15,
+                          marginHorizontal: 20,
                         },
                       ]}
                     >
@@ -2575,7 +2819,7 @@ export default function WalletScreen({
                       )}
                     </View>
 
-                    <ScrollView style={{ marginTop: 10 }}>
+                    <ScrollView style={{ marginTop: 10, paddingHorizontal: 20 }}>
                       {transferSearchResults.length === 0 &&
                       transferSearchQuery.length >= 2 &&
                       !isSearching ? (
@@ -3935,15 +4179,15 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "transparent",
   },
   modalContent: {
     width: "100%",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 5,
-    paddingBottom: 20,
-    maxHeight: "80%",
+    padding: 0,
+    paddingBottom: 0,
+    maxHeight: "85%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -3961,8 +4205,6 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 24,
-    marginTop: 20,
     paddingHorizontal: 15,
     height: 50,
     borderRadius: 12,
@@ -3976,7 +4218,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
+    paddingHorizontal: 4,
     paddingVertical: 12,
   },
   userListItemLeft: {
@@ -4048,7 +4290,8 @@ const styles = StyleSheet.create({
   exchangeSelector: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 16,
+    marginTop: 4,
   },
   exchangeTypeBtn: {
     flex: 1,
