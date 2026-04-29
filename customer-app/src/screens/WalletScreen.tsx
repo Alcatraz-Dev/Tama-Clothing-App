@@ -42,6 +42,7 @@ import {
   Hexagon,
   Landmark,
   Mail,
+  Diamond,
 } from "lucide-react-native";
 import * as Animatable from "react-native-animatable";
 import { BlurView } from "expo-blur";
@@ -223,9 +224,9 @@ export default function WalletScreen({
   );
   const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
   const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
-  const [adminPanelTab, setAdminPanelTab] = useState<
-    "crypto" | "withdrawals"
-  >("crypto");
+  const [adminPanelTab, setAdminPanelTab] = useState<"crypto" | "withdrawals">(
+    "crypto",
+  );
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const [wallet, setWallet] = useState<any | null>(null);
@@ -348,7 +349,6 @@ export default function WalletScreen({
 
     return () => unsubscribe();
   }, [isAdmin]);
-
 
   const handleApproveWithdrawal = async (requestId: string) => {
     try {
@@ -883,7 +883,7 @@ export default function WalletScreen({
         fromCurrency,
         toCurrency,
         amount,
-        toAmount
+        toAmount,
       );
 
       setShowExchangeModal(false);
@@ -989,7 +989,7 @@ export default function WalletScreen({
         recipientWalletId,
         selectedUserForTransfer.fullName,
         amount,
-        transferType
+        transferType,
       );
 
       Alert.alert(
@@ -2294,7 +2294,6 @@ export default function WalletScreen({
                     WITHDRAWALS ({adminWithdrawals.length})
                   </Text>
                 </TouchableOpacity>
-
               </ScrollView>
             </View>
 
@@ -2379,12 +2378,16 @@ export default function WalletScreen({
                             {inv._user?.fullName || "Unknown"}
                           </Text>
                           {inv._user?.email && (
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                            <Text
+                              style={{ fontSize: 11, color: colors.textMuted }}
+                            >
                               {inv._user.email}
                             </Text>
                           )}
                           {inv._user?.phone && (
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                            <Text
+                              style={{ fontSize: 11, color: colors.textMuted }}
+                            >
                               {inv._user.phone}
                             </Text>
                           )}
@@ -2499,12 +2502,16 @@ export default function WalletScreen({
                             {req._user?.fullName || "Unknown"}
                           </Text>
                           {req._user?.email && (
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                            <Text
+                              style={{ fontSize: 11, color: colors.textMuted }}
+                            >
                               {req._user.email}
                             </Text>
                           )}
                           {req._user?.phone && (
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                            <Text
+                              style={{ fontSize: 11, color: colors.textMuted }}
+                            >
                               {req._user.phone}
                             </Text>
                           )}
@@ -4000,592 +4007,840 @@ export default function WalletScreen({
         transparent={true}
         onRequestClose={() => setWithdrawModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "flex-end",
+          }}
         >
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.card,
-                maxHeight: "95%",
-                minHeight: "50%",
-                paddingBottom: insets.bottom + 20,
-              },
-            ]}
+          <BlurView
+            intensity={20}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              setWithdrawModalVisible(false);
+              setWithdrawStep("method");
+            }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {withdrawStep === "details" && (
-                  <TouchableOpacity
-                    onPress={() => setWithdrawStep("method")}
-                    style={{ marginRight: 15 }}
-                  >
-                    <ArrowLeft size={24} color={colors.foreground} />
-                  </TouchableOpacity>
-                )}
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                  {tr("Withdraw Funds", "Retirer des fonds", "اجبد فلوسك")}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setWithdrawModalVisible(false);
-                  setWithdrawStep("method");
-                }}
-              >
-                <X size={24} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={{ paddingHorizontal: 24, paddingVertical: 20 }}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: isDark ? "#1C1C1E" : "#FFF",
+                  maxHeight: "95%",
+                  paddingBottom: insets.bottom + 5,
+                  marginTop: 70,
+                },
+              ]}
             >
-              {withdrawStep === "method" ? (
-                <>
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {withdrawStep === "details" && (
+                    <TouchableOpacity
+                      onPress={() => setWithdrawStep("method")}
+                      style={{ marginRight: 15 }}
+                    >
+                      <ArrowLeft size={24} color={colors.foreground} />
+                    </TouchableOpacity>
+                  )}
                   <Text
-                    style={[
-                      styles.sectionTitle,
-                      {
-                        color: colors.foreground,
-                        fontSize: 16,
-                        marginBottom: 20,
-                      },
-                    ]}
+                    style={[styles.modalTitle, { color: colors.foreground }]}
                   >
-                    {tr(
-                      "Choose amount to withdraw",
-                      "Choisir le montant à retirer",
-                      "قداش تحب تجبد",
-                    )}
+                    {tr("Withdraw Funds", "Retirer des fonds", "اجبد فلوسك")}
                   </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setWithdrawModalVisible(false);
+                    setWithdrawStep("method");
+                  }}
+                >
+                  <X size={24} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
 
-                  <View
-                    style={[
-                      styles.inputContainer,
-                      {
-                        backgroundColor: isDark
-                          ? "rgba(255,255,255,0.05)"
-                          : "#F9FAFB",
-                        marginBottom: 10,
-                      },
-                    ]}
-                  >
-                    <TextInput
-                      style={[styles.modalInput, { color: colors.foreground }]}
-                      placeholder="0.00"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="numeric"
-                      value={withdrawAmount}
-                      onChangeText={setWithdrawAmount}
-                    />
-                    <Text
+              <ScrollView
+                style={{ paddingHorizontal: 24, paddingVertical: 20 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+              >
+                {withdrawStep === "method" ? (
+                  <>
+                    {/* Balance Summary Card */}
+                    <View
                       style={{
-                        fontWeight: "800",
-                        color: colors.foreground,
-                        marginRight: 10,
+                        backgroundColor: isDark
+                          ? "rgba(139,92,246,0.12)"
+                          : "rgba(139,92,246,0.08)",
+                        borderRadius: 18,
+                        padding: 16,
+                        marginBottom: 20,
+                        borderWidth: 1,
+                        borderColor: "rgba(139,92,246,0.2)",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
                       }}
                     >
-                      TND
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setWithdrawAmount((diamondBalance * DIAMOND_TO_TND_RATE).toString())
-                      }
-                    >
-                      <Text
-                        style={{ color: colors.primary, fontWeight: "700" }}
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 22,
+                          backgroundColor: "rgba(139,92,246,0.2)",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
                       >
-                        MAX
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        <Gem size={22} color="#8B5CF6" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: colors.textMuted,
+                            fontSize: 12,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {tr(
+                            "Available to Withdraw",
+                            "Disponible au retrait",
+                            "يمكن سحبه",
+                          )}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.foreground,
+                            fontSize: 20,
+                            fontWeight: "900",
+                            marginTop: 2,
+                          }}
+                        >
+                          {(diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)}{" "}
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "700",
+                              color: colors.textMuted,
+                            }}
+                          >
+                            TND
+                          </Text>
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#8B5CF6",
+                            fontSize: 11,
+                            fontWeight: "700",
+                            marginTop: 2,
+                          }}
+                        >
+                          = {diamondBalance.toLocaleString()} Diamonds
+                        </Text>
+                      </View>
+                    </View>
 
-                  <Text
-                    style={{
-                      color: colors.textMuted,
-                      fontSize: 12,
-                      marginBottom: 30,
-                    }}
-                  >
-                    {tr(
-                      "Available balance:",
-                      "Solde disponible :",
-                      "الرصيد المتوفر:",
-                    )}{" "}
-                    {(diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)} TND
-                  </Text>
+                    <Text
+                      style={[
+                        styles.sectionTitle,
+                        {
+                          color: colors.foreground,
+                          fontSize: 14,
+                          marginBottom: 10,
+                          fontWeight: "700",
+                        },
+                      ]}
+                    >
+                      {tr(
+                        "Amount to withdraw",
+                        "Choisir le montant à retirer",
+                        "قداش تحب تجبد",
+                      )}
+                    </Text>
 
-                  <Text
-                    style={[
-                      styles.sectionTitle,
-                      {
-                        color: colors.foreground,
-                        fontSize: 16,
-                        marginBottom: 15,
-                      },
-                    ]}
-                  >
-                    {tr(
-                      "Select withdrawal method",
-                      "Choisir le mode de retrait",
-                      "اختار كفاش تحب تجبد",
-                    )}
-                  </Text>
-
-                  <View style={{ gap: 12 }}>
-                    {[
-                      {
-                        id: "stripe",
-                        name: "Stripe",
-                        icon: CreditCard,
-                        color: "#6366F1",
-                      },
-                      {
-                        id: "crypto",
-                        name: "Crypto",
-                        icon: Hexagon,
-                        color: "#F59E0B",
-                      },
-                      {
-                        id: "bank_transfer",
-                        name: "Bank Transfer",
-                        icon: Landmark,
-                        color: "#10B981",
-                      },
-                      {
-                        id: "post_office",
-                        name: "Post Office",
-                        icon: Mail,
-                        color: "#EF4444",
-                      },
-                    ].map((method) => (
-                      <TouchableOpacity
-                        key={method.id}
+                    <View
+                      style={[
+                        styles.inputContainer,
+                        {
+                          backgroundColor: isDark
+                            ? "rgba(255,255,255,0.06)"
+                            : "#F3F4F6",
+                          marginBottom: 6,
+                          borderWidth: 1,
+                          borderColor: isDark
+                            ? "rgba(255,255,255,0.1)"
+                            : "rgba(0,0,0,0.08)",
+                          borderRadius: 14,
+                        },
+                      ]}
+                    >
+                      <TextInput
                         style={[
-                          styles.transactionItem,
+                          styles.modalInput,
                           {
-                            backgroundColor:
-                              withdrawMethod === method.id
-                                ? isDark
-                                  ? "rgba(59, 130, 246, 0.1)"
-                                  : "rgba(59, 130, 246, 0.05)"
-                                : isDark
-                                  ? "#333"
-                                  : "#F9FAFB",
-                            padding: 16,
-                            borderRadius: 16,
-                            borderBottomWidth: 0,
-                            borderWidth: 1.5,
-                            borderColor:
-                              withdrawMethod === method.id
-                                ? colors.primary
-                                : "transparent",
+                            color: colors.foreground,
+                            fontSize: 20,
+                            fontWeight: "800",
                           },
                         ]}
-                        onPress={() => setWithdrawMethod(method.id as any)}
+                        placeholder="0.00"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={withdrawAmount}
+                        onChangeText={setWithdrawAmount}
+                      />
+                      <Text
+                        style={{
+                          fontWeight: "800",
+                          color: colors.textMuted,
+                          marginRight: 10,
+                          fontSize: 13,
+                        }}
                       >
-                        <View
-                          style={[
-                            styles.coinIconWrapper,
-                            {
-                              backgroundColor: `${method.color}20`,
-                              marginBottom: 0,
-                            },
-                          ]}
+                        TND
+                      </Text>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: isDark ? "#FFFFFF" : "#111111",
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          marginRight: 4,
+                        }}
+                        onPress={() =>
+                          setWithdrawAmount(
+                            (diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2),
+                          )
+                        }
+                      >
+                        <Text
+                          style={{
+                            color: isDark ? "#000000" : "#FFFFFF",
+                            fontWeight: "800",
+                            fontSize: 12,
+                          }}
                         >
-                          <method.icon size={24} color={method.color} />
-                        </View>
-                        <View style={styles.transactionInfo}>
-                          <Text
-                            style={[
-                              styles.transactionTitle,
-                              { color: colors.foreground },
-                            ]}
-                          >
-                            {method.name}
-                          </Text>
-                        </View>
-                        {withdrawMethod === method.id && (
-                          <Check size={20} color={colors.primary} />
-                        )}
+                          MAX
+                        </Text>
                       </TouchableOpacity>
-                    ))}
-                  </View>
+                    </View>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.confirmBtn,
-                      {
-                        backgroundColor: colors.primary,
-                        opacity:
-                          !withdrawAmount || parseFloat(withdrawAmount) < 50
-                            ? 0.5
-                            : 1,
-                        marginTop: 30,
-                      },
-                    ]}
-                    onPress={() => setWithdrawStep("details")}
-                    disabled={
-                      !withdrawAmount || parseFloat(withdrawAmount) < 50
-                    }
-                  >
-                    <Text style={styles.confirmBtnText}>
-                      {tr("Next Step", "Étape suivante", "تعدى للي بعدو")}
-                    </Text>
-                  </TouchableOpacity>
-                  {parseFloat(withdrawAmount) < 50 && withdrawAmount !== "" && (
                     <Text
                       style={{
-                        color: "#EF4444",
-                        fontSize: 12,
-                        textAlign: "center",
-                        marginTop: 10,
+                        color: colors.textMuted,
+                        fontSize: 11,
+                        marginBottom: 22,
+                        paddingLeft: 4,
                       }}
                     >
                       {tr(
-                        "Minimum withdrawal is 50 TND",
-                        "Le retrait minimum est de 50 TND",
-                        "أقل مبلغ تجبدو هو 50 دت",
+                        "Minimum withdrawal:",
+                        "Retrait minimum :",
+                        "الحد الأدنى:",
+                      )}{" "}
+                      <Text
+                        style={{ fontWeight: "700", color: colors.foreground }}
+                      >
+                        50 TND
+                      </Text>
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.sectionTitle,
+                        {
+                          color: colors.foreground,
+                          fontSize: 14,
+                          marginBottom: 12,
+                          fontWeight: "700",
+                        },
+                      ]}
+                    >
+                      {tr(
+                        "Select withdrawal method",
+                        "Choisir le mode de retrait",
+                        "اختار كفاش تحب تجبد",
                       )}
                     </Text>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text
-                    style={[
-                      styles.sectionTitle,
-                      {
-                        color: colors.foreground,
-                        fontSize: 16,
-                        marginBottom: 20,
-                      },
-                    ]}
-                  >
-                    {tr(
-                      "Enter withdrawal details",
-                      "Saisir les détails du retrait",
-                      "حط المعلومات",
-                    )}
-                  </Text>
 
-                  {withdrawMethod === "stripe" && (
-                    <View style={{ gap: 15 }}>
-                      <Text
-                        style={[styles.inputLabel, { color: colors.textMuted }]}
-                      >
-                        {tr("Stripe Email", "Email Stripe", "إيميل سترايب")}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder="email@example.com"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="email-address"
-                        value={stripeEmail}
-                        onChangeText={setStripeEmail}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  )}
-
-                  {withdrawMethod === "crypto" && (
-                    <View style={{ gap: 15 }}>
-                      <Text
-                        style={[styles.inputLabel, { color: colors.textMuted }]}
-                      >
-                        {tr("Select Coin", "Choisir la pièce", "اختار العملة")}
-                      </Text>
-                      <View style={{ flexDirection: "row", gap: 10 }}>
-                        {["USDT", "BTC", "ETH"].map((c) => (
-                          <TouchableOpacity
-                            key={c}
-                            style={{
-                              flex: 1,
-                              paddingVertical: 12,
-                              borderRadius: 12,
-                              backgroundColor:
-                                cryptoCoin === c
-                                  ? colors.primary
-                                  : isDark
-                                    ? "#333"
-                                    : "#EEE",
+                    <View style={{ gap: 12 }}>
+                      {[
+                        {
+                          id: "stripe",
+                          name: "Stripe",
+                          icon: CreditCard,
+                          color: "#6366F1",
+                        },
+                        {
+                          id: "crypto",
+                          name: "Crypto",
+                          icon: Hexagon,
+                          color: "#F59E0B",
+                        },
+                        {
+                          id: "bank_transfer",
+                          name: "Bank Transfer",
+                          icon: Landmark,
+                          color: "#10B981",
+                        },
+                        {
+                          id: "post_office",
+                          name: "Post Office",
+                          icon: Mail,
+                          color: "#EF4444",
+                        },
+                      ].map((method) => (
+                        <TouchableOpacity
+                          key={method.id}
+                          style={[
+                            {
+                              flexDirection: "row",
                               alignItems: "center",
-                            }}
-                            onPress={() => setCryptoCoin(c as any)}
+                              backgroundColor:
+                                withdrawMethod === method.id
+                                  ? isDark
+                                    ? `${method.color}20`
+                                    : `${method.color}12`
+                                  : isDark
+                                    ? "rgba(255,255,255,0.06)"
+                                    : "#F9FAFB",
+                              padding: 16,
+                              borderRadius: 16,
+                              borderWidth: 1.5,
+                              borderColor:
+                                withdrawMethod === method.id
+                                  ? method.color
+                                  : isDark
+                                    ? "rgba(255,255,255,0.08)"
+                                    : "rgba(0,0,0,0.07)",
+                            },
+                          ]}
+                          onPress={() => setWithdrawMethod(method.id as any)}
+                        >
+                          <View
+                            style={[
+                              styles.coinIconWrapper,
+                              {
+                                backgroundColor: `${method.color}20`,
+                                marginBottom: 0,
+                              },
+                            ]}
                           >
+                            <method.icon size={24} color={method.color} />
+                          </View>
+                          <View style={styles.transactionInfo}>
                             <Text
-                              style={{
-                                color:
-                                  cryptoCoin === c ? "#FFF" : colors.foreground,
-                                fontWeight: "bold",
-                              }}
+                              style={[
+                                styles.transactionTitle,
+                                { color: colors.foreground },
+                              ]}
                             >
-                              {c}
+                              {method.name}
                             </Text>
+                          </View>
+                          {withdrawMethod === method.id && (
+                            <Check size={20} color={method.color} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmBtn,
+                        {
+                          backgroundColor: isDark ? "#FFFFFF" : "#111111",
+                          opacity:
+                            !withdrawAmount || parseFloat(withdrawAmount) < 50
+                              ? 0.4
+                              : 1,
+                          marginTop: 24,
+                        },
+                      ]}
+                      onPress={() => setWithdrawStep("details")}
+                      disabled={
+                        !withdrawAmount || parseFloat(withdrawAmount) < 50
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.confirmBtnText,
+                          { color: isDark ? "#000000" : "#FFFFFF" },
+                        ]}
+                      >
+                        {tr("Next Step", "Étape suivante", "تعدى للي بعدو")}
+                      </Text>
+                    </TouchableOpacity>
+                    {parseFloat(withdrawAmount) < 50 &&
+                      withdrawAmount !== "" && (
+                        <Text
+                          style={{
+                            color: "#EF4444",
+                            fontSize: 12,
+                            textAlign: "center",
+                            marginTop: 10,
+                          }}
+                        >
+                          {tr(
+                            "Minimum withdrawal is 50 TND",
+                            "Le retrait minimum est de 50 TND",
+                            "أقل مبلغ تجبدو هو 50 دت",
+                          )}
+                        </Text>
+                      )}
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.sectionTitle,
+                        {
+                          color: colors.foreground,
+                          fontSize: 16,
+                          marginBottom: 20,
+                        },
+                      ]}
+                    >
+                      {tr(
+                        "Enter withdrawal details",
+                        "Saisir les détails du retrait",
+                        "حط المعلومات",
+                      )}
+                    </Text>
+
+                    {withdrawMethod === "stripe" && (
+                      <View style={{ gap: 15 }}>
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {tr("Stripe Email", "Email Stripe", "إيميل سترايب")}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                            },
+                          ]}
+                          placeholder="email@example.com"
+                          placeholderTextColor={colors.textMuted}
+                          keyboardType="email-address"
+                          value={stripeEmail}
+                          onChangeText={setStripeEmail}
+                          autoCapitalize="none"
+                        />
+                      </View>
+                    )}
+
+                    {withdrawMethod === "crypto" && (
+                      <View style={{ gap: 14 }}>
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {tr(
+                            "Select Network & Coin",
+                            "Choisir le réseau et la pièce",
+                            "اختار الشبكة والعملة",
+                          )}
+                        </Text>
+
+                        {(
+                          [
+                            {
+                              id: "USDT_TRC20",
+                              label: "USDT (TRC-20)",
+                              sub: "Tron Network · Fast & Low Fee",
+                              color: "#22C55E",
+                              symbol: "USDT",
+                            },
+                            {
+                              id: "USDT_ERC20",
+                              label: "USDT (ERC-20)",
+                              sub: "Ethereum Network",
+                              color: "#22C55E",
+                              symbol: "USDT",
+                            },
+                            {
+                              id: "BTC",
+                              label: "Bitcoin (BTC)",
+                              sub: "Bitcoin Network",
+                              color: "#F59E0B",
+                              symbol: "BTC",
+                            },
+                            {
+                              id: "ETH",
+                              label: "Ethereum (ETH)",
+                              sub: "Ethereum Network",
+                              color: "#6366F1",
+                              symbol: "ETH",
+                            },
+                          ] as const
+                        ).map((coin) => (
+                          <TouchableOpacity
+                            key={coin.id}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              backgroundColor:
+                                cryptoCoin === coin.id
+                                  ? isDark
+                                    ? `${coin.color}20`
+                                    : `${coin.color}15`
+                                  : isDark
+                                    ? "rgba(255,255,255,0.05)"
+                                    : "#F9FAFB",
+                              padding: 14,
+                              borderRadius: 14,
+                              borderWidth: 1.5,
+                              borderColor:
+                                cryptoCoin === coin.id
+                                  ? coin.color
+                                  : isDark
+                                    ? "rgba(255,255,255,0.08)"
+                                    : "rgba(0,0,0,0.07)",
+                            }}
+                            onPress={() => setCryptoCoin(coin.id)}
+                          >
+                            <View
+                              style={[
+                                styles.coinIconWrapper,
+                                {
+                                  backgroundColor: `${coin.color}20`,
+                                  marginBottom: 0,
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: 21,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  fontWeight: "900",
+                                  color: coin.color,
+                                  fontSize: 10,
+                                }}
+                              >
+                                {coin.symbol}
+                              </Text>
+                            </View>
+                            <View style={styles.transactionInfo}>
+                              <Text
+                                style={[
+                                  styles.transactionTitle,
+                                  { color: colors.foreground, fontSize: 14 },
+                                ]}
+                              >
+                                {coin.label}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.transactionDate,
+                                  { color: colors.textMuted },
+                                ]}
+                              >
+                                {coin.sub}
+                              </Text>
+                            </View>
+                            {cryptoCoin === coin.id && (
+                              <Check size={18} color={coin.color} />
+                            )}
                           </TouchableOpacity>
                         ))}
+
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted, marginTop: 6 },
+                          ]}
+                        >
+                          {tr(
+                            "Wallet Address",
+                            "Adresse du portefeuille",
+                            "أدريسة المحفظة",
+                          )}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.08)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                              borderWidth: 1,
+                              borderColor: isDark
+                                ? "rgba(255,255,255,0.1)"
+                                : "rgba(0,0,0,0.08)",
+                            },
+                          ]}
+                          placeholder={
+                            cryptoCoin === "USDT_TRC20"
+                              ? "T..."
+                              : cryptoCoin === "USDT_ERC20" ||
+                                  cryptoCoin === "ETH"
+                                ? "0x..."
+                                : cryptoCoin === "BTC"
+                                  ? "bc1... or 1... or 3..."
+                                  : "Address..."
+                          }
+                          placeholderTextColor={colors.textMuted}
+                          value={cryptoAddress}
+                          onChangeText={setCryptoAddress}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
                       </View>
-
-                      <Text
-                        style={[
-                          styles.inputLabel,
-                          { color: colors.textMuted, marginTop: 10 },
-                        ]}
-                      >
-                        {tr(
-                          "Wallet Address",
-                          "Adresse du portefeuille",
-                          "أدريسة المحفظة",
-                        )}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder="0x..."
-                        placeholderTextColor={colors.textMuted}
-                        value={cryptoAddress}
-                        onChangeText={setCryptoAddress}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                  )}
-
-                  {withdrawMethod === "bank_transfer" && (
-                    <View style={{ gap: 15 }}>
-                      <Text
-                        style={[styles.inputLabel, { color: colors.textMuted }]}
-                      >
-                        {tr("Bank Name", "Nom de la banque", "اسم البانكا")}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder={tr(
-                          "Example: BIAT",
-                          "Ex: BIAT",
-                          "مثال: BIAT",
-                        )}
-                        placeholderTextColor={colors.textMuted}
-                        value={bankName}
-                        onChangeText={setBankName}
-                      />
-
-                      <Text
-                        style={[
-                          styles.inputLabel,
-                          { color: colors.textMuted, marginTop: 10 },
-                        ]}
-                      >
-                        {tr("IBAN / RIB", "IBAN / RIB", "الريب")}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder="TN..."
-                        placeholderTextColor={colors.textMuted}
-                        value={iban}
-                        onChangeText={setIban}
-                        autoCapitalize="characters"
-                      />
-                    </View>
-                  )}
-
-                  {withdrawMethod === "post_office" && (
-                    <View style={{ gap: 15 }}>
-                      <Text
-                        style={[styles.inputLabel, { color: colors.textMuted }]}
-                      >
-                        {tr("Full Name", "Nom Complet", "الاسم الكامل")}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder="Alcatraz Dev"
-                        placeholderTextColor={colors.textMuted}
-                        value={postFullName}
-                        onChangeText={setPostFullName}
-                      />
-
-                      <Text
-                        style={[
-                          styles.inputLabel,
-                          { color: colors.textMuted, marginTop: 10 },
-                        ]}
-                      >
-                        {tr(
-                          "Delivery Address",
-                          "Adresse de livraison",
-                          "العنوان",
-                        )}
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.modalInput,
-                          {
-                            color: colors.foreground,
-                            backgroundColor: isDark
-                              ? "rgba(255,255,255,0.05)"
-                              : "#F9FAFB",
-                            padding: 15,
-                            borderRadius: 12,
-                            height: 54,
-                          },
-                        ]}
-                        placeholder="Street, City..."
-                        placeholderTextColor={colors.textMuted}
-                        value={postAddress}
-                        onChangeText={setPostAddress}
-                      />
-
-                      <View style={{ flexDirection: "row", gap: 10 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.inputLabel,
-                              { color: colors.textMuted, marginTop: 10 },
-                            ]}
-                          >
-                            {tr(
-                              "Postal Code",
-                              "Code Postal",
-                              "الترقيم البريدي",
-                            )}
-                          </Text>
-                          <TextInput
-                            style={[
-                              styles.modalInput,
-                              {
-                                color: colors.foreground,
-                                backgroundColor: isDark
-                                  ? "rgba(255,255,255,0.05)"
-                                  : "#F9FAFB",
-                                padding: 15,
-                                borderRadius: 12,
-                                height: 54,
-                              },
-                            ]}
-                            placeholder="4000"
-                            placeholderTextColor={colors.textMuted}
-                            keyboardType="numeric"
-                            value={postPostal}
-                            onChangeText={setPostPostal}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.inputLabel,
-                              { color: colors.textMuted, marginTop: 10 },
-                            ]}
-                          >
-                            {tr("City", "Ville", "الولاية")}
-                          </Text>
-                          <TextInput
-                            style={[
-                              styles.modalInput,
-                              {
-                                color: colors.foreground,
-                                backgroundColor: isDark
-                                  ? "rgba(255,255,255,0.05)"
-                                  : "#F9FAFB",
-                                padding: 15,
-                                borderRadius: 12,
-                                height: 54,
-                              },
-                            ]}
-                            placeholder="Sousse"
-                            placeholderTextColor={colors.textMuted}
-                            value={postCity}
-                            onChangeText={setPostCity}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  )}
-
-                  <TouchableOpacity
-                    style={[
-                      styles.confirmBtn,
-                      {
-                        backgroundColor: colors.primary,
-                        opacity: submittingWithdraw ? 0.5 : 1,
-                        marginTop: 40,
-                      },
-                    ]}
-                    onPress={handleWithdraw}
-                    disabled={submittingWithdraw}
-                  >
-                    {submittingWithdraw ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <Text style={styles.confirmBtnText}>
-                        {tr(
-                          "Confirm Withdrawal",
-                          "Confirmer le retrait",
-                          "أكد الجبدان",
-                        )}
-                      </Text>
                     )}
-                  </TouchableOpacity>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+
+                    {withdrawMethod === "bank_transfer" && (
+                      <View style={{ gap: 15 }}>
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {tr("Bank Name", "Nom de la banque", "اسم البانكا")}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                            },
+                          ]}
+                          placeholder={tr(
+                            "Example: BIAT",
+                            "Ex: BIAT",
+                            "مثال: BIAT",
+                          )}
+                          placeholderTextColor={colors.textMuted}
+                          value={bankName}
+                          onChangeText={setBankName}
+                        />
+
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted, marginTop: 10 },
+                          ]}
+                        >
+                          {tr("IBAN / RIB", "IBAN / RIB", "الريب")}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                            },
+                          ]}
+                          placeholder="TN..."
+                          placeholderTextColor={colors.textMuted}
+                          value={iban}
+                          onChangeText={setIban}
+                          autoCapitalize="characters"
+                        />
+                      </View>
+                    )}
+
+                    {withdrawMethod === "post_office" && (
+                      <View style={{ gap: 15 }}>
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {tr("Full Name", "Nom Complet", "الاسم الكامل")}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                            },
+                          ]}
+                          placeholder="Alcatraz Dev"
+                          placeholderTextColor={colors.textMuted}
+                          value={postFullName}
+                          onChangeText={setPostFullName}
+                        />
+
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { color: colors.textMuted, marginTop: 10 },
+                          ]}
+                        >
+                          {tr(
+                            "Delivery Address",
+                            "Adresse de livraison",
+                            "العنوان",
+                          )}
+                        </Text>
+                        <TextInput
+                          style={[
+                            styles.modalInput,
+                            {
+                              color: colors.foreground,
+                              backgroundColor: isDark
+                                ? "rgba(255,255,255,0.05)"
+                                : "#F9FAFB",
+                              padding: 15,
+                              borderRadius: 12,
+                              height: 54,
+                            },
+                          ]}
+                          placeholder="Street, City..."
+                          placeholderTextColor={colors.textMuted}
+                          value={postAddress}
+                          onChangeText={setPostAddress}
+                        />
+
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.inputLabel,
+                                { color: colors.textMuted, marginTop: 10 },
+                              ]}
+                            >
+                              {tr(
+                                "Postal Code",
+                                "Code Postal",
+                                "الترقيم البريدي",
+                              )}
+                            </Text>
+                            <TextInput
+                              style={[
+                                styles.modalInput,
+                                {
+                                  color: colors.foreground,
+                                  backgroundColor: isDark
+                                    ? "rgba(255,255,255,0.05)"
+                                    : "#F9FAFB",
+                                  padding: 15,
+                                  borderRadius: 12,
+                                  height: 54,
+                                },
+                              ]}
+                              placeholder="4000"
+                              placeholderTextColor={colors.textMuted}
+                              keyboardType="numeric"
+                              value={postPostal}
+                              onChangeText={setPostPostal}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.inputLabel,
+                                { color: colors.textMuted, marginTop: 10 },
+                              ]}
+                            >
+                              {tr("City", "Ville", "الولاية")}
+                            </Text>
+                            <TextInput
+                              style={[
+                                styles.modalInput,
+                                {
+                                  color: colors.foreground,
+                                  backgroundColor: isDark
+                                    ? "rgba(255,255,255,0.05)"
+                                    : "#F9FAFB",
+                                  padding: 15,
+                                  borderRadius: 12,
+                                  height: 54,
+                                },
+                              ]}
+                              placeholder="Sousse"
+                              placeholderTextColor={colors.textMuted}
+                              value={postCity}
+                              onChangeText={setPostCity}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmBtn,
+                        {
+                          backgroundColor: isDark ? "#FFFFFF" : "#111111",
+                          opacity: submittingWithdraw ? 0.5 : 1,
+                          marginTop: 32,
+                        },
+                      ]}
+                      onPress={handleWithdraw}
+                      disabled={submittingWithdraw}
+                    >
+                      {submittingWithdraw ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={isDark ? "#000" : "#FFF"}
+                        />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.confirmBtnText,
+                            { color: isDark ? "#000000" : "#FFFFFF" },
+                          ]}
+                        >
+                          {tr(
+                            "Confirm Withdrawal",
+                            "Confirmer le retrait",
+                            "أكد الجبدان",
+                          )}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Payment Method Selection Modal */}
