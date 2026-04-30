@@ -93,30 +93,68 @@ export default function AdminWalletScreen({
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
 
-  const [activeTab, setActiveTab] = useState<"withdrawals" | "bonuses" | "recharges">(
-    "bonuses",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "withdrawals" | "bonuses" | "recharges"
+  >("bonuses");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // RBAC: Strict check for admin role
   const isAdmin = profileData?.role === "admin";
 
+  const tr = (en: string, fr: string, ar: string) =>
+    language === "ar" ? ar : language === "fr" ? fr : en;
+
   if (!isAdmin) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
         <XCircle size={64} color="#EF4444" />
-        <Text style={{ color: colors.foreground, fontSize: 18, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
+        <Text
+          style={{
+            color: colors.foreground,
+            fontSize: 18,
+            fontWeight: "700",
+            marginTop: 16,
+            textAlign: "center",
+          }}
+        >
           {tr("Access Denied", "Accès Refusé", "تم رفض الدخول")}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8, textAlign: 'center' }}>
-          {tr("You do not have permission to access administrative financial controls.", "Vous n'avez pas l'autorisation d'accéder aux contrôles financiers administratifs.", "ليس لديك الصلاحية للدخول إلى ضوابط الإدارة المالية.")}
-        </Text>
-        <TouchableOpacity 
-          onPress={onBack}
-          style={{ marginTop: 24, backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 14,
+            marginTop: 8,
+            textAlign: "center",
+          }}
         >
-          <Text style={{ color: "#FFF", fontWeight: '700' }}>{tr("Go Back", "Retourner", "رجوع")}</Text>
+          {tr(
+            "You do not have permission to access administrative financial controls.",
+            "Vous n'avez pas l'autorisation d'accéder aux contrôles financiers administratifs.",
+            "ليس لديك الصلاحية للدخول إلى ضوابط الإدارة المالية.",
+          )}
+        </Text>
+        <TouchableOpacity
+          onPress={onBack}
+          style={{
+            marginTop: 24,
+            backgroundColor: colors.primary,
+            paddingHorizontal: 24,
+            paddingVertical: 12,
+            borderRadius: 12,
+          }}
+        >
+          <Text style={{ color: "#FFF", fontWeight: "700" }}>
+            {tr("Go Back", "Retourner", "رجوع")}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -143,7 +181,9 @@ export default function AdminWalletScreen({
 
   // Pending Recharges (Crypto Invoices)
   const [pendingRecharges, setPendingRecharges] = useState<any[]>([]);
-  const [isConfirmingPayment, setIsConfirmingPayment] = useState<string | null>(null);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState<string | null>(
+    null,
+  );
 
   // User details cache for withdrawals
   const [userDetails, setUserDetails] = useState<Record<string, any>>({});
@@ -192,12 +232,6 @@ export default function AdminWalletScreen({
     }
   };
 
-  // Helper for tr
-  const tr = (en: string, fr: string, ar: string) => {
-    if (language === "ar") return ar;
-    if (language === "fr") return fr;
-    return en;
-  };
 
   const loadData = async () => {
     try {
@@ -239,7 +273,10 @@ export default function AdminWalletScreen({
 
       // Fetch user details for each request if not already in cache
       requests.forEach(async (req) => {
-        fetchUserDetails(req.actorId, req.actorType === "brand" ? "brands" : "users");
+        fetchUserDetails(
+          req.actorId,
+          req.actorType === "brand" ? "brands" : "users",
+        );
       });
     });
 
@@ -252,7 +289,7 @@ export default function AdminWalletScreen({
     const unsubRecharge = onSnapshot(rechargeQuery, (snap) => {
       const recharges = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setPendingRecharges(recharges);
-      
+
       // Fetch user details for each recharge
       recharges.forEach((r: any) => {
         fetchUserDetails(r.userId, "users");
@@ -274,7 +311,11 @@ export default function AdminWalletScreen({
         setUserDetails((prev) => ({
           ...prev,
           [uid]: {
-            name: data.displayName || data.fullName || data.name || (collectionName === "brands" ? data.brandName : "Unknown"),
+            name:
+              data.displayName ||
+              data.fullName ||
+              data.name ||
+              (collectionName === "brands" ? data.brandName : "Unknown"),
             email: data.email || "No email",
             phone: data.phoneNumber || data.phone || "No phone",
             avatar: data.photoURL || data.logo || data.avatar || data.avatarUrl,
@@ -311,36 +352,43 @@ export default function AdminWalletScreen({
 
   const handleManualRecharge = async () => {
     if (!manualRechargeUserId || !manualRechargeAmount) {
-      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Fill all fields", "Remplir tous les champs", "عمر كل البيانات"));
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr("Fill all fields", "Remplir tous les champs", "عمر كل البيانات"),
+      );
       return;
     }
 
     const amount = Number(manualRechargeAmount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Invalid amount", "Montant invalide", "مبلغ غير صالح"));
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr("Invalid amount", "Montant invalide", "مبلغ غير صالح"),
+      );
       return;
     }
 
     try {
       setIsRecharging(true);
       await grantRecharge(manualRechargeUserId, amount, manualRechargeReason);
-      
+
       Alert.alert(
         tr("Success", "Succès", "تم"),
-        tr("Recharge successful", "Recharge réussie", "تم الشحن بنجاح")
+        tr("Recharge successful", "Recharge réussie", "تم الشحن بنجاح"),
       );
 
       setManualRechargeUserId("");
       setManualRechargeAmount("");
       setManualRechargeReason("");
-      
+
       // Refresh history
       fetchRechargeHistory();
     } catch (error: any) {
       console.error("Manual recharge error:", error);
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        error.message || tr("Failed to recharge", "Échec de recharge", "فشل الشحن")
+        error.message ||
+          tr("Failed to recharge", "Échec de recharge", "فشل الشحن"),
       );
     } finally {
       setIsRecharging(false);
@@ -350,16 +398,29 @@ export default function AdminWalletScreen({
   const handleConfirmCryptoPayment = async (invoiceId: string) => {
     try {
       setIsConfirmingPayment(invoiceId);
-      const response = await fetch(`${API_BASE_URL}/crypto/confirm/${invoiceId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/crypto/confirm/${invoiceId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
       const result = await response.json();
       if (result.success) {
-        Alert.alert(tr("Success", "Succès", "تم"), tr("Payment confirmed successfully", "Paiement confirmé", "تم تأكيد الدفع"));
+        Alert.alert(
+          tr("Success", "Succès", "تم"),
+          tr(
+            "Payment confirmed successfully",
+            "Paiement confirmé",
+            "تم تأكيد الدفع",
+          ),
+        );
       } else {
-        Alert.alert(tr("Error", "Erreur", "غلطة"), result.error || "Failed to confirm payment");
+        Alert.alert(
+          tr("Error", "Erreur", "غلطة"),
+          result.error || "Failed to confirm payment",
+        );
       }
     } catch (error) {
       console.error("Confirm payment error:", error);
@@ -368,7 +429,6 @@ export default function AdminWalletScreen({
       setIsConfirmingPayment(null);
     }
   };
-
 
   const handleApproveWithdrawal = async (req: WithdrawalRequest) => {
     Alert.alert(
@@ -393,7 +453,7 @@ export default function AdminWalletScreen({
   const handleRejectWithdrawal = async (req: WithdrawalRequest) => {
     Alert.alert(
       tr("Reject", "Rejeter", "رفض"),
-      req.payoutCurrency !== "TND" 
+      req.payoutCurrency !== "TND"
         ? `Reject ${req.payoutAmount.toFixed(2)} ${req.payoutCurrency} (${req.amount.toFixed(2)} TND) withdrawal?`
         : `Reject ${req.amount.toFixed(2)} TND withdrawal?`,
       [
@@ -477,75 +537,104 @@ export default function AdminWalletScreen({
       </View>
 
       {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
+      <View
+        style={[
+          styles.tabContainer,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.03)"
+              : "rgba(0,0,0,0.02)",
+            padding: 6,
+            borderRadius: 20,
+            marginHorizontal: 16,
+            marginBottom: 16,
+          },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => setActiveTab("bonuses")}
           style={[
             styles.tab,
             activeTab === "bonuses" && {
-              backgroundColor: colors.primary + "15",
-              borderColor: colors.primary,
+              backgroundColor: isDark ? "rgba(139,92,246,0.15)" : "#EDE9FE",
+              borderColor: "#8B5CF6",
+              borderWidth: 1.5,
             },
           ]}
         >
           <Gift
             size={18}
-            color={activeTab === "bonuses" ? colors.primary : colors.textMuted}
+            color={activeTab === "bonuses" ? "#8B5CF6" : colors.textMuted}
           />
           <Text
             style={[
               styles.tabText,
               {
-                color:
-                  activeTab === "bonuses" ? colors.primary : colors.textMuted,
+                color: activeTab === "bonuses" ? "#8B5CF6" : colors.textMuted,
+                fontWeight: activeTab === "bonuses" ? "800" : "600",
               },
             ]}
           >
-            {tr("Bonuses", "Bonus", "المكافآت")}
+            {tr("Bonus", "Bonus", "المكافآت")}
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => setActiveTab("withdrawals")}
           style={[
             styles.tab,
             activeTab === "withdrawals" && {
-              backgroundColor: colors.primary + "15",
-              borderColor: colors.primary,
+              backgroundColor: isDark ? "rgba(59,130,246,0.15)" : "#DBEAFE",
+              borderColor: "#3B82F6",
+              borderWidth: 1.5,
             },
           ]}
         >
           <Wallet
             size={18}
-            color={
-              activeTab === "withdrawals" ? colors.primary : colors.textMuted
-            }
+            color={activeTab === "withdrawals" ? "#3B82F6" : colors.textMuted}
           />
           <Text
             style={[
               styles.tabText,
               {
                 color:
-                  activeTab === "withdrawals"
-                    ? colors.primary
-                    : colors.textMuted,
+                  activeTab === "withdrawals" ? "#3B82F6" : colors.textMuted,
+                fontWeight: activeTab === "withdrawals" ? "800" : "600",
               },
             ]}
           >
             {tr("Withdrawals", "Retraits", "السحوبات")}
           </Text>
           {withdrawalRequests.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{withdrawalRequests.length}</Text>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: "#EF4444",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.badgeText, { fontSize: 10, fontWeight: "900" }]}
+              >
+                {withdrawalRequests.length}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => setActiveTab("recharges")}
           style={[
             styles.tab,
             activeTab === "recharges" && {
-              backgroundColor: "#10B98115",
+              backgroundColor: isDark ? "rgba(16,185,129,0.15)" : "#D1FAE5",
               borderColor: "#10B981",
+              borderWidth: 1.5,
             },
           ]}
         >
@@ -557,16 +646,30 @@ export default function AdminWalletScreen({
             style={[
               styles.tabText,
               {
-                color:
-                  activeTab === "recharges" ? "#10B981" : colors.textMuted,
+                color: activeTab === "recharges" ? "#10B981" : colors.textMuted,
+                fontWeight: activeTab === "recharges" ? "800" : "600",
               },
             ]}
           >
             {tr("Recharges", "Recharges", "الشحن")}
           </Text>
           {pendingRecharges.length > 0 && (
-            <View style={[styles.badge, { backgroundColor: "#10B981" }]}>
-              <Text style={styles.badgeText}>{pendingRecharges.length}</Text>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: "#10B981",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.badgeText, { fontSize: 10, fontWeight: "900" }]}
+              >
+                {pendingRecharges.length}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -925,8 +1028,17 @@ export default function AdminWalletScreen({
             {/* Pending Crypto Recharges Section */}
             {pendingRecharges.length > 0 && (
               <View style={{ marginBottom: 30 }}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 15 }]}>
-                  {tr("Pending Payments", "Paiements en Attente", "عمليات شحن قيد الانتظار")}
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: colors.foreground, marginBottom: 15 },
+                  ]}
+                >
+                  {tr(
+                    "Pending Payments",
+                    "Paiements en Attente",
+                    "عمليات شحن قيد الانتظار",
+                  )}
                 </Text>
                 {pendingRecharges.map((inv) => (
                   <View
@@ -943,7 +1055,13 @@ export default function AdminWalletScreen({
                       },
                     ]}
                   >
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                      }}
+                    >
                       <View style={{ flexDirection: "row", flex: 1 }}>
                         <View
                           style={{
@@ -958,35 +1076,80 @@ export default function AdminWalletScreen({
                           }}
                         >
                           {userDetails[inv.userId]?.avatar ? (
-                            <Image source={{ uri: userDetails[inv.userId].avatar }} style={{ width: '100%', height: '100%' }} />
+                            <Image
+                              source={{ uri: userDetails[inv.userId].avatar }}
+                              style={{ width: "100%", height: "100%" }}
+                            />
                           ) : (
-                            <View style={{ width: '100%', height: '100%', backgroundColor: "#10B98120", justifyContent: 'center', alignItems: 'center' }}>
+                            <View
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                backgroundColor: "#10B98120",
+                                justifyContent: "center",
+                                alignItems: "center",
+                              }}
+                            >
                               <Text style={{ fontSize: 20 }}>👤</Text>
                             </View>
                           )}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
+                          <Text
+                            style={{
+                              fontSize: 16,
+                              fontWeight: "800",
+                              color: colors.foreground,
+                            }}
+                          >
                             {userDetails[inv.userId]?.name || "Loading..."}
                           </Text>
-                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: colors.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
                             {userDetails[inv.userId]?.email || "..."}
                           </Text>
-                          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          <Text
+                            style={{ fontSize: 12, color: colors.textMuted }}
+                          >
                             {userDetails[inv.userId]?.phone || "..."}
                           </Text>
-                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, fontWeight: "600" }}>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: colors.textMuted,
+                              marginTop: 4,
+                              fontWeight: "600",
+                            }}
+                          >
                             {inv.coin} Payment
                           </Text>
                         </View>
                       </View>
 
                       <View style={{ alignItems: "flex-end" }}>
-                        <Text style={{ fontSize: 20, fontWeight: "900", color: "#10B981" }}>
+                        <Text
+                          style={{
+                            fontSize: 20,
+                            fontWeight: "900",
+                            color: "#10B981",
+                          }}
+                        >
                           {inv.coinAmount} {inv.coin}
                         </Text>
                         {inv.amountEUR && (
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textMuted, marginTop: 2 }}>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "700",
+                              color: colors.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
                             ≈ {inv.amountEUR.toFixed(2)} EUR
                           </Text>
                         )}
@@ -1009,8 +1172,18 @@ export default function AdminWalletScreen({
                       {isConfirmingPayment === inv.id ? (
                         <ActivityIndicator color="#FFF" size="small" />
                       ) : (
-                        <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 14 }}>
-                          {tr("CONFIRM PAYMENT", "CONFIRMER LE PAIEMENT", "تأكيد الدفع")}
+                        <Text
+                          style={{
+                            color: "#FFF",
+                            fontWeight: "900",
+                            fontSize: 14,
+                          }}
+                        >
+                          {tr(
+                            "CONFIRM PAYMENT",
+                            "CONFIRMER LE PAIEMENT",
+                            "تأكيد الدفع",
+                          )}
                         </Text>
                       )}
                     </TouchableOpacity>
@@ -1025,43 +1198,75 @@ export default function AdminWalletScreen({
                 marginBottom: 20,
                 padding: 16,
                 borderRadius: 18,
-                backgroundColor: isDark
-                  ? "rgba(16,185,129,0.06)"
-                  : "#F0FDF4",
+                backgroundColor: isDark ? "rgba(16,185,129,0.06)" : "#F0FDF4",
                 borderWidth: 1,
                 borderColor: "#10B98130",
               }}
             >
-              <Text style={{ fontWeight: "800", fontSize: 16, color: colors.foreground, marginBottom: 12 }}>
+              <Text
+                style={{
+                  fontWeight: "800",
+                  fontSize: 16,
+                  color: colors.foreground,
+                  marginBottom: 12,
+                }}
+              >
                 {tr("Manual Recharge", "Recharge Manuelle", "شحن يدوي")}
               </Text>
-              
+
               <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                  },
+                ]}
                 placeholder={tr("User ID", "ID Utilisateur", "معرف المستخدم")}
                 placeholderTextColor={colors.textMuted}
                 value={manualRechargeUserId}
                 onChangeText={setManualRechargeUserId}
                 autoCapitalize="none"
               />
-              
+
               <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 10 }]}
-                placeholder={tr("Amount (Coins)", "Montant (Pièces)", "المبلغ (عملات)")}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    marginTop: 10,
+                  },
+                ]}
+                placeholder={tr(
+                  "Amount (Coins)",
+                  "Montant (Pièces)",
+                  "المبلغ (عملات)",
+                )}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={manualRechargeAmount}
                 onChangeText={setManualRechargeAmount}
               />
-              
+
               <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 10 }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    marginTop: 10,
+                  },
+                ]}
                 placeholder={tr("Reason", "Raison", "السبب")}
                 placeholderTextColor={colors.textMuted}
                 value={manualRechargeReason}
                 onChangeText={setManualRechargeReason}
               />
-              
+
               <TouchableOpacity
                 style={{
                   backgroundColor: "#10B981",
@@ -1088,10 +1293,7 @@ export default function AdminWalletScreen({
               {tr("Recent Recharges", "Recharges Récents", "آخر عمليات الشحن")}
             </Text>
             {loadingRecharges ? (
-              <ActivityIndicator
-                style={{ marginTop: 20 }}
-                color={"#10B981"}
-              />
+              <ActivityIndicator style={{ marginTop: 20 }} color={"#10B981"} />
             ) : rechargeHistory.length === 0 ? (
               <Text
                 style={{
@@ -1135,9 +1337,14 @@ export default function AdminWalletScreen({
                         { color: colors.foreground },
                       ]}
                     >
-                      User: {item.actorId?.slice(0, 8) || item.userId?.slice(0, 8) || "??"}
+                      User:{" "}
+                      {item.actorId?.slice(0, 8) ||
+                        item.userId?.slice(0, 8) ||
+                        "??"}
                     </Text>
-                    <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                    <View
+                      style={{ flexDirection: "row", gap: 8, marginTop: 4 }}
+                    >
                       {item.amountEUR != null && (
                         <Text
                           style={[
@@ -1230,7 +1437,13 @@ export default function AdminWalletScreen({
                     },
                   ]}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
                     <View style={{ flexDirection: "row", flex: 1 }}>
                       <View
                         style={{
@@ -1245,92 +1458,244 @@ export default function AdminWalletScreen({
                         }}
                       >
                         {userDetails[req.actorId]?.avatar ? (
-                          <Image source={{ uri: userDetails[req.actorId].avatar }} style={{ width: '100%', height: '100%' }} />
+                          <Image
+                            source={{ uri: userDetails[req.actorId].avatar }}
+                            style={{ width: "100%", height: "100%" }}
+                          />
                         ) : (
-                          <View style={{ width: '100%', height: '100%', backgroundColor: colors.primary + "20", justifyContent: 'center', alignItems: 'center' }}>
+                          <View
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              backgroundColor: colors.primary + "20",
+                              justifyContent: "center",
+                              alignItems: "center",
+                            }}
+                          >
                             <Text style={{ fontSize: 20 }}>👤</Text>
                           </View>
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
-                            {userDetails[req.actorId]?.name || (req.actorType === "brand" ? req.brandName : "Loading...") }
+                        <View
+                          style={{ flexDirection: "row", alignItems: "center" }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 16,
+                              fontWeight: "800",
+                              color: colors.foreground,
+                            }}
+                          >
+                            {userDetails[req.actorId]?.name ||
+                              (req.actorType === "brand"
+                                ? req.brandName
+                                : "Loading...")}
                           </Text>
-                          <View style={{ backgroundColor: colors.primary + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>
+                          <View
+                            style={{
+                              backgroundColor: colors.primary + "15",
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                              marginLeft: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 9,
+                                fontWeight: "800",
+                                color: colors.primary,
+                                textTransform: "uppercase",
+                              }}
+                            >
                               {req.actorType}
                             </Text>
                           </View>
                         </View>
-                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginTop: 2,
+                          }}
+                        >
                           {userDetails[req.actorId]?.email || "..."}
                         </Text>
                         <Text style={{ fontSize: 12, color: colors.textMuted }}>
                           {userDetails[req.actorId]?.phone || "..."}
                         </Text>
-                        <Text style={{ fontSize: 11, color: colors.textMuted, opacity: 0.7 }}>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: colors.textMuted,
+                            opacity: 0.7,
+                          }}
+                        >
                           UID: {req.actorId}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: colors.textMuted,
+                            opacity: 0.7,
+                            marginTop: 2,
+                          }}
+                        >
+                          {req.requestedAt?.toDate
+                            ? req.requestedAt.toDate().toLocaleString()
+                            : String(req.requestedAt || "...")}
                         </Text>
                       </View>
                     </View>
 
                     <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 18, fontWeight: "900", color: "#EF4444" }}>
-                        {req.amountTND?.toFixed(2) || req.amount?.toFixed(2)} TND
+                      <Text
+                        style={{
+                          fontSize: 18,
+                          fontWeight: "900",
+                          color: "#EF4444",
+                        }}
+                      >
+                        {req.amountTND?.toFixed(2) || req.amount?.toFixed(2)}{" "}
+                        TND
                       </Text>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textMuted, marginTop: 2 }}>
-                        {req.amountEUR?.toFixed(2) || (req.amountTND ? (req.amountTND / 3.4).toFixed(2) : "0.00")} EUR
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "700",
+                          color: colors.textMuted,
+                          marginTop: 2,
+                        }}
+                      >
+                        {req.amountEUR?.toFixed(2) ||
+                          (req.amountTND
+                            ? (req.amountTND / 3.4).toFixed(2)
+                            : "0.00")}{" "}
+                        EUR
                       </Text>
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginTop: 4 }}>
-                        💎 {req.amountDiamonds || Math.round((req.amountTND || req.amount || 0) * 10)}
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "600",
+                          color: "#6366F1",
+                          marginTop: 4,
+                        }}
+                      >
+                        💎{" "}
+                        {req.amountDiamonds ||
+                          Math.round((req.amountTND || req.amount || 0) * 10)}
                       </Text>
                     </View>
                   </View>
 
                   {/* Withdrawal Method & Details */}
-                  <View 
-                    style={{ 
-                      marginTop: 16, 
-                      padding: 12, 
-                      backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  <View
+                    style={{
+                      marginTop: 16,
+                      padding: 12,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.03)"
+                        : "rgba(0,0,0,0.02)",
                       borderRadius: 12,
                       borderWidth: 1,
-                      borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"
+                      borderColor: isDark
+                        ? "rgba(255,255,255,0.05)"
+                        : "rgba(0,0,0,0.05)",
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: colors.textMuted,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                        }}
+                      >
                         {tr("Method", "Méthode", "الطريقة")}:
                       </Text>
-                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.foreground, marginLeft: 6 }}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "800",
+                          color: colors.foreground,
+                          marginLeft: 6,
+                        }}
+                      >
                         {req.method || "Standard"}
                       </Text>
                     </View>
-                    {req.details && (
+                    {req.details ? (
                       <View style={{ marginTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: colors.textMuted,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                          }}
+                        >
                           {tr("Details", "Détails", "التفاصيل")}:
                         </Text>
                         <View style={{ marginTop: 2 }}>
-                          {typeof req.details === 'object' ? (
+                          {typeof req.details === "object" ? (
                             Object.entries(req.details).map(([key, value]) => (
-                              <View key={key} style={{ flexDirection: 'row', marginBottom: 2 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, width: 80 }}>{key}:</Text>
-                                <Text style={{ fontSize: 11, color: colors.foreground, flex: 1 }}>{String(value)}</Text>
+                              <View
+                                key={key}
+                                style={{
+                                  flexDirection: "row",
+                                  marginBottom: 2,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: "600",
+                                    color: colors.textMuted,
+                                    width: 80,
+                                  }}
+                                >
+                                  {key}:
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    color: colors.foreground,
+                                    flex: 1,
+                                  }}
+                                >
+                                  {String(value)}
+                                </Text>
                               </View>
                             ))
                           ) : (
-                            <Text style={{ fontSize: 12, color: colors.foreground, lineHeight: 16 }}>
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: colors.foreground,
+                                lineHeight: 16,
+                              }}
+                            >
                               {String(req.details)}
                             </Text>
                           )}
                         </View>
                       </View>
-                    )}
+                    ) : null}
                   </View>
 
-                  <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
+                  <View
+                    style={{ flexDirection: "row", marginTop: 20, gap: 12 }}
+                  >
                     <TouchableOpacity
                       onPress={() => handleRejectWithdrawal(req)}
                       style={{
@@ -1343,11 +1708,17 @@ export default function AdminWalletScreen({
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: "#EF4444", fontWeight: "800", fontSize: 14 }}>
+                      <Text
+                        style={{
+                          color: "#EF4444",
+                          fontWeight: "800",
+                          fontSize: 14,
+                        }}
+                      >
                         {tr("REJECT", "REJETER", "رفض")}
                       </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity
                       onPress={() => handleApproveWithdrawal(req)}
                       style={{
@@ -1359,7 +1730,13 @@ export default function AdminWalletScreen({
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 14 }}>
+                      <Text
+                        style={{
+                          color: "#FFF",
+                          fontWeight: "800",
+                          fontSize: 14,
+                        }}
+                      >
                         {tr("APPROVE", "APPROUVER", "قبول")}
                       </Text>
                     </TouchableOpacity>
@@ -1481,18 +1858,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 15,
-    borderWidth: 1,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: "transparent",
     gap: 8,
   },
-  tabText: { fontSize: 14, fontWeight: "700" },
+  tabText: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3 },
   badge: {
     backgroundColor: "#EF4444",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+    top: -5,
+    right: -5,
+    borderWidth: 2,
+    borderColor: "#1C1C1E", // Matching dark background
   },
   badgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
   content: { paddingHorizontal: 20, paddingBottom: 100 },
