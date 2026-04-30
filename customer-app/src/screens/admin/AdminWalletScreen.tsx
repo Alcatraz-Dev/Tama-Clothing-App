@@ -59,6 +59,7 @@ interface AdminWalletScreenProps {
   t: (key: string) => string;
   theme: string;
   language: string;
+  profileData?: any;
 }
 
 interface WithdrawalRequest {
@@ -71,7 +72,7 @@ interface WithdrawalRequest {
   payoutCurrency: string;
   status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   method: string;
-  details?: string;
+  details?: any;
   requestedAt: any;
   createdAt?: any;
   processedAt?: any;
@@ -86,6 +87,7 @@ export default function AdminWalletScreen({
   t,
   theme,
   language,
+  profileData,
 }: AdminWalletScreenProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -96,6 +98,29 @@ export default function AdminWalletScreen({
   );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // RBAC: Strict check for admin role
+  const isAdmin = profileData?.role === "admin";
+
+  if (!isAdmin) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <XCircle size={64} color="#EF4444" />
+        <Text style={{ color: colors.foreground, fontSize: 18, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
+          {tr("Access Denied", "Accès Refusé", "تم رفض الدخول")}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+          {tr("You do not have permission to access administrative financial controls.", "Vous n'avez pas l'autorisation d'accéder aux contrôles financiers administratifs.", "ليس لديك الصلاحية للدخول إلى ضوابط الإدارة المالية.")}
+        </Text>
+        <TouchableOpacity 
+          onPress={onBack}
+          style={{ marginTop: 24, backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+        >
+          <Text style={{ color: "#FFF", fontWeight: '700' }}>{tr("Go Back", "Retourner", "رجوع")}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Withdrawals State
   const [withdrawalRequests, setWithdrawalRequests] = useState<
@@ -1228,9 +1253,16 @@ export default function AdminWalletScreen({
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
-                          {userDetails[req.actorId]?.name || (req.actorType === "brand" ? req.brandName : "Loading...")}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
+                            {userDetails[req.actorId]?.name || (req.actorType === "brand" ? req.brandName : "Loading...") }
+                          </Text>
+                          <View style={{ backgroundColor: colors.primary + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>
+                              {req.actorType}
+                            </Text>
+                          </View>
+                        </View>
                         <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
                           {userDetails[req.actorId]?.email || "..."}
                         </Text>
@@ -1280,9 +1312,20 @@ export default function AdminWalletScreen({
                         <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                           {tr("Details", "Détails", "التفاصيل")}:
                         </Text>
-                        <Text style={{ fontSize: 12, color: colors.foreground, marginTop: 2, lineHeight: 16 }}>
-                          {req.details}
-                        </Text>
+                        <View style={{ marginTop: 2 }}>
+                          {typeof req.details === 'object' ? (
+                            Object.entries(req.details).map(([key, value]) => (
+                              <View key={key} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, width: 80 }}>{key}:</Text>
+                                <Text style={{ fontSize: 11, color: colors.foreground, flex: 1 }}>{String(value)}</Text>
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={{ fontSize: 12, color: colors.foreground, lineHeight: 16 }}>
+                              {String(req.details)}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                     )}
                   </View>

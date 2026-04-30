@@ -266,7 +266,7 @@ export default function AdminMenuScreen({
       label: t("walletAndBonus") || "Wallet & Bonus",
       icon: Wallet,
       route: "AdminWallet",
-      roles: ["admin", "brand_owner", "vendor"],
+      roles: ["admin"],
       color: "#8B5CF6",
     },
     {

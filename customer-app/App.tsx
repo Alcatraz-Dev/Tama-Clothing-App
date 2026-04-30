@@ -2791,6 +2791,7 @@ export default function App() {
             t={t}
             theme={theme}
             language={language}
+            profileData={profileData}
           />
         );
       case "BrandRevenue":
