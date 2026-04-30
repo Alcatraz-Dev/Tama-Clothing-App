@@ -1123,7 +1123,8 @@ export const fr = {
   noTransactions: "Aucune transaction pour le moment",
   transactionsAppearHere:
     "Vos revenus apparaîtront ici après chaque livraison confirmée.",
-  platformRevenue: "Revenus Plateforme",
+  platformRevenue: "Revenu de la plateforme",
+  walletAndBonus: "Gestion Wallet & Bonus",
 
   // ── Delivery Companies ─────────────────────────────────────────────────────
   deliveryCompanies: "Sociétés de Livraison",

@@ -1108,6 +1108,7 @@ export const en = {
   transactionsAppearHere:
     "Your revenue will appear here once orders are delivered.",
   platformRevenue: "Platform Revenue",
+  walletAndBonus: "Wallet & Bonus Management",
 
   // ── Delivery Companies ─────────────────────────────────────────────────────
   deliveryCompanies: "Delivery Companies",

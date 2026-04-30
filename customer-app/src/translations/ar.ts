@@ -34,7 +34,7 @@ export const ar = {
   checkOut: "اكتشف",
   leaveReview: "أعطي رايك",
   website: "الموقع",
-  projects: "مشاريع",
+  walletAndBonus: "إدارة المحفظة والمكافآت",
   settings: "إعدادات",
   language: "اللغة",
   signOut: "خرج الكونت",

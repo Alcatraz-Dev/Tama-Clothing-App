@@ -652,14 +652,41 @@ async function reverseVendorPayout(orderId, split) {
 async function rechargeUserWallet(userId, pack, paymentId) {
   try {
     const userRef = db.collection('users').doc(userId);
+    const configRef = db.collection('app_config').doc('wallet_bonuses');
     
     // Use a transaction to ensure atomicity
     await db.runTransaction(async (t) => {
       const userDoc = await t.get(userRef);
       if (!userDoc.exists) throw new Error('User not found');
       
+      const configDoc = await t.get(configRef);
+      const bonusSettings = configDoc.exists ? configDoc.data() : {
+        firstRecharge: { enabled: false, bonus: 0 },
+        extraBonus: { enabled: false, bonus: 0 }
+      };
+
       const currentWallet = userDoc.data().wallet || { coins: 0, diamonds: 0 };
-      const totalNewCoins = (pack.coins || 0) + (pack.bonus || 0);
+      let baseCoins = (pack.coins || 0) + (pack.bonus || 0);
+      let extraBonusCoins = 0;
+
+      // Check for first recharge bonus
+      if (bonusSettings.firstRecharge?.enabled) {
+        const txsSnap = await t.get(userRef.collection('transactions')
+          .where('type', '==', 'recharge')
+          .where('status', '==', 'completed')
+          .limit(1));
+        
+        if (txsSnap.empty) {
+          extraBonusCoins += Math.floor(baseCoins * ((bonusSettings.firstRecharge.bonus || 0) / 100));
+        }
+      }
+
+      // Check for general event bonus (can accumulate with first recharge or be separate)
+      if (bonusSettings.extraBonus?.enabled) {
+        extraBonusCoins += Math.floor(baseCoins * ((bonusSettings.extraBonus.bonus || 0) / 100));
+      }
+
+      const totalNewCoins = baseCoins + extraBonusCoins;
       
       // Update user wallet
       t.update(userRef, {
@@ -671,10 +698,12 @@ async function rechargeUserWallet(userId, pack, paymentId) {
       t.set(txRef, {
         type: 'recharge',
         amountCoins: totalNewCoins,
+        baseAmount: baseCoins,
+        extraBonusAmount: extraBonusCoins,
         currency: 'coins',
         price: pack.price,
         priceDisplay: pack.priceDisplay,
-        description: `Coin Pack Purchase via Flouci (${pack.coins} + ${pack.bonus} Bonus)`,
+        description: `Coin Pack Purchase (${pack.coins} + ${pack.bonus} Bonus)${extraBonusCoins > 0 ? ` + ${extraBonusCoins} Admin Bonus` : ''}`,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: 'completed',
         paymentId: paymentId

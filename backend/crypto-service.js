@@ -28,8 +28,8 @@ const PLATFORM_WALLETS = {
   ETH:        process.env.CRYPTO_WALLET_ETH        || '',
 };
 
-// Rates are refreshed by a cron job; fallback values below (USD-based)
-const FALLBACK_RATES_USD = { USDT: 1.0, BTC: 65000, ETH: 3200 };
+// Rates are refreshed by a cron job; fallback values below (EUR-based)
+const FALLBACK_RATES_EUR = { USDT: 0.93, BTC: 60000, ETH: 3000 };
 
 /**
  * Creates a pending crypto invoice in Firestore.
@@ -39,18 +39,18 @@ const FALLBACK_RATES_USD = { USDT: 1.0, BTC: 65000, ETH: 3200 };
  * @param {Object} params
  * @param {string} params.userId
  * @param {string} params.coin - One of SUPPORTED_COINS keys
- * @param {number} params.amountUSD - Equivalent USD value to pay
+ * @param {number} params.amountEUR - Equivalent EUR value to pay
  * @param {Object} params.meta - { packCoins, packBonus, priceDisplay }
  * @returns {{ invoiceId, walletAddress, coinAmount, coin, network, expiresAt }}
  */
-async function createCryptoInvoice({ userId, coin, amountUSD, meta = {} }) {
+async function createCryptoInvoice({ userId, coin, amountEUR, meta = {} }) {
   if (!SUPPORTED_COINS[coin]) throw new Error(`Unsupported coin: ${coin}`);
   const walletAddress = PLATFORM_WALLETS[coin];
   if (!walletAddress) throw new Error(`Platform wallet not configured for ${coin}`);
 
   const coinSymbol = SUPPORTED_COINS[coin].symbol;
-  const rate = FALLBACK_RATES_USD[coinSymbol] || 1;
-  const coinAmount = parseFloat((amountUSD / rate).toPrecision(8));
+  const rate = FALLBACK_RATES_EUR[coinSymbol] || 1;
+  const coinAmount = parseFloat((amountEUR / rate).toPrecision(8));
 
   const invoiceId = `crypto_${userId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -64,7 +64,7 @@ async function createCryptoInvoice({ userId, coin, amountUSD, meta = {} }) {
     coinSymbol,
     network: SUPPORTED_COINS[coin].network,
     walletAddress,
-    amountUSD,
+    amountEUR,
     coinAmount,
     meta,
     status: 'pending',
@@ -87,6 +87,8 @@ async function verifyCryptoInvoice(invoiceId) {
   return { success: true, status: doc.data().status, invoiceData: doc.data() };
 }
 
+const paymentService = require('./payment-service');
+
 /**
  * Mark an invoice as confirmed (called by admin or webhook)
  * Also triggers coin wallet recharge
@@ -101,35 +103,21 @@ async function confirmCryptoInvoice(invoiceId, txHash) {
   const invoice = invoiceDoc.data();
   if (invoice.status === 'completed') return { success: true, alreadyProcessed: true };
 
-  await db.runTransaction(async (t) => {
-    // Recharge user wallet
-    const userRef = db.collection('users').doc(invoice.userId);
-    const totalCoins = (invoice.meta?.packCoins || 0) + (invoice.meta?.packBonus || 0);
-    if (totalCoins > 0) {
-      t.update(userRef, { 'wallet.coins': admin.firestore.FieldValue.increment(totalCoins) });
-    }
+  // Recharge user wallet via centralized payment service (handles bonuses)
+  const pack = {
+    coins: invoice.meta?.packCoins || 0,
+    bonus: invoice.meta?.packBonus || 0,
+    price: invoice.amountUSD,
+    priceDisplay: invoice.meta?.priceDisplay || `${invoice.amountUSD} USD`
+  };
 
-    // Transaction log
-    const txRef = db.collection('users').doc(invoice.userId).collection('transactions').doc();
-    t.set(txRef, {
-      type: 'recharge',
-      method: 'crypto',
-      coin: invoice.coin,
-      txHash: txHash || null,
-      amountCoins: totalCoins,
-      amountUSD: invoice.amountUSD,
-      coinAmount: invoice.coinAmount,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'completed',
-      invoiceId,
-    });
+  await paymentService.rechargeUserWallet(invoice.userId, pack, invoiceId);
 
-    // Mark invoice completed
-    t.update(invoiceRef, {
-      status: 'completed',
-      txHash: txHash || null,
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+  // Mark invoice completed
+  await invoiceRef.update({
+    status: 'completed',
+    txHash: txHash || null,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return { success: true };

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   ShoppingCart,
+  Wallet,
   Package,
   Users as UsersIcon,
   Image as ImageIcon,
@@ -506,6 +507,51 @@ export default function AdminDashboardScreen({
                         style={[sc.quickActionSub, { color: colors.textMuted }]}
                       >
                         {t("manageGiftsDesc").toUpperCase()}
+                      </Text>
+                    </View>
+                    <ChevronLeft
+                      size={18}
+                      color={colors.textMuted}
+                      style={{ transform: [{ rotate: "180deg" }] }}
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => onNavigate && onNavigate("AdminWallet")}
+                    style={[
+                      sc.quickActionCard,
+                      {
+                        backgroundColor: isDark ? "#111118" : "#FFFFFF",
+                        borderColor: isDark
+                          ? "rgba(255,255,255,0.07)"
+                          : "rgba(0,0,0,0.06)",
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        sc.statIconBox,
+                        {
+                          backgroundColor: "#8B5CF6" + (isDark ? "20" : "14"),
+                          marginBottom: 0,
+                        },
+                      ]}
+                    >
+                      <Wallet size={20} color="#8B5CF6" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 15 }}>
+                      <Text
+                        style={[
+                          sc.quickActionTitle,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {t("walletAndBonus") || "Wallet & Bonus Management"}
+                      </Text>
+                      <Text
+                        style={[sc.quickActionSub, { color: colors.textMuted }]}
+                      >
+                        {t("walletAndBonusDesc") || "MANAGE WITHDRAWALS & BONUSES"}
                       </Text>
                     </View>
                     <ChevronLeft

@@ -228,7 +228,7 @@ export default function BrandRevenueScreen({ onBack, t, profileData }: BrandReve
                 details.postalCode = postPostal.trim();
                 details.city = postCity.trim();
             }
-            await requestWithdrawal(wallet.id, brandId, amount, details);
+            await requestWithdrawal(wallet.id, brandId, amount, details, 'brand');
             Alert.alert(
                 t('success') || 'Success',
                 'Withdrawal request sent!\nAdmin will process it shortly.',

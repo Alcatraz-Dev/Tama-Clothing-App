@@ -12,6 +12,7 @@ import {
   TextInput,
   Animated,
   ActivityIndicator,
+  Switch,
 } from "react-native";
 import {
   ChevronLeft,
@@ -67,6 +68,7 @@ import {
   arrayRemove,
   deleteDoc,
   documentId,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../api/firebase";
 import { getName } from "../utils/translationHelpers";
@@ -83,6 +85,7 @@ import {
   performTransfer,
   getOrCreateWallet,
   subscribeToWallet,
+  notifyAdmins,
 } from "../services/codFinancialService";
 
 import Constants from "expo-constants";
@@ -127,6 +130,8 @@ const RECHARGE_PACKAGES = [
 
 const DIAMOND_TO_TND_RATE = 0.01;
 const DIAMOND_TO_COIN_RATE = 1;
+const TND_TO_EUR_RATE = 1 / 3.4;
+const DIAMOND_TO_EUR_RATE = DIAMOND_TO_TND_RATE * TND_TO_EUR_RATE;
 
 interface WalletScreenProps {
   onBack: () => void;
@@ -224,10 +229,12 @@ export default function WalletScreen({
   );
   const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
   const [adminWithdrawals, setAdminWithdrawals] = useState<any[]>([]);
-  const [adminPanelTab, setAdminPanelTab] = useState<"crypto" | "withdrawals">(
-    "crypto",
-  );
+  const [adminPanelTab, setAdminPanelTab] = useState<
+    "crypto" | "withdrawals" | "bonuses"
+  >("crypto");
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [bonusSettings, setBonusSettings] = useState<any>(null);
+  const [savingBonus, setSavingBonus] = useState(false);
 
   const [wallet, setWallet] = useState<any | null>(null);
   const [walletId, setWalletId] = useState<string | null>(null);
@@ -349,6 +356,67 @@ export default function WalletScreen({
 
     return () => unsubscribe();
   }, [isAdmin]);
+
+  // Fetch Bonus Settings for everyone to show on UI
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const docRef = doc(db, "app_config", "wallet_bonuses");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setBonusSettings(docSnap.data());
+        } else {
+          const defaults = {
+            firstRecharge: { enabled: false, bonus: 0 },
+            extraBonus: { enabled: false, bonus: 0 },
+          };
+          setBonusSettings(defaults);
+        }
+      } catch (error) {
+        console.error("Error fetching bonus settings:", error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  // Determine if it's user's first recharge
+  const [isFirstRecharge, setIsFirstRecharge] = useState(false);
+  useEffect(() => {
+    if (!user?.uid || !transactions) return;
+    const hasRecharge = transactions.some(
+      (tx: any) => tx.type === "recharge" && tx.status === "completed",
+    );
+    setIsFirstRecharge(!hasRecharge);
+  }, [user?.uid, transactions]);
+
+  const saveBonusSettings = async (newSettings: any) => {
+    try {
+      setSavingBonus(true);
+      await setDoc(doc(db, "app_config", "wallet_bonuses"), newSettings);
+      setBonusSettings(newSettings);
+      Alert.alert(
+        tr("Success", "Succès", "تم"),
+        tr(
+          "Settings saved successfully",
+          "Paramètres enregistrés",
+          "تم حفظ الإعدادات",
+        ),
+      );
+    } catch (error) {
+      console.error("Error saving bonus settings:", error);
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr(
+          "Failed to save settings",
+          "Échec de l'enregistrement",
+          "فشل حفظ الإعدادات",
+        ),
+      );
+    } finally {
+      setSavingBonus(false);
+    }
+  };
 
   const handleApproveWithdrawal = async (requestId: string) => {
     try {
@@ -524,7 +592,30 @@ export default function WalletScreen({
   };
 
   const coinBalance = profileData?.wallet?.coins || 0;
-  const diamondBalance = profileData?.wallet?.diamonds || 0;
+  // Use live wallet subscription (same Firestore doc the service reads) to avoid stale-data mismatch
+  const diamondBalance = (wallet?.diamonds ?? profileData?.wallet?.diamonds) || 0;
+
+  const getCalculatedBonus = (pack: any, method: string) => {
+    if (!bonusSettings) return 0;
+    let extraPercent = 0;
+    if (bonusSettings.extraBonus?.enabled) {
+      extraPercent += bonusSettings.extraBonus.bonus || 0;
+    }
+    if (bonusSettings.firstRecharge?.enabled && isFirstRecharge) {
+      extraPercent += bonusSettings.firstRecharge.bonus || 0;
+    }
+    if (method === "crypto" && bonusSettings.cryptoBonus?.enabled) {
+      extraPercent += bonusSettings.cryptoBonus.bonus || 0;
+    }
+    if (
+      bonusSettings.bulkBonus?.enabled &&
+      pack.price >= (bonusSettings.bulkBonus.threshold || 0)
+    ) {
+      extraPercent += bonusSettings.bulkBonus.bonus || 0;
+    }
+
+    return Math.floor(pack.coins * (extraPercent / 100));
+  };
 
   const initiateRecharge = (pack: any) => {
     if (!user?.uid) {
@@ -554,10 +645,10 @@ export default function WalletScreen({
         body: JSON.stringify({
           userId: user.uid,
           coin: coin,
-          amountUSD: Number((selectedPackage.price / 3.1).toFixed(2)), // convert TND to USD
+          amountEUR: Number((selectedPackage.price / 3.4).toFixed(2)), // convert TND to EUR
           pack: {
             coins: selectedPackage.coins,
-            bonus: selectedPackage.bonus,
+            bonus: selectedPackage.bonus + getCalculatedBonus(selectedPackage, "crypto"),
             priceDisplay: selectedPackage.priceDisplay,
           },
         }),
@@ -599,7 +690,7 @@ export default function WalletScreen({
           userId: user.uid,
           pack: {
             coins: pack.coins,
-            bonus: pack.bonus,
+            bonus: pack.bonus + getCalculatedBonus(pack, "stripe"),
             price: pack.price,
             priceDisplay: pack.priceDisplay,
           },
@@ -622,7 +713,7 @@ export default function WalletScreen({
           userId: user.uid,
           pack: {
             coins: pack.coins,
-            bonus: pack.bonus,
+            bonus: pack.bonus + getCalculatedBonus(pack, "stripe"),
             price: pack.price,
             priceDisplay: pack.priceDisplay,
           },
@@ -646,7 +737,7 @@ export default function WalletScreen({
         const { queryParams } = Linking.parse(result.url || "");
         const sessionId = queryParams?.session_id as string;
         if (sessionId) {
-          await verifyAndCompletePayment(sessionId);
+          await verifyAndCompletePayment(sessionId, pack.price);
         }
       } else {
         setLoading(false);
@@ -679,18 +770,23 @@ export default function WalletScreen({
       );
       return;
     }
-    if (amount < 50) {
+    const isEUR = withdrawMethod === "stripe" || withdrawMethod === "crypto";
+    const minAmount = isEUR ? (50 * TND_TO_EUR_RATE) : 50;
+    const currency = isEUR ? "EUR" : "TND";
+    const maxAmount = isEUR ? (diamondBalance * DIAMOND_TO_EUR_RATE) : (diamondBalance * DIAMOND_TO_TND_RATE);
+
+    if (amount < minAmount) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
         tr(
-          "Minimum withdrawal is 50 TND",
-          "Le retrait minimum est de 50 TND",
-          "أقل مبلغ تجبدو هو 50 دت",
+          `Minimum withdrawal is ${minAmount.toFixed(2)} ${currency}`,
+          `Le retrait minimum est de ${minAmount.toFixed(2)} ${currency}`,
+          `أقل مبلغ تجبدو هو ${minAmount.toFixed(2)} ${currency === "EUR" ? "يورو" : "دت"}`,
         ),
       );
       return;
     }
-    if (amount > diamondBalance * DIAMOND_TO_TND_RATE) {
+    if (amount > maxAmount + 0.01) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
         tr("Insufficient balance", "Solde insuffisant", "ماعندكش رصيد كافي"),
@@ -699,17 +795,37 @@ export default function WalletScreen({
     }
 
     // Per-method validation
+    if (!withdrawMethod) {
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        tr(
+          "Please select a withdrawal method",
+          "Veuillez choisir une méthode de retrait",
+          "اختار وسيلة السحب",
+        ),
+      );
+      return;
+    }
+
     if (withdrawMethod === "stripe" && !stripeEmail.trim()) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        "Please enter your Stripe email",
+        tr(
+          "Please enter your Stripe email",
+          "Veuillez entrer votre email Stripe",
+          "حط إيميل سترايب متاعك",
+        ),
       );
       return;
     }
     if (withdrawMethod === "crypto" && (!cryptoAddress.trim() || !cryptoCoin)) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        "Please enter your crypto wallet address",
+        tr(
+          "Please enter your crypto wallet address",
+          "Veuillez entrer votre adresse de portefeuille crypto",
+          "حط عنوان المحفظة الكريبتو متاعك",
+        ),
       );
       return;
     }
@@ -719,7 +835,11 @@ export default function WalletScreen({
     ) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        "Please enter your IBAN and bank name",
+        tr(
+          "Please enter your IBAN and bank name",
+          "Veuillez entrer votre IBAN et le nom de la banque",
+          "حط الـ IBAN وإسم البانكة",
+        ),
       );
       return;
     }
@@ -732,7 +852,11 @@ export default function WalletScreen({
     ) {
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        "Please fill all postal delivery fields",
+        tr(
+          "Please fill all postal delivery fields",
+          "Veuillez remplir tous les champs de livraison postale",
+          "عمر البيانات الكل متاع البريد",
+        ),
       );
       return;
     }
@@ -758,7 +882,8 @@ export default function WalletScreen({
         city: withdrawMethod === "post_office" ? postCity.trim() : undefined,
       };
 
-      await requestWithdrawal(wallet.id, user.uid, amount, details, "customer");
+      const finalAmountTND = Number((isEUR ? amount * 3.4 : amount).toFixed(2));
+      await requestWithdrawal(wallet.id, user.uid, finalAmountTND, details, "customer");
 
       Alert.alert(
         tr("Success", "Succès", "تمت العملية"),
@@ -774,7 +899,8 @@ export default function WalletScreen({
       console.error("[WalletScreen] Withdrawal error:", error);
       Alert.alert(
         tr("Error", "Erreur", "غلطة"),
-        error.message || "Withdrawal failed",
+        error.message ||
+          tr("Withdrawal failed", "Le retrait a échoué", "فشل الجبدان"),
       );
     } finally {
       setSubmittingWithdraw(false);
@@ -793,7 +919,7 @@ export default function WalletScreen({
     setPostCity("");
   };
 
-  const verifyAndCompletePayment = async (sessionIdOrIntentId: string) => {
+  const verifyAndCompletePayment = async (sessionIdOrIntentId: string, rechargeAmountTND?: number) => {
     try {
       // Verify Stripe payment via backend; backend credits wallet on success
       const response = await fetch(
@@ -813,6 +939,16 @@ export default function WalletScreen({
             "Paiement réussi ! Vos pièces ont été ajoutées.",
             "خلصت بنجاح! تزدادولك العملات",
           ),
+        );
+        
+        // Notify admins about the recharge
+        const amountEUR = data.amount ? (data.amount / 100).toFixed(2) : (rechargeAmountTND ? (rechargeAmountTND / 3.4).toFixed(2) : "???");
+        const amountTND = data.amount_tnd || rechargeAmountTND || "???";
+        
+        notifyAdmins(
+          "💳 Successful Recharge",
+          `User ${user?.displayName || user?.uid?.slice(0, 8)} successfully recharged their wallet with ${amountEUR} EUR (${amountTND} TND) via Stripe.`,
+          { userId: user?.uid, type: "recharge", amount: data.amount, amount_tnd: amountTND }
         );
       } else {
         Alert.alert(
@@ -898,7 +1034,7 @@ export default function WalletScreen({
       );
     } catch (error: any) {
       console.error("Exchange Error:", error);
-      Alert.alert("Error", error.message || "Exchange failed");
+      Alert.alert(tr("Error", "Erreur", "غلطة"), error.message || tr("Exchange failed", "Échec de l'échange", "ما نجمناش نبدلو"));
     } finally {
       setLoading(false);
     }
@@ -1007,7 +1143,7 @@ export default function WalletScreen({
       setTransferSearchResults([]);
     } catch (error: any) {
       console.error("Transfer Error:", error);
-      Alert.alert("Error", error.message || "Transfer failed");
+      Alert.alert(tr("Error", "Erreur", "غلطة"), error.message || tr("Transfer failed", "Échec du transfert", "ما نجمناش نحولو"));
     } finally {
       setLoading(false);
     }
@@ -1064,7 +1200,7 @@ export default function WalletScreen({
       );
     } catch (error) {
       console.error("Friend Request Error:", error);
-      Alert.alert("Error", "Failed to send request");
+      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Failed to send request", "Échec de l'envoi de la demande", "ما نجمناش نبعثو الطلب"));
     } finally {
       setLoading(false);
     }
@@ -1104,7 +1240,7 @@ export default function WalletScreen({
       );
     } catch (error) {
       console.error("Accept Friend Error:", error);
-      Alert.alert("Error", "Failed to accept request");
+      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Failed to accept request", "Échec de l'acceptation de la demande", "ما نجمناش نقبلو الطلب"));
     } finally {
       setLoading(false);
     }
@@ -1141,7 +1277,7 @@ export default function WalletScreen({
               );
             } catch (error) {
               console.error("Remove Friend Error:", error);
-              Alert.alert("Error", "Failed to remove friend");
+              Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Failed to remove friend", "Échec de la suppression de l'ami", "ما نجمناش نفرخو الصاحب"));
             } finally {
               setLoading(false);
             }
@@ -1487,33 +1623,78 @@ export default function WalletScreen({
                 </TouchableOpacity> */}
       </View>
       <View style={styles.gridContainer}>
-        {RECHARGE_PACKAGES.map((pack) => (
-          <TouchableOpacity
-            key={pack.id}
-            style={[
-              styles.packageCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            activeOpacity={0.7}
-            onPress={() => initiateRecharge(pack)}
-            disabled={loading}
-          >
-            <View style={styles.coinIconWrapper}>
-              <Coins size={28} color="#F59E0B" fill="#F59E0B" />
-            </View>
-            <Text style={[styles.coinAmount, { color: colors.foreground }]}>
-              {pack.coins}
-            </Text>
-            {pack.bonus > 0 && (
-              <Text style={styles.bonusText}>
-                +{pack.bonus} {tr("Bonus", "Bonus", "زيادة")}
+        {RECHARGE_PACKAGES.map((pack) => {
+          let totalExtraPercent = 0;
+          if (bonusSettings?.extraBonus?.enabled) {
+            totalExtraPercent += bonusSettings.extraBonus.bonus || 0;
+          }
+          if (bonusSettings?.firstRecharge?.enabled && isFirstRecharge) {
+            totalExtraPercent += bonusSettings.firstRecharge.bonus || 0;
+          }
+          if (
+            bonusSettings?.bulkBonus?.enabled &&
+            pack.price >= (bonusSettings.bulkBonus.threshold || 0)
+          ) {
+            totalExtraPercent += bonusSettings.bulkBonus.bonus || 0;
+          }
+          // Note: Crypto bonus is not shown here because we don't know the method yet,
+          // but we could add a hint " +X% more with Crypto"
+
+          return (
+            <TouchableOpacity
+              key={pack.id}
+              style={[
+                styles.packageCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              activeOpacity={0.7}
+              onPress={() => initiateRecharge(pack)}
+              disabled={loading}
+            >
+              {totalExtraPercent > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -8,
+                    right: -8,
+                    backgroundColor: "#EF4444",
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    zIndex: 10,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 2,
+                    elevation: 3,
+                  }}
+                >
+                  <Text
+                    style={{ color: "#FFF", fontSize: 10, fontWeight: "900" }}
+                  >
+                    +{totalExtraPercent}% {tr("BONUS", "BONUS", "زيادة")}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.coinIconWrapper}>
+                <Coins size={28} color="#F59E0B" fill="#F59E0B" />
+              </View>
+              <Text style={[styles.coinAmount, { color: colors.foreground }]}>
+                {pack.coins}
               </Text>
-            )}
-            <View style={[styles.priceButton, { backgroundColor: "#F59E0B" }]}>
-              <Text style={styles.priceText}>{pack.priceDisplay}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              {pack.bonus > 0 && (
+                <Text style={styles.bonusText}>
+                  +{pack.bonus} {tr("Bonus", "Bonus", "زيادة")}
+                </Text>
+              )}
+              <View
+                style={[styles.priceButton, { backgroundColor: "#F59E0B" }]}
+              >
+                <Text style={styles.priceText}>{pack.priceDisplay}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -2215,10 +2396,18 @@ export default function WalletScreen({
                       fontSize: 16,
                     }}
                   >
-                    ADMIN VERIFICATION
+                    {tr(
+                      "ADMIN VERIFICATION",
+                      "VÉRIFICATION ADMIN",
+                      "مراجعة الأدمن",
+                    )}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    Approve or reject transactions
+                    {tr(
+                      "Approve or reject transactions",
+                      "Approuver ou rejeter les transactions",
+                      "قبول أو رفض المعاملات",
+                    )}
                   </Text>
                 </View>
               </View>
@@ -2260,7 +2449,8 @@ export default function WalletScreen({
                       fontSize: 11,
                     }}
                   >
-                    RECHARGES ({adminInvoices.length})
+                    {tr("RECHARGES", "RECHARGES", "شحن")} (
+                    {adminInvoices.length})
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -2291,7 +2481,37 @@ export default function WalletScreen({
                       fontSize: 11,
                     }}
                   >
-                    WITHDRAWALS ({adminWithdrawals.length})
+                    {tr("WITHDRAWALS", "RETRAITS", "سحب")} (
+                    {adminWithdrawals.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setAdminPanelTab("bonuses")}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    backgroundColor:
+                      adminPanelTab === "bonuses"
+                        ? "rgba(239,68,68,0.1)"
+                        : "transparent",
+                    borderWidth: 1,
+                    borderColor:
+                      adminPanelTab === "bonuses" ? "#EF4444" : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        adminPanelTab === "bonuses"
+                          ? "#EF4444"
+                          : colors.textMuted,
+                      fontWeight: "800",
+                      fontSize: 11,
+                    }}
+                  >
+                    {tr("BONUSES", "BONUS", "مكافآت")}
                   </Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -2319,7 +2539,11 @@ export default function WalletScreen({
                         fontWeight: "600",
                       }}
                     >
-                      No pending crypto payments
+                      {tr(
+                        "No pending crypto payments",
+                        "Aucun paiement crypto en attente",
+                        "ما فماش شحن بالكريبتو توة",
+                      )}
                     </Text>
                   </View>
                 ) : (
@@ -2375,7 +2599,8 @@ export default function WalletScreen({
                               fontSize: 15,
                             }}
                           >
-                            {inv._user?.fullName || "Unknown"}
+                            {inv._user?.fullName ||
+                              tr("Unknown", "Inconnu", "غير معروف")}
                           </Text>
                           {inv._user?.email && (
                             <Text
@@ -2419,7 +2644,11 @@ export default function WalletScreen({
                           }}
                         >
                           <Text style={{ color: "#FFF", fontWeight: "900" }}>
-                            CONFIRM PAYMENT
+                            {tr(
+                              "CONFIRM PAYMENT",
+                              "CONFIRMER LE PAIEMENT",
+                              "أكد الدفع",
+                            )}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -2444,7 +2673,11 @@ export default function WalletScreen({
                         fontWeight: "600",
                       }}
                     >
-                      No pending withdrawal requests
+                      {tr(
+                        "No pending withdrawal requests",
+                        "Aucune demande de retrait en attente",
+                        "ما فماش طلبات جبدان توة",
+                      )}
                     </Text>
                   </View>
                 ) : (
@@ -2499,7 +2732,8 @@ export default function WalletScreen({
                               fontSize: 15,
                             }}
                           >
-                            {req._user?.fullName || "Unknown"}
+                            {req._user?.fullName ||
+                              tr("Unknown", "Inconnu", "غير معروف")}
                           </Text>
                           {req._user?.email && (
                             <Text
@@ -2523,7 +2757,11 @@ export default function WalletScreen({
                           <Text
                             style={{ fontSize: 11, color: colors.textMuted }}
                           >
-                            {req.method.toUpperCase()} Withdrawal
+                            {tr(
+                              `${req.method.toUpperCase()} Withdrawal`,
+                              `Retrait ${req.method.toUpperCase()}`,
+                              `سحب ${req.method.toUpperCase()}`,
+                            )}
                           </Text>
                         </View>
                         <View style={{ alignItems: "flex-end" }}>
@@ -2536,6 +2774,20 @@ export default function WalletScreen({
                           >
                             -{req.amount.toFixed(2)} TND
                           </Text>
+                          {req.payoutCurrency &&
+                            req.payoutCurrency !== "TND" && (
+                              <Text
+                                style={{
+                                  fontWeight: "800",
+                                  color: "#10B981",
+                                  fontSize: 13,
+                                  marginTop: -2,
+                                }}
+                              >
+                                ≈ {req.payoutAmount?.toFixed(2)}{" "}
+                                {req.payoutCurrency}
+                              </Text>
+                            )}
                           <Text
                             style={{
                               fontWeight: "700",
@@ -2566,7 +2818,7 @@ export default function WalletScreen({
                                 marginBottom: 4,
                               }}
                             >
-                              Coin:{" "}
+                              {tr("Coin", "Pièce", "العملة")}:{" "}
                               <Text
                                 style={{ fontWeight: "800", color: "#F59E0B" }}
                               >
@@ -2576,7 +2828,7 @@ export default function WalletScreen({
                             <Text
                               style={{ fontSize: 12, color: colors.foreground }}
                             >
-                              Address:{" "}
+                              {tr("Address", "Adresse", "العنوان")}:{" "}
                               <Text style={{ fontWeight: "700" }}>
                                 {req.details?.cryptoAddress}
                               </Text>
@@ -2601,7 +2853,7 @@ export default function WalletScreen({
                                 marginBottom: 4,
                               }}
                             >
-                              Bank:{" "}
+                              {tr("Bank", "Banque", "البنك")}:{" "}
                               <Text style={{ fontWeight: "800" }}>
                                 {req.details?.bankName}
                               </Text>
@@ -2609,7 +2861,7 @@ export default function WalletScreen({
                             <Text
                               style={{ fontSize: 12, color: colors.foreground }}
                             >
-                              IBAN:{" "}
+                              {tr("IBAN", "IBAN", "الآيبان")}:{" "}
                               <Text style={{ fontWeight: "700" }}>
                                 {req.details?.iban}
                               </Text>
@@ -2634,7 +2886,7 @@ export default function WalletScreen({
                                 marginBottom: 4,
                               }}
                             >
-                              Recipient:{" "}
+                              {tr("Recipient", "Destinataire", "المستلم")}:{" "}
                               <Text style={{ fontWeight: "800" }}>
                                 {req.details?.fullName}
                               </Text>
@@ -2642,7 +2894,7 @@ export default function WalletScreen({
                             <Text
                               style={{ fontSize: 12, color: colors.foreground }}
                             >
-                              Address:{" "}
+                              {tr("Address", "Adresse", "العنوان")}:{" "}
                               <Text style={{ fontWeight: "700" }}>
                                 {req.details?.address},{" "}
                                 {req.details?.postalCode} {req.details?.city}
@@ -2665,7 +2917,7 @@ export default function WalletScreen({
                             <Text
                               style={{ color: "#EF4444", fontWeight: "800" }}
                             >
-                              REJECT
+                              {tr("REJECT", "REJETER", "رفض")}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -2679,7 +2931,7 @@ export default function WalletScreen({
                             }}
                           >
                             <Text style={{ color: "#FFF", fontWeight: "800" }}>
-                              APPROVE
+                              {tr("APPROVE", "APPROUVER", "قبول")}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -2687,6 +2939,437 @@ export default function WalletScreen({
                     </View>
                   ))
                 )
+              ) : adminPanelTab === "bonuses" ? (
+                <View style={{ padding: 12 }}>
+                  {/* First Recharge Bonus */}
+                  <View
+                    style={{
+                      marginBottom: 20,
+                      padding: 16,
+                      borderRadius: 18,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.05)"
+                        : "#F9FAFB",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View>
+                        <Text
+                          style={{
+                            fontWeight: "800",
+                            fontSize: 16,
+                            color: colors.foreground,
+                          }}
+                        >
+                          {tr(
+                            "First Recharge Bonus",
+                            "Bonus premier recharge",
+                            "مكافأة أول شحن",
+                          )}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {tr(
+                            "Extra coins for new users",
+                            "Pièces en plus pour nouveaux users",
+                            "عملات زيادة للمستخدمين الجدد",
+                          )}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={bonusSettings?.firstRecharge?.enabled}
+                        onValueChange={(val) =>
+                          setBonusSettings({
+                            ...bonusSettings,
+                            firstRecharge: {
+                              ...bonusSettings.firstRecharge,
+                              enabled: val,
+                            },
+                          })
+                        }
+                      />
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tr("Bonus %", "Bonus %", "نسبة المكافأة")}
+                        </Text>
+                        <TextInput
+                          style={{
+                            height: 44,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 12,
+                            color: colors.foreground,
+                          }}
+                          keyboardType="numeric"
+                          value={(
+                            bonusSettings?.firstRecharge?.bonus ?? 0
+                          ).toString()}
+                          onChangeText={(txt) =>
+                            setBonusSettings({
+                              ...bonusSettings,
+                              firstRecharge: {
+                                ...bonusSettings.firstRecharge,
+                                bonus: Number(txt),
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* General Bonus */}
+                  <View
+                    style={{
+                      marginBottom: 20,
+                      padding: 16,
+                      borderRadius: 18,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.05)"
+                        : "#F9FAFB",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View>
+                        <Text
+                          style={{
+                            fontWeight: "800",
+                            fontSize: 16,
+                            color: colors.foreground,
+                          }}
+                        >
+                          {tr(
+                            "General Event Bonus",
+                            "Bonus évènement général",
+                            "مكافأة عامة",
+                          )}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {tr(
+                            "Extra coins for all users",
+                            "Pièces en plus pour tous",
+                            "عملات زيادة للكل",
+                          )}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={bonusSettings?.extraBonus?.enabled}
+                        onValueChange={(val) =>
+                          setBonusSettings({
+                            ...bonusSettings,
+                            extraBonus: {
+                              ...bonusSettings.extraBonus,
+                              enabled: val,
+                            },
+                          })
+                        }
+                      />
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tr("Bonus %", "Bonus %", "نسبة المكافأة")}
+                        </Text>
+                        <TextInput
+                          style={{
+                            height: 44,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 12,
+                            color: colors.foreground,
+                          }}
+                          keyboardType="numeric"
+                          value={(
+                            bonusSettings?.extraBonus?.bonus ?? 0
+                          ).toString()}
+                          onChangeText={(txt) =>
+                            setBonusSettings({
+                              ...bonusSettings,
+                              extraBonus: {
+                                ...bonusSettings.extraBonus,
+                                bonus: Number(txt),
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Crypto Bonus */}
+                  <View
+                    style={{
+                      marginBottom: 20,
+                      padding: 16,
+                      borderRadius: 18,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.05)"
+                        : "#F9FAFB",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View>
+                        <Text
+                          style={{
+                            fontWeight: "800",
+                            fontSize: 16,
+                            color: colors.foreground,
+                          }}
+                        >
+                          {tr(
+                            "Crypto Payment Bonus",
+                            "Bonus Paiement Crypto",
+                            "مكافأة الدفع بالكريبتو",
+                          )}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {tr(
+                            "Extra coins for Crypto recharges",
+                            "Pièces en plus pour recharge Crypto",
+                            "عملات زيادة كي تشحن بالكريبتو",
+                          )}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={bonusSettings?.cryptoBonus?.enabled}
+                        onValueChange={(val) =>
+                          setBonusSettings({
+                            ...bonusSettings,
+                            cryptoBonus: {
+                              ...bonusSettings.cryptoBonus,
+                              enabled: val,
+                            },
+                          })
+                        }
+                      />
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tr("Bonus %", "Bonus %", "نسبة المكافأة")}
+                        </Text>
+                        <TextInput
+                          style={{
+                            height: 44,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 12,
+                            color: colors.foreground,
+                          }}
+                          keyboardType="numeric"
+                          value={(
+                            bonusSettings?.cryptoBonus?.bonus ?? 0
+                          ).toString()}
+                          onChangeText={(txt) =>
+                            setBonusSettings({
+                              ...bonusSettings,
+                              cryptoBonus: {
+                                ...bonusSettings.cryptoBonus,
+                                bonus: Number(txt),
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Bulk Bonus */}
+                  <View
+                    style={{
+                      marginBottom: 20,
+                      padding: 16,
+                      borderRadius: 18,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.05)"
+                        : "#F9FAFB",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View>
+                        <Text
+                          style={{
+                            fontWeight: "800",
+                            fontSize: 16,
+                            color: colors.foreground,
+                          }}
+                        >
+                          {tr(
+                            "Bulk Purchase Bonus",
+                            "Bonus Achat en Gros",
+                            "مكافأة الشراء بالجملة",
+                          )}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {tr(
+                            "Coins for large recharges",
+                            "Pièces pour grosses recharges",
+                            "عملات للشحن الكبير",
+                          )}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={bonusSettings?.bulkBonus?.enabled}
+                        onValueChange={(val) =>
+                          setBonusSettings({
+                            ...bonusSettings,
+                            bulkBonus: {
+                              ...bonusSettings.bulkBonus,
+                              enabled: val,
+                            },
+                          })
+                        }
+                      />
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tr("Threshold (DT)", "Seuil (DT)", "العتبة (دت)")}
+                        </Text>
+                        <TextInput
+                          style={{
+                            height: 44,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 12,
+                            color: colors.foreground,
+                          }}
+                          keyboardType="numeric"
+                          value={(
+                            bonusSettings?.bulkBonus?.threshold ?? 0
+                          ).toString()}
+                          onChangeText={(txt) =>
+                            setBonusSettings({
+                              ...bonusSettings,
+                              bulkBonus: {
+                                ...bonusSettings.bulkBonus,
+                                threshold: Number(txt),
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tr("Bonus %", "Bonus %", "نسبة المكافأة")}
+                        </Text>
+                        <TextInput
+                          style={{
+                            height: 44,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            paddingHorizontal: 12,
+                            color: colors.foreground,
+                          }}
+                          keyboardType="numeric"
+                          value={(
+                            bonusSettings?.bulkBonus?.bonus ?? 0
+                          ).toString()}
+                          onChangeText={(txt) =>
+                            setBonusSettings({
+                              ...bonusSettings,
+                              bulkBonus: {
+                                ...bonusSettings.bulkBonus,
+                                bonus: Number(txt),
+                              },
+                            })
+                          }
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => saveBonusSettings(bonusSettings)}
+                    disabled={savingBonus}
+                    style={{
+                      backgroundColor: "#EF4444",
+                      height: 50,
+                      borderRadius: 15,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginTop: 10,
+                    }}
+                  >
+                    {savingBonus ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text
+                        style={{
+                          color: "#FFF",
+                          fontWeight: "900",
+                          fontSize: 16,
+                        }}
+                      >
+                        {tr("SAVE CHANGES", "ENREGISTRER", "حفظ التغييرات")}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               ) : null}
               <View style={{ height: 40 }} />
             </ScrollView>
@@ -4123,7 +4806,9 @@ export default function WalletScreen({
                             marginTop: 2,
                           }}
                         >
-                          {(diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)}{" "}
+                          {(withdrawMethod === "stripe" || withdrawMethod === "crypto") 
+                            ? (diamondBalance * DIAMOND_TO_EUR_RATE).toFixed(2)
+                            : (diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2)}{" "}
                           <Text
                             style={{
                               fontSize: 14,
@@ -4131,7 +4816,7 @@ export default function WalletScreen({
                               color: colors.textMuted,
                             }}
                           >
-                            TND
+                            {(withdrawMethod === "stripe" || withdrawMethod === "crypto") ? "EUR" : "TND"}
                           </Text>
                         </Text>
                         <Text
@@ -4204,7 +4889,7 @@ export default function WalletScreen({
                           fontSize: 13,
                         }}
                       >
-                        TND
+                        {(withdrawMethod === "stripe" || withdrawMethod === "crypto") ? "EUR" : "TND"}
                       </Text>
                       <TouchableOpacity
                         style={{
@@ -4214,11 +4899,16 @@ export default function WalletScreen({
                           borderRadius: 10,
                           marginRight: 4,
                         }}
-                        onPress={() =>
+                        onPress={() => {
+                          const isEUR =
+                            withdrawMethod === "stripe" ||
+                            withdrawMethod === "crypto";
                           setWithdrawAmount(
-                            (diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2),
-                          )
-                        }
+                            isEUR
+                              ? (diamondBalance * DIAMOND_TO_EUR_RATE).toFixed(2)
+                              : (diamondBalance * DIAMOND_TO_TND_RATE).toFixed(2),
+                          );
+                        }}
                       >
                         <Text
                           style={{
@@ -4236,7 +4926,11 @@ export default function WalletScreen({
                       style={{
                         color: colors.textMuted,
                         fontSize: 11,
-                        marginBottom: 22,
+                        marginBottom:
+                          withdrawMethod === "stripe" ||
+                          withdrawMethod === "crypto"
+                            ? 8
+                            : 22,
                         paddingLeft: 4,
                       }}
                     >
@@ -4248,9 +4942,44 @@ export default function WalletScreen({
                       <Text
                         style={{ fontWeight: "700", color: colors.foreground }}
                       >
-                        50 TND
+                        {(withdrawMethod === "stripe" || withdrawMethod === "crypto") 
+                          ? `${(50 * TND_TO_EUR_RATE).toFixed(2)} EUR`
+                          : "50 TND"}
                       </Text>
                     </Text>
+
+                    {(withdrawMethod === "stripe" ||
+                      withdrawMethod === "crypto") && (
+                      <View
+                        style={{
+                          backgroundColor: isDark
+                            ? "rgba(16,185,129,0.1)"
+                            : "rgba(16,185,129,0.06)",
+                          padding: 10,
+                          borderRadius: 10,
+                          marginBottom: 20,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <TrendingUp size={16} color="#10B981" />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#10B981",
+                            fontWeight: "700",
+                            flex: 1,
+                          }}
+                        >
+                          {tr(
+                            `Approximate value: ${(parseFloat(withdrawAmount || "0") * (withdrawMethod === "stripe" || withdrawMethod === "crypto" ? 3.4 : 1)).toFixed(2)} TND`,
+                            `Valeur approximative : ${(parseFloat(withdrawAmount || "0") * (withdrawMethod === "stripe" || withdrawMethod === "crypto" ? 3.4 : 1)).toFixed(2)} TND`,
+                            `بالتقريب تجيك: ${(parseFloat(withdrawAmount || "0") * (withdrawMethod === "stripe" || withdrawMethod === "crypto" ? 3.4 : 1)).toFixed(2)} دت`,
+                          )}
+                        </Text>
+                      </View>
+                    )}
 
                     <Text
                       style={[
@@ -4274,25 +5003,29 @@ export default function WalletScreen({
                       {[
                         {
                           id: "stripe",
-                          name: "Stripe",
+                          name: tr("Stripe", "Stripe", "سترايب"),
                           icon: CreditCard,
                           color: "#6366F1",
                         },
                         {
                           id: "crypto",
-                          name: "Crypto",
+                          name: tr("Crypto", "Crypto", "كريبتو"),
                           icon: Hexagon,
                           color: "#F59E0B",
                         },
                         {
                           id: "bank_transfer",
-                          name: "Bank Transfer",
+                          name: tr(
+                            "Bank Transfer",
+                            "Virement Bancaire",
+                            "تحويل بنكي",
+                          ),
                           icon: Landmark,
                           color: "#10B981",
                         },
                         {
                           id: "post_office",
-                          name: "Post Office",
+                          name: tr("Post Office", "Bureau de Poste", "البريد"),
                           icon: Mail,
                           color: "#EF4444",
                         },
@@ -4322,7 +5055,24 @@ export default function WalletScreen({
                                     : "rgba(0,0,0,0.07)",
                             },
                           ]}
-                          onPress={() => setWithdrawMethod(method.id as any)}
+                          onPress={() => {
+                            const wasEUR = withdrawMethod === "stripe" || withdrawMethod === "crypto";
+                            const isNowEUR = method.id === "stripe" || method.id === "crypto";
+                            
+                            if (withdrawAmount && wasEUR !== isNowEUR) {
+                              const amt = parseFloat(withdrawAmount);
+                              if (!isNaN(amt)) {
+                                if (isNowEUR) {
+                                  // Convert TND to EUR
+                                  setWithdrawAmount((amt / 3.4).toFixed(2));
+                                } else {
+                                  // Convert EUR to TND
+                                  setWithdrawAmount((amt * 3.4).toFixed(2));
+                                }
+                              }
+                            }
+                            setWithdrawMethod(method.id as any);
+                          }}
                         >
                           <View
                             style={[
@@ -4358,7 +5108,7 @@ export default function WalletScreen({
                         {
                           backgroundColor: isDark ? "#FFFFFF" : "#111111",
                           opacity:
-                            !withdrawAmount || parseFloat(withdrawAmount) < 50
+                            !withdrawAmount || parseFloat(withdrawAmount) < ((withdrawMethod === "stripe" || withdrawMethod === "crypto") ? (50 * TND_TO_EUR_RATE) : 50)
                               ? 0.4
                               : 1,
                           marginTop: 24,
@@ -4366,7 +5116,7 @@ export default function WalletScreen({
                       ]}
                       onPress={() => setWithdrawStep("details")}
                       disabled={
-                        !withdrawAmount || parseFloat(withdrawAmount) < 50
+                        !withdrawAmount || parseFloat(withdrawAmount) < ((withdrawMethod === "stripe" || withdrawMethod === "crypto") ? (50 * TND_TO_EUR_RATE) : 50)
                       }
                     >
                       <Text
@@ -4389,9 +5139,15 @@ export default function WalletScreen({
                           }}
                         >
                           {tr(
-                            "Minimum withdrawal is 50 TND",
-                            "Le retrait minimum est de 50 TND",
-                            "أقل مبلغ تجبدو هو 50 دت",
+                            (withdrawMethod === "stripe" || withdrawMethod === "crypto")
+                              ? `Minimum withdrawal is ${(50 * TND_TO_EUR_RATE).toFixed(2)} EUR`
+                              : "Minimum withdrawal is 50 TND",
+                            (withdrawMethod === "stripe" || withdrawMethod === "crypto")
+                              ? `Retrait minimum : ${(50 * TND_TO_EUR_RATE).toFixed(2)} EUR`
+                              : "Le retrait minimum est de 50 TND",
+                            (withdrawMethod === "stripe" || withdrawMethod === "crypto")
+                              ? `الحد الأدنى: ${(50 * TND_TO_EUR_RATE).toFixed(2)} يورو`
+                              : "أقل مبلغ تجبدو هو 50 دت",
                           )}
                         </Text>
                       )}
@@ -4603,7 +5359,7 @@ export default function WalletScreen({
                                 ? "0x..."
                                 : cryptoCoin === "BTC"
                                   ? "bc1... or 1... or 3..."
-                                  : "Address..."
+                                  : tr("Address...", "Adresse...", "العنوان...")
                           }
                           placeholderTextColor={colors.textMuted}
                           value={cryptoAddress}
@@ -4731,7 +5487,11 @@ export default function WalletScreen({
                               height: 54,
                             },
                           ]}
-                          placeholder="Street, City..."
+                          placeholder={tr(
+                            "Street, City...",
+                            "Rue, Ville...",
+                            "النهج، الولاية...",
+                          )}
                           placeholderTextColor={colors.textMuted}
                           value={postAddress}
                           onChangeText={setPostAddress}

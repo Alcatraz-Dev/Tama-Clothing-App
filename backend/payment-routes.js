@@ -445,15 +445,15 @@ router.post('/stripe/webhook', require('express').raw({ type: 'application/json'
  */
 router.post('/crypto/create-invoice', async (req, res) => {
   try {
-    const { userId, coin, amountUSD, pack } = req.body;
-    if (!userId || !coin || !amountUSD || !pack) {
-      return res.status(400).json({ error: 'Missing required fields: userId, coin, amountUSD, pack' });
+    const { userId, coin, amountEUR, pack } = req.body;
+    if (!userId || !coin || !amountEUR || !pack) {
+      return res.status(400).json({ error: 'Missing required fields: userId, coin, amountEUR, pack' });
     }
 
     const invoice = await cryptoService.createCryptoInvoice({
       userId,
       coin,
-      amountUSD,
+      amountEUR,
       meta: { packCoins: pack.coins, packBonus: pack.bonus, priceDisplay: pack.priceDisplay }
     });
 

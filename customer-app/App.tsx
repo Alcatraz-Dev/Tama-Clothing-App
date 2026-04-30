@@ -89,6 +89,7 @@ import AdminVendorTeamScreen from "./src/screens/admin/AdminVendorTeamScreen";
 import AdminNotreSelectionScreen from "./src/screens/admin/AdminNotreSelectionScreen";
 import AdminGiftsScreen from "./src/screens/admin/AdminGiftsScreen";
 import AdminDeliveryCompaniesScreen from "./src/screens/admin/AdminDeliveryCompaniesScreen";
+import AdminWalletScreen from "./src/screens/admin/AdminWalletScreen";
 import AdminFinanceDashboard from "./src/screens/admin/AdminFinanceDashboard";
 import BrandRevenueScreen from "./src/screens/BrandRevenueScreen";
 import { Shipment, generateShippingStickerHTML } from "./src/utils/shipping";
@@ -2781,6 +2782,15 @@ export default function App() {
           <AdminFinanceDashboard
             onBack={() => setActiveTab("AdminMenu")}
             t={t}
+          />
+        );
+      case "AdminWallet":
+        return (
+          <AdminWalletScreen
+            onBack={() => setActiveTab("AdminMenu")}
+            t={t}
+            theme={theme}
+            language={language}
           />
         );
       case "BrandRevenue":

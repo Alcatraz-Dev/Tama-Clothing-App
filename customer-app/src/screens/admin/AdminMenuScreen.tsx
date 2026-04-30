@@ -31,6 +31,7 @@ import {
   Store,
   Trophy,
   Video,
+  Wallet,
 } from "lucide-react-native";
 import { useAppTheme } from "../../context/ThemeContext";
 import { AdminHeader } from "../../components/admin/AdminUI";
@@ -260,6 +261,13 @@ export default function AdminMenuScreen({
       route: "AdminDeliveryCompanies",
       roles: ["admin"],
       color: "#F59E0B",
+    },
+    {
+      label: t("walletAndBonus") || "Wallet & Bonus",
+      icon: Wallet,
+      route: "AdminWallet",
+      roles: ["admin", "brand_owner", "vendor"],
+      color: "#8B5CF6",
     },
     {
       label: t("platformRevenue"),
