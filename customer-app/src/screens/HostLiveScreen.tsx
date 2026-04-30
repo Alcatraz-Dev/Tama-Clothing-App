@@ -62,7 +62,10 @@ import {
   increment,
   addDoc,
   serverTimestamp,
+  updateDoc,
+  runTransaction,
 } from "firebase/firestore";
+import { getOrCreateWallet } from "../services/codFinancialService";
 import { BlurView } from "expo-blur";
 import { db } from "../api/firebase";
 import { GIFTS, Gift } from "../config/gifts";
@@ -316,6 +319,8 @@ export default function HostLiveScreen(props: Props) {
   >([]);
 
   // PK Battle State
+  const [userRole, setUserRole] = useState("host");
+  const [walletId, setWalletId] = useState<string | null>(null);
   const [isInPK, setIsInPK] = useState(false);
   const isInPKRef = useRef(false);
   const [hostScore, setHostScore] = useState(0);
@@ -523,17 +528,41 @@ export default function HostLiveScreen(props: Props) {
     });
   };
 
-  // Initialize user balance with coins
+  // Initialize user balance with coins (summing legacy and modern sources)
   useEffect(() => {
     if (!userId) return;
-    const unsubscribe = onSnapshot(doc(db, "users", userId), (snap) => {
+
+    let legacyCoins = 0;
+    let modernCoins = 0;
+
+    const updateCombinedBalance = () => {
+      setUserBalance(legacyCoins + modernCoins);
+    };
+
+    // 1. Subscribe to legacy user doc
+    const unsubUser = onSnapshot(doc(db, "users", userId), (snap) => {
       if (snap.exists()) {
-        const data = snap.data();
-        setUserBalance(data?.wallet?.coins || 0);
+        legacyCoins = snap.data()?.wallet?.coins || 0;
+        updateCombinedBalance();
       }
     });
-    return () => unsubscribe();
-  }, [userId]);
+
+    // 2. Subscribe to central wallet doc
+    let unsubWallet: (() => void) | null = null;
+    if (walletId) {
+      unsubWallet = onSnapshot(doc(db, "wallets", walletId), (snap) => {
+        if (snap.exists()) {
+          modernCoins = snap.data()?.coins || 0;
+          updateCombinedBalance();
+        }
+      });
+    }
+
+    return () => {
+      unsubUser();
+      if (unsubWallet) unsubWallet();
+    };
+  }, [userId, walletId]);
 
   // Capture baseline likes when PK Starts
   useEffect(() => {
@@ -1314,36 +1343,43 @@ export default function HostLiveScreen(props: Props) {
     try {
       // A. Deduct Coins from Host
       const senderRef = doc(db, "users", userId);
-      await setDoc(
-        senderRef,
-        {
-          wallet: {
-            coins: increment(-gift.points),
-          },
-        },
-        { merge: true },
-      );
+      const walletRef = walletId ? doc(db, "wallets", walletId) : null;
 
-      // B. Add 70% of value to Recipient as Diamonds (if recipient is a user)
-      if (targetId) {
-        const recipientRef = doc(db, "users", targetId);
-        const earnings = Math.ceil(gift.points * 0.7); // Use ceil to ensure at least 1 diamond for points > 0
+      if (walletRef) {
+        await updateDoc(walletRef, {
+          coins: increment(-gift.points),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
         await setDoc(
-          recipientRef,
+          senderRef,
           {
             wallet: {
-              diamonds: increment(earnings),
+              coins: increment(-gift.points),
             },
           },
           { merge: true },
         );
+      }
+
+      // B. Add 70% of value to Recipient as Diamonds (if recipient is a user)
+      if (targetId) {
+        const earnings = Math.ceil(gift.points * 0.7);
+        const recipientWalletId = await getOrCreateWallet(targetId, "customer");
+        const recipientWalletRef = doc(db, "wallets", recipientWalletId);
+
+        await updateDoc(recipientWalletRef, {
+          diamonds: increment(earnings),
+          updatedAt: serverTimestamp(),
+        });
 
         // Record Transaction for Recipient (Earnings)
-        await addDoc(collection(db, "users", targetId, "transactions"), {
+        await addDoc(collection(db, "wallets", recipientWalletId, "transactions"), {
           type: "gift_received",
           amountDiamonds: earnings,
           giftName: gift.name,
           senderName: userName || "Host",
+          senderId: userId,
           timestamp: serverTimestamp(),
           status: "completed",
         });
@@ -1445,6 +1481,12 @@ export default function HostLiveScreen(props: Props) {
 
   // AUTO-START Firestore session on mount (since we skip the start button)
   useEffect(() => {
+    if (userId) {
+      getOrCreateWallet(userId, "customer", userName || "User")
+        .then(setWalletId)
+        .catch((err) => console.error("Error getting wallet:", err));
+    }
+
     // ✅ CRITICAL: Don't start session if ZEGO modules aren't available (Expo Go)
     if (!ZegoUIKitPrebuiltLiveStreaming) {
       console.log("⚠️ ZEGO modules not available - skipping session start");

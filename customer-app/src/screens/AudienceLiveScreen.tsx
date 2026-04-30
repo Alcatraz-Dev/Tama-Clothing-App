@@ -6,7 +6,8 @@ import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
 import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins, MessageSquareOff } from 'lucide-react-native';
-import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { getOrCreateWallet } from '../services/codFinancialService';
 import { BlurView } from 'expo-blur';
 import { FlameCounter } from '../components/FlameCounter';
 import { db } from '../api/firebase';
@@ -240,6 +241,7 @@ export default function AudienceLiveScreen(props: Props) {
     const clampedBalance = Math.max(0, userBalance);
     const [showRechargeModal, setShowRechargeModal] = useState(false);
     const [hostId, setHostId] = useState<string | null>(null);
+    const [walletId, setWalletId] = useState<string | null>(null);
 
 
     // Pinned Product Timer State
@@ -253,7 +255,7 @@ export default function AudienceLiveScreen(props: Props) {
         if (profileData) {
             setCustomerName(prev => prev || profileData.fullName || '');
             setPhoneNumber(prev => prev || profileData.phone || '');
-            setUserBalance(profileData?.wallet?.coins || 0);
+            // userBalance is now handled by the combined listener below
 
             // For address, we might have multiple. Get the default or first one.
             if (profileData.addresses && profileData.addresses.length > 0) {
@@ -265,15 +267,55 @@ export default function AudienceLiveScreen(props: Props) {
         }
     }, [profileData]);
 
-    // Fetch Collab Info
     useEffect(() => {
-        if (channelId) {
+        if (userId) {
+            getOrCreateWallet(userId, 'customer', userName || 'User')
+                .then(setWalletId)
+                .catch(err => console.error('Error getting wallet:', err));
+        }
+    }, [userId]);
+
+    // Sync balance from both legacy and modern sources
+    useEffect(() => {
+        if (!userId) return;
+
+        let legacyCoins = profileData?.wallet?.coins || 0;
+        let modernCoins = 0;
+
+        const updateCombinedBalance = () => {
+            setUserBalance(legacyCoins + modernCoins);
+        };
+
+        const unsubUser = onSnapshot(doc(db, 'users', userId), (snap) => {
+            if (snap.exists()) {
+                legacyCoins = snap.data()?.wallet?.coins || 0;
+                updateCombinedBalance();
+            }
+        });
+
+        let unsubWallet: (() => void) | null = null;
+        if (walletId) {
+            unsubWallet = onSnapshot(doc(db, 'wallets', walletId), (snap) => {
+                if (snap.exists()) {
+                    modernCoins = snap.data()?.coins || 0;
+                    updateCombinedBalance();
+                }
+            });
+        }
+
+        return () => {
+            unsubUser();
+            if (unsubWallet) unsubWallet();
+        };
+    }, [userId, walletId]);
+
+    useEffect(() => {
+        if (!channelId) return;
             getDoc(doc(db, 'collaborations', channelId)).then(snap => {
                 if (snap.exists()) {
                     setCollabType(snap.data().type);
                 }
             });
-        }
     }, [channelId]);
 
     // Check if following
@@ -311,6 +353,7 @@ export default function AudienceLiveScreen(props: Props) {
 
     const isInPKRef = useRef(false);
     const hostScoreRef = useRef(0);
+    const [streamHost, setStreamHost] = useState<any>(null);
     const guestScoreRef = useRef(0);
     const streamHostIdRef = useRef<string | null>(null);
     const totalLikesRef = useRef(0);
@@ -318,18 +361,6 @@ export default function AudienceLiveScreen(props: Props) {
     const opponentChannelIdRef = useRef<string | null>(null);
     const handledPKEndTimeRef = useRef<number | null>(null);
 
-    // State to Ref Sync
-    useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
-    useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
-    useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
-    useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
-    useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
-    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
-
-    // Initial load sync
-    useEffect(() => {
-        recentGiftRef.current = recentGift;
-    }, [recentGift]);
     const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
     const heartCounter = useRef(0);
 
@@ -391,10 +422,12 @@ export default function AudienceLiveScreen(props: Props) {
 
     // ✅ Sync refs
     useEffect(() => { isInPKRef.current = isInPK; }, [isInPK]);
-    useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
-    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
+    useEffect(() => { hostScoreRef.current = hostScore; }, [hostScore]);
     useEffect(() => { guestScoreRef.current = guestScore; }, [guestScore]);
+    useEffect(() => { totalLikesRef.current = totalLikes; }, [totalLikes]);
     useEffect(() => { streamHostIdRef.current = streamHostId; }, [streamHostId]);
+    useEffect(() => { opponentChannelIdRef.current = opponentChannelId; }, [opponentChannelId]);
+    useEffect(() => { recentGiftRef.current = recentGift; }, [recentGift]);
 
     // Capture baseline likes when PK Starts
     useEffect(() => {
@@ -526,30 +559,43 @@ export default function AudienceLiveScreen(props: Props) {
         try {
             // A. Deduct Coins from Sender
             const senderRef = doc(db, 'users', userId);
-            await setDoc(senderRef, {
-                wallet: {
-                    coins: increment(-gift.points)
-                }
-            }, { merge: true });
+            const walletRef = walletId ? doc(db, 'wallets', walletId) : null;
+
+            if (walletRef) {
+                await updateDoc(walletRef, {
+                    coins: increment(-gift.points),
+                    updatedAt: serverTimestamp()
+                });
+            } else {
+                await setDoc(senderRef, {
+                    wallet: {
+                        coins: increment(-gift.points)
+                    }
+                }, { merge: true });
+            }
 
             // B. Add 70% of value to Host as Diamonds
             if (streamHostIdRef.current) {
-                const hostRef = doc(db, 'users', streamHostIdRef.current);
-                const hostEarnings = Math.ceil(gift.points * 0.7); // Use ceil to ensure at least 1 diamond for points > 0
-                await setDoc(hostRef, {
-                    wallet: {
-                        diamonds: increment(hostEarnings)
-                    }
-                }, { merge: true });
+                const hostEarnings = Math.ceil(gift.points * 0.7); 
+                
+                // Get or create host wallet ID
+                const hostWalletId = await getOrCreateWallet(streamHostIdRef.current, 'customer');
+                const hostWalletRef = doc(db, 'wallets', hostWalletId);
+
+                await updateDoc(hostWalletRef, {
+                    diamonds: increment(hostEarnings),
+                    updatedAt: serverTimestamp()
+                });
 
                 // Record Transaction for Host (Earnings)
-                await addDoc(collection(db, 'users', streamHostIdRef.current, 'transactions'), {
+                await addDoc(collection(db, 'wallets', hostWalletId, 'transactions'), {
                     type: 'gift_received',
                     amountDiamonds: hostEarnings,
                     giftName: gift.name,
                     senderName: userName || 'Viewer',
+                    senderId: userId,
                     timestamp: serverTimestamp(),
-                    status: 'completed'
+                    status: 'completed',
                 });
             }
 

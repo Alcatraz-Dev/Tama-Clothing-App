@@ -591,9 +591,12 @@ export default function WalletScreen({
     return language === "ar" ? ar : language === "fr" ? fr : en;
   };
 
-  const coinBalance = profileData?.wallet?.coins || 0;
-  // Use live wallet subscription (same Firestore doc the service reads) to avoid stale-data mismatch
-  const diamondBalance = (wallet?.diamonds ?? profileData?.wallet?.diamonds) || 0;
+  const legacyWallet = profileData?.wallet;
+  const legacyCoins = typeof legacyWallet === "object" ? (legacyWallet?.coins || 0) : (Number(legacyWallet) || 0);
+  const legacyDiamonds = typeof legacyWallet === "object" ? (legacyWallet?.diamonds || 0) : 0;
+
+  const coinBalance = (wallet?.coins || 0) + legacyCoins;
+  const diamondBalance = (wallet?.diamonds || 0) + legacyDiamonds;
 
   const getCalculatedBonus = (pack: any, method: string) => {
     if (!bonusSettings) return 0;

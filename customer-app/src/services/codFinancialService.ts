@@ -209,15 +209,19 @@ export async function getOrCreateWallet(
     if (!snap.empty) return snap.docs[0].id;
 
     // Create new wallet
-    const walletRef = await addDoc(collection(db, 'wallets'), {
+    const walletRef = doc(collection(db, 'wallets'));
+    await setDoc(walletRef, {
+        id: walletRef.id,
         ownerId,
-        ownerName: ownerName ?? ownerId,
-        balance: 0,
-        pendingBalance: 0,
-        totalEarned: 0,
-        totalWithdrawn: 0,
         type,
-        currency: 'TND',
+        ownerName,
+        balance: 0,
+        coins: 0,
+        diamonds: 0,
+        pendingWithdrawals: 0,
+        totalWithdrawn: 0,
+        totalWithdrawnTND: 0,
+        totalEarned: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });
@@ -390,6 +394,54 @@ export async function grantBonus(userId: string, amount: number, reason: string)
     );
 }
 
+/**
+ * Admin: Grant a manual recharge (coins) to a user.
+ */
+export async function grantRecharge(userId: string, amount: number, reason: string) {
+    if (amount <= 0) throw new Error("Amount must be positive");
+    
+    await runTransaction(db, async (transaction) => {
+        const q = query(
+            collection(db, 'wallets'),
+            where('ownerId', '==', userId),
+            where('type', '==', 'customer'),
+            limit(1)
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) throw new Error("Customer wallet not found");
+        
+        const walletDoc = snap.docs[0];
+        
+        // Update wallet
+        transaction.update(walletDoc.ref, {
+            coins: increment(amount),
+            updatedAt: serverTimestamp(),
+        });
+        
+        // Create transaction record
+        const txRef = doc(collection(db, 'transactions'));
+        transaction.set(txRef, {
+            type: 'recharge',
+            method: 'manual_admin',
+            actorId: userId,
+            actorType: 'customer',
+            amount: amount * 0.01, // TND equivalent
+            currency: 'TND',
+            coins: amount,
+            reason: reason || "Admin manual recharge",
+            status: 'completed',
+            createdAt: serverTimestamp(),
+            completedAt: serverTimestamp(),
+        });
+    });
+
+    await notifyAdmins(
+        "🪙 Manual Recharge",
+        `A manual recharge of ${amount} coins was granted to user ${userId.slice(0, 8)}.`,
+        { userId, amount, type: 'recharge' }
+    );
+}
+
 // ─── Real-time Wallet Listener ────────────────────────────────────────────────
 export function subscribeToWallet(
     ownerId: string,
@@ -547,15 +599,51 @@ export async function requestWithdrawal(
         const wallet = walletSnap.data() as Wallet;
 
         if (actorType === 'customer') {
+            // Support legacy diamonds stored in user profile
+            const userRef = doc(db, 'users', actorId);
+            const userSnap = await firestoreTx.get(userRef);
+            const userData = userSnap.exists() ? userSnap.data() : {};
+            
+            // Support legacy diamonds: could be userData.wallet.diamonds (object) or userData.wallet (number)
+            let legacyDiamonds = 0;
+            if (userData.wallet) {
+                if (typeof userData.wallet === 'object') {
+                    legacyDiamonds = Number(userData.wallet.diamonds) || 0;
+                } else {
+                    legacyDiamonds = Number(userData.wallet) || 0;
+                }
+            }
+            
+            const modernDiamonds = Number(wallet.diamonds) || 0;
+            const totalDiamonds = modernDiamonds + legacyDiamonds;
             const diamondAmount = Math.round(amount * 100); // 1 diamond = 0.01 TND
-            if ((wallet.diamonds || 0) < diamondAmount) {
+
+            if (totalDiamonds < diamondAmount) {
                 throw new Error('Insufficient diamond balance');
             }
+
+            // Perform "Lazy Migration": Move legacy diamonds to modern wallet document
+            // and deduct the withdrawal amount from the consolidated total.
+            const newModernDiamonds = totalDiamonds - diamondAmount;
+            
             firestoreTx.update(walletRef, {
-                diamonds: increment(-diamondAmount),
+                diamonds: newModernDiamonds,
                 totalWithdrawnTND: increment(amount),
                 updatedAt: serverTimestamp(),
             });
+
+            // Wipe legacy diamonds from user profile to prevent double-spending/confusion
+            if (legacyDiamonds > 0) {
+                if (typeof userData.wallet === 'object') {
+                    firestoreTx.update(userRef, {
+                        'wallet.diamonds': 0
+                    });
+                } else {
+                    firestoreTx.update(userRef, {
+                        wallet: 0
+                    });
+                }
+            }
         } else {
             if (wallet.balance < amount) {
                 throw new Error('Insufficient balance');
@@ -570,6 +658,12 @@ export async function requestWithdrawal(
 
         // 1. Withdrawal request (for Admin review)
         const requestRef = doc(collection(db, 'withdrawal_requests'));
+        
+        // Clean details object of undefined values to avoid Firestore errors
+        const cleanedDetails = Object.fromEntries(
+            Object.entries(details).filter(([_, v]) => v !== undefined)
+        );
+
         firestoreTx.set(requestRef, {
             actorId,
             actorType,
@@ -580,7 +674,7 @@ export async function requestWithdrawal(
             payoutCurrency,
             status: 'pending',
             method: details.method,
-            details,
+            details: cleanedDetails,
             requestedAt: serverTimestamp(),
         } as Omit<WithdrawalRequest, 'id'>);
 

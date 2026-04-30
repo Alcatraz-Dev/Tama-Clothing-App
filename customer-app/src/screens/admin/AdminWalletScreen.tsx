@@ -11,6 +11,7 @@ import {
   Alert,
   Switch,
   TextInput,
+  Image,
 } from "react-native";
 import {
   ArrowLeft,
@@ -45,7 +46,11 @@ import {
   approveWithdrawal,
   rejectWithdrawal,
   grantBonus,
+  grantRecharge,
 } from "../../services/codFinancialService";
+import Constants from "expo-constants";
+
+const API_BASE_URL = "https://backend-bey3a.vercel.app/api/payment";
 
 const { width } = Dimensions.get("window");
 
@@ -66,9 +71,14 @@ interface WithdrawalRequest {
   payoutCurrency: string;
   status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   method: string;
+  details?: string;
   requestedAt: any;
+  createdAt?: any;
   processedAt?: any;
   brandName?: string; // for display
+  amountTND?: number;
+  amountEUR?: number;
+  amountDiamonds?: number;
 }
 
 export default function AdminWalletScreen({
@@ -101,6 +111,17 @@ export default function AdminWalletScreen({
   // Recharges State
   const [rechargeHistory, setRechargeHistory] = useState<any[]>([]);
   const [loadingRecharges, setLoadingRecharges] = useState(false);
+  const [manualRechargeUserId, setManualRechargeUserId] = useState("");
+  const [manualRechargeAmount, setManualRechargeAmount] = useState("");
+  const [manualRechargeReason, setManualRechargeReason] = useState("");
+  const [isRecharging, setIsRecharging] = useState(false);
+
+  // Pending Recharges (Crypto Invoices)
+  const [pendingRecharges, setPendingRecharges] = useState<any[]>([]);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState<string | null>(null);
+
+  // User details cache for withdrawals
+  const [userDetails, setUserDetails] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (activeTab === "bonuses") {
@@ -185,16 +206,60 @@ export default function AdminWalletScreen({
       orderBy("requestedAt", "desc"),
     );
     const unsubWd = onSnapshot(wdQuery, (snap) => {
-      setWithdrawalRequests(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<WithdrawalRequest, "id">),
-        })),
-      );
+      const requests = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<WithdrawalRequest, "id">),
+      }));
+      setWithdrawalRequests(requests);
+
+      // Fetch user details for each request if not already in cache
+      requests.forEach(async (req) => {
+        fetchUserDetails(req.actorId, req.actorType === "brand" ? "brands" : "users");
+      });
     });
 
-    return () => unsubWd();
-  }, []);
+    // Listen to pending crypto recharges
+    const rechargeQuery = query(
+      collection(db, "crypto_invoices"),
+      where("status", "==", "pending"),
+      orderBy("createdAt", "desc"),
+    );
+    const unsubRecharge = onSnapshot(rechargeQuery, (snap) => {
+      const recharges = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setPendingRecharges(recharges);
+      
+      // Fetch user details for each recharge
+      recharges.forEach((r: any) => {
+        fetchUserDetails(r.userId, "users");
+      });
+    });
+
+    return () => {
+      unsubWd();
+      unsubRecharge();
+    };
+  }, [userDetails]);
+
+  const fetchUserDetails = async (uid: string, collectionName: string) => {
+    if (userDetails[uid]) return;
+    try {
+      const userSnap = await getDoc(doc(db, collectionName, uid));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        setUserDetails((prev) => ({
+          ...prev,
+          [uid]: {
+            name: data.displayName || data.fullName || data.name || (collectionName === "brands" ? data.brandName : "Unknown"),
+            email: data.email || "No email",
+            phone: data.phoneNumber || data.phone || "No phone",
+            avatar: data.photoURL || data.logo || data.avatar || data.avatarUrl,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching user details:", err);
+    }
+  };
 
   const handleSaveBonuses = async () => {
     try {
@@ -218,6 +283,67 @@ export default function AdminWalletScreen({
       setSavingBonus(false);
     }
   };
+
+  const handleManualRecharge = async () => {
+    if (!manualRechargeUserId || !manualRechargeAmount) {
+      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Fill all fields", "Remplir tous les champs", "عمر كل البيانات"));
+      return;
+    }
+
+    const amount = Number(manualRechargeAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert(tr("Error", "Erreur", "غلطة"), tr("Invalid amount", "Montant invalide", "مبلغ غير صالح"));
+      return;
+    }
+
+    try {
+      setIsRecharging(true);
+      await grantRecharge(manualRechargeUserId, amount, manualRechargeReason);
+      
+      Alert.alert(
+        tr("Success", "Succès", "تم"),
+        tr("Recharge successful", "Recharge réussie", "تم الشحن بنجاح")
+      );
+
+      setManualRechargeUserId("");
+      setManualRechargeAmount("");
+      setManualRechargeReason("");
+      
+      // Refresh history
+      fetchRechargeHistory();
+    } catch (error: any) {
+      console.error("Manual recharge error:", error);
+      Alert.alert(
+        tr("Error", "Erreur", "غلطة"),
+        error.message || tr("Failed to recharge", "Échec de recharge", "فشل الشحن")
+      );
+    } finally {
+      setIsRecharging(false);
+    }
+  };
+
+  const handleConfirmCryptoPayment = async (invoiceId: string) => {
+    try {
+      setIsConfirmingPayment(invoiceId);
+      const response = await fetch(`${API_BASE_URL}/crypto/confirm/${invoiceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (result.success) {
+        Alert.alert(tr("Success", "Succès", "تم"), tr("Payment confirmed successfully", "Paiement confirmé", "تم تأكيد الدفع"));
+      } else {
+        Alert.alert(tr("Error", "Erreur", "غلطة"), result.error || "Failed to confirm payment");
+      }
+    } catch (error) {
+      console.error("Confirm payment error:", error);
+      Alert.alert(tr("Error", "Erreur", "غلطة"), "An error occurred");
+    } finally {
+      setIsConfirmingPayment(null);
+    }
+  };
+
 
   const handleApproveWithdrawal = async (req: WithdrawalRequest) => {
     Alert.alert(
@@ -413,6 +539,11 @@ export default function AdminWalletScreen({
           >
             {tr("Recharges", "Recharges", "الشحن")}
           </Text>
+          {pendingRecharges.length > 0 && (
+            <View style={[styles.badge, { backgroundColor: "#10B981" }]}>
+              <Text style={styles.badgeText}>{pendingRecharges.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -766,6 +897,168 @@ export default function AdminWalletScreen({
           </View>
         ) : activeTab === "recharges" ? (
           <View>
+            {/* Pending Crypto Recharges Section */}
+            {pendingRecharges.length > 0 && (
+              <View style={{ marginBottom: 30 }}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 15 }]}>
+                  {tr("Pending Payments", "Paiements en Attente", "عمليات شحن قيد الانتظار")}
+                </Text>
+                {pendingRecharges.map((inv) => (
+                  <View
+                    key={inv.id}
+                    style={[
+                      styles.wdCard,
+                      {
+                        backgroundColor: isDark ? "#1C1C1E" : "#FFF",
+                        borderColor: "#10B98130",
+                        padding: 16,
+                        borderRadius: 24,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <View style={{ flexDirection: "row", flex: 1 }}>
+                        <View
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#10B98115",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            marginRight: 12,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {userDetails[inv.userId]?.avatar ? (
+                            <Image source={{ uri: userDetails[inv.userId].avatar }} style={{ width: '100%', height: '100%' }} />
+                          ) : (
+                            <View style={{ width: '100%', height: '100%', backgroundColor: "#10B98120", justifyContent: 'center', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 20 }}>👤</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
+                            {userDetails[inv.userId]?.name || "Loading..."}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                            {userDetails[inv.userId]?.email || "..."}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                            {userDetails[inv.userId]?.phone || "..."}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, fontWeight: "600" }}>
+                            {inv.coin} Payment
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={{ fontSize: 20, fontWeight: "900", color: "#10B981" }}>
+                          {inv.coinAmount} {inv.coin}
+                        </Text>
+                        {inv.amountEUR && (
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textMuted, marginTop: 2 }}>
+                            ≈ {inv.amountEUR.toFixed(2)} EUR
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => handleConfirmCryptoPayment(inv.id)}
+                      disabled={isConfirmingPayment === inv.id}
+                      style={{
+                        backgroundColor: "#10B981",
+                        height: 48,
+                        borderRadius: 14,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginTop: 20,
+                        opacity: isConfirmingPayment === inv.id ? 0.7 : 1,
+                      }}
+                    >
+                      {isConfirmingPayment === inv.id ? (
+                        <ActivityIndicator color="#FFF" size="small" />
+                      ) : (
+                        <Text style={{ color: "#FFF", fontWeight: "900", fontSize: 14 }}>
+                          {tr("CONFIRM PAYMENT", "CONFIRMER LE PAIEMENT", "تأكيد الدفع")}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Manual Recharge Form */}
+            <View
+              style={{
+                marginBottom: 20,
+                padding: 16,
+                borderRadius: 18,
+                backgroundColor: isDark
+                  ? "rgba(16,185,129,0.06)"
+                  : "#F0FDF4",
+                borderWidth: 1,
+                borderColor: "#10B98130",
+              }}
+            >
+              <Text style={{ fontWeight: "800", fontSize: 16, color: colors.foreground, marginBottom: 12 }}>
+                {tr("Manual Recharge", "Recharge Manuelle", "شحن يدوي")}
+              </Text>
+              
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border }]}
+                placeholder={tr("User ID", "ID Utilisateur", "معرف المستخدم")}
+                placeholderTextColor={colors.textMuted}
+                value={manualRechargeUserId}
+                onChangeText={setManualRechargeUserId}
+                autoCapitalize="none"
+              />
+              
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 10 }]}
+                placeholder={tr("Amount (Coins)", "Montant (Pièces)", "المبلغ (عملات)")}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={manualRechargeAmount}
+                onChangeText={setManualRechargeAmount}
+              />
+              
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.foreground, borderColor: colors.border, marginTop: 10 }]}
+                placeholder={tr("Reason", "Raison", "السبب")}
+                placeholderTextColor={colors.textMuted}
+                value={manualRechargeReason}
+                onChangeText={setManualRechargeReason}
+              />
+              
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#10B981",
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  marginTop: 15,
+                  opacity: isRecharging ? 0.7 : 1,
+                }}
+                onPress={handleManualRecharge}
+                disabled={isRecharging}
+              >
+                {isRecharging ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={{ color: "#FFF", fontWeight: "800" }}>
+                    {tr("Grant Recharge", "Accorder Recharge", "شحن الحساب")}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
               {tr("Recent Recharges", "Recharges Récents", "آخر عمليات الشحن")}
             </Text>
@@ -907,83 +1200,124 @@ export default function AdminWalletScreen({
                     {
                       backgroundColor: isDark ? "#1C1C1E" : "#FFF",
                       borderColor: colors.border,
+                      padding: 16,
+                      borderRadius: 24,
                     },
                   ]}
                 >
-                  <View style={styles.wdCardTop}>
-                    <View
-                      style={[
-                        styles.wdIcon,
-                        { backgroundColor: colors.primary + "15" },
-                      ]}
-                    >
-                      <DollarSign size={20} color={colors.primary} />
-                    </View>
-                    <View style={styles.wdInfo}>
-                      <Text
-                        style={[styles.wdAmount, { color: colors.foreground }]}
-                      >
-                        {req.amount.toFixed(2)} TND
-                        {req.actorType === "customer" && (
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: "400",
-                              color: colors.textMuted,
-                            }}
-                          >
-                            {" "}
-                            ({Math.round(req.amount * 100)} Diamonds)
-                          </Text>
-                        )}
-                      </Text>
-                      <Text
-                        style={[styles.wdBrand, { color: colors.textMuted }]}
-                      >
-                        {req.actorType === "brand"
-                          ? `Brand: ${req.brandName || req.actorId}`
-                          : `Actor: ${req.actorType} (${req.actorId.slice(0, 8)})`}
-                      </Text>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <View style={{ flexDirection: "row", flex: 1 }}>
                       <View
                         style={{
-                          flexDirection: "row",
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          backgroundColor: colors.primary + "15",
+                          justifyContent: "center",
                           alignItems: "center",
-                          marginTop: 4,
-                          gap: 8,
+                          marginRight: 12,
+                          overflow: "hidden",
                         }}
                       >
-                        {req.method && (
-                          <Text
-                            style={[styles.wdMethod, { color: colors.primary }]}
-                          >
-                            {req.method.toUpperCase()}
-                          </Text>
+                        {userDetails[req.actorId]?.avatar ? (
+                          <Image source={{ uri: userDetails[req.actorId].avatar }} style={{ width: '100%', height: '100%' }} />
+                        ) : (
+                          <View style={{ width: '100%', height: '100%', backgroundColor: colors.primary + "20", justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 20 }}>👤</Text>
+                          </View>
                         )}
-                        <Text
-                          style={[styles.wdMethod, { color: colors.textMuted }]}
-                        >
-                          ≈ {req.payoutAmount.toFixed(2)} {req.payoutCurrency}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: "800", color: colors.foreground }}>
+                          {userDetails[req.actorId]?.name || (req.actorType === "brand" ? req.brandName : "Loading...")}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                          {userDetails[req.actorId]?.email || "..."}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {userDetails[req.actorId]?.phone || "..."}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, opacity: 0.7 }}>
+                          UID: {req.actorId}
                         </Text>
                       </View>
                     </View>
+
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={{ fontSize: 18, fontWeight: "900", color: "#EF4444" }}>
+                        {req.amountTND?.toFixed(2) || req.amount?.toFixed(2)} TND
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textMuted, marginTop: 2 }}>
+                        {req.amountEUR?.toFixed(2) || (req.amountTND ? (req.amountTND / 3.4).toFixed(2) : "0.00")} EUR
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginTop: 4 }}>
+                        💎 {req.amountDiamonds || Math.round((req.amountTND || req.amount || 0) * 10)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.wdActions}>
+
+                  {/* Withdrawal Method & Details */}
+                  <View 
+                    style={{ 
+                      marginTop: 16, 
+                      padding: 12, 
+                      backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {tr("Method", "Méthode", "الطريقة")}:
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.foreground, marginLeft: 6 }}>
+                        {req.method || "Standard"}
+                      </Text>
+                    </View>
+                    {req.details && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {tr("Details", "Détails", "التفاصيل")}:
+                        </Text>
+                        <Text style={{ fontSize: 12, color: colors.foreground, marginTop: 2, lineHeight: 16 }}>
+                          {req.details}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
                     <TouchableOpacity
-                      style={[styles.wdBtn, { backgroundColor: "#10B98115" }]}
-                      onPress={() => handleApproveWithdrawal(req)}
+                      onPress={() => handleRejectWithdrawal(req)}
+                      style={{
+                        flex: 1,
+                        height: 48,
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: "#EF4444",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
                     >
-                      <CheckCircle size={16} color="#10B981" />
-                      <Text style={[styles.wdBtnText, { color: "#10B981" }]}>
-                        {tr("Approve", "Approuver", "قبول")}
+                      <Text style={{ color: "#EF4444", fontWeight: "800", fontSize: 14 }}>
+                        {tr("REJECT", "REJETER", "رفض")}
                       </Text>
                     </TouchableOpacity>
+                    
                     <TouchableOpacity
-                      style={[styles.wdBtn, { backgroundColor: "#EF444415" }]}
-                      onPress={() => handleRejectWithdrawal(req)}
+                      onPress={() => handleApproveWithdrawal(req)}
+                      style={{
+                        flex: 1,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: "#10B981",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
                     >
-                      <XCircle size={16} color="#EF4444" />
-                      <Text style={[styles.wdBtnText, { color: "#EF4444" }]}>
-                        {tr("Reject", "Rejeter", "رفض")}
+                      <Text style={{ color: "#FFF", fontWeight: "800", fontSize: 14 }}>
+                        {tr("APPROVE", "APPROUVER", "قبول")}
                       </Text>
                     </TouchableOpacity>
                   </View>
