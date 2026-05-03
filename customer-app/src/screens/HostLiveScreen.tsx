@@ -105,10 +105,11 @@ import {
   useAutoEnterPiPEffect,
   useIsInPiPMode,
   LivestreamLayout,
+  HostLivestream,
 } from "@stream-io/video-react-native-sdk";
 import { useChatContext } from "stream-chat-react-native";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
-import { MessageCircle, Camera, Video } from "lucide-react-native";
+import { MessageCircle, Camera, Video, Pin } from "lucide-react-native";
 
 // ✅ Stream SDK configuration handled via STREAM_API_KEY from config/stream
 
@@ -459,7 +460,7 @@ export default function HostLiveScreen(props: Props) {
     );
   };
   const client = useStreamVideoClient();
-  
+
   // Try to get chat client, but handle if not available
   let chatClient = null;
   try {
@@ -468,7 +469,7 @@ export default function HostLiveScreen(props: Props) {
   } catch (e) {
     console.log("Chat context not available in HostLiveScreen");
   }
-  
+
   // Try to use screenshot, handle if not available
   let takeScreenshot = null;
   try {
@@ -477,7 +478,7 @@ export default function HostLiveScreen(props: Props) {
   } catch (e) {
     console.log("Screenshot context not available");
   }
-  
+
   const [call, setCall] = useState<any>(null);
   const [resolvedName, setResolvedName] = useState(userName);
   const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
@@ -2479,31 +2480,32 @@ export default function HostLiveScreen(props: Props) {
       {/* Stream Video Background */}
       {call ? (
         <View style={StyleSheet.absoluteFill}>
-          <StreamCall call={call}>
+<StreamCall call={call}>
             <BackgroundFiltersProvider>
-              {/* <HostStreamUI /> */}
-              <LivestreamLayout
-                //@ts-ignore
-                muted={false}
-                enableFullscreen={true}
-                showParticipantCount={true}
-                humanizeParticipantCount={true}
-                showDuration={true}
-                showLiveBadge={true}
-                showMuteButton={true}
-                showSpeakerName={false}
-                floatingParticipantProps={{
-                  muted: false,
-                  enableFullscreen: true,
-                  showParticipantCount: true,
-                  humanizeParticipantCount: true,
-                  showDuration: true,
-                  showLiveBadge: true,
-                  showMuteButton: true,
-                  showSpeakerName: false,
-                  position: "top-right",
-                }}
-              />
+              <View style={StyleSheet.absoluteFill}>
+                <LivestreamLayout
+                  //@ts-ignore
+                  muted={false}
+                  enableFullscreen={true}
+                  showParticipantCount={true}
+                  humanizeParticipantCount={true}
+                  showDuration={true}
+                  showLiveBadge={true}
+                  showMuteButton={true}
+                  showSpeakerName={false}
+                  floatingParticipantProps={{
+                    muted: false,
+                    enableFullscreen: true,
+                    showParticipantCount: true,
+                    humanizeParticipantCount: true,
+                    showDuration: true,
+                    showLiveBadge: true,
+                    showMuteButton: true,
+                    showSpeakerName: false,
+                    position: "top-right",
+                  }}
+                />
+              </View>
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
@@ -3782,6 +3784,125 @@ export default function HostLiveScreen(props: Props) {
         </Animatable.View>
       )}
 
+      {/* PRODUCT CAROUSEL - Show selected products */}
+      {selectedProductIds.length > 0 && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 80,
+            left: 0,
+            right: 0,
+            zIndex: 2500,
+          }}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 15, gap: 12 }}
+          >
+            {products
+              .filter((p) => selectedProductIds.includes(p.id))
+              .map((p) => {
+                const isPinned = pinnedProductId === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => {
+                      setPinnedProductId(p.id);
+                      setPinnedProduct(p);
+                      setPinDuration("5");
+                      setPinEndTime(Date.now() + 300000);
+                    }}
+                    style={{
+                      width: 100,
+                      borderRadius: 16,
+                      backgroundColor: isPinned
+                        ? "rgba(16, 185, 129, 0.2)"
+                        : "rgba(0,0,0,0.7)",
+                      borderWidth: isPinned ? 2 : 1,
+                      borderColor: isPinned
+                        ? "#10B981"
+                        : "rgba(255,255,255,0.1)",
+                      padding: 8,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Image
+                      source={{ uri: p.images?.[0] }}
+                      style={{
+                        width: 84,
+                        height: 84,
+                        borderRadius: 12,
+                        backgroundColor: "#333",
+                      }}
+                    />
+                    {p.discountPrice && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 10,
+                          left: 6,
+                          backgroundColor: "#EF4444",
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 8,
+                            fontWeight: "900",
+                          }}
+                        >
+                          -{Math.round((1 - p.discountPrice / p.price) * 100)}%
+                        </Text>
+                      </View>
+                    )}
+                    <View style={{ marginTop: 6 }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {getLocalizedName(p.name)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: isPinned ? "#10B981" : "#F59E0B",
+                          fontSize: 12,
+                          fontWeight: "900",
+                          marginTop: 2,
+                        }}
+                      >
+                        {p.discountPrice || p.price} TND
+                      </Text>
+                    </View>
+                    {isPinned && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          right: 4,
+                          backgroundColor: "#10B981",
+                          borderRadius: 8,
+                          paddingHorizontal: 5,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Pin size={8} color="#fff" fill="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* FLOATING HOST CONTROLS - Moved to bottom right */}
       {/* ✅ Only show after live starts to prevent bugs */}
       {isLiveStarted && (
@@ -3792,8 +3913,47 @@ export default function HostLiveScreen(props: Props) {
             right: 15,
             gap: 14,
             alignItems: "center",
+            zIndex: 9999,
           }}
         >
+          {/* Mic Toggle */}
+          <TouchableOpacity
+            onPress={() => {}}
+            style={{
+              width: 37,
+              height: 37,
+              borderRadius: 20,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            <Mic size={16} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Camera Toggle */}
+          <TouchableOpacity
+            onPress={() => {}}
+            style={{
+              width: 37,
+              height: 37,
+              borderRadius: 20,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            <Camera size={16} color="#fff" />
+          </TouchableOpacity>
+
           {/* Commerce Button */}
           <TouchableOpacity
             onPress={() => setShowProductModal(true)}

@@ -47,6 +47,7 @@ import {
   Settings,
   MessageCircle,
   Camera,
+  Mic,
 } from "lucide-react-native";
 import { API_BASE_URL } from "../config/api";
 import { STREAM_API_KEY } from "../config/stream";
@@ -328,7 +329,7 @@ export default function AudienceLiveScreen(props: Props) {
     return String(name) || "";
   };
   const client = useStreamVideoClient();
-  
+
   // Try to get chat client, but handle if not available
   let chatClient = null;
   try {
@@ -337,7 +338,7 @@ export default function AudienceLiveScreen(props: Props) {
   } catch (e) {
     console.log("Chat context not available in AudienceLiveScreen");
   }
-  
+
   const [call, setCall] = useState<any>(null);
 
   useEffect(() => {
@@ -2287,7 +2288,7 @@ export default function AudienceLiveScreen(props: Props) {
                 position: "top-right",
               }}
             />
-            {/* <AudienceStreamUI language={language || "fr"} /> */}
+            <AudienceStreamUI language={language || "fr"} />
           </StreamCall>
         </View>
       ) : (
@@ -2324,6 +2325,127 @@ export default function AudienceLiveScreen(props: Props) {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* FLOATING AUDIENCE CONTROLS */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 100,
+          right: 15,
+          gap: 14,
+          alignItems: "center",
+          zIndex: 9999,
+        }}
+      >
+        {/* Mic Toggle */}
+        <TouchableOpacity
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <Mic size={16} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Camera Toggle */}
+        <TouchableOpacity
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <Camera size={16} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Like/Heart Button */}
+        <TouchableOpacity
+          onPress={handleSendLike}
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(239, 68, 68, 0.8)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
+          <Heart size={16} color="#fff" fill="#fff" />
+        </TouchableOpacity>
+
+        {/* Gift Button */}
+        <TouchableOpacity
+          onPress={() => setShowGifts(true)}
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <GiftIcon size={16} color="#fff" strokeWidth={2} />
+        </TouchableOpacity>
+
+        {/* Chat Toggle */}
+        <TouchableOpacity
+          onPress={() => setShowChat(true)}
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <MessageCircle size={16} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Share Button */}
+        <TouchableOpacity
+          style={{
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <ShoppingBag size={16} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       {/* Always visible Exit Button for Audience (Top Right) */}
       <TouchableOpacity
