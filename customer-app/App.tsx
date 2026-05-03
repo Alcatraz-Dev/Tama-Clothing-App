@@ -1384,29 +1384,17 @@ export default function App() {
     setStreamInitError(null);
 
     try {
-      console.log(
-        "📡 Attempting to initialize Stream client with DEMO credentials...",
-      );
-
-      const MOCK_STREAM_API_KEY = "6uwr9r2ypxw9";
-      const MOCK_STREAM_USER_ID = "demo-user-sjbhsMhI";
-      const MOCK_STREAM_TOKEN =
-        "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZGVtby11c2VyLXNqYmhzTWhJIiwic3ViIjoidXNlci9kZW1vLXVzZXItc2piaHNNaEkiLCJhcGlLZXkiOiI2dXdyOXIyeXB4dzkiLCJpYXQiOjE3Nzc4MjAzNTMsImV4cCI6MTc3NzgyMzk1M30.oZnWQOqpY7EBGqaFwBlw_-pGQEWC1Kv3EsO-FPzScV8";
-
-      const streamUser: StreamUser = {
-        id: MOCK_STREAM_USER_ID,
-        name: "Demo User",
-      };
-
+      console.log("📡 Attempting to initialize Stream client...");
+      const { token, userId, name } = await getStreamTokenForCurrentUser();
+      const streamUser: StreamUser = { id: userId, name };
       const client = StreamVideoClient.getOrCreateInstance({
-        apiKey: MOCK_STREAM_API_KEY,
+        apiKey: STREAM_API_KEY,
         user: streamUser,
-        token: MOCK_STREAM_TOKEN,
+        token,
       });
-
       setStreamClient(client);
       setStreamInitError(null);
-      console.log("✅ Stream client initialized with DEMO credentials");
+      console.log("✅ Stream client initialized for:", userId);
     } catch (streamErr: any) {
       const errMsg = streamErr?.message || "Unknown stream error";
       console.warn("⚠️ Stream client init failed:", errMsg);
