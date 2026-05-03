@@ -213,6 +213,8 @@ type AudienceStreamContentProps = {
   t: (key: string) => string;
   hostAvatar?: string;
   hostBrandName?: string;
+  totalLikes: number;
+  isInPK: boolean;
 };
 
 const AudienceStreamContent = ({
@@ -232,6 +234,8 @@ const AudienceStreamContent = ({
   t,
   hostAvatar,
   hostBrandName,
+  totalLikes,
+  isInPK,
 }: AudienceStreamContentProps) => {
   const { useRemoteParticipants, useParticipantCount, useCameraState } = useCallStateHooks();
   const remote = useRemoteParticipants();
@@ -277,6 +281,8 @@ const AudienceStreamContent = ({
           <Text style={{ fontSize: 30 }}>❤️</Text>
         </Animatable.View>
       ))}
+
+      {totalLikes >= 50 && <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />}
 
       {pinnedProduct && (
         <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
@@ -1819,16 +1825,6 @@ export default function AudienceLiveScreen(props: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Flame Counter */}
-      {/* Flame Counter - ONLY if reach 50 */}
-      {totalLikes >= 50 && (
-        <FlameCounter
-          count={totalLikes}
-          onPress={handleSendLike}
-          top={isInPK ? 210 : 120}
-        />
-      )}
-
       {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
       {isInPK && (
         <Animatable.View
@@ -2356,6 +2352,8 @@ export default function AudienceLiveScreen(props: Props) {
               t={t}
               hostAvatar={props.hostAvatar}
               hostBrandName={props.hostBrandName}
+              totalLikes={totalLikes}
+              isInPK={isInPK}
             />
           </StreamCall>
         </View>

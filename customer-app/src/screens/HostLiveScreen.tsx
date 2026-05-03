@@ -245,6 +245,13 @@ type HostStreamContentProps = {
   setActivePoll: (p: any) => void;
   durationSeconds: number;
   formatDuration: (s: number) => string;
+  openGiftModal: () => void;
+  setShowChat: (v: boolean) => void;
+  handleTakeScreenshot: () => void;
+  toggleRecording: () => void;
+  isRecording: boolean;
+  activeCoupon: any;
+  setShowCouponModal: (v: boolean) => void;
 };
 
 const HostStreamContent = ({
@@ -277,6 +284,13 @@ const HostStreamContent = ({
   setActivePoll,
   durationSeconds,
   formatDuration,
+  openGiftModal,
+  setShowChat,
+  handleTakeScreenshot,
+  toggleRecording,
+  isRecording,
+  activeCoupon,
+  setShowCouponModal,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
   const camState = useCameraState();
@@ -395,6 +409,48 @@ const HostStreamContent = ({
         </Animatable.View>
       )}
 
+      <View style={{ position: "absolute", bottom: 180, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
+        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
+          <Heart size={18} color="#fff" fill="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowProductModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <ShoppingBag size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPollModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)" }}>
+          <BarChart2 size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPKInviteModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)" }}>
+          <Swords size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={openGiftModal} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <GiftIcon size={18} color="#fff" strokeWidth={2} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowCouponModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activeCoupon ? "#F59E0B" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activeCoupon ? "#fff" : "rgba(255,255,255,0.2)" }}>
+          <Ticket size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <MessageCircle size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleTakeScreenshot} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <Camera size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={toggleRecording} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)" }}>
+          <Radio size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, zIndex: 400 }}>
+        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.toggle(); } catch (e) { console.error("Camera toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          {isCameraOn ? <Camera size={20} color="#fff" /> : <CameraOff size={20} color="#fff" />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={async () => { try { if (microphone) await microphone.toggle(); } catch (e) { console.error("Mic toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          {isMicMuted ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.flip(); } catch (e) { console.error("Camera flip error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <FlipHorizontal size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
       {/* Modals - TODO: Implement inline */}
     </>
   );
@@ -442,210 +498,6 @@ export default function HostLiveScreen(props: Props) {
     return language === "ar" ? ar : language === "fr" ? fr : en;
   };
 
-  const HostStreamUI = () => {
-    const {
-      useLocalParticipant,
-      useParticipantCount,
-      useMicrophoneState,
-      useCameraState,
-    } = useCallStateHooks();
-    const localParticipant = useLocalParticipant();
-    const participantCount = useParticipantCount();
-
-     const { microphone, optimisticIsMute: isMicMuted } = useMicrophoneState();
-     const camState = useCameraState();
-     const { camera } = camState ?? {};
-     const isCamOn = camState?.isEnabled ?? true;
-
-     const toggleMic = async () => {
-       try {
-         await microphone.toggle();
-       } catch (e) {
-         console.error("Mic toggle error:", e);
-       }
-     };
-
-     const toggleCam = async () => {
-       try {
-         if (!camera) return;
-         await camera.toggle();
-       } catch (e) {
-         console.error("Camera toggle error:", e);
-       }
-     };
-
-     const switchCam = async () => {
-       try {
-         if (!camera) return;
-         await camera.flip();
-       } catch (e) {
-         console.error("Switch camera error:", e);
-       }
-     };
-
-    // Filter button using BackgroundFiltersProvider
-    const FilterButton = () => {
-      const {
-        isSupported,
-        applyBackgroundBlurFilter,
-        disableAllFilters,
-        currentBackgroundFilter,
-      } = useBackgroundFilters();
-
-      const toggleFilter = () => {
-        if (!isSupported) return;
-        if (!currentBackgroundFilter) {
-          applyBackgroundBlurFilter("medium");
-        } else if (currentBackgroundFilter.blur) {
-          const level = currentBackgroundFilter.blur;
-          if (level === "light") applyBackgroundBlurFilter("medium");
-          else if (level === "medium") applyBackgroundBlurFilter("heavy");
-          else disableAllFilters();
-        } else {
-          disableAllFilters();
-        }
-      };
-
-      if (!isSupported) return null;
-      return (
-        <TouchableOpacity
-          onPress={toggleFilter}
-          style={{
-            position: "absolute",
-            top: 50,
-            right: 15,
-            width: 37,
-            height: 37,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-            overflow: "hidden",
-          }}
-        >
-          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-          <Sparkles size={16} color="#fff" />
-        </TouchableOpacity>
-      );
-    };
-
-    return (
-      <>
-        {/* Top-left AV controls */}
-        <View
-          style={{
-            position: "absolute",
-            top: 90,
-            left: 15,
-            gap: 8,
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          {/* Mic Toggle */}
-          <TouchableOpacity
-            onPress={toggleMic}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            {isMicMuted ? (
-              <MicOff size={14} color="#fff" />
-            ) : (
-              <Mic size={14} color="#fff" />
-            )}
-          </TouchableOpacity>
-
-          {/* Camera Toggle */}
-          <TouchableOpacity
-            onPress={toggleCam}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            {!isCamOn ? (
-              <CameraOff size={14} color="#fff" />
-            ) : (
-              <Camera size={14} color="#fff" />
-            )}
-          </TouchableOpacity>
-
-          {/* Switch Camera */}
-          <TouchableOpacity
-            onPress={switchCam}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <FlipHorizontal size={14} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Top-right Filter Button */}
-        <FilterButton />
-
-        {/* LIVE indicator */}
-        <View
-          style={{
-            position: "absolute",
-            top: 50,
-            left: 15,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 15,
-            flexDirection: "row",
-            alignItems: "center",
-            zIndex: 1000,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.15)",
-          }}
-        >
-          <View
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: "#10B981",
-              marginRight: 6,
-            }}
-          />
-          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
-            {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
-          </Text>
-        </View>
-      </>
-    );
-  };
   const client = useStreamVideoClient();
 
   // Try to get chat client, but handle if not available
@@ -2761,6 +2613,13 @@ export default function HostLiveScreen(props: Props) {
                 setActivePoll={setActivePoll}
                 durationSeconds={durationSeconds}
                 formatDuration={formatDuration}
+                openGiftModal={openGiftModal}
+                setShowChat={setShowChat}
+                handleTakeScreenshot={handleTakeScreenshot}
+                toggleRecording={toggleRecording}
+                isRecording={isRecording}
+                activeCoupon={activeCoupon}
+                setShowCouponModal={setShowCouponModal}
               />
             </BackgroundFiltersProvider>
           </StreamCall>
@@ -2811,51 +2670,6 @@ export default function HostLiveScreen(props: Props) {
             <Text style={{ color: "#fff", fontWeight: "600" }}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      {/* Exit Button (Always visible) */}
-      <TouchableOpacity
-        onPress={() => {
-          Alert.alert(
-            t("endLiveTitle") || "End Live",
-            t("endLiveConfirm") ||
-              "Are you sure you want to end the live session?",
-            [
-              { text: t("cancel") || "Cancel", style: "cancel" },
-              {
-                text: t("end") || "End Live",
-                style: "destructive",
-                onPress: endFirestoreSession,
-              },
-            ],
-          );
-        }}
-        style={{
-          position: "absolute",
-          top: 50,
-          right: 20,
-          zIndex: 9999,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.2)",
-        }}
-      >
-        <X size={24} color="#fff" />
-      </TouchableOpacity>
-
-      {/* Flame Counter */}
-      {/* Flame Counter - ONLY if reach 50 */}
-      {totalLikes >= 50 && (
-        <FlameCounter
-          count={totalLikes}
-          onPress={handleSendLike}
-          top={isInPK ? 210 : 120}
-        />
       )}
 
       {/* PK BATTLE SCORE BAR - TikTok Premium Style */}
@@ -4068,390 +3882,6 @@ export default function HostLiveScreen(props: Props) {
             </TouchableOpacity>
           </BlurView>
         </Animatable.View>
-      )}
-
-      {/* PRODUCT CAROUSEL - Show selected products */}
-      {selectedProductIds.length > 0 && (
-        <View
-          style={{
-            position: "absolute",
-            bottom: 80,
-            left: 0,
-            right: 0,
-            zIndex: 2500,
-          }}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 15, gap: 12 }}
-          >
-            {products
-              .filter((p) => selectedProductIds.includes(p.id))
-              .map((p) => {
-                const isPinned = pinnedProductId === p.id;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => {
-                      setPinnedProductId(p.id);
-                      setPinnedProduct(p);
-                      setPinDuration("5");
-                      setPinEndTime(Date.now() + 300000);
-                    }}
-                    style={{
-                      width: 100,
-                      borderRadius: 16,
-                      backgroundColor: isPinned
-                        ? "rgba(16, 185, 129, 0.2)"
-                        : "rgba(0,0,0,0.7)",
-                      borderWidth: isPinned ? 2 : 1,
-                      borderColor: isPinned
-                        ? "#10B981"
-                        : "rgba(255,255,255,0.1)",
-                      padding: 8,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <Image
-                      source={{ uri: p.images?.[0] }}
-                      style={{
-                        width: 84,
-                        height: 84,
-                        borderRadius: 12,
-                        backgroundColor: "#333",
-                      }}
-                    />
-                    {p.discountPrice && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 10,
-                          left: 6,
-                          backgroundColor: "#EF4444",
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#fff",
-                            fontSize: 8,
-                            fontWeight: "900",
-                          }}
-                        >
-                          -{Math.round((1 - p.discountPrice / p.price) * 100)}%
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ marginTop: 6 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: "#fff",
-                          fontSize: 11,
-                          fontWeight: "700",
-                        }}
-                      >
-                        {getLocalizedName(p.name)}
-                      </Text>
-                      <Text
-                        style={{
-                          color: isPinned ? "#10B981" : "#F59E0B",
-                          fontSize: 12,
-                          fontWeight: "900",
-                          marginTop: 2,
-                        }}
-                      >
-                        {p.discountPrice || p.price} TND
-                      </Text>
-                    </View>
-                    {isPinned && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 4,
-                          right: 4,
-                          backgroundColor: "#10B981",
-                          borderRadius: 8,
-                          paddingHorizontal: 5,
-                          paddingVertical: 2,
-                        }}
-                      >
-                        <Pin size={8} color="#fff" fill="#fff" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* FLOATING HOST CONTROLS - Moved to bottom right */}
-      {/* ✅ Only show after live starts to prevent bugs */}
-      {isLiveStarted && (
-        <View
-          style={{
-            position: "absolute",
-            bottom: 100,
-            right: 15,
-            gap: 14,
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          {/* Mic Toggle */}
-          <TouchableOpacity
-            onPress={() => {}}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <Mic size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Camera Toggle */}
-          <TouchableOpacity
-            onPress={() => {}}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <Camera size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Commerce Button */}
-          <TouchableOpacity
-            onPress={() => setShowProductModal(true)}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <ShoppingBag size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* PK Toggle Button */}
-          <TouchableOpacity
-            onPress={() => setShowPKInviteModal(true)}
-            activeOpacity={0.8}
-            style={{
-              borderRadius: 20,
-              overflow: "hidden",
-              elevation: isInPK ? 8 : 0,
-              shadowColor: isInPK ? "#FFA500" : "transparent",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: isInPK ? 0.3 : 0,
-              shadowRadius: 8,
-            }}
-          >
-            {isInPK ? (
-              <LinearGradient
-                colors={["#FFD700", "#FFA500"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  width: 37,
-                  height: 37,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Swords size={20} color="#fff" />
-              </LinearGradient>
-            ) : (
-              <View
-                style={{
-                  width: 37,
-                  height: 37,
-                  borderRadius: 20,
-                  backgroundColor: "rgba(0,0,0,0.6)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.2)",
-                }}
-              >
-                <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                <Swords size={16} color="#fff" />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* Gift Button for Host */}
-          <TouchableOpacity
-            onPress={openGiftModal}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <GiftIcon size={16} color="#fff" strokeWidth={2} />
-          </TouchableOpacity>
-
-          {/* Coupon Button */}
-          <TouchableOpacity
-            onPress={() => setShowCouponModal(true)}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: activeCoupon ? "#F59E0B" : "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: activeCoupon ? "#fff" : "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            {!activeCoupon && (
-              <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            )}
-            <Ticket size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Beauty Toggle Button */}
-          {/* <TouchableOpacity
-                            onPress={() => Alert.alert("Beauty", "Beauty Filters toggled!")}
-                            style={{
-                                width: 37,
-                                height: 37,
-                                borderRadius: 22,
-                                backgroundColor: 'rgba(0,0,0,0.6)',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderWidth: 1,
-                                borderColor: 'rgba(255,255,255,0.2)',
-                                overflow: 'hidden'
-                            }}
-                        >
-                            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                            <Sparkles size={16} color="#fff" />
-                        </TouchableOpacity> */}
-
-          {/* Share Button */}
-          <TouchableOpacity
-            onPress={() =>
-              Share.share({ message: `Watch my live stream on Bey3a!` })
-            }
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <Share2 size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Chat Button */}
-          <TouchableOpacity
-            onPress={() => setShowChat(true)}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <MessageCircle size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Screenshot Button */}
-          <TouchableOpacity
-            onPress={handleTakeScreenshot}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            <Camera size={16} color="#fff" />
-          </TouchableOpacity>
-
-          {/* Recording Toggle Button */}
-          <TouchableOpacity
-            onPress={toggleRecording}
-            style={{
-              width: 37,
-              height: 37,
-              borderRadius: 20,
-              backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)",
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)",
-              overflow: "hidden",
-            }}
-          >
-            {isRecording ? (
-              <LinearGradient
-                colors={["#EF4444", "#B91C1C"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ ...StyleSheet.absoluteFill, borderRadius: 20 }}
-              />
-            ) : (
-              <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-            )}
-            <Radio size={16} color="#fff" />
-          </TouchableOpacity>
-        </View>
       )}
 
       {/* Live Chat Overlay */}
