@@ -284,7 +284,7 @@ export default function HostLiveScreen(props: Props) {
 
     const switchCam = async () => {
       try {
-        await camera.switchCamera();
+        await camera.flip();
       } catch (e) {
         console.error("Switch camera error:", e);
       }
@@ -485,7 +485,6 @@ export default function HostLiveScreen(props: Props) {
             await chatClient
               .channel("messaging", channelId, {
                 members: [{ user_id: userId }],
-                custom: { type: "livestream_chat" },
               })
               .create();
             console.log("✅ Chat channel created");

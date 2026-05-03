@@ -3,6 +3,7 @@ import {
   Chat,
   OverlayProvider,
   Streami18n,
+  Unknown,
   useCreateChatClient,
 } from "stream-chat-react-native";
 import { SafeAreaView, ActivityIndicator, StyleSheet } from "react-native";
@@ -36,7 +37,9 @@ export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
 
   const chatClient = useCreateChatClient({
     apiKey: STREAM_API_KEY,
-    userData: userData || undefined,
+    //@ts-ignore
+    userData: userData?.id || undefined,
+    //@ts-ignore
     tokenProvider: tokenProvider,
   });
 
