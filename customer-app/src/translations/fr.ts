@@ -291,6 +291,7 @@ export const fr = {
   sendAGift: "ENVOYER UN CADEAU",
   giftSent: "Cadeau envoyé !",
   sentA: "a envoyé un",
+  hostSent: "Le host a envoyé un",
   disconnectUser: "Déconnecter Utilisateur",
   confirmDisconnect: "Confirmer Déconnexion",
   areYouSureDisconnect: "Voulez-vous déconnecter",

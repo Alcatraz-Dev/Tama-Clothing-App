@@ -288,6 +288,7 @@ export const en = {
   sendAGift: "SEND A GIFT",
   giftSent: "Gift sent!",
   sentA: "sent a",
+  hostSent: "Host sent a",
   disconnectUser: "Disconnect User",
   confirmDisconnect: "Confirm Disconnect",
   areYouSureDisconnect: "Do you want to disconnect",

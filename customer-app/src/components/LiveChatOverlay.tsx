@@ -51,7 +51,7 @@ export const LiveChatOverlay = ({
       <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
         <View style={styles.overlay}>
           <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-          <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+          <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <View style={styles.header}>
               <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
               <Text style={styles.title}>Live Chat</Text>
@@ -104,7 +104,7 @@ export const LiveChatOverlay = ({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Header */}
           <View style={styles.header}>
             <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -144,8 +144,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#0F0F13",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: Dimensions.get("window").height * 0.65,
+    height: Dimensions.get("window").height * 0.75,
     overflow: "hidden",
+    paddingLeft: 12,
+    paddingRight: 12,
   },
   header: {
     height: 56,
@@ -172,6 +174,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#333",
     backgroundColor: "#1A1A1F",
+    paddingHorizontal: 8,
   },
   noChatContainer: {
     flex: 1,

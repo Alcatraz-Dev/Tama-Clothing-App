@@ -273,6 +273,7 @@ export const ar = {
   sendAGift: "ابعث كادو",
   giftSent: "تم بعث الكادو!",
   sentA: "بعث",
+  hostSent: "الهوست بعث",
   disconnectUser: "افصل المستخدم",
   confirmDisconnect: "تأكيد الفصل",
   areYouSureDisconnect: "تحب تفصل",

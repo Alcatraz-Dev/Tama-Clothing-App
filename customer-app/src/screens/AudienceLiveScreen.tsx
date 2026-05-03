@@ -216,6 +216,7 @@ type AudienceStreamContentProps = {
   hostBrandName?: string;
   totalLikes: number;
   isInPK: boolean;
+  hostCameraOn?: boolean;
 };
 
 const AudienceStreamContent = ({
@@ -237,12 +238,14 @@ const AudienceStreamContent = ({
   hostBrandName,
   totalLikes,
   isInPK,
+  hostCameraOn,
 }: AudienceStreamContentProps) => {
   const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
   const remote = useRemoteParticipants();
   const count = useParticipantCount();
   const host = remote[0] || remoteParticipants[0];
-  const isHostCameraOn = host ? hasVideo(host) : false;
+  const hasHostVideo = host ? hasVideo(host) : false;
+  const isHostCameraOn = hostCameraOn !== undefined ? hostCameraOn : hasHostVideo;
   const viewerCount = count || participantCount;
 
   return (
@@ -482,6 +485,8 @@ export default function AudienceLiveScreen(props: Props) {
         handleSendLike();
       } else if (data.type === "PK_BATTLE_STOP") {
         setIsInPK(false);
+      } else if (data.type === "camera_state") {
+        setHostCameraOn(data.isCameraOn);
       } else if (data.type === "gift") {
         const senderId = data.senderId || data.userId;
         const isHost = data.isHost === true;
@@ -688,6 +693,7 @@ export default function AudienceLiveScreen(props: Props) {
   >([]);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [pinnedProduct, setPinnedProduct] = useState<any | null>(null);
+  const [hostCameraOn, setHostCameraOn] = useState<boolean | undefined>(undefined);
   const [showProductSheet, setShowProductSheet] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -2345,16 +2351,17 @@ export default function AudienceLiveScreen(props: Props) {
               pinnedProduct={pinnedProduct}
               getLocalizedName={getLocalizedName}
               featuredProducts={featuredProducts}
-              setPinnedProduct={setPinnedProduct}
-              handleSendLike={handleSendLike}
-              setShowGifts={setShowGifts}
-              setShowChat={setShowChat}
-              t={t}
-              hostAvatar={props.hostAvatar}
-              hostBrandName={props.hostBrandName}
-              totalLikes={totalLikes}
-              isInPK={isInPK}
-            />
+setPinnedProduct={setPinnedProduct}
+               handleSendLike={handleSendLike}
+               setShowGifts={setShowGifts}
+               setShowChat={setShowChat}
+               t={t}
+               hostAvatar={props.hostAvatar}
+               hostBrandName={props.hostBrandName}
+               totalLikes={totalLikes}
+               isInPK={isInPK}
+               hostCameraOn={hostCameraOn}
+             />
           </StreamCall>
         </View>
       ) : (
@@ -2443,7 +2450,7 @@ export default function AudienceLiveScreen(props: Props) {
                         fontWeight: "800",
                       }}
                     >
-                      {t("sentA") || "sent a"} {recentGift.giftName}
+                      {recentGift.isHost ? (t("hostSent") || "Host sent a") : (t("sentA") || "sent a")} {recentGift.giftName}
                     </Text>
                   </View>
 

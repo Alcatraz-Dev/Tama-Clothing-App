@@ -252,6 +252,7 @@ type HostStreamContentProps = {
   isRecording: boolean;
   activeCoupon: any;
   setShowCouponModal: (v: boolean) => void;
+  sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
 };
 
 const HostStreamContent = ({
@@ -280,7 +281,7 @@ const HostStreamContent = ({
   setShowPollModal,
   showPKInviteModal,
   setShowPKInviteModal,
-  activePoll,
+activePoll,
   setActivePoll,
   durationSeconds,
   formatDuration,
@@ -291,6 +292,7 @@ const HostStreamContent = ({
   isRecording,
   activeCoupon,
   setShowCouponModal,
+  sendStreamCustomEvent,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
   const camState = useCameraState();
@@ -298,6 +300,15 @@ const HostStreamContent = ({
   const isCameraOn = camState?.isEnabled ?? true;
   const localParticipant = useLocalParticipant();
   const participantCount = useParticipantCount();
+
+  useEffect(() => {
+    if (sendStreamCustomEvent && isCameraOn !== undefined) {
+      sendStreamCustomEvent({
+        type: "camera_state",
+        isCameraOn: isCameraOn,
+      }).catch(console.error);
+    }
+  }, [isCameraOn, sendStreamCustomEvent]);
 
   return (
     <>
@@ -2611,16 +2622,17 @@ export default function HostLiveScreen(props: Props) {
                 setShowPKInviteModal={setShowPKInviteModal}
                 activePoll={activePoll}
                 setActivePoll={setActivePoll}
-                durationSeconds={durationSeconds}
-                formatDuration={formatDuration}
-                openGiftModal={openGiftModal}
-                setShowChat={setShowChat}
-                handleTakeScreenshot={handleTakeScreenshot}
-                toggleRecording={toggleRecording}
-                isRecording={isRecording}
-                activeCoupon={activeCoupon}
-                setShowCouponModal={setShowCouponModal}
-              />
+durationSeconds={durationSeconds}
+                 formatDuration={formatDuration}
+                 openGiftModal={openGiftModal}
+                 setShowChat={setShowChat}
+                 handleTakeScreenshot={handleTakeScreenshot}
+                 toggleRecording={toggleRecording}
+                 isRecording={isRecording}
+                 activeCoupon={activeCoupon}
+                 setShowCouponModal={setShowCouponModal}
+                 sendStreamCustomEvent={sendStreamCustomEvent}
+               />
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
