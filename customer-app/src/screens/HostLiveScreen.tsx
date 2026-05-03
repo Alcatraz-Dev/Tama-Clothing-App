@@ -95,20 +95,7 @@ import {
   ParticipantView,
 } from "@stream-io/video-react-native-sdk";
 
-const isExpoGo = Constants.executionEnvironment === "storeClient";
-
-// ✅ Legacy Zego Mocks (Required after package removal to prevent crashes/errors)
-let ZegoUIKitPrebuiltLiveStreaming: any;
-let ZegoUIKit: any;
-let HOST_DEFAULT_CONFIG: any;
-let ZIM: any;
-let ZegoMenuBarButtonName: any;
-let ZegoLiveStreamingRole: any;
-
-const ZEGO_APP_ID = 1327315162;
-
-const ZEGO_APP_SIGN =
-  "2c0f518d65e837480793f1ebe41b0ad44e999bca88ef783b65ef4391b4514ace";
+// ✅ Stream SDK configuration handled via STREAM_API_KEY from config/stream
 
 type Props = {
   channelId: string;
@@ -207,53 +194,6 @@ const MemberAvatar = ({
   );
 };
 
-const HostStreamUI = () => {
-  const { useLocalParticipant, useParticipantCount } = useCallStateHooks();
-  const localParticipant = useLocalParticipant();
-  const participantCount = useParticipantCount();
-
-  return (
-    <View style={StyleSheet.absoluteFill}>
-      {localParticipant && (
-        <ParticipantView
-          participant={localParticipant}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-
-      {/* Viewer Count Overlay - Compact mobile-first style */}
-      <View
-        style={{
-          position: "absolute",
-          top: 50,
-          left: 15,
-          backgroundColor: "rgba(0,0,0,0.4)",
-          paddingHorizontal: 10,
-          paddingVertical: 5,
-          borderRadius: 15,
-          flexDirection: "row",
-          alignItems: "center",
-          zIndex: 1000,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.15)",
-        }}
-      >
-        <View
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: "#EF4444",
-            marginRight: 6,
-          }}
-        />
-        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>
-          {participantCount} {participantCount === 1 ? "viewer" : "viewers"}
-        </Text>
-      </View>
-    </View>
-  );
-};
 
 export default function HostLiveScreen(props: Props) {
   const t = typeof props.t === "function" ? props.t : (key: string) => key;
@@ -271,43 +211,62 @@ export default function HostLiveScreen(props: Props) {
   } = props;
 
   const getLocalizedName = (name: any): string => {
-    // Handle undefined/null
     if (!name) return "";
-
-    // Already a string
     if (typeof name === "string") return name;
-
-    // It's an object with translations - handle safely
     if (typeof name === "object") {
       try {
-        const lang = language || "fr"; // Default to French if undefined
+        const lang = language || "fr";
         const langKey = lang === "ar" ? "ar-tn" : lang;
-
-        // Try to get the right language
-        if (name[langKey] && typeof name[langKey] === "string")
-          return name[langKey];
+        if (name[langKey] && typeof name[langKey] === "string") return name[langKey];
         if (name.fr && typeof name.fr === "string") return name.fr;
         if (name.en && typeof name.en === "string") return name.en;
         if (name.ar && typeof name.ar === "string") return name.ar;
-
-        // Try any available value
-        const values = Object.values(name);
-        for (const v of values) {
-          if (typeof v === "string" && v.trim()) {
-            return v;
-          }
-        }
-
-        // Last resort - return empty string
-        return "";
-      } catch (e) {
-        // If anything fails, return empty string
-        return "";
-      }
+        return (Object.values(name).find(v => typeof v === "string") as string) || "";
+      } catch (e) { return ""; }
     }
-
-    // Fallback for any other type
     return String(name) || "";
+  };
+
+  const tr = (en: string, fr: string, ar: string) => {
+    return language === "ar" ? ar : language === "fr" ? fr : en;
+  };
+
+  const HostStreamUI = () => {
+    const { useLocalParticipant, useParticipantCount } = useCallStateHooks();
+    const localParticipant = useLocalParticipant();
+    const participantCount = useParticipantCount();
+
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        {localParticipant && (
+          <ParticipantView
+            participant={localParticipant}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        <View
+          style={{
+            position: "absolute",
+            top: 50,
+            left: 15,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 15,
+            flexDirection: "row",
+            alignItems: "center",
+            zIndex: 1000,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.15)",
+          }}
+        >
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981", marginRight: 6 }} />
+          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
+            {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
+          </Text>
+        </View>
+      </View>
+    );
   };
   const client = useStreamVideoClient();
   const [call, setCall] = useState<any>(null);
@@ -496,6 +455,9 @@ export default function HostLiveScreen(props: Props) {
   const [couponTimeRemaining, setCouponTimeRemaining] = useState(0);
   const couponTimerRef = useRef<any>(null);
   const [showPKResult, setShowPKResult] = useState(false);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [inviter, setInviter] = useState<{ id: string; name: string; channelId: string } | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<"received" | "sent" | "none">("none");
 
   // Promo Video States
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
@@ -1058,33 +1020,24 @@ export default function HostLiveScreen(props: Props) {
     totalLikesRef.current = totalLikes;
   }, [totalLikes]);
 
-  // ✅ Safe Zego command helper: silently ignores 1009015 (room not connected)
-  const safeZegoCommand = (payload: object, targets: string[] = []) => {
-    if (!ZegoUIKit || !isLiveStarted) return;
+  // ✅ Safe Stream command helper: replaces legacy Zego signaling
+  const sendStreamCustomEvent = async (payload: any, targets: string[] = []) => {
+    if (!call || !isLiveStarted) return;
     try {
-      const result = ZegoUIKit.sendInRoomCommand(
-        JSON.stringify(payload),
-        targets,
-        () => {},
-      );
-      if (result && typeof result.catch === "function") {
-        result.catch((err: any) => {
-          // 1009015 = room not connected yet, safe to ignore
-          if (err !== "1009015" && err !== 1009015) {
-            console.log("Zego command error:", err);
-          }
-        });
-      }
+      // Use Stream custom events for low-latency synchronization
+      await call.sendCustomEvent(payload).catch((err: any) => {
+        console.log("Stream custom event error:", err);
+      });
     } catch (e) {
-      // Silently ignore synchronous errors too
+      console.error("Error sending custom event:", e);
     }
   };
 
-  // Periodically broadcast state to keep audience in sync (Zego backup)
+  // Periodically broadcast state to keep audience in sync (Stream)
   useEffect(() => {
-    if (!ZegoUIKit || !isLiveStarted) return;
+    if (!call || !isLiveStarted) return;
     const interval = setInterval(() => {
-      safeZegoCommand({
+      sendStreamCustomEvent({
         type: "PK_SCORE_SYNC",
         hostScore: hostScoreRef.current,
         guestScore: guestScoreRef.current,
@@ -1166,9 +1119,9 @@ export default function HostLiveScreen(props: Props) {
 
   // Force Sync on PK Start
   useEffect(() => {
-    if (isInPK && ZegoUIKit && isLiveStarted) {
+    if (isInPK && isLiveStarted) {
       console.log("⚡ Force Syncing PK State Start");
-      safeZegoCommand({
+      sendStreamCustomEvent({
         type: "PK_SCORE_SYNC",
         hostScore: hostScoreRef.current,
         guestScore: guestScoreRef.current,
@@ -1278,7 +1231,7 @@ export default function HostLiveScreen(props: Props) {
       ).catch((e) => console.error("PK Host Score Increment Error:", e));
 
       // Broadcast for immediate feedback (optional, Firestore sync will handle it)
-      safeZegoCommand({
+      sendStreamCustomEvent({
         type: "PK_VOTE",
         points: pointsToAdd,
         hostId: userId,
@@ -1288,10 +1241,10 @@ export default function HostLiveScreen(props: Props) {
 
   // ✅ Sync PK scores every 3 seconds to ensure real-time accuracy
   useEffect(() => {
-    if (!isInPK || !ZegoUIKit || !isLiveStarted) return;
+    if (!isInPK || !call || !isLiveStarted) return;
 
     const syncInterval = setInterval(() => {
-      safeZegoCommand({
+      sendStreamCustomEvent({
         type: "PK_SCORE_SYNC",
         hostScore: hostScoreRef.current,
         guestScore: guestScoreRef.current,
@@ -1307,11 +1260,14 @@ export default function HostLiveScreen(props: Props) {
   }, [isInPK, userName, opponentName, isLiveStarted]);
 
   const openGiftModal = () => {
-    if (ZegoUIKit) {
+    if (call) {
       // Get all participants, excluding the host themselves
-      const all = ZegoUIKit.getAllUsers().filter(
-        (u: any) => u.userID !== userId,
-      );
+      const all = call.state.participants.filter(
+        (p: any) => p.userId !== userId,
+      ).map((p: any) => ({
+        userID: p.userId,
+        userName: p.name || p.userId,
+      }));
       setRoomUsers(all);
       // Default to first user if available
       if (all.length > 0) setSelectedTargetUser(all[0]);
@@ -1407,7 +1363,7 @@ export default function HostLiveScreen(props: Props) {
       });
 
       // 2. Send signaling command
-      safeZegoCommand(couponData);
+      sendStreamCustomEvent(couponData);
 
       setActiveCoupon(couponData);
       setCouponTimeRemaining(expirySecs);
@@ -1556,29 +1512,21 @@ export default function HostLiveScreen(props: Props) {
         status: "completed",
       });
 
-      // Send via Signaling
-      if (ZegoUIKit) {
-        ZegoUIKit.getSignalingPlugin()
-          .sendInRoomCommandMessage(
-            JSON.stringify({
-              type: "gift",
-              senderId: userId,
-              ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
-              userName: userName || "Host",
-              giftName: gift.name,
-              points: gift.points,
-              icon: gift.icon,
-              targetName: targetName,
-              isHost: true,
-              combo: newCount,
-              timestamp: Date.now(),
-            }),
-          )
-          .catch((e: any) => console.log("Host Gift Send Error:", e));
+      // Send via Signaling - Migrated to Stream
+      await sendStreamCustomEvent({
+        type: "gift",
+        senderId: userId,
+        ...(finalAvatar ? { senderAvatar: finalAvatar } : {}),
+        userName: userName || "Host",
+        giftName: gift.name,
+        points: gift.points,
+        icon: gift.icon,
+        targetName: targetName,
+        isHost: true,
+        combo: newCount,
+        timestamp: Date.now(),
+      });
 
-        const chatMsg = `🎁 ${userName} sent a ${gift.name} to ${targetName}!`;
-        ZegoUIKit.sendInRoomMessage(chatMsg);
-      }
       // Sync and Score
       if (channelId) {
         LiveSessionService.incrementGifts(channelId, gift.points || 1).catch(
@@ -1648,11 +1596,6 @@ export default function HostLiveScreen(props: Props) {
         .catch((err) => console.error("Error getting wallet:", err));
     }
 
-    // ✅ CRITICAL: Don't start session if ZEGO modules aren't available (Expo Go)
-    if (!ZegoUIKitPrebuiltLiveStreaming) {
-      console.log("⚠️ ZEGO modules not available - skipping session start");
-      return;
-    }
 
     console.log("🚀 HostLiveScreen mounted, waiting for promo selection...");
     // startFirestoreSession(); // Don't auto-start yet, wait for promo setup
@@ -1816,214 +1759,110 @@ export default function HostLiveScreen(props: Props) {
     }
   };
 
-  // Listen for In-Room Commands (Gifts) using ZegoUIKit core signaling plugin
+    // Listen for Stream Custom Events (Gifts, PK, etc.)
   useEffect(() => {
-    if (!ZegoUIKit) return;
+    if (!call) return;
 
-    const callbackID = "HostGiftListener_" + userId;
-    console.log("🎧 Registering HostGiftListener:", callbackID);
+    const unsubscribe = call.on("custom", (event: any) => {
+      const data = event.custom;
+      if (!data) return;
 
-    // 1. Command Message Handler (Gifts, Likes, PK Updates)
-    ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(
-      callbackID,
-      (messageData: any) => {
-        const { message, senderUserID } = messageData;
-        // Prevent processing own messages (handled locally)
-        if (senderUserID === userId) return;
+      // Handle Gifts
+      if (data.type === "gift") {
+        const senderId = data.senderId;
+        const senderName = data.userName || "User";
+        const giftNameStr = String(data.giftName || "");
 
-        try {
-          const data =
-            typeof message === "string" ? JSON.parse(message) : message;
+        const foundGift = GIFTS.find(
+          (g) => g.name.toLowerCase() === giftNameStr.toLowerCase(),
+        );
+        const points =
+          (foundGift && foundGift.points) || Number(data.points) || 0;
 
-          if (data.type === "gift") {
-            const senderId = data.senderId || senderUserID;
-            const isHost = data.isHost === true;
-            const senderName = data.userName || "User";
-            const giftNameStr = String(data.giftName || "");
+        handleNewGift({
+          senderName: senderName,
+          senderId: senderId,
+          giftName: giftNameStr,
+          points: points,
+          icon: foundGift ? foundGift.icon : data.icon,
+          senderAvatar: data.senderAvatar,
+          targetName: data.targetName,
+          isHost: data.isHost === true,
+          combo: data.combo || 1,
+        });
 
-            const foundGift = GIFTS.find(
-              (g) => g.name.toLowerCase() === giftNameStr.toLowerCase(),
-            );
-            const points =
-              (foundGift && foundGift.points) || Number(data.points) || 0;
-
-            handleNewGift({
-              senderName: senderName,
-              senderId: senderId,
-              giftName: giftNameStr,
-              points: points,
-              icon: foundGift ? foundGift.icon : data.icon,
-              senderAvatar: data.senderAvatar,
-              targetName: data.targetName,
-              isHost: isHost,
-              combo: data.combo, // ✅ Pass Combo
-            });
-          } else if (data.type === "PK_VOTE") {
-            // No-op: scores are synced via Firestore listener
-          } else if (data.type === "PK_LIKE") {
-            handleSendLike(); // Keep to trigger floating heart animation
-          } else if (data.type === "PK_SCORE_SYNC") {
-            // No-op: scores are synced via Firestore listener
-          } else if (data.type === "PK_BATTLE_STOP") {
-            setIsInPK(false);
-            setPkBattleId(null);
-            if (data.winner) {
-              setPkWinner(data.winner);
-              setShowPKResult(true);
-              setTimeout(() => {
-                setShowPKResult(false);
-                setPkWinner(null);
-              }, 5000);
-            }
-            Alert.alert(
-              "PK Battle",
-              data.message || "The opponent has ended the battle.",
-            );
-          } else if (data.type === "coupon_drop") {
-            setActiveCoupon(data);
-            setCouponTimeRemaining(data.expiryMinutes * 60);
-          }
-        } catch (e) {
-          console.error("HostGiftListener Parse Error:", e);
+        if (!data.isHost) {
+          setTotalPoints((prev) => prev + points);
         }
-      },
-    );
+      }
 
-    // 2. PK Invitation Handler
-    ZegoUIKit.getSignalingPlugin().onInvitationReceived(
-      callbackID,
-      ({ callID, inviter, data }: any) => {
-        try {
-          let pkData = null;
-          try {
-            pkData = data ? JSON.parse(data) : null;
-          } catch (e) {
-            // Not JSON or another type of invitation, ignore
-            return;
-          }
+      // Handle PK Invitations
+      if (data.type === "PK_INVITE") {
+        setInviter({
+          id: data.inviterId,
+          name: data.inviterName,
+          channelId: data.inviterChannelId,
+        });
+        setInviteStatus("received");
+        setShowPKInviteModal(true);
+      }
 
-          // If it's a co-host request or something else, let Zego or other handlers deal with it
-          if (!pkData || pkData.type !== "PK_REQUEST") return;
-
-          const duration = pkData.duration || 180;
-          Alert.alert(
-            t("pkBattleRequest") || "PK Battle Request",
-            `${pkData.inviterName || "Host"} ${t("wantsToStartPK") || "wants to start a PK battle!"}`,
-            [
-              {
-                text: t("reject") || "Reject",
-                onPress: () =>
-                  ZegoUIKit.getSignalingPlugin().refuseInvitation(inviter.id),
-              },
-              {
-                text: t("accept") || "Accept",
-                onPress: () => {
-                  ZegoUIKit.getSignalingPlugin().acceptInvitation(
-                    inviter.id,
-                    JSON.stringify({
-                      accepterName: userName,
-                      channelId: channelId,
-                      duration: duration,
-                      endTime: pkData.endTime,
-                    }),
-                  );
-                  setIsInPK(true);
-                  setHostScore(0); // ✅ Explicit reset for new battle
-                  setGuestScore(0); // ✅ Explicit reset for new battle
-                  setOpponentName(pkData.inviterName || "Opponent");
-                  setOpponentChannelId(pkData.roomID || null); // ✅ Save opponent channel ID
-                  setPkBattleId(callID);
-                  setPkEndTime(pkData.endTime || Date.now() + duration * 1000);
-                },
-              },
-            ],
-          );
-        } catch (e) {
-          console.error("PK Invitation Parse Error:", e);
-        }
-      },
-    );
-
-    // 3. Invitation Accepted Handler
-    ZegoUIKit.getSignalingPlugin().onInvitationAccepted(
-      callbackID,
-      async ({ invitee, data }: any) => {
+      // Handle PK Accepted
+      if (data.type === "PK_ACCEPT") {
+        const { opponentChanId, opponentName: oppName, endTime } = data;
+        setOpponentName(oppName);
+        setOpponentChannelId(opponentChanId);
         setIsInPK(true);
+        setPkEndTime(endTime);
         setHostScore(0);
         setGuestScore(0);
         setPkWinner(null);
         setShowPKResult(false);
+      }
 
-        let opponentChanId = null;
-        let endTime = null;
-
-        try {
-          if (data) {
-            const parsed = JSON.parse(data);
-            if (parsed.accepterName) setOpponentName(parsed.accepterName);
-            if (parsed.endTime) {
-              endTime = parsed.endTime;
-              setPkEndTime(endTime);
-            }
-            if (parsed.channelId) {
-              opponentChanId = parsed.channelId;
-              setOpponentChannelId(opponentChanId);
-            }
-          }
-        } catch (e) {
-          console.error("PK Accept Parse Error:", e);
+      // Handle PK Votes/Scores
+      if (data.type === "PK_VOTE") {
+        if (data.isOpponent) {
+          setGuestScore(data.score);
+          guestScoreRef.current = data.score;
+        } else {
+          setHostScore(data.score);
+          hostScoreRef.current = data.score;
         }
+      }
 
-        // ✅ Initialize scores to 0 in Firestore for both hosts
-        await LiveSessionService.updatePKState(channelId, {
-          isActive: true,
-          hostScore: 0,
-          guestScore: 0,
-          opponentName: opponentName,
-          hostName: resolvedName,
-          opponentChannelId: opponentChanId,
-          endTime: endTime,
-          duration: pkDuration,
-        }).catch((e) => console.error("PK State Init Error:", e));
-
-        if (opponentChanId) {
-          await LiveSessionService.updatePKState(opponentChanId, {
-            isActive: true,
-            hostScore: 0,
-            guestScore: 0,
-            opponentName: userName,
-            hostName: opponentName,
-            opponentChannelId: channelId,
-            endTime: endTime,
-            duration: pkDuration,
-          }).catch((e) => console.error("Opponent PK State Init Error:", e));
+      // Handle PK Stop
+      if (data.type === "PK_BATTLE_STOP") {
+        setIsInPK(false);
+        setPkBattleId(null);
+        if (data.winner) {
+          setPkWinner(data.winner);
+          setShowPKResult(true);
+          setTimeout(() => {
+            setShowPKResult(false);
+            setPkWinner(null);
+          }, 5000);
         }
-
         Alert.alert(
-          t("success") || "Success",
-          t("pkBattleStarted") || "PK Battle Started!",
+          "PK Battle",
+          data.message || "The opponent has ended the battle.",
         );
-      },
-    );
+      }
 
-    ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, () => {
-      Alert.alert(
-        t("declined") || "Declined",
-        t("pkDeclinedDesc") || "The host declined your PK challenge.",
-      );
+      // Handle Coupon Drops
+      if (data.type === "coupon_drop") {
+        setActiveCoupon(data);
+        setCouponTimeRemaining(data.expiryMinutes * 60);
+      }
+
+      // Handle Likes (Animations)
+      if (data.type === "PK_LIKE") {
+        handleSendLike(); 
+      }
     });
 
-    return () => {
-      console.log("🧹 Cleaning up HostGiftListener:", callbackID);
-      ZegoUIKit.getSignalingPlugin().onInRoomCommandMessageReceived(
-        callbackID,
-        () => {},
-      );
-      ZegoUIKit.getSignalingPlugin().onInvitationReceived(callbackID, () => {});
-      ZegoUIKit.getSignalingPlugin().onInvitationAccepted(callbackID, () => {});
-      ZegoUIKit.getSignalingPlugin().onInvitationRefused(callbackID, () => {});
-    };
-  }, [ZegoUIKit, userId, channelId, userName]);
+    return () => unsubscribe();
+  }, [call, userId, channelId, resolvedName]);
 
   const endFirestoreSession = async () => {
     // ✅ Prevent double-calling if session already ended
@@ -2143,16 +1982,12 @@ export default function HostLiveScreen(props: Props) {
       ).catch((e) => console.error("PK Host Score Increment Error:", e));
 
       // Broadcast like to other participants (optional, for immediate feedback)
-      if (ZegoUIKit && isLiveStarted) {
-        ZegoUIKit.sendInRoomCommand(
-          JSON.stringify({
-            type: "PK_LIKE",
-            count: 1,
-            hostId: userId,
-          }),
-          [],
-          () => {},
-        );
+      if (isLiveStarted && call) {
+        call.sendCustomEvent({
+          type: "PK_LIKE",
+          count: 1,
+          hostId: userId,
+        }).catch((e: any) => console.error("PK Like Broadcast Error:", e));
       }
     }
 
@@ -2938,368 +2773,6 @@ export default function HostLiveScreen(props: Props) {
           </TouchableOpacity>
         </View>
       )}
-      {/*
-
-        ref={prebuiltRef}
-        appID={ZEGO_APP_ID}
-        appSign={ZEGO_APP_SIGN}
-        userID={userId}
-        userName={
-          typeof userName === "string" && userName.trim().length > 0
-            ? userName
-            : "Host"
-        }
-        liveID={channelId}
-        config={{
-          ...HOST_DEFAULT_CONFIG,
-          inRoomChatConfig: {
-            itemBuilder: (message: any) => {
-              const senderName = message.sender.userName || "Viewer";
-              const isHostMsg =
-                senderName.trim().includes("Host") ||
-                senderName.trim() === "Bey3a" ||
-                message.sender.userID === userId;
-
-              return (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    paddingVertical: 6,
-                    paddingHorizontal: 14,
-                    backgroundColor: isHostMsg
-                      ? "rgba(239, 68, 68, 0.8)"
-                      : "rgba(0,0,0,0.5)",
-                    borderRadius: 18,
-                    marginVertical: 4,
-                    maxWidth: "90%",
-                    borderWidth: 1,
-                    borderColor: isHostMsg
-                      ? "rgba(255,255,255,0.4)"
-                      : "rgba(255,255,255,0.1)",
-                    alignSelf: "flex-start",
-                  }}
-                >
-                  <View>
-                    <Text style={{ fontSize: 13, lineHeight: 18 }}>
-                      <Text
-                        style={{
-                          color: isHostMsg ? "#FFD700" : "#A5F3FC",
-                          fontWeight: "900",
-                        }}
-                      >
-                        {senderName}:
-                      </Text>
-                      <Text style={{ color: "#fff", fontWeight: "500" }}>
-                        {" "}
-                        {message.message}
-                      </Text>
-                    </Text>
-                  </View>
-                </View>
-              );
-            },
-          },
-          role: ZegoLiveStreamingRole?.Host ?? 0,
-          confirmStartLive: true, // Show preview so styling applies
-          showStartLiveButton: true,
-          startLiveButtonBuilder: (onClick: any) => (
-            <TouchableOpacity
-              onPress={onClick}
-              activeOpacity={0.8}
-              style={{
-                width: 220,
-                height: 50,
-                borderRadius: 25,
-                overflow: "hidden",
-                shadowColor: "#EF4444",
-                shadowOpacity: 0.5,
-                shadowRadius: 15,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 12,
-                marginBottom: 60, // Move up slightly
-                alignSelf: "center",
-              }}
-            >
-              <LinearGradient
-                colors={["#EF4444", "#B91C1C"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 20,
-                  gap: 10,
-                }}
-              >
-                <Radio size={18} color="#FFF" />
-                <Text
-                  style={{
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: "900",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                    textAlign: "center",
-                  }}
-                >
-                  {t ? t("startLive") : "START LIVE"}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          ),
-          onStartLiveButtonPressed: () => {
-            console.log("🎬 Host Pressed Start!");
-            startFirestoreSession();
-          },
-          onLiveStreamingEnded: async () => {
-            console.log(
-              "🎬 [Host] Live streaming ended by SDK (Stop button pressed)",
-            );
-            await endFirestoreSession();
-            // Don't call onClose() here - let onLeaveLiveStreaming handle it
-          },
-          onLeaveLiveStreaming: async () => {
-            console.log(
-              "🎬 [Host] Host leaving live (X button or back pressed)",
-            );
-            await endFirestoreSession();
-            onClose();
-          },
-          durationConfig: {
-            isVisible: true,
-            onDurationUpdate: (duration: number) => {
-              // Can track duration if needed
-            },
-          },
-          topMenuBarConfig: {
-            buttons: [ZegoMenuBarButtonName.leaveButton],
-            buttonBuilders: {
-              leaveBuilder: CustomBuilder.leaveBuilder,
-              memberBuilder: CustomBuilder.memberBuilder,
-              hostAvatarBuilder: (host: any) => {
-                return (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: "rgba(0,0,0,0.5)",
-                      borderRadius: 20,
-                      paddingRight: 8,
-                      paddingVertical: 2,
-                      paddingLeft: 2,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        overflow: "hidden",
-                        borderWidth: 1,
-                        borderColor: "#fff",
-                      }}
-                    >
-                      <MemberAvatar
-                        userId={host.userID}
-                        userName={host.userName}
-                        defaultAvatar={CustomBuilder.getUserAvatar(host.userID)}
-                      />
-                    </View>
-                    <View style={{ marginLeft: 6, marginRight: 8 }}>
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 12,
-                          fontWeight: "bold",
-                        }}
-                        numberOfLines={1}
-                      >
-                        {host.userName}
-                      </Text>
-                      <Text
-                        style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}
-                      >
-                        {totalLikes} likes
-                      </Text>
-                    </View>
-                  </View>
-                );
-              },
-            },
-          },
-          // Manual PK Logic: The Prebuilt Kit v2.8.3 does not have native pkConfig support.
-          // We handle PK Battle logic manually via the signaling plugin and in-room commands.
-          pkConfig: {},
-          beautyConfig: {}, // Explicitly enable Beauty
-          bottomMenuBarConfig: {
-            maxCount: 8,
-            buttons: [
-              ZegoMenuBarButtonName.toggleCameraButton || "toggleCamera",
-              ZegoMenuBarButtonName.toggleMicrophoneButton ||
-                "toggleMicrophone",
-              ZegoMenuBarButtonName.switchCameraButton || "switchCamera",
-              ZegoMenuBarButtonName.chatButton || "chat",
-              // Note: coHostControlButton removed to prevent native Zego invite/remove UI
-              // Co-host management is handled via the memberList (3-dots menu) instead
-            ],
-            buttonBuilders: {
-              toggleCameraBuilder: CustomBuilder.toggleCameraBuilder,
-              toggleMicrophoneBuilder: CustomBuilder.toggleMicrophoneBuilder,
-              switchCameraBuilder: CustomBuilder.switchCameraBuilder,
-              switchAudioOutputBuilder: CustomBuilder.switchAudioOutputBuilder,
-              enableChatBuilder: CustomBuilder.enableChatBuilder,
-              chatBuilder: CustomBuilder.chatBuilder,
-              leaveBuilder: CustomBuilder.leaveBuilder,
-              memberBuilder: CustomBuilder.memberBuilder,
-              pkBattleBuilder: CustomBuilder.pkBattleBuilder,
-            },
-          },
-          onCoHostRequestReceived: (user: any) => {
-            console.log("📬 Co-host request from:", user.userName);
-            if (blockedApplying.includes(user.userID)) {
-              console.log("🚫 Auto-declining blocked user:", user.userName);
-              // Auto decline logic - the SDK usually handles the UI,
-              // but we can intercept or show nothing.
-              return;
-            }
-          },
-          memberListConfig: {
-            showCameraState: false,
-            showMicrophoneState: false,
-            avatarBuilder: (userInfo: any) => {
-              // Register user info in our map for later use in onMemberMoreButtonPressed
-              if (userInfo?.userID) {
-                roomUserMap.current.set(userInfo.userID, userInfo);
-              }
-
-              const showMe = userInfo.isSelf ? "You" : "";
-              const roleName =
-                userInfo.role === ZegoLiveStreamingRole.host
-                  ? "Host"
-                  : userInfo.role === ZegoLiveStreamingRole.coHost
-                    ? "Co-host"
-                    : "";
-              let roleDesc = "";
-              if (!showMe) {
-                roleDesc = `${roleName ? "(" + roleName + ")" : ""}`;
-              } else {
-                roleDesc = `(${showMe + (roleName ? "," + roleName : "")})`;
-              }
-
-              return (
-                <View style={styles.memberItemLeft}>
-                  <View style={styles.memberAvatar}>
-                    <MemberAvatar
-                      userId={userInfo?.userID}
-                      userName={userInfo?.userName}
-                      defaultAvatar={CustomBuilder.getUserAvatar(
-                        userInfo?.userID,
-                      )}
-                    />
-                  </View>
-                  <View style={[styles.memberName]}>
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: 16, color: "#FFFFFF" }}
-                    >
-                      {userInfo.userName}
-                      {roleDesc}
-                    </Text>
-                  </View>
-                </View>
-              );
-            },
-            onMemberMoreButtonPressed: async (item: any) => {
-              if (!item || !item.userID || item.userID === userId) return;
-
-              const looksLikeUserId = (s: string) =>
-                !s || (s.length > 20 && /^[a-zA-Z0-9_-]+$/.test(s));
-
-              // Start with the best name we have in the item itself
-              let targetName = item.userName || item.nickName;
-
-              // 1. Try resolving from our roomUserMap (most reliable cached data)
-              const roomUserInfo = roomUserMap.current.get(item.userID);
-              if (!targetName || looksLikeUserId(targetName)) {
-                targetName = roomUserInfo?.userName || roomUserInfo?.nickName;
-              }
-
-              // 2. Try ZegoUIKit directly
-              if (!targetName || looksLikeUserId(targetName)) {
-                try {
-                  const u = ZegoUIKit?.getUser(item.userID);
-                  if (u?.userName && !looksLikeUserId(u.userName))
-                    targetName = u.userName;
-                  else if (u?.nickName && !looksLikeUserId(u.nickName))
-                    targetName = u.nickName;
-                } catch (_) {}
-              }
-
-              // 3. Try global cache
-              if (!targetName || looksLikeUserId(targetName)) {
-                targetName = CustomBuilder.getUserName(item.userID);
-              }
-
-              // 4. Force Firestore fetch if still no real name
-              if (!targetName || looksLikeUserId(targetName)) {
-                try {
-                  const snap = await getDoc(doc(db, "users", item.userID));
-                  if (snap.exists()) {
-                    const data = snap.data();
-                    const foundName =
-                      data.fullName ||
-                      data.userName ||
-                      data.name ||
-                      data.displayName;
-                    if (foundName && !looksLikeUserId(foundName)) {
-                      targetName = foundName;
-                      CustomBuilder.registerUserName(item.userID, foundName);
-                    }
-                  }
-                } catch (e) {
-                  console.log("Error resolving name in menu:", e);
-                }
-              }
-
-              // 5. Final fallback
-              if (!targetName || looksLikeUserId(targetName))
-                targetName = "User";
-
-              // Open custom bottom sheet
-              setMemberActionSheet({
-                visible: true,
-                userId: item.userID,
-                userName: targetName,
-                isCoHost: roomUserInfo?.role === 1 || item.role === 1,
-                isBlocked: blockedApplying.includes(item.userID),
-                isMuted: mutedUsers.includes(item.userID),
-              });
-            },
-          },
-          onWindowMinimized: () => {
-            onClose();
-          },
-
-          onInRoomTextMessageReceived: (messages: any[]) => {
-            // ⚠️ DISABLED: Chat fallback causes duplicate gifts
-            // The onInRoomCommandReceived handler above is the primary method
-            // This fallback is only needed if commands fail completely
-
-            // Fallback: Check chat messages for gifts if command fails
-            messages.forEach((msg: any) => {
-              // Only process non-gift messages to avoid duplicates
-              if (msg.message && !msg.message.startsWith("🎁")) {
-                // Handle other chat messages here if needed
-              }
-            });
-          },
-        }}
-        plugins={ZIM ? [ZIM] : []}
-      />
-      */}
 
       {/* ALPHA VIDEO OVERLAY */}
       {/* GIFT ANIMATIONS (Full Screen Overlay) */}
@@ -4258,16 +3731,12 @@ export default function HostLiveScreen(props: Props) {
                         }
                       }
 
-                      if (isLiveStarted && ZegoUIKit) {
-                        ZegoUIKit.sendInRoomCommand(
-                          JSON.stringify({
-                            type: "PK_BATTLE_STOP",
-                            winner: winner,
-                            message: `${userName} has ended the battle.`,
-                          }),
-                          [],
-                          () => {},
-                        );
+                      if (isLiveStarted && call) {
+                        sendStreamCustomEvent({
+                          type: "PK_BATTLE_STOP",
+                          winner: winner,
+                          message: `${userName} has ended the battle.`,
+                        });
                       }
                       setShowPKInviteModal(false);
 
@@ -4411,38 +3880,25 @@ export default function HostLiveScreen(props: Props) {
                           onPress={() => {
                             const targetId =
                               session.hostId || session.channelId;
-                            if (ZegoUIKit && targetId) {
+                            if (targetId) {
                               const endTime = Date.now() + pkDuration * 1000;
-                              const invitationData = JSON.stringify({
+                              sendStreamCustomEvent({
+                                type: "PK_INVITE",
+                                inviterId: userId,
                                 inviterName: userName,
-                                roomID: channelId,
-                                type: "PK_REQUEST",
-                                duration: pkDuration,
+                                inviterChannelId: channelId,
+                                pkDuration: pkDuration,
                                 endTime: endTime,
+                              }, [targetId]).then(() => {
+                                setShowPKInviteModal(false);
+                                Alert.alert(
+                                  t("success") || "Request Sent",
+                                  `${t("challenge")} ${session.hostName}...`,
+                                );
+                              }).catch(err => {
+                                console.error("PK Invite Error:", err);
+                                Alert.alert("Error", "Failed to send challenge request.");
                               });
-                              ZegoUIKit.getSignalingPlugin()
-                                .sendInvitation(
-                                  userName,
-                                  [targetId],
-                                  60,
-                                  10,
-                                  invitationData,
-                                )
-                                .then(() => {
-                                  setShowPKInviteModal(false);
-                                  Alert.alert(
-                                    t("success") || "Request Sent",
-                                    `${t("challenge")} ${session.hostName}...`,
-                                  );
-                                })
-                                .catch((err: any) => {
-                                  console.log("PK Invitation Error:", err);
-                                  Alert.alert(
-                                    t("error") || "Error",
-                                    t("failedToSave") ||
-                                      "Could not send challenge.",
-                                  );
-                                });
                             }
                           }}
                         >
@@ -6374,23 +5830,15 @@ export default function HostLiveScreen(props: Props) {
                 onPress: () => {
                   setMemberActionSheet(null);
                   if (memberActionSheet.isCoHost) {
-                    safeZegoCommand({
+                    sendStreamCustomEvent({
                       type: "stop_cohosting",
                       target: memberActionSheet.userId,
                     });
                   } else {
-                    ZegoUIKit?.getSignalingPlugin()
-                      ?.sendInvitation(
-                        userName,
-                        [memberActionSheet.userId],
-                        60,
-                        2,
-                        JSON.stringify({ inviter_name: userName, type: 2 }),
-                      )
-                      .catch(() => {});
+                    // Zego co-host invitation removed
                     Alert.alert(
                       t("success") || "Success",
-                      `${t("invitationSentTo") || "Invitation sent to"} ${memberActionSheet.userName}`,
+                      `${t("invitationSentTo") || "Invitation sent to"} ${memberActionSheet.userName} (Stream)`,
                     );
                   }
                 },
@@ -6414,7 +5862,7 @@ export default function HostLiveScreen(props: Props) {
                       ? [...prev, memberActionSheet.userId]
                       : prev.filter((id) => id !== memberActionSheet.userId),
                   );
-                  safeZegoCommand({
+                  sendStreamCustomEvent({
                     type: "user_chat_mute",
                     targetUserId: memberActionSheet.userId,
                     muted: nowMuted,
@@ -6430,11 +5878,7 @@ export default function HostLiveScreen(props: Props) {
                 label: t("muteMicrophone") || "Mute Microphone",
                 sublabel: "Disable their audio in the live",
                 onPress: () => {
-                  try {
-                    const ZegoRN = require("@zegocloud/zego-uikit-rn").default;
-                    if (ZegoRN)
-                      ZegoRN.turnMicrophoneOn(memberActionSheet.userId, false);
-                  } catch (_) {}
+                  // Zego microphone control removed
                   setMemberActionSheet(null);
                 },
               },
@@ -6456,14 +5900,7 @@ export default function HostLiveScreen(props: Props) {
                         text: t("remove") || "Remove",
                         style: "destructive",
                         onPress: () => {
-                          try {
-                            const ZegoRN =
-                              require("@zegocloud/zego-uikit-rn").default;
-                            if (ZegoRN)
-                              ZegoRN.removeUserFromRoom([
-                                memberActionSheet.userId,
-                              ]);
-                          } catch (_) {}
+                          // Zego user removal removed
                         },
                       },
                     ],
