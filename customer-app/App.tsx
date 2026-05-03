@@ -269,7 +269,8 @@ import {
   StreamVideoClient,
   User as StreamUser,
 } from "@stream-io/video-react-native-sdk";
-import { STREAM_API_KEY, STREAM_TOKEN } from "./src/config/stream";
+import { STREAM_API_KEY } from "./src/config/stream";
+import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
 
 // New extracted imports
 import {
@@ -349,17 +350,6 @@ export const AnimatedAppText = Animated.createAnimatedComponent(Text);
 
 // Multi-language Translations
 
-const streamUser: StreamUser = {
-  id: "demo-user-7lPNsLOW",
-  name: "Demo User",
-};
-
-const streamClient = StreamVideoClient.getOrCreateInstance({
-  apiKey: STREAM_API_KEY,
-  user: streamUser,
-  token: STREAM_TOKEN,
-});
-
 export default function App() {
   const [fontsLoaded] = useFonts({
     Rubik_300Light,
@@ -381,6 +371,7 @@ export default function App() {
     | "PrivacyPolicy"
     | "TermsOfService"
   >("Onboarding");
+  const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(null);
   const [activeTab, setActiveTab] = useState("Home");
   const [previousTab, setPreviousTab] = useState("Home");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -1389,6 +1380,23 @@ export default function App() {
       if (u) {
         setUser(u);
         setAppState("Main");
+
+        // ── Initialize Stream Video Client with real Firebase user ──
+        try {
+          const { token, userId, name } = await getStreamTokenForCurrentUser();
+          const streamUser: StreamUser = { id: userId, name };
+          const client = StreamVideoClient.getOrCreateInstance({
+            apiKey: STREAM_API_KEY,
+            user: streamUser,
+            token,
+          });
+          setStreamClient(client);
+          console.log("✅ Stream client initialized for:", userId);
+        } catch (streamErr: any) {
+          console.warn("⚠️ Stream client init failed:", streamErr?.message);
+        }
+        // ────────────────────────────────────────────────────────────
+
         // Listen to user data changes in real-time
         const unsubscribeUser = onSnapshot(
           doc(db, "users", u.uid),
@@ -1445,6 +1453,11 @@ export default function App() {
         setUser(null);
         setProfileData(null);
         setWishlist([]);
+        // Disconnect Stream client on logout
+        if (streamClient) {
+          streamClient.disconnectUser().catch(() => {});
+          setStreamClient(null);
+        }
       }
     });
     return unsubscribe;
@@ -3266,7 +3279,7 @@ export default function App() {
       <ThemeContext.Provider
         value={{ theme, colors: getAppColors(theme), setTheme }}
       >
-        <StreamVideo client={streamClient}>
+        {streamClient ? <StreamVideo client={streamClient}>
           <SafeAreaProvider>
           <StatusBar
             barStyle={theme === "dark" ? "light-content" : "dark-content"}
@@ -3910,7 +3923,7 @@ export default function App() {
             </View>
           )}
           </SafeAreaProvider>
-        </StreamVideo>
+        </StreamVideo> : null}
       </ThemeContext.Provider>
     </GestureHandlerRootView>
   );
