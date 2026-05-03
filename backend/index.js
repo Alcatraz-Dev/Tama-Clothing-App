@@ -82,6 +82,62 @@ app.use('/api/payment', paymentRoutes);
 // Treasure Hunt Routes
 app.use('/api/treasure', treasureRoutes);
 
+// ─── Stream Video Token Endpoint ─────────────────────────────────────────────
+// POST /api/stream-token
+// Body: { firebaseIdToken: string }
+// Returns: { token: string, userId: string }
+app.post('/api/stream-token', async (req, res) => {
+  const { firebaseIdToken } = req.body;
+
+  if (!firebaseIdToken) {
+    return res.status(400).json({ error: 'firebaseIdToken is required' });
+  }
+
+  const streamSecret = process.env.STREAM_API_SECRET;
+  const streamApiKey = process.env.STREAM_API_KEY;
+
+  if (!streamSecret || streamSecret === 'YOUR_STREAM_API_SECRET_HERE') {
+    return res.status(503).json({ error: 'STREAM_API_SECRET not configured on backend' });
+  }
+
+  try {
+    // Verify Firebase ID token to get the real user UID
+    const decoded = await admin.auth().verifyIdToken(firebaseIdToken);
+    const userId = decoded.uid;
+    const userName = decoded.name || decoded.email || userId;
+
+    // Build Stream JWT — HS256 signed with the Stream API secret
+    const crypto = require('crypto');
+    const now = Math.floor(Date.now() / 1000);
+    const exp = now + 60 * 60 * 24; // 24 hours
+
+    const header  = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      user_id: userId,
+      sub: `user/${userId}`,
+      name: userName,
+      apiKey: streamApiKey,
+      iat: now,
+      exp,
+    })).toString('base64url');
+
+    const signature = crypto
+      .createHmac('sha256', streamSecret)
+      .update(`${header}.${payload}`)
+      .digest('base64url');
+
+    const token = `${header}.${payload}.${signature}`;
+
+    console.log(`✅ Stream token issued for Firebase UID: ${userId}`);
+    res.json({ token, userId, name: userName });
+  } catch (err) {
+    console.error('❌ Stream token error:', err.message);
+    res.status(401).json({ error: 'Invalid Firebase token', detail: err.message });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 // Upload Endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
