@@ -101,6 +101,8 @@ type Props = {
   brandId?: string;
   collabId?: string;
   hostAvatar?: string;
+  streamInitError?: string | null;
+  onRetryStreamInit?: () => void;
   onClose: () => void;
   t?: (key: string) => string;
   language?: "fr" | "ar" | "en";
@@ -198,6 +200,8 @@ export default function HostLiveScreen(props: Props) {
     brandId,
     collabId,
     hostAvatar,
+    streamInitError,
+    onRetryStreamInit,
     onClose,
     language,
   } = props;
@@ -245,9 +249,11 @@ export default function HostLiveScreen(props: Props) {
   const [call, setCall] = useState<any>(null);
 
   useEffect(() => {
-    if (!client || !channelId) return;
+    // If we have an initialization error, we don't proceed with call setup
+    if (streamInitError || !client || !channelId) return;
 
-    const _call = client.call("default", channelId);
+    let isMounted = true;
+    const _call = client.call("livestream", channelId);
 
     const unsubscribeCustomEvent = _call.on('custom', (event: any) => {
         if (event.custom?.type === 'stream:like') {
@@ -273,15 +279,25 @@ export default function HostLiveScreen(props: Props) {
         }
     });
 
-    _call
-      .join({ create: true })
-      .then(() => {
-        setCall(_call);
-        console.log("✅ Joined call:", channelId);
-      })
-      .catch((err) => {
-        console.error("❌ Failed to join call:", err);
-      });
+        // Use a timeout to prevent infinite loading if join hangs
+        const joinPromise = _call.join({ create: true });
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Join timeout after 15s")), 15000)
+        );
+
+        Promise.race([joinPromise, timeoutPromise])
+            .then(() => {
+                setCall(_call);
+                console.log("✅ Joined call as host:", channelId);
+            })
+            .catch(err => {
+                console.error("❌ Failed to join call as host:", err);
+                Alert.alert(
+                    t('connectionError') || "Erreur de connexion",
+                    t('joinFailedMsg') || "Impossible de rejoindre le direct. Veuillez réessayer.",
+                    [{ text: t('ok') || "OK", onPress: onClose }]
+                );
+            });
 
     return () => {
       unsubscribeCustomEvent();
@@ -1914,7 +1930,7 @@ export default function HostLiveScreen(props: Props) {
     }
 
     try {
-      // ✅ PK Forfeit Logic: If host leaves during PK, they lose.
+      // ✅ PK Forfeit Logic (Non-blocking)
       if (isInPKRef.current && channelId) {
         console.log("🏁 PK Active during exit. Declaring loser...");
         const winner = opponentNameRef.current || "Opponent";
@@ -1924,41 +1940,22 @@ export default function HostLiveScreen(props: Props) {
           endTime: Date.now(),
         };
 
-        // Update my room
-        await LiveSessionService.updatePKState(channelId, finalPkState).catch(
+        LiveSessionService.updatePKState(channelId, finalPkState).catch(
           (e) => console.error("Exit PK Update Error:", e),
         );
 
-        // Update opponent's room
         if (opponentChannelIdRef.current) {
           const opponentState = {
             ...finalPkState,
             hostName: opponentNameRef.current,
             opponentName: userName,
-            hostScore: guestScoreRef.current, // Opponent's score becomes their hostScore
-            guestScore: hostScoreRef.current, // Our score remains guestScore for them
+            hostScore: guestScoreRef.current,
+            guestScore: hostScoreRef.current,
           };
-          await LiveSessionService.updatePKState(
+          LiveSessionService.updatePKState(
             opponentChannelIdRef.current,
             opponentState,
           ).catch((e) => console.error("Exit Opponent PK Update Error:", e));
-        }
-
-        // Send signaling command (Optional, Firestore handles the truth)
-        if (isLiveStarted && ZegoUIKit) {
-          try {
-            ZegoUIKit.sendInRoomCommand(
-              JSON.stringify({
-                type: "PK_BATTLE_STOP",
-                winner: winner,
-                message: `${userName} has left the live streaming. You win!`,
-              }),
-              [],
-              () => {},
-            );
-          } catch (e) {
-            console.error("Exit PK Signaling Error:", e);
-          }
         }
       }
 
@@ -1968,21 +1965,31 @@ export default function HostLiveScreen(props: Props) {
       setIsLiveStarted(false);
       sessionEndedRef.current = true;
 
-      // 2. Update Firestore so audience knows it's over
-      await LiveSessionService.endSession(channelId);
-      console.log("🎬 Firestore session marked as 'ended'");
+      // 2. Update Firestore so audience knows it's over (background-ish)
+      LiveSessionService.endSession(channelId).catch(
+        e => console.error("❌ Firestore end session error:", e)
+      );
 
-      // 3. Leave the Stream call
+      // 3. Leave the Stream call with a timeout to prevent hanging
       if (call) {
-        await call.leave();
-        console.log("🎬 Stream call left");
+        try {
+          // Give it a short time to leave properly, but don't hang the UI
+          await Promise.race([
+            call.leave(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Stream leave timeout")), 2000))
+          ]);
+          console.log("🎬 Stream call left successfully");
+        } catch (e) {
+          console.warn("⚠️ Stream call leave timed out or failed:", e);
+        }
       }
 
-      // 4. Close the screen
+      // 4. Close the screen immediately after attempting cleanup
+      console.log("🎬 Calling onClose to return to Home");
       onClose();
     } catch (error) {
-      console.error("❌ Error ending firestore session:", error);
-      // Fallback: still close the screen
+      console.error("❌ Critical error in endFirestoreSession:", error);
+      // Fallback: ALWAYS close the screen
       onClose();
     }
   };
@@ -2094,10 +2101,47 @@ export default function HostLiveScreen(props: Props) {
     );
   };
 
+  if (streamInitError || !client) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <Radio size={64} color="#FFD700" style={{ marginBottom: 20, opacity: 0.5 }} />
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>
+            {streamInitError ? "Connection Error" : "Stream Service Loading..."}
+          </Text>
+          <Text style={{ color: '#aaa', fontSize: 14, textAlign: 'center', marginBottom: 30 }}>
+            {streamInitError || "The stream service is taking longer than usual to initialize."}
+          </Text>
+          
+          <TouchableOpacity 
+            style={{ 
+              backgroundColor: '#FFD700', 
+              paddingHorizontal: 40, 
+              paddingVertical: 12, 
+              borderRadius: 25,
+              width: 200,
+              alignItems: 'center'
+            }}
+            onPress={() => onRetryStreamInit?.()}
+          >
+            <Text style={{ color: '#000', fontWeight: 'bold' }}>Retry Connection</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ marginTop: 20, padding: 10 }}
+            onPress={onClose}
+          >
+            <Text style={{ color: '#aaa', textDecorationLine: 'underline' }}>Back to Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Stream Video Background */}
-      {client && call ? (
+      {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
             <CallContent layout="grid" />
@@ -2106,7 +2150,7 @@ export default function HostLiveScreen(props: Props) {
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
            <ActivityIndicator size="large" color="#fff" />
-           <Text style={{ color: '#fff', marginTop: 10 }}>{client ? 'Initializing Camera...' : 'Connecting to Stream...'}</Text>
+           <Text style={{ color: '#fff', marginTop: 10 }}>Initializing Camera...</Text>
         </View>
       )}
 

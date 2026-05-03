@@ -378,6 +378,8 @@ export default function App() {
     | "TermsOfService"
   >("Onboarding");
   const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(null);
+  const [streamInitError, setStreamInitError] = useState<string | null>(null);
+  const [isStreamInitializing, setIsStreamInitializing] = useState(false);
   const [activeTab, setActiveTab] = useState("Home");
   const [previousTab, setPreviousTab] = useState("Home");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -1366,19 +1368,37 @@ export default function App() {
     }
   }, [user]);
 
+  const initStreamClient = async () => {
+    if (!user?.uid || isStreamInitializing) return;
+    
+    setIsStreamInitializing(true);
+    setStreamInitError(null);
+    
+    try {
+      console.log("📡 Attempting to initialize Stream client...");
+      const { token, userId, name } = await getStreamTokenForCurrentUser();
+      const streamUser: StreamUser = { id: userId, name };
+      const client = StreamVideoClient.getOrCreateInstance({
+        apiKey: STREAM_API_KEY,
+        user: streamUser,
+        token,
+      });
+      setStreamClient(client);
+      setStreamInitError(null);
+      console.log("✅ Stream client initialized for:", userId);
+    } catch (streamErr: any) {
+      const errMsg = streamErr?.message || "Unknown stream error";
+      console.warn("⚠️ Stream client init failed:", errMsg);
+      setStreamInitError(errMsg);
+      setStreamClient(null);
+    } finally {
+      setIsStreamInitializing(false);
+    }
+  };
+
+
   useEffect(() => {
-    const fetchSocials = async () => {
-      try {
-        const docRef = doc(db, "settings", "socials");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setSocialLinks(snap.data());
-        }
-      } catch (err) {
-        console.error("Error fetching socials:", err);
-      }
-    };
-    fetchSocials();
+    // Initial data fetching if needed
   }, []);
 
   useEffect(() => {
@@ -1387,20 +1407,7 @@ export default function App() {
         setUser(u);
         setAppState("Main");
 
-        // ── Initialize Stream Video Client with real Firebase user ──
-        try {
-          const { token, userId, name } = await getStreamTokenForCurrentUser();
-          const streamUser: StreamUser = { id: userId, name };
-          const client = StreamVideoClient.getOrCreateInstance({
-            apiKey: STREAM_API_KEY,
-            user: streamUser,
-            token,
-          });
-          setStreamClient(client);
-          console.log("✅ Stream client initialized for:", userId);
-        } catch (streamErr: any) {
-          console.warn("⚠️ Stream client init failed:", streamErr?.message);
-        }
+        initStreamClient();
         // ────────────────────────────────────────────────────────────
 
         // Listen to user data changes in real-time
@@ -2205,6 +2212,8 @@ export default function App() {
               profileData?.avatarUrl ||
               user?.photoURL
             }
+            streamInitError={streamInitError}
+            onRetryStreamInit={initStreamClient}
           />
         ) : (
           <AudienceLiveScreen
@@ -2224,6 +2233,8 @@ export default function App() {
             t={t}
             language={language}
             profileData={profileData}
+            streamInitError={streamInitError}
+            onRetryStreamInit={initStreamClient}
           />
         );
       case "Notifications":

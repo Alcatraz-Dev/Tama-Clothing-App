@@ -77,6 +77,8 @@ type Props = {
     t?: (key: string) => string;
     language?: 'fr' | 'ar' | 'en';
     profileData?: any;
+    streamInitError?: string | null;
+    onRetryStreamInit?: () => void;
 };
 
 const MemberAvatar = ({ userId, userName, defaultAvatar }: { userId: string, userName: string, defaultAvatar?: string }) => {
@@ -118,7 +120,7 @@ export default function AudienceLiveScreen(props: Props) {
         return language === 'ar' ? ar : (language === 'fr' ? fr : en);
     };
   
-    const { channelId, userId, userName, userAvatar, onClose, language, profileData } = props;
+    const { channelId, userId, userName, userAvatar, onClose, language, profileData, streamInitError, onRetryStreamInit } = props;
 
     const getLocalizedName = (name: any): string => {
         // Handle undefined/null
@@ -162,9 +164,9 @@ export default function AudienceLiveScreen(props: Props) {
     const [call, setCall] = useState<any>(null);
 
     useEffect(() => {
-        if (!client || !channelId) return;
+        if (streamInitError || !client || !channelId) return;
         
-        const _call = client.call('default', channelId);
+        const _call = client.call('livestream', channelId);
         
         // Listen to custom events for low-latency updates
         const unsubscribeCustomEvent = _call.on('custom', (event: any) => {
@@ -211,19 +213,32 @@ export default function AudienceLiveScreen(props: Props) {
             }
         });
 
-        _call.join().then(() => {
-            setCall(_call);
-            console.log("✅ Joined call as audience:", channelId);
-        }).catch(err => {
-            console.error("❌ Failed to join call as audience:", err);
-        });
+        // Use a timeout to prevent infinite loading if join hangs
+        const joinPromise = _call.join();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Join timeout after 15s")), 15000)
+        );
+
+        Promise.race([joinPromise, timeoutPromise])
+            .then(() => {
+                setCall(_call);
+                console.log("✅ Joined call as audience:", channelId);
+            })
+            .catch(err => {
+                console.error("❌ Failed to join call as audience:", err);
+                Alert.alert(
+                    t('connectionError') || "Erreur de connexion",
+                    t('joinFailedMsg') || "Impossible de rejoindre le direct. Veuillez réessayer.",
+                    [{ text: t('ok') || "OK", onPress: onClose }]
+                );
+            });
 
         return () => {
             unsubscribeCustomEvent();
             unsubscribeReaction();
             _call.leave().catch(err => console.error("❌ Failed to leave call:", err));
         };
-    }, [client, channelId]);
+    }, [client, channelId, streamInitError]);
 
     const prebuiltRef = useRef<any>(null);
 
@@ -1262,7 +1277,42 @@ export default function AudienceLiveScreen(props: Props) {
         );
     };
 
+    if (streamInitError || !client) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#FFD700" style={{ marginBottom: 20 }} />
+                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>
+                        {streamInitError ? "Connection Error" : "Live Service Loading..."}
+                    </Text>
+                    <Text style={{ color: '#aaa', fontSize: 14, textAlign: 'center', marginBottom: 30 }}>
+                        {streamInitError || "The live service is taking longer than usual to initialize."}
+                    </Text>
+                    
+                    <TouchableOpacity 
+                        style={{ 
+                            backgroundColor: '#FFD700', 
+                            paddingHorizontal: 40, 
+                            paddingVertical: 12, 
+                            borderRadius: 25,
+                            width: 200,
+                            alignItems: 'center'
+                        }}
+                        onPress={() => onRetryStreamInit?.()}
+                    >
+                        <Text style={{ color: '#000', fontWeight: 'bold' }}>Retry Connection</Text>
+                    </TouchableOpacity>
 
+                    <TouchableOpacity 
+                        style={{ marginTop: 20, padding: 10 }}
+                        onPress={onClose}
+                    >
+                        <Text style={{ color: '#aaa', textDecorationLine: 'underline' }}>Back to Home</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
 
 
 
@@ -1655,33 +1705,33 @@ export default function AudienceLiveScreen(props: Props) {
                 </Animatable.View>
             )}
 
-            {client && call ? (
-              <StreamCall call={call}>
-                <CallContent
-                  layout="grid"
-                />
-              </StreamCall>
+            {/* Stream Video Background */}
+            {call ? (
+                <View style={StyleSheet.absoluteFill}>
+                    <StreamCall call={call}>
+                        <CallContent layout="grid" />
+                    </StreamCall>
+                </View>
             ) : (
-              <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={{ color: "#fff", marginTop: 12 }}>{client ? t('connecting') || "Connecting..." : "Waiting for Stream Client..."}</Text>
-                
-                {/* Exit button even during connecting state */}
-                <TouchableOpacity 
-                    onPress={onClose}
-                    style={{
-                        marginTop: 30,
-                        paddingVertical: 10,
-                        paddingHorizontal: 20,
-                        backgroundColor: 'rgba(255,255,255,0.1)',
-                        borderRadius: 20,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.2)'
-                    }}
-                >
-                    <Text style={{ color: '#fff', fontWeight: '600' }}>{t('exit') || 'Exit'}</Text>
-                </TouchableOpacity>
-              </View>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={{ color: '#fff', marginTop: 10 }}>Joining Live Stream...</Text>
+                    
+                    <TouchableOpacity 
+                        onPress={onClose}
+                        style={{
+                            marginTop: 30,
+                            paddingVertical: 10,
+                            paddingHorizontal: 20,
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            borderRadius: 20,
+                            borderWidth: 1,
+                            borderColor: 'rgba(255,255,255,0.2)'
+                        }}
+                    >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>{t ? t('exit') : 'Exit'}</Text>
+                    </TouchableOpacity>
+                </View>
             )}
 
             {/* Always visible Exit Button for Audience (Top Right) */}
