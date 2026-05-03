@@ -40,13 +40,28 @@ import {
   PlusCircle,
   Send,
   Timer,
+  ArrowRight,
+  Gem,
+  QrCode,
+  Scan,
+  Copy,
+  CreditCard,
+  UserPlus,
+  UserCheck,
   Trophy,
-  User,
+  Ruler,
+  BrainCircuit,
+  Printer,
+  Sticker,
+  Settings,
   Users,
   ChessKingIcon,
   Coins,
+  User,
 } from "lucide-react-native";
 import Constants from "expo-constants";
+import { API_BASE_URL } from "../config/api";
+import { STREAM_API_KEY } from "../config/stream";
 import { CustomBuilder } from "../utils/CustomBuilder";
 import { LiveSessionService } from "../services/LiveSessionService";
 import { FlameCounter } from "../components/FlameCounter";
@@ -255,54 +270,61 @@ export default function HostLiveScreen(props: Props) {
     let isMounted = true;
     const _call = client.call("livestream", channelId);
 
-    const unsubscribeCustomEvent = _call.on('custom', (event: any) => {
-        if (event.custom?.type === 'stream:like') {
-            if (event.user?.id !== userId) {
-                const id = Date.now() + Math.random();
-                const x = Math.random() * 60 - 30;
-                setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
-                setTimeout(() => {
-                    setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
-                }, 3000);
-            }
+    const unsubscribeCustomEvent = _call.on("custom", (event: any) => {
+      if (event.custom?.type === "stream:like") {
+        if (event.user?.id !== userId) {
+          const id = Date.now() + Math.random();
+          const x = Math.random() * 60 - 30;
+          setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+          setTimeout(() => {
+            setFloatingHearts((prev: any) =>
+              prev.filter((h: any) => h.id !== id),
+            );
+          }, 3000);
         }
+      }
     });
 
-    const unsubscribeReaction = _call.on('call.reaction_new', (event: any) => {
-        if (event.user?.id !== userId && event.reaction?.type === 'like') {
-            const id = Date.now() + Math.random();
-            const x = Math.random() * 60 - 30;
-            setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
-            setTimeout(() => {
-                setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
-            }, 3000);
-        }
+    const unsubscribeReaction = _call.on("call.reaction_new", (event: any) => {
+      if (event.user?.id !== userId && event.reaction?.type === "like") {
+        const id = Date.now() + Math.random();
+        const x = Math.random() * 60 - 30;
+        setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+        setTimeout(() => {
+          setFloatingHearts((prev: any) =>
+            prev.filter((h: any) => h.id !== id),
+          );
+        }, 3000);
+      }
     });
 
-        // Use a timeout to prevent infinite loading if join hangs
-        const joinPromise = _call.join({ create: true });
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Join timeout after 15s")), 15000)
+    // Use a timeout to prevent infinite loading if join hangs
+    const joinPromise = _call.join({ create: true });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Join timeout after 15s")), 15000),
+    );
+
+    Promise.race([joinPromise, timeoutPromise])
+      .then(() => {
+        setCall(_call);
+        console.log("✅ Joined call as host:", channelId);
+      })
+      .catch((err) => {
+        console.error("❌ Failed to join call as host:", err);
+        Alert.alert(
+          t("connectionError") || "Erreur de connexion",
+          t("joinFailedMsg") ||
+            "Impossible de rejoindre le direct. Veuillez réessayer.",
+          [{ text: t("ok") || "OK", onPress: onClose }],
         );
-
-        Promise.race([joinPromise, timeoutPromise])
-            .then(() => {
-                setCall(_call);
-                console.log("✅ Joined call as host:", channelId);
-            })
-            .catch(err => {
-                console.error("❌ Failed to join call as host:", err);
-                Alert.alert(
-                    t('connectionError') || "Erreur de connexion",
-                    t('joinFailedMsg') || "Impossible de rejoindre le direct. Veuillez réessayer.",
-                    [{ text: t('ok') || "OK", onPress: onClose }]
-                );
-            });
+      });
 
     return () => {
       unsubscribeCustomEvent();
       unsubscribeReaction();
-      _call.leave().catch((err) => console.error("❌ Failed to leave call:", err));
+      _call
+        .leave()
+        .catch((err) => console.error("❌ Failed to leave call:", err));
     };
   }, [client, channelId]);
 
@@ -708,11 +730,13 @@ export default function HostLiveScreen(props: Props) {
 
       // Notify viewers via Stream Custom Event for low-latency update
       if (call) {
-        await call.sendCustomEvent({
-          type: "product:pin",
-          productId: id,
-          duration: duration || 0
-        }).catch((err: any) => console.log("Stream Event Error:", err));
+        await call
+          .sendCustomEvent({
+            type: "product:pin",
+            productId: id,
+            duration: duration || 0,
+          })
+          .catch((err: any) => console.log("Stream Event Error:", err));
       }
 
       // Also ensure it's in the bag if pinned
@@ -779,12 +803,14 @@ export default function HostLiveScreen(props: Props) {
       setPinnedProduct(null);
       setPinEndTime(null);
       await LiveSessionService.unpinProduct(channelId);
-      
+
       // Notify viewers via Stream Custom Event
       if (call) {
-        await call.sendCustomEvent({
-          type: "product:unpin"
-        }).catch((err: any) => console.log("Stream Event Error:", err));
+        await call
+          .sendCustomEvent({
+            type: "product:unpin",
+          })
+          .catch((err: any) => console.log("Stream Event Error:", err));
       }
       console.log("✅ Product unpinned successfully");
     } catch (error) {
@@ -1432,15 +1458,18 @@ export default function HostLiveScreen(props: Props) {
         });
 
         // Record Transaction for Recipient (Earnings)
-        await addDoc(collection(db, "wallets", recipientWalletId, "transactions"), {
-          type: "gift_received",
-          amountDiamonds: earnings,
-          giftName: gift.name,
-          senderName: userName || "Host",
-          senderId: userId,
-          timestamp: serverTimestamp(),
-          status: "completed",
-        });
+        await addDoc(
+          collection(db, "wallets", recipientWalletId, "transactions"),
+          {
+            type: "gift_received",
+            amountDiamonds: earnings,
+            giftName: gift.name,
+            senderName: userName || "Host",
+            senderId: userId,
+            timestamp: serverTimestamp(),
+            status: "completed",
+          },
+        );
       }
 
       // Record Transaction for Host (Spending)
@@ -1940,8 +1969,8 @@ export default function HostLiveScreen(props: Props) {
           endTime: Date.now(),
         };
 
-        LiveSessionService.updatePKState(channelId, finalPkState).catch(
-          (e) => console.error("Exit PK Update Error:", e),
+        LiveSessionService.updatePKState(channelId, finalPkState).catch((e) =>
+          console.error("Exit PK Update Error:", e),
         );
 
         if (opponentChannelIdRef.current) {
@@ -1966,8 +1995,8 @@ export default function HostLiveScreen(props: Props) {
       sessionEndedRef.current = true;
 
       // 2. Update Firestore so audience knows it's over (background-ish)
-      LiveSessionService.endSession(channelId).catch(
-        e => console.error("❌ Firestore end session error:", e)
+      LiveSessionService.endSession(channelId).catch((e) =>
+        console.error("❌ Firestore end session error:", e),
       );
 
       // 3. Leave the Stream call with a timeout to prevent hanging
@@ -1976,7 +2005,9 @@ export default function HostLiveScreen(props: Props) {
           // Give it a short time to leave properly, but don't hang the UI
           await Promise.race([
             call.leave(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Stream leave timeout")), 2000))
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Stream leave timeout")), 2000),
+            ),
           ]);
           console.log("🎬 Stream call left successfully");
         } catch (e) {
@@ -1993,8 +2024,6 @@ export default function HostLiveScreen(props: Props) {
       onClose();
     }
   };
-
-
 
   // Gift Animation Logic (Image/WebP Overlay)
   async function showGiftAnimation(videoUrl?: string) {
@@ -2103,37 +2132,92 @@ export default function HostLiveScreen(props: Props) {
 
   if (streamInitError || !client) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
-        <View style={{ padding: 20, alignItems: 'center' }}>
-          <Radio size={64} color="#FFD700" style={{ marginBottom: 20, opacity: 0.5 }} />
-          <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>
+      <View
+        style={[
+          styles.container,
+          {
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#000",
+          },
+        ]}
+      >
+        <View style={{ padding: 20, alignItems: "center" }}>
+          <Radio
+            size={64}
+            color="#FFD700"
+            style={{ marginBottom: 20, opacity: 0.5 }}
+          />
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 18,
+              fontWeight: "bold",
+              textAlign: "center",
+              marginBottom: 10,
+            }}
+          >
             {streamInitError ? "Connection Error" : "Stream Service Loading..."}
           </Text>
-          <Text style={{ color: '#aaa', fontSize: 14, textAlign: 'center', marginBottom: 30 }}>
-            {streamInitError || "The stream service is taking longer than usual to initialize."}
+          <Text
+            style={{
+              color: "#aaa",
+              fontSize: 14,
+              textAlign: "center",
+              marginBottom: 30,
+            }}
+          >
+            {streamInitError ||
+              "The stream service is taking longer than usual to initialize."}
           </Text>
-          
-          <TouchableOpacity 
-            style={{ 
-              backgroundColor: '#FFD700', 
-              paddingHorizontal: 40, 
-              paddingVertical: 12, 
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#FFD700",
+              paddingHorizontal: 40,
+              paddingVertical: 12,
               borderRadius: 25,
               width: 200,
-              alignItems: 'center'
+              alignItems: "center",
             }}
             onPress={() => onRetryStreamInit?.()}
           >
-            <Text style={{ color: '#000', fontWeight: 'bold' }}>Retry Connection</Text>
+            <Text style={{ color: "#000", fontWeight: "bold" }}>
+              Retry Connection
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={{ marginTop: 20, padding: 10 }}
             onPress={onClose}
           >
-            <Text style={{ color: '#aaa', textDecorationLine: 'underline' }}>Back to Home</Text>
+            <Text style={{ color: "#aaa", textDecorationLine: "underline" }}>
+              Back to Home
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Floating Settings Button like in screenshot */}
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 150,
+            right: 30,
+            backgroundColor: "rgba(255,255,255,0.1)",
+            padding: 12,
+            borderRadius: 30,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+          onPress={() =>
+            Alert.alert(
+              "Connection Info",
+              `Backend: ${API_BASE_URL}\nStream Key: ${STREAM_API_KEY ? "Present" : "Missing"}`,
+            )
+          }
+        >
+          <Settings size={28} color="#fff" opacity={0.5} />
+        </TouchableOpacity>
       </View>
     );
   }
@@ -2148,9 +2232,20 @@ export default function HostLiveScreen(props: Props) {
           </StreamCall>
         </View>
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-           <ActivityIndicator size="large" color="#fff" />
-           <Text style={{ color: '#fff', marginTop: 10 }}>Initializing Camera...</Text>
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: "#000",
+              justifyContent: "center",
+              alignItems: "center",
+            },
+          ]}
+        >
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={{ color: "#fff", marginTop: 10 }}>
+            Initializing Camera...
+          </Text>
         </View>
       )}
 
@@ -2159,7 +2254,8 @@ export default function HostLiveScreen(props: Props) {
         onPress={() => {
           Alert.alert(
             t("endLiveTitle") || "End Live",
-            t("endLiveConfirm") || "Are you sure you want to end the live session?",
+            t("endLiveConfirm") ||
+              "Are you sure you want to end the live session?",
             [
               { text: t("cancel") || "Cancel", style: "cancel" },
               {
@@ -2167,7 +2263,7 @@ export default function HostLiveScreen(props: Props) {
                 style: "destructive",
                 onPress: endFirestoreSession,
               },
-            ]
+            ],
           );
         }}
         style={{
@@ -2705,64 +2801,69 @@ export default function HostLiveScreen(props: Props) {
         </Animatable.View>
       )}
 
-            {!isLiveStarted && (
-              <View style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.6)',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 100
-              }}>
-                <TouchableOpacity
-                  onPress={async () => {
-                    console.log("🎬 Host Pressed Start!");
-                    await startFirestoreSession();
-                    setIsLiveStarted(true);
-                  }}
-                  activeOpacity={0.8}
-                  style={{
-                    width: 220,
-                    height: 50,
-                    borderRadius: 25,
-                    overflow: "hidden",
-                    shadowColor: "#EF4444",
-                    shadowOpacity: 0.5,
-                    shadowRadius: 15,
-                    shadowOffset: { width: 0, height: 6 },
-                    elevation: 12,
-                  }}
-                >
-                  <LinearGradient
-                    colors={["#EF4444", "#B91C1C"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{
-                      flex: 1,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      paddingHorizontal: 20,
-                      gap: 10,
-                    }}
-                  >
-                    <Radio size={18} color="#FFF" />
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontSize: 13,
-                        fontWeight: "900",
-                        textTransform: "uppercase",
-                        letterSpacing: 0.5,
-                        textAlign: "center",
-                      }}
-                    >
-                      {t ? t("startLive") : "START LIVE"}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            )}
+      {!isLiveStarted && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <TouchableOpacity
+            onPress={async () => {
+              console.log("🎬 Host Pressed Start!");
+              await startFirestoreSession();
+              setIsLiveStarted(true);
+            }}
+            activeOpacity={0.8}
+            style={{
+              width: 220,
+              height: 50,
+              borderRadius: 25,
+              overflow: "hidden",
+              shadowColor: "#EF4444",
+              shadowOpacity: 0.5,
+              shadowRadius: 15,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: 12,
+            }}
+          >
+            <LinearGradient
+              colors={["#EF4444", "#B91C1C"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 20,
+                gap: 10,
+              }}
+            >
+              <Radio size={18} color="#FFF" />
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: "900",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                  textAlign: "center",
+                }}
+              >
+                {t ? t("startLive") : "START LIVE"}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
       {/*
 
         ref={prebuiltRef}
@@ -3125,7 +3226,6 @@ export default function HostLiveScreen(props: Props) {
         plugins={ZIM ? [ZIM] : []}
       />
       */}
-
 
       {/* ALPHA VIDEO OVERLAY */}
       {/* GIFT ANIMATIONS (Full Screen Overlay) */}
@@ -3596,7 +3696,6 @@ export default function HostLiveScreen(props: Props) {
           </View>
         </View>
       </Modal>
-
 
       {/* PINNED PRODUCT CARD OVERLAY (Matches Audience UI) */}
       {pinnedProduct && (
@@ -5535,8 +5634,7 @@ export default function HostLiveScreen(props: Props) {
         >
           <Animatable.View animation="slideInLeft" duration={400}>
             {(() => {
-              const isGradient =
-                (recentGift.points ?? 0) >= 10;
+              const isGradient = (recentGift.points ?? 0) >= 10;
               const content = (
                 <>
                   <View

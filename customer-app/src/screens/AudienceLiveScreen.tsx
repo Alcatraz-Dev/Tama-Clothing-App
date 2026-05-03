@@ -6,7 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
 import { CustomBuilder } from '../utils/CustomBuilder';
 import { LiveSessionService } from '../services/LiveSessionService';
-import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins, MessageSquareOff } from 'lucide-react-native';
+import { Gift as GiftIcon, Share2, Heart, Flame, Ticket, X, Clock, ShoppingBag, PlusCircle, Send, Timer, Trophy, User, Users, Coins, MessageSquareOff, Radio, Settings } from 'lucide-react-native';
+import { API_BASE_URL } from '../config/api';
+import { STREAM_API_KEY } from '../config/stream';
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot, increment, runTransaction, deleteDoc, addDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getOrCreateWallet } from '../services/codFinancialService';
 import { BlurView } from 'expo-blur';
@@ -1281,7 +1283,7 @@ export default function AudienceLiveScreen(props: Props) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
                 <View style={{ padding: 20, alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#FFD700" style={{ marginBottom: 20 }} />
+                    <Radio size={64} color="#FFD700" style={{ marginBottom: 20, opacity: 0.5 }} />
                     <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>
                         {streamInitError ? "Connection Error" : "Live Service Loading..."}
                     </Text>
@@ -1310,6 +1312,23 @@ export default function AudienceLiveScreen(props: Props) {
                         <Text style={{ color: '#aaa', textDecorationLine: 'underline' }}>Back to Home</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Floating Settings Button like in screenshot */}
+                <TouchableOpacity 
+                    style={{ 
+                        position: 'absolute', 
+                        top: 150, 
+                        right: 30, 
+                        backgroundColor: 'rgba(255,255,255,0.1)', 
+                        padding: 12, 
+                        borderRadius: 30,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)'
+                    }}
+                    onPress={() => Alert.alert("Connection Info", `Backend: ${API_BASE_URL}\nStream Key: ${STREAM_API_KEY ? 'Present' : 'Missing'}`)}
+                >
+                    <Settings size={28} color="#fff" opacity={0.5} />
+                </TouchableOpacity>
             </View>
         );
     }
