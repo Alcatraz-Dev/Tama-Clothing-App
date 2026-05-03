@@ -269,8 +269,7 @@ import {
   StreamVideoClient,
   User as StreamUser,
 } from "@stream-io/video-react-native-sdk";
-// ChatWrapper disabled - needs working backend for token generation
-// import { ChatWrapper } from "./src/components/ChatWrapper";
+import { ChatWrapper } from "./src/components/ChatWrapper";
 import { STREAM_API_KEY } from "./src/config/stream";
 import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
 import { API_BASE_URL } from "./src/config/api";
@@ -3363,6 +3362,7 @@ export default function App() {
           value={{ theme, colors: getAppColors(theme), setTheme }}
         >
           <ConditionalStreamVideo client={streamClient}>
+            <ChatWrapper>
             <SafeAreaProvider>
               <StatusBar
                 barStyle={theme === "dark" ? "light-content" : "dark-content"}
@@ -4021,7 +4021,8 @@ export default function App() {
                 </Modal>
               </View>
             )}
-</SafeAreaProvider>
+            </SafeAreaProvider>
+            </ChatWrapper>
           </ConditionalStreamVideo>
         </ThemeContext.Provider>
       </View>

@@ -13,7 +13,6 @@ import {
   MessageList,
   MessageInput,
   useChatContext,
-  Channel as ChannelType,
   Message,
 } from "stream-chat-react-native";
 import { BlurView } from "expo-blur";
@@ -43,7 +42,7 @@ export const LiveChatOverlay = ({
     console.log("Chat context not available");
   }
   
-  const [channel, setChannel] = useState<ChannelType | null>(null);
+  const [channel, setChannel] = useState<any>(null);
   const insets = useSafeAreaInsets();
 
   // Show message when chat is not available
@@ -73,7 +72,7 @@ export const LiveChatOverlay = ({
   useEffect(() => {
     if (!client || !channelId || !visible) return;
 
-    const ch = client.channel("messaging", channelId);
+    const ch = client.channel("livestream", channelId);
 
     // Try to watch the channel; if it doesn't exist, create it
     const setupChannel = async () => {
@@ -83,8 +82,6 @@ export const LiveChatOverlay = ({
       } catch (error: any) {
         console.log("Chat channel not found, creating...", error);
         try {
-          // Create channel with host as initial member - for now we add just system?
-          // We'll add the current user later when they join as viewer
           await ch.create();
           await ch.watch();
           setChannel(ch);
@@ -98,7 +95,6 @@ export const LiveChatOverlay = ({
 
     return () => {
       // We don't stop watching on close to keep messages cached
-      // but we could stop if needed
     };
   }, [client, channelId, visible]);
 
@@ -120,27 +116,13 @@ export const LiveChatOverlay = ({
 
           {/* Messages */}
           <Channel channel={channel}>
-            <MessageList
-              style={styles.messageList}
-              // Show avatars, etc.
-              renderMessage={(props) => {
-                // Custom message rendering can be done here
-                return <Message {...props} />;
-              }}
-            />
+            <View style={styles.messageListContainer}>
+              <MessageList />
+            </View>
 
             {/* Message Input */}
             <View style={styles.inputContainer}>
-              <MessageInput
-                style={styles.messageInput}
-                placeholder="Type a message..."
-                placeholderTextColor="#888"
-                sendButton={(props: any) => (
-                  <TouchableOpacity onPress={props.onSubmit} style={styles.sendButton}>
-                    <Send size={20} color="#FF0066" />
-                  </TouchableOpacity>
-                )}
-              />
+              <MessageInput />
             </View>
           </Channel>
         </View>
@@ -182,7 +164,7 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 1,
   },
-  messageList: {
+  messageListContainer: {
     flex: 1,
     backgroundColor: "transparent",
   },
@@ -190,17 +172,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#333",
     backgroundColor: "#1A1A1F",
-  },
-  messageInput: {
-    backgroundColor: "transparent",
-    borderRadius: 0,
-    padding: 10,
-    minHeight: 44,
-  },
-  sendButton: {
-    padding: 8,
-    justifyContent: "center",
-    alignItems: "center",
   },
   noChatContainer: {
     flex: 1,
