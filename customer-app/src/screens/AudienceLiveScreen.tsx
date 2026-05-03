@@ -82,6 +82,7 @@ import {
   ParticipantView,
   FloatingParticipantView,
 } from "@stream-io/video-react-native-sdk";
+import { hasVideo } from '@stream-io/video-client';
 import { useChatContext } from "stream-chat-react-native";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 
@@ -237,21 +238,20 @@ const AudienceStreamContent = ({
   totalLikes,
   isInPK,
 }: AudienceStreamContentProps) => {
-  const { useRemoteParticipants, useParticipantCount, useCameraState } = useCallStateHooks();
+  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
   const remote = useRemoteParticipants();
   const count = useParticipantCount();
-  const camState = useCameraState();
-  const isCameraOn = camState?.isEnabled ?? true;
   const host = remote[0] || remoteParticipants[0];
+  const isHostCameraOn = host ? hasVideo(host) : false;
   const viewerCount = count || participantCount;
 
   return (
     <>
-      {host && (
+      {host && isHostCameraOn && (
         <ParticipantView participant={host} style={StyleSheet.absoluteFill} />
       )}
 
-      {!isCameraOn && (
+      {(!host || !isHostCameraOn) && (
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
           <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{hostBrandName || "Host"}</Text>
@@ -2373,6 +2373,411 @@ export default function AudienceLiveScreen(props: Props) {
         onClose={() => setShowChat(false)}
         currentUserId={userId}
       />
+
+      {/* Gift Pill Notification */}
+      {recentGift && !recentGift.isBig && (
+        <View
+          style={{
+            position: "absolute",
+            top: isInPK ? 220 : 180,
+            left: 10,
+            zIndex: 10000,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Animatable.View animation="slideInLeft" duration={400}>
+            {(() => {
+              const isGradient = (recentGift.points ?? 0) >= 10;
+              const content = (
+                <>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "#FF0066",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1.5,
+                      borderColor: "rgba(255,255,255,0.8)",
+                      overflow: "hidden",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 3,
+                    }}
+                  >
+                    <Image
+                      source={
+                        recentGift.senderAvatar
+                          ? typeof recentGift.senderAvatar === "number"
+                            ? recentGift.senderAvatar
+                            : { uri: recentGift.senderAvatar }
+                          : {
+                              uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(recentGift.senderName || "User")}&background=random`,
+                            }
+                      }
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
+                  </View>
+
+                  <View style={{ marginLeft: 10, marginRight: 40 }}>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "bold",
+                        fontSize: 13,
+                        textShadowColor: "rgba(0,0,0,0.5)",
+                        textShadowRadius: 2,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {recentGift.senderName}
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#FBBF24",
+                        fontSize: 11,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {t("sentA") || "sent a"} {recentGift.giftName}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: 1,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 26,
+                      backgroundColor: "rgba(255, 255, 255, 0.25)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 2,
+                      borderColor: "rgba(255, 255, 255, 0.5)",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 4, height: 4 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 6,
+                      elevation: 8,
+                    }}
+                  >
+                    <Animatable.Image
+                      key={`gift-icon-${recentGift.count}`}
+                      animation="tada"
+                      duration={1000}
+                      source={
+                        typeof recentGift.icon === "number"
+                          ? recentGift.icon
+                          : { uri: recentGift.icon || "" }
+                      }
+                      style={{ width: 38, height: 38 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </>
+              );
+
+              return isGradient ? (
+                <LinearGradient
+                  colors={["#FF0066", "#A855F7"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    borderRadius: 40,
+                    paddingVertical: 4,
+                    paddingHorizontal: 6,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.5)",
+                    minWidth: 250,
+                  }}
+                >
+                  {content}
+                </LinearGradient>
+              ) : (
+                <BlurView
+                  intensity={95}
+                  tint="dark"
+                  style={{
+                    borderRadius: 40,
+                    paddingVertical: 4,
+                    paddingHorizontal: 6,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.3)",
+                    backgroundColor: "rgba(0,0,0,0.6)",
+                    minWidth: 250,
+                    overflow: "hidden",
+                  }}
+                >
+                  {content}
+                </BlurView>
+              );
+            })()}
+
+            {recentGift.count > 1 && (
+              <Animatable.View
+                key={`combo-${recentGift.count}`}
+                animation="bounceIn"
+                duration={500}
+                style={{ marginLeft: 35 }}
+              >
+                <Text
+                  style={{
+                    color: "#FBBF24",
+                    fontSize: 32,
+                    fontWeight: "900",
+                    fontStyle: "italic",
+                    textShadowColor: "#000",
+                    textShadowOffset: { width: 2, height: 2 },
+                    textShadowRadius: 4,
+                  }}
+                >
+                  x{recentGift.count}
+                </Text>
+              </Animatable.View>
+            )}
+          </Animatable.View>
+        </View>
+      )}
+
+      {/* Audience Gift Modal */}
+      <Modal
+        visible={showGifts}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowGifts(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowGifts(false)}
+          />
+          <View
+            style={{
+              backgroundColor: "#121218",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              height: Dimensions.get("window").height * 0.55,
+              paddingBottom: Platform.OS === "ios" ? 34 : 10,
+            }}
+          >
+            {/* Categories Bar */}
+            <View
+              style={{
+                flexDirection: "row",
+                borderBottomWidth: 1,
+                borderBottomColor: "#222",
+                paddingHorizontal: 10,
+              }}
+            >
+              {["POPULAIRE", "SPÉCIAL", "LUXE"].map((cat: any) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setGiftCategory(cat)}
+                  style={{
+                    paddingVertical: 15,
+                    paddingHorizontal: 20,
+                    borderBottomWidth: giftCategory === cat ? 2 : 0,
+                    borderBottomColor: "#FF0066",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: giftCategory === cat ? "#fff" : "#888",
+                      fontWeight: "bold",
+                      fontSize: 13,
+                    }}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Gift Grid */}
+            <FlatList
+              key={giftCategory}
+              numColumns={4}
+              data={GIFTS.filter((g) => {
+                if (giftCategory === "POPULAIRE") return g.points < 100;
+                if (giftCategory === "SPÉCIAL")
+                  return g.points >= 100 && g.points < 500;
+                if (giftCategory === "LUXE") return g.points >= 500;
+                return true;
+              })}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 10 }}
+              renderItem={({ item: gift }) => {
+                const isSelected = selectedGift?.id === gift.id;
+                return (
+                  <TouchableOpacity
+                    onPress={() => setSelectedGift(gift)}
+                    style={{
+                      width: "25%",
+                      aspectRatio: 0.85,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 5,
+                      marginVertical: 5,
+                      borderRadius: 12,
+                      backgroundColor: isSelected
+                        ? "rgba(255, 0, 102, 0.15)"
+                        : "transparent",
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? "#FF0066" : "transparent",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 55,
+                        height: 55,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 6,
+                      }}
+                    >
+                      <Image
+                        source={
+                          typeof gift.icon === "number"
+                            ? gift.icon
+                            : { uri: gift.icon }
+                        }
+                        style={{ width: 48, height: 48 }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
+                    >
+                      {gift.name}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 2,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: isSelected ? "#fff" : "#FFD700",
+                          fontSize: 9,
+                          fontWeight: "900",
+                        }}
+                      >
+                        {gift.points}
+                      </Text>
+                      <Coins
+                        size={8}
+                        color={isSelected ? "#fff" : "#FFD700"}
+                        style={{ marginLeft: 2 }}
+                        fill={isSelected ? "#fff" : "#FFD700"}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+
+            {/* Bottom Actions */}
+            <BlurView
+              intensity={90}
+              tint="dark"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                borderTopWidth: 1,
+                borderTopColor: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.1)",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 15,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}
+                  >
+                    {userBalance.toLocaleString()}
+                  </Text>
+                  <Coins
+                    size={12}
+                    color="#F59E0B"
+                    style={{ marginLeft: 4 }}
+                    fill="#F59E0B"
+                  />
+                  <TouchableOpacity
+                    style={{ marginLeft: 8 }}
+                    onPress={() => {
+                      setShowGifts(false);
+                    }}
+                  >
+                    <PlusCircle size={16} color="#FF0066" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (selectedGift) {
+                    sendGift(selectedGift);
+                    setSelectedGift(null);
+                  }
+                }}
+                disabled={!selectedGift}
+                style={{
+                  backgroundColor: selectedGift
+                    ? "#FF0066"
+                    : "rgba(255,255,255,0.1)",
+                  paddingHorizontal: 28,
+                  paddingVertical: 12,
+                  borderRadius: 25,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: selectedGift ? 1 : 0.5,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "900",
+                    fontSize: 15,
+                    marginRight: 8,
+                  }}
+                >
+                  {t("send") || "ENVOYER"}
+                </Text>
+                <Send size={18} color="#fff" />
+              </TouchableOpacity>
+            </BlurView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

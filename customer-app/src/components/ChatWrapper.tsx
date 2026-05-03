@@ -9,6 +9,7 @@ import { SafeAreaView, ActivityIndicator, StyleSheet, Text } from "react-native"
 import { getStreamTokenForCurrentUser } from "../services/streamAuth";
 import { auth } from "../api/firebase";
 import { LayoutProvider } from "../contexts/LayoutContext";
+import { View } from "react-native-animatable";
 
 const STREAM_API_KEY = require("../config/stream").STREAM_API_KEY;
 const STREAM_TOKEN = require("../config/stream").STREAM_TOKEN;
@@ -95,7 +96,7 @@ export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
   return (
     <LayoutProvider>
       <OverlayProvider i18nInstance={streami18n}>
-        <Chat client={chatClient} i18nInstance={streami18n}>
+        <Chat client={chatClient} i18nInstance={streami18n}> 
           {children}
         </Chat>
       </OverlayProvider>
