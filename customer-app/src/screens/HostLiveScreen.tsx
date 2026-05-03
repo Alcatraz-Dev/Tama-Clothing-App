@@ -69,6 +69,7 @@ import {
   FlipHorizontal,
   Square,
   CircleDot,
+  LayoutGrid,
 } from "lucide-react-native";
 import Constants from "expo-constants";
 import { API_BASE_URL } from "../config/api";
@@ -252,6 +253,8 @@ type HostStreamContentProps = {
   isRecording: boolean;
   activeCoupon: any;
   setShowCouponModal: (v: boolean) => void;
+  showGridModal: boolean;
+  setShowGridModal: (v: boolean) => void;
   sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
 };
 
@@ -274,14 +277,14 @@ const HostStreamContent = ({
   pinnedProductId,
   setPinnedProductId,
   setPinnedProduct,
-  setPinEndTime,
+setPinEndTime,
   showProductModal,
   setShowProductModal,
   showPollModal,
   setShowPollModal,
   showPKInviteModal,
   setShowPKInviteModal,
-activePoll,
+  activePoll,
   setActivePoll,
   durationSeconds,
   formatDuration,
@@ -292,6 +295,8 @@ activePoll,
   isRecording,
   activeCoupon,
   setShowCouponModal,
+  showGridModal,
+  setShowGridModal,
   sendStreamCustomEvent,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
@@ -447,6 +452,10 @@ activePoll,
         </TouchableOpacity>
         <TouchableOpacity onPress={toggleRecording} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)" }}>
           <Radio size={18} color="#fff" />
+        </TouchableOpacity>
+        {/* Grid Layout Customization Button */}
+        <TouchableOpacity onPress={() => setShowGridModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <LayoutGrid size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -817,6 +826,7 @@ export default function HostLiveScreen(props: Props) {
   const [pkWinner, setPkWinner] = useState<string | null>(null);
   // Coupon State
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showGridModal, setShowGridModal] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponType, setCouponType] = useState<
     "percentage" | "fixed" | "free_shipping"
@@ -2629,9 +2639,11 @@ durationSeconds={durationSeconds}
                  handleTakeScreenshot={handleTakeScreenshot}
                  toggleRecording={toggleRecording}
                  isRecording={isRecording}
-                 activeCoupon={activeCoupon}
-                 setShowCouponModal={setShowCouponModal}
-                 sendStreamCustomEvent={sendStreamCustomEvent}
+activeCoupon={activeCoupon}
+                  setShowCouponModal={setShowCouponModal}
+                  showGridModal={showGridModal}
+                  setShowGridModal={setShowGridModal}
+                  sendStreamCustomEvent={sendStreamCustomEvent}
                />
             </BackgroundFiltersProvider>
           </StreamCall>
@@ -5979,6 +5991,30 @@ durationSeconds={durationSeconds}
           </Animatable.View>
         )}
       </Modal>
+
+      {/* Grid Layout Customization Modal */}
+      <Modal visible={showGridModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowGridModal(false)} />
+          <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Grid Layout</Text>
+              <TouchableOpacity onPress={() => setShowGridModal(false)}>
+                <X size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              {["2x2", "3x3", "4x4", "5x5", "1x1"].map((layout) => (
+                <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>{layout}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animatable.View>
+        </View>
+      </Modal>
+
     </View>
   );
 }

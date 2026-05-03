@@ -248,7 +248,7 @@ const AudienceStreamContent = ({
   const isHostCameraOn = hostCameraOn !== undefined ? hostCameraOn : hasHostVideo;
   const viewerCount = count || participantCount;
 
-  return (
+return (
     <>
       {host && isHostCameraOn && (
         <ParticipantView participant={host} style={StyleSheet.absoluteFill} />
@@ -261,8 +261,14 @@ const AudienceStreamContent = ({
         </View>
       )}
 
+      {/* Top Bar - Live Info - Always show host info first */}
       <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {/* Host Avatar + Name in top left */}
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 }}>
+            <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#fff" }} />
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginLeft: 6 }} numberOfLines={1}>{hostBrandName || "Host"}</Text>
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
             <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
@@ -2374,12 +2380,14 @@ setPinnedProduct={setPinnedProduct}
           </TouchableOpacity>
         </View>
       )}
-      <LiveChatOverlay
-        visible={showChat}
-        channelId={channelId}
-        onClose={() => setShowChat(false)}
-        currentUserId={userId}
-      />
+<LiveChatOverlay
+         visible={showChat}
+         channelId={channelId}
+         onClose={() => setShowChat(false)}
+         currentUserId={userId}
+         hostAvatar={hostAvatar}
+         hostName={hostBrandName}
+       />
 
       {/* Gift Pill Notification */}
       {recentGift && !recentGift.isBig && (

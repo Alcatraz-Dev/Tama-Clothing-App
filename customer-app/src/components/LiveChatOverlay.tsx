@@ -7,6 +7,7 @@ import {
   Dimensions,
   StyleSheet,
   TextInput as RNTextInput,
+  Image,
 } from "react-native";
 import {
   Channel,
@@ -14,9 +15,10 @@ import {
   MessageInput,
   useChatContext,
   Message,
+  MessageStatus,
 } from "stream-chat-react-native";
 import { BlurView } from "expo-blur";
-import { X, Send } from "lucide-react-native";
+import { X, Send, Crown } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type LiveChatOverlayProps = {
@@ -24,6 +26,8 @@ type LiveChatOverlayProps = {
   channelId: string;
   onClose: () => void;
   currentUserId?: string;
+  hostAvatar?: string;
+  hostName?: string;
 };
 
 export const LiveChatOverlay = ({
@@ -31,6 +35,8 @@ export const LiveChatOverlay = ({
   channelId,
   onClose,
   currentUserId,
+  hostAvatar,
+  hostName,
 }: LiveChatOverlayProps) => {
   // Try to use chat context, but handle if not available
   let client = null;
@@ -45,6 +51,34 @@ export const LiveChatOverlay = ({
   const [channel, setChannel] = useState<any>(null);
   const insets = useSafeAreaInsets();
 
+  // Custom message component with avatar (TikTok style)
+  const renderMessage = (message: any) => {
+    const isHost = message.user?.id === channel?.data?.created_by?.id || 
+                   message.user?.name === hostName;
+    const avatarUri = message.user?.image || 
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(message.user?.name || "User")}&background=random`;
+    
+    return (
+      <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 4 }}>
+        <Image 
+          source={{ uri: avatarUri }} 
+          style={{ width: 32, height: 32, borderRadius: 16, marginRight: 8 }} 
+        />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {isHost && <Crown size={12} color="#FFD700" style={{ marginRight: 4 }} />}
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>
+              {message.user?.name || "User"}
+            </Text>
+          </View>
+          <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>
+            {message.text}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   // Show message when chat is not available
   if (!client) {
     return (
@@ -54,7 +88,13 @@ export const LiveChatOverlay = ({
           <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <View style={styles.header}>
               <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-              <Text style={styles.title}>Live Chat</Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {hostAvatar && (
+                  <Image source={{ uri: hostAvatar }} style={{ width: 32, height: 32, borderRadius: 16, marginRight: 8 }} />
+                )}
+                <Text style={styles.title}>Live Chat</Text>
+                {hostName && <Crown size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
+              </View>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <X size={24} color="#fff" />
               </TouchableOpacity>
@@ -105,10 +145,19 @@ export const LiveChatOverlay = ({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          {/* Header */}
+          {/* Header with Host Info - TikTok Style */}
           <View style={styles.header}>
             <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-            <Text style={styles.title}>Live Chat</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {hostAvatar && (
+                <Image 
+                  source={{ uri: hostAvatar }} 
+                  style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: "#fff" }} 
+                />
+              )}
+              <Text style={styles.title}>{hostName || "Live Chat"}</Text>
+              <Crown size={14} color="#FFD700" />
+            </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <X size={24} color="#fff" />
             </TouchableOpacity>
@@ -144,7 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0F0F13",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: Dimensions.get("window").height * 0.75,
+    height: Dimensions.get("window").height * 0.85,
     overflow: "hidden",
     paddingLeft: 12,
     paddingRight: 12,
@@ -161,7 +210,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     position: "relative",
     zIndex: 1,
@@ -175,6 +224,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#333",
     backgroundColor: "#1A1A1F",
     paddingHorizontal: 8,
+    paddingBottom: 20,
   },
   noChatContainer: {
     flex: 1,
