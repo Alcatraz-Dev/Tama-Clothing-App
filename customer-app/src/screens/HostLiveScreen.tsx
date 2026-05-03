@@ -346,7 +346,7 @@ const HostStreamContent = ({
       )}
 
       {selectedProductIds.length > 0 && (
-        <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
+        <View style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 250 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
             {products.filter((p) => selectedProductIds.includes(p.id)).map((p) => {
               const isPinned = pinnedProductId === p.id;
@@ -364,33 +364,6 @@ const HostStreamContent = ({
           </ScrollView>
         </View>
       )}
-
-      <View style={{ position: "absolute", bottom: 180, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
-        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
-          <Heart size={18} color="#fff" fill="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowProductModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          <ShoppingBag size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowPollModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)" }}>
-          <BarChart2 size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowPKInviteModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)" }}>
-          <Swords size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, zIndex: 400 }}>
-        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.toggle(); } catch (e) { console.error("Camera toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          {isCameraOn ? <Camera size={20} color="#fff" /> : <CameraOff size={20} color="#fff" />}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={async () => { try { if (microphone) await microphone.toggle(); } catch (e) { console.error("Mic toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          {isMicMuted ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.flip(); } catch (e) { console.error("Camera flip error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          <FlipHorizontal size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
 
       {activePoll && (
         <Animatable.View animation="slideInUp" duration={400} style={{ position: "absolute", bottom: 300, left: 15, right: 15, zIndex: 350 }}>
