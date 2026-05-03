@@ -340,13 +340,7 @@ export default function HostLiveScreen(props: Props) {
     };
 
     return (
-      <View style={StyleSheet.absoluteFill}>
-        {localParticipant && (
-          <ParticipantView
-            participant={localParticipant}
-            style={StyleSheet.absoluteFill}
-          />
-        )}
+      <>
         {/* Top-left AV controls */}
         <View
           style={{
@@ -355,6 +349,7 @@ export default function HostLiveScreen(props: Props) {
             left: 15,
             gap: 8,
             alignItems: "center",
+            zIndex: 9999,
           }}
         >
           {/* Mic Toggle */}
@@ -456,7 +451,7 @@ export default function HostLiveScreen(props: Props) {
             {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
           </Text>
         </View>
-      </View>
+      </>
     );
   };
   const client = useStreamVideoClient();
@@ -2491,7 +2486,7 @@ export default function HostLiveScreen(props: Props) {
                   humanizeParticipantCount={true}
                   showDuration={true}
                   showLiveBadge={true}
-                  showMuteButton={true}
+                  showMuteButton={false}
                   showSpeakerName={false}
                   floatingParticipantProps={{
                     muted: false,
@@ -2500,11 +2495,12 @@ export default function HostLiveScreen(props: Props) {
                     humanizeParticipantCount: true,
                     showDuration: true,
                     showLiveBadge: true,
-                    showMuteButton: true,
+                    showMuteButton: false,
                     showSpeakerName: false,
                     position: "top-right",
                   }}
                 />
+                <HostStreamUI />
               </View>
             </BackgroundFiltersProvider>
           </StreamCall>

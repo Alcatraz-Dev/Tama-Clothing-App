@@ -203,39 +203,7 @@ const AudienceStreamUI = ({ language }: { language: string }) => {
   const host = remoteParticipants[0];
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      {host ? (
-        <ParticipantView participant={host} style={StyleSheet.absoluteFill} />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              backgroundColor: "#000",
-              justifyContent: "center",
-              alignItems: "center",
-            },
-          ]}
-        >
-          <ActivityIndicator size="large" color="#F59E0B" />
-          <Text
-            style={{
-              color: "#fff",
-              marginTop: 15,
-              fontWeight: "700",
-              fontSize: 12,
-              letterSpacing: 1,
-            }}
-          >
-            {tr(
-              "WAITING FOR HOST...",
-              "EN ATTENTE DE L'HÔTE...",
-              "في انتظار المضيف...",
-            )}
-          </Text>
-        </View>
-      )}
-
+    <>
       {/* Viewer Count Overlay - Compact & Premium */}
       <View
         style={{
@@ -266,7 +234,7 @@ const AudienceStreamUI = ({ language }: { language: string }) => {
           {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
         </Text>
       </View>
-    </View>
+    </>
   );
 };
 
