@@ -350,6 +350,12 @@ export const AnimatedAppText = Animated.createAnimatedComponent(Text);
 
 // Multi-language Translations
 
+// --- HELPERS ---
+const ConditionalStreamVideo = ({ client, children }: { client: any; children: React.ReactNode }) => {
+  if (!client) return <>{children}</>;
+  return <StreamVideo client={client}>{children}</StreamVideo>;
+};
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     Rubik_300Light,
@@ -3279,7 +3285,7 @@ export default function App() {
       <ThemeContext.Provider
         value={{ theme, colors: getAppColors(theme), setTheme }}
       >
-        {streamClient ? <StreamVideo client={streamClient}>
+        <ConditionalStreamVideo client={streamClient}>
           <SafeAreaProvider>
           <StatusBar
             barStyle={theme === "dark" ? "light-content" : "dark-content"}
@@ -3923,7 +3929,7 @@ export default function App() {
             </View>
           )}
           </SafeAreaProvider>
-        </StreamVideo> : null}
+        </ConditionalStreamVideo>
       </ThemeContext.Provider>
     </GestureHandlerRootView>
   );
