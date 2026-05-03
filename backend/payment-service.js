@@ -7,15 +7,28 @@ const admin = require('firebase-admin');
 let db = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    let saString = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (saString.startsWith('"') && saString.endsWith('"')) {
+    let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+    if ((saString.startsWith('"') && saString.endsWith('"')) || 
+        (saString.startsWith("'") && saString.endsWith("'"))) {
       saString = saString.substring(1, saString.length - 1);
     }
-    const serviceAccount = JSON.parse(saString.replace(/\\n/g, '\n'));
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
+    
+    try {
+      const serviceAccount = JSON.parse(saString);
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+      }
+    } catch (parseError) {
+      console.error('Firebase Admin parse error in payment-service:', parseError.message);
+      // Fallback to file
+      const serviceAccount = require('./serviceAccountKey.json');
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+      }
     }
   } else {
     const serviceAccount = require('./serviceAccountKey.json');
@@ -27,7 +40,7 @@ try {
   }
   db = admin.firestore();
 } catch (error) {
-  console.error('Firebase Admin initialization error:', error.message);
+  console.error('Firebase Admin initialization error in payment-service:', error.message);
 }
 
 // ============================================================================

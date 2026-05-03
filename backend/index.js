@@ -41,26 +41,37 @@ app.use(bodyParser.json());
 // Initialize Firebase Admin
 let db = null;
 try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-      // Remove potential outer quotes (single or double)
-      if ((saString.startsWith('"') && saString.endsWith('"')) || 
-          (saString.startsWith("'") && saString.endsWith("'"))) {
-        saString = saString.substring(1, saString.length - 1);
-      }
-      
-      // Remove any actual control characters (like actual newlines) that might break JSON.parse
-      // but keep literal "\n" strings.
-      saString = saString.replace(/[\x00-\x1F]/g, '');
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+    
+    // Remove wrapping quotes if present
+    if ((saString.startsWith('"') && saString.endsWith('"')) || 
+        (saString.startsWith("'") && saString.endsWith("'"))) {
+      saString = saString.substring(1, saString.length - 1);
+    }
 
-      // Parse the JSON string. JSON.parse will handle escaped characters like \n automatically.
+    try {
+      // Robust JSON parsing: do NOT replace \\n with \n BEFORE parsing
+      // as it breaks the JSON string literal. JSON.parse handles \n correctly.
       const serviceAccount = JSON.parse(saString);
+      
       if (!admin.apps.length) {
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount)
         });
       }
       console.log('✅ Firebase Admin initialized via environment variable');
+    } catch (parseError) {
+      console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:', parseError.message);
+      // Fallback to file if env var fails
+      console.log('⚠️ Falling back to serviceAccountKey.json...');
+      const serviceAccount = require('./serviceAccountKey.json');
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+      }
+    }
   } else {
     const serviceAccount = require('./serviceAccountKey.json');
     if (!admin.apps.length) {
@@ -72,8 +83,7 @@ try {
   }
   db = admin.firestore();
 } catch (error) {
-  console.error('❌ CRITICAL: Firebase Admin could not be initialized.');
-  console.error('Reason:', error.message);
+  console.error('❌ CRITICAL: Firebase Admin could not be initialized:', error.message);
   console.log('Action: For local development, add serviceAccountKey.json. For production, set FIREBASE_SERVICE_ACCOUNT environment variable.');
 }
 
@@ -313,8 +323,9 @@ app.get('/api/brands', async (req, res) => {
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
+    console.log(`📡 Reachable at http://192.168.8.230:${PORT}`);
   });
 }
 
