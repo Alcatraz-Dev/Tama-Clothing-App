@@ -8,7 +8,8 @@ import {
 import { useTheme } from "@stream-io/video-react-native-sdk";
 import LayoutSwitcherModal from "./LayoutSwitcherModal";
 import { useLayout } from "../contexts/LayoutContext";
-import { Grid, SpotLight } from "../assets/icons";
+import { Grid } from "../assets/icons/Grid";
+import { SpotLight } from "../assets/icons/SpotLight";
 
 export const LayoutSwitcherButton = () => {
   const { theme } = useTheme();
