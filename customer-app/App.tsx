@@ -264,6 +264,13 @@ import {
   Campaign,
 } from "./src/services/TreasureHuntService";
 
+import {
+  StreamVideo,
+  StreamVideoClient,
+  User as StreamUser,
+} from "@stream-io/video-react-native-sdk";
+import { STREAM_API_KEY, STREAM_TOKEN } from "./src/config/stream";
+
 // New extracted imports
 import {
   ThemeContext,
@@ -341,6 +348,17 @@ const Text = AppText;
 export const AnimatedAppText = Animated.createAnimatedComponent(Text);
 
 // Multi-language Translations
+
+const streamUser: StreamUser = {
+  id: "demo-user-7lPNsLOW",
+  name: "Demo User",
+};
+
+const streamClient = StreamVideoClient.getOrCreateInstance({
+  apiKey: STREAM_API_KEY,
+  user: streamUser,
+  token: STREAM_TOKEN,
+});
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -3248,7 +3266,8 @@ export default function App() {
       <ThemeContext.Provider
         value={{ theme, colors: getAppColors(theme), setTheme }}
       >
-        <SafeAreaProvider>
+        <StreamVideo client={streamClient}>
+          <SafeAreaProvider>
           <StatusBar
             barStyle={theme === "dark" ? "light-content" : "dark-content"}
           />
@@ -3890,7 +3909,8 @@ export default function App() {
               </Modal>
             </View>
           )}
-        </SafeAreaProvider>
+          </SafeAreaProvider>
+        </StreamVideo>
       </ThemeContext.Provider>
     </GestureHandlerRootView>
   );

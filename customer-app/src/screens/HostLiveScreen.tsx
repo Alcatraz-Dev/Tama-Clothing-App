@@ -72,47 +72,25 @@ import { GIFTS, Gift } from "../config/gifts";
 import { RechargeModal } from "../components/RechargeModal";
 import { uploadToSanity } from "../utils/sanity";
 
-// ✅ Expo Go detection
+import {
+  StreamCall,
+  CallContent,
+  useStreamVideoClient,
+  StreamVideoClient,
+} from "@stream-io/video-react-native-sdk";
+
 const isExpoGo = Constants.executionEnvironment === "storeClient";
 
-// ✅ Conditionally import ZEGO and ZIM
+// ✅ Legacy Zego Mocks (Required after package removal to prevent crashes/errors)
 let ZegoUIKitPrebuiltLiveStreaming: any;
+let ZegoUIKit: any;
 let HOST_DEFAULT_CONFIG: any;
+let ZIM: any;
 let ZegoMenuBarButtonName: any;
 let ZegoLiveStreamingRole: any;
-let ZIM: any = null;
-let ZegoUIKit: any = null;
-let ZegoExpressEngine: any = null;
-let ZegoTextureView: any = null;
-let ZegoMediaPlayerState: any = null;
-let ZegoMultimediaLoadType: any = null;
-let ZegoAlphaLayoutType: any = null;
-let ZegoMediaPlayerResource: any = null;
-
-if (!isExpoGo) {
-  try {
-    const ZegoModule = require("@zegocloud/zego-uikit-prebuilt-live-streaming-rn");
-    ZegoMediaPlayerResource = ZegoModule.ZegoMediaPlayerResource;
-    ZegoUIKitPrebuiltLiveStreaming = ZegoModule.default;
-    HOST_DEFAULT_CONFIG = ZegoModule.HOST_DEFAULT_CONFIG;
-    ZegoMenuBarButtonName = ZegoModule.ZegoMenuBarButtonName;
-    ZegoLiveStreamingRole = ZegoModule.ZegoLiveStreamingRole;
-    ZIM = require("zego-zim-react-native");
-    ZegoUIKit = require("@zegocloud/zego-uikit-rn").default;
-
-    const ZegoExpress = require("zego-express-engine-react-native");
-    ZegoExpressEngine = ZegoExpress.default;
-    ZegoTextureView = ZegoExpress.ZegoTextureView;
-    ZegoMediaPlayerState = ZegoExpress.ZegoMediaPlayerState;
-    ZegoMultimediaLoadType = ZegoExpress.ZegoMultimediaLoadType;
-    ZegoAlphaLayoutType = ZegoExpress.ZegoAlphaLayoutType;
-    ZegoMediaPlayerResource = ZegoExpress.ZegoMediaPlayerResource;
-  } catch (e) {
-    console.log("ZEGO modules not available");
-  }
-}
 
 const ZEGO_APP_ID = 1327315162;
+
 const ZEGO_APP_SIGN =
   "2c0f518d65e837480793f1ebe41b0ad44e999bca88ef783b65ef4391b4514ace";
 
@@ -263,7 +241,28 @@ export default function HostLiveScreen(props: Props) {
     // Fallback for any other type
     return String(name) || "";
   };
-  const prebuiltRef = useRef<any>(null);
+  const client = useStreamVideoClient();
+  const [call, setCall] = useState<any>(null);
+
+  useEffect(() => {
+    if (!client || !channelId) return;
+
+    const _call = client.call("default", channelId);
+    _call
+      .join({ create: true })
+      .then(() => {
+        setCall(_call);
+        console.log("✅ Joined call:", channelId);
+      })
+      .catch((err) => {
+        console.error("❌ Failed to join call:", err);
+      });
+
+    return () => {
+      _call.leave().catch((err) => console.error("❌ Failed to leave call:", err));
+    };
+  }, [client, channelId]);
+
   const mediaViewRef = useRef<any>(null);
   const mediaPlayerRef = useRef<any>(null);
   const [blockedApplying, setBlockedApplying] = useState<string[]>([]);
@@ -2612,7 +2611,77 @@ export default function HostLiveScreen(props: Props) {
           </Animatable.View>
         </Animatable.View>
       )}
-      <ZegoUIKitPrebuiltLiveStreaming
+      {call ? (
+        <StreamCall call={call}>
+          <View style={{ flex: 1 }}>
+            <CallContent
+              layout="grid"
+            />
+
+            
+            {!isLiveStarted && (
+              <View style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 100
+              }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    console.log("🎬 Host Pressed Start!");
+                    await startFirestoreSession();
+                    setIsLiveStarted(true);
+                  }}
+                  activeOpacity={0.8}
+                  style={{
+                    width: 220,
+                    height: 50,
+                    borderRadius: 25,
+                    overflow: "hidden",
+                    shadowColor: "#EF4444",
+                    shadowOpacity: 0.5,
+                    shadowRadius: 15,
+                    shadowOffset: { width: 0, height: 6 },
+                    elevation: 12,
+                  }}
+                >
+                  <LinearGradient
+                    colors={["#EF4444", "#B91C1C"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 20,
+                      gap: 10,
+                    }}
+                  >
+                    <Radio size={18} color="#FFF" />
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 13,
+                        fontWeight: "900",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                        textAlign: "center",
+                      }}
+                    >
+                      {t ? t("startLive") : "START LIVE"}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </StreamCall>
+      ) : null}
+      {/*
+
         ref={prebuiltRef}
         appID={ZEGO_APP_ID}
         appSign={ZEGO_APP_SIGN}
@@ -2972,6 +3041,8 @@ export default function HostLiveScreen(props: Props) {
         }}
         plugins={ZIM ? [ZIM] : []}
       />
+      */}
+
 
       {/* ALPHA VIDEO OVERLAY */}
       {/* GIFT ANIMATIONS (Full Screen Overlay) */}

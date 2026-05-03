@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions, Clipboard, StyleSheet, View, findNodeHandle, TextInput, KeyboardAvoidingView, Platform, FlatList, Share } from 'react-native';
+import { Alert, Modal, Text, TouchableOpacity, Image, ScrollView, Animated, Easing, Dimensions, Clipboard, StyleSheet, View, findNodeHandle, TextInput, KeyboardAvoidingView, Platform, FlatList, Share, ActivityIndicator } from 'react-native';
+
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
@@ -14,19 +15,27 @@ import { db } from '../api/firebase';
 import { GIFTS, Gift } from '../config/gifts';
 import { RechargeModal } from '../components/RechargeModal';
 
+import {
+  StreamCall,
+  CallContent,
+  useStreamVideoClient,
+} from "@stream-io/video-react-native-sdk";
+
+
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
 
-// ✅ Conditionally import ZEGO and ZIM
+// ✅ Legacy Zego Mocks (Required after package removal to prevent crashes/errors)
 let ZegoUIKitPrebuiltLiveStreaming: any;
+let ZegoUIKit: any;
 let AUDIENCE_DEFAULT_CONFIG: any;
+let ZIM: any;
 let ZegoMenuBarButtonName: any;
 let ZegoLiveStreamingRole: any;
-let ZIM: any = null;
-let ZegoUIKit: any = null;
-let ZegoExpressEngine: any = null;
-let ZegoTextureView: any = null;
+let ZegoExpressEngine: any;
+let ZegoTextureView: any;
+
 let ZegoMediaPlayerState: any = null;
 let ZegoMultimediaLoadType: any = null;
 let ZegoAlphaLayoutType: any = null;
@@ -149,7 +158,27 @@ export default function AudienceLiveScreen(props: Props) {
         // Fallback for any other type
         return String(name) || '';
     };
+    const client = useStreamVideoClient();
+    const [call, setCall] = useState<any>(null);
+
+    useEffect(() => {
+        if (!client || !channelId) return;
+        
+        const _call = client.call('default', channelId);
+        _call.join().then(() => {
+            setCall(_call);
+            console.log("✅ Joined call as audience:", channelId);
+        }).catch(err => {
+            console.error("❌ Failed to join call as audience:", err);
+        });
+
+        return () => {
+            _call.leave().catch(err => console.error("❌ Failed to leave call:", err));
+        };
+    }, [client, channelId]);
+
     const prebuiltRef = useRef<any>(null);
+
     const mediaViewRef = useRef<any>(null);
     const mediaPlayerRef = useRef<any>(null);
     const [showGiftVideo, setShowGiftVideo] = useState(false);
@@ -1605,7 +1634,22 @@ export default function AudienceLiveScreen(props: Props) {
                 </Animatable.View>
             )}
 
+            {call ? (
+              <StreamCall call={call}>
+                <CallContent
+                  layout="grid"
+                />
+
+              </StreamCall>
+            ) : (
+              <View style={styles.container}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={{ color: "#fff", marginTop: 12 }}>Connecting...</Text>
+              </View>
+            )}
+            {/*
             <ZegoUIKitPrebuiltLiveStreaming
+
                 key={channelId} // Force remount on channel switch
                 appID={ZEGO_APP_ID}
                 appSign={ZEGO_APP_SIGN}
@@ -1831,6 +1875,8 @@ export default function AudienceLiveScreen(props: Props) {
                 }}
                 {...(ZIM ? { plugins: [ZIM] } : {})}
             />
+            */}
+
 
             {/* FULL SCREEN GIFT VIDEO OVERLAY */}
             {/* GIFT ANIMATIONS (Full Screen Overlay) */}
