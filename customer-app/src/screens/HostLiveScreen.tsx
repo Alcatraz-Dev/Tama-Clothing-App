@@ -248,6 +248,31 @@ export default function HostLiveScreen(props: Props) {
     if (!client || !channelId) return;
 
     const _call = client.call("default", channelId);
+
+    const unsubscribeCustomEvent = _call.on('custom', (event: any) => {
+        if (event.custom?.type === 'stream:like') {
+            if (event.user?.id !== userId) {
+                const id = Date.now() + Math.random();
+                const x = Math.random() * 60 - 30;
+                setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+                setTimeout(() => {
+                    setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
+                }, 3000);
+            }
+        }
+    });
+
+    const unsubscribeReaction = _call.on('call.reaction_new', (event: any) => {
+        if (event.user?.id !== userId && event.reaction?.type === 'like') {
+            const id = Date.now() + Math.random();
+            const x = Math.random() * 60 - 30;
+            setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+            setTimeout(() => {
+                setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
+            }, 3000);
+        }
+    });
+
     _call
       .join({ create: true })
       .then(() => {
@@ -259,6 +284,8 @@ export default function HostLiveScreen(props: Props) {
       });
 
     return () => {
+      unsubscribeCustomEvent();
+      unsubscribeReaction();
       _call.leave().catch((err) => console.error("❌ Failed to leave call:", err));
     };
   }, [client, channelId]);
@@ -663,6 +690,15 @@ export default function HostLiveScreen(props: Props) {
       // Pin product in Firestore - this syncs to audience
       await LiveSessionService.pinProduct(channelId, id, duration);
 
+      // Notify viewers via Stream Custom Event for low-latency update
+      if (call) {
+        await call.sendCustomEvent({
+          type: "product:pin",
+          productId: id,
+          duration: duration || 0
+        }).catch((err: any) => console.log("Stream Event Error:", err));
+      }
+
       // Also ensure it's in the bag if pinned
       if (!selectedProductIds.includes(id)) {
         const newIds = [...selectedProductIds, id];
@@ -727,6 +763,13 @@ export default function HostLiveScreen(props: Props) {
       setPinnedProduct(null);
       setPinEndTime(null);
       await LiveSessionService.unpinProduct(channelId);
+      
+      // Notify viewers via Stream Custom Event
+      if (call) {
+        await call.sendCustomEvent({
+          type: "product:unpin"
+        }).catch((err: any) => console.log("Stream Event Error:", err));
+      }
       console.log("✅ Product unpinned successfully");
     } catch (error) {
       console.error("Error unpinning product:", error);
@@ -1932,61 +1975,7 @@ export default function HostLiveScreen(props: Props) {
     }
   };
 
-  if (!ZegoUIKitPrebuiltLiveStreaming) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#000",
-          },
-        ]}
-      >
-        <View style={{ padding: 20, alignItems: "center" }}>
-          <Text
-            style={{
-              color: "#fff",
-              fontSize: 20,
-              fontWeight: "bold",
-              marginBottom: 10,
-              textAlign: "center",
-            }}
-          >
-            Live Streaming Unavailable
-          </Text>
-          <Text
-            style={{
-              color: "#ccc",
-              fontSize: 16,
-              textAlign: "center",
-              marginBottom: 30,
-            }}
-          >
-            Live Streaming features require native modules not available in Expo
-            Go. Please use a Development Build or the standalone app.
-          </Text>
-          <TouchableOpacity
-            onPress={async () => {
-              // ✅ End any potential session before closing (safety measure)
-              console.log("🎬 Expo Go: Ending session before close");
-              await endFirestoreSession();
-              onClose();
-            }}
-            style={{
-              backgroundColor: "#FF0055",
-              paddingHorizontal: 24,
-              paddingVertical: 12,
-              borderRadius: 25,
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+
 
   // Gift Animation Logic (Image/WebP Overlay)
   const showGiftAnimation = async (videoUrl?: string) => {

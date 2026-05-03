@@ -165,6 +165,52 @@ export default function AudienceLiveScreen(props: Props) {
         if (!client || !channelId) return;
         
         const _call = client.call('default', channelId);
+        
+        // Listen to custom events for low-latency updates
+        const unsubscribeCustomEvent = _call.on('custom', (event: any) => {
+            if (event.custom?.type === 'product:pin') {
+                console.log("⚡ Low-latency Stream Event: Product Pinned");
+                const productId = event.custom.productId;
+                const duration = event.custom.duration;
+                setPinEndTime(duration ? Date.now() + duration * 60 * 1000 : null);
+                
+                getDoc(doc(db, 'products', productId)).then((snap: any) => {
+                    if (snap.exists()) {
+                        setPinnedProduct({ id: snap.id, ...snap.data() });
+                    } else {
+                        setPinnedProduct(null);
+                    }
+                }).catch((error: any) => {
+                    console.error("Error fetching pinned product via stream event:", error);
+                    setPinnedProduct(null);
+                });
+            } else if (event.custom?.type === 'product:unpin') {
+                console.log("⚡ Low-latency Stream Event: Product Unpinned");
+                setPinnedProduct(null);
+                setPinEndTime(null);
+            } else if (event.custom?.type === 'stream:like') {
+                if (event.user?.id !== userId) {
+                    const id = ++heartCounter.current;
+                    const x = Math.random() * 60 - 30;
+                    setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+                    setTimeout(() => {
+                        setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
+                    }, 3000);
+                }
+            }
+        });
+
+        const unsubscribeReaction = _call.on('call.reaction_new', (event: any) => {
+            if (event.user?.id !== userId && event.reaction?.type === 'like') {
+                const id = ++heartCounter.current;
+                const x = Math.random() * 60 - 30;
+                setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+                setTimeout(() => {
+                    setFloatingHearts((prev: any) => prev.filter((h: any) => h.id !== id));
+                }, 3000);
+            }
+        });
+
         _call.join().then(() => {
             setCall(_call);
             console.log("✅ Joined call as audience:", channelId);
@@ -173,6 +219,8 @@ export default function AudienceLiveScreen(props: Props) {
         });
 
         return () => {
+            unsubscribeCustomEvent();
+            unsubscribeReaction();
             _call.leave().catch(err => console.error("❌ Failed to leave call:", err));
         };
     }, [client, channelId]);
@@ -1120,7 +1168,6 @@ export default function AudienceLiveScreen(props: Props) {
     const lastLikeSentTimeRef = useRef(0);
 
     const handleSendLike = () => {
-        if (!ZegoUIKit) return;
 
         // Visual effects
         const id = ++heartCounter.current;
@@ -1129,6 +1176,11 @@ export default function AudienceLiveScreen(props: Props) {
         setTimeout(() => {
             setFloatingHearts(prev => prev.filter(h => h.id !== id));
         }, 3000);
+
+        // Stream Native Reaction
+        if (call) {
+            call.sendReaction({ type: 'like', emoji_code: ':heart:' }).catch((e: any) => console.log('Reaction error', e));
+        }
 
         // Optimistic Updates
         setLikeCount(prev => prev + 1);
@@ -1146,13 +1198,15 @@ export default function AudienceLiveScreen(props: Props) {
 
             console.log(`❤️ Sending Batch Like (${countToSend}) to Host:`, streamHostIdRef.current);
 
-            // 1. Send Command (Fast, cheap)
-            ZegoUIKit.sendInRoomCommand(JSON.stringify({
-                type: 'PK_LIKE',
-                hostId: streamHostIdRef.current,
-                userName: userName,
-                count: countToSend
-            }), [], (res: any) => { if (res?.errorCode) console.error('SendCmd Error:', res) });
+            // 1. Stream Event instead of Zego InRoomCommand
+            if (call) {
+                call.sendCustomEvent({
+                    type: 'stream:like',
+                    hostId: streamHostIdRef.current,
+                    userName: userName,
+                    count: countToSend
+                }).catch((err: any) => console.log("Stream Event Error:", err));
+            }
 
             // 2. Update Firestore (Reliable, persistent)
             LiveSessionService.incrementLikes(channelId, countToSend).catch(e => console.error('Firestore Like Error:', e));
@@ -1210,40 +1264,7 @@ export default function AudienceLiveScreen(props: Props) {
 
 
 
-    if (!ZegoUIKitPrebuiltLiveStreaming) {
-        return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }}>
-                        Live Streaming Unavailable
-                    </Text>
-                    <Text style={{ color: '#ccc', fontSize: 16, textAlign: 'center', marginBottom: 30 }}>
-                        Live Streaming features require native modules not available in Expo Go. Please use a Development Build or the standalone app.
-                    </Text>
-                    <TouchableOpacity
-                        onPress={async () => {
-                            // ✅ Leave session before closing (decrement view count)
-                            console.log('🎬 Expo Go: Leaving session before close');
-                            try {
-                                await LiveSessionService.leaveSession(channelId);
-                            } catch (error) {
-                                console.error('Error leaving session:', error);
-                            }
-                            onClose();
-                        }}
-                        style={{
-                            backgroundColor: '#FF0055',
-                            paddingHorizontal: 24,
-                            paddingVertical: 12,
-                            borderRadius: 25,
-                        }}
-                    >
-                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Close</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
-    }
+
 
     return (
         <View style={styles.container}>
