@@ -318,7 +318,7 @@ if (!(isExpoGo && Platform.OS === "android")) {
 
 // --- LEGACY WRAPPERS & GLOBAL STATE ---
 let currentLang = "fr";
-const API_BASE_URL = "http://192.168.8.189:3000";
+const API_BASE_URL = "http://192.168.8.230:3000";
 
 // Legacy Colors support
 let Colors = getAppColors("dark");

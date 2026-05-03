@@ -41,20 +41,26 @@ app.use(bodyParser.json());
 // Initialize Firebase Admin
 let db = null;
 try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    let saString = process.env.FIREBASE_SERVICE_ACCOUNT;
-    // Remove potential outer quotes if the string was pasted with them
-    if (saString.startsWith('"') && saString.endsWith('"')) {
-      saString = saString.substring(1, saString.length - 1);
-    }
-    // Ensure escaped newlines are handled correctly
-    const serviceAccount = JSON.parse(saString.replace(/\\n/g, '\n'));
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-    console.log('✅ Firebase Admin initialized via environment variable');
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      let saString = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      // Remove potential outer quotes (single or double)
+      if ((saString.startsWith('"') && saString.endsWith('"')) || 
+          (saString.startsWith("'") && saString.endsWith("'"))) {
+        saString = saString.substring(1, saString.length - 1);
+      }
+      
+      // Remove any actual control characters (like actual newlines) that might break JSON.parse
+      // but keep literal "\n" strings.
+      saString = saString.replace(/[\x00-\x1F]/g, '');
+
+      // Parse the JSON string. JSON.parse will handle escaped characters like \n automatically.
+      const serviceAccount = JSON.parse(saString);
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+      }
+      console.log('✅ Firebase Admin initialized via environment variable');
   } else {
     const serviceAccount = require('./serviceAccountKey.json');
     if (!admin.apps.length) {
