@@ -269,6 +269,7 @@ import {
   StreamVideoClient,
   User as StreamUser,
 } from "@stream-io/video-react-native-sdk";
+import { ChatWrapper } from "./src/components/ChatWrapper";
 import { STREAM_API_KEY } from "./src/config/stream";
 import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
 import { API_BASE_URL } from "./src/config/api";
@@ -3326,15 +3327,16 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeContext.Provider
-        value={{ theme, colors: getAppColors(theme), setTheme }}
-      >
-        <ConditionalStreamVideo client={streamClient}>
-          <SafeAreaProvider>
-            <StatusBar
-              barStyle={theme === "dark" ? "light-content" : "dark-content"}
-            />
-            {appState === "Onboarding" ? (
+      <ChatWrapper>
+        <ThemeContext.Provider
+          value={{ theme, colors: getAppColors(theme), setTheme }}
+        >
+          <ConditionalStreamVideo client={streamClient}>
+            <SafeAreaProvider>
+              <StatusBar
+                barStyle={theme === "dark" ? "light-content" : "dark-content"}
+              />
+              {appState === "Onboarding" ? (
               <OnboardingScreen
                 onFinish={() => setAppState("Auth")}
                 t={t as any}
@@ -3983,6 +3985,7 @@ export default function App() {
           </SafeAreaProvider>
         </ConditionalStreamVideo>
       </ThemeContext.Provider>
+      </ChatWrapper>
     </GestureHandlerRootView>
   );
 }

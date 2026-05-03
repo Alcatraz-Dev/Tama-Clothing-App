@@ -58,6 +58,12 @@ import {
   ChessKingIcon,
   Coins,
   User,
+  Mic,
+  MicOff,
+  CameraOff,
+  FlipHorizontal,
+  Square,
+  CircleDot,
 } from "lucide-react-native";
 import Constants from "expo-constants";
 import { API_BASE_URL } from "../config/api";
@@ -93,7 +99,16 @@ import {
   StreamVideoClient,
   useCallStateHooks,
   ParticipantView,
+  BackgroundFiltersProvider,
+  useBackgroundFilters,
+  useScreenshot,
+  useAutoEnterPiPEffect,
+  useIsInPiPMode,
+  LivestreamLayout,
 } from "@stream-io/video-react-native-sdk";
+import { useChatContext } from "stream-chat-react-native";
+import { LiveChatOverlay } from "../components/LiveChatOverlay";
+import { MessageCircle, Camera, Video } from "lucide-react-native";
 
 // ✅ Stream SDK configuration handled via STREAM_API_KEY from config/stream
 
@@ -194,7 +209,6 @@ const MemberAvatar = ({
   );
 };
 
-
 export default function HostLiveScreen(props: Props) {
   const t = typeof props.t === "function" ? props.t : (key: string) => key;
   const {
@@ -217,12 +231,18 @@ export default function HostLiveScreen(props: Props) {
       try {
         const lang = language || "fr";
         const langKey = lang === "ar" ? "ar-tn" : lang;
-        if (name[langKey] && typeof name[langKey] === "string") return name[langKey];
+        if (name[langKey] && typeof name[langKey] === "string")
+          return name[langKey];
         if (name.fr && typeof name.fr === "string") return name.fr;
         if (name.en && typeof name.en === "string") return name.en;
         if (name.ar && typeof name.ar === "string") return name.ar;
-        return (Object.values(name).find(v => typeof v === "string") as string) || "";
-      } catch (e) { return ""; }
+        return (
+          (Object.values(name).find((v) => typeof v === "string") as string) ||
+          ""
+        );
+      } catch (e) {
+        return "";
+      }
     }
     return String(name) || "";
   };
@@ -232,9 +252,91 @@ export default function HostLiveScreen(props: Props) {
   };
 
   const HostStreamUI = () => {
-    const { useLocalParticipant, useParticipantCount } = useCallStateHooks();
+    const {
+      useLocalParticipant,
+      useParticipantCount,
+      useMicrophoneState,
+      useCameraState,
+    } = useCallStateHooks();
     const localParticipant = useLocalParticipant();
     const participantCount = useParticipantCount();
+
+    const { microphone, optimisticIsMute: isMicMuted } = useMicrophoneState();
+    const camState = useCameraState();
+    const { camera } = camState;
+    const isCamOn = camState.isEnabled;
+
+    const toggleMic = async () => {
+      try {
+        await microphone.toggle();
+      } catch (e) {
+        console.error("Mic toggle error:", e);
+      }
+    };
+
+    const toggleCam = async () => {
+      try {
+        await camera.toggle();
+      } catch (e) {
+        console.error("Camera toggle error:", e);
+      }
+    };
+
+    const switchCam = async () => {
+      try {
+        await camera.switchCamera();
+      } catch (e) {
+        console.error("Switch camera error:", e);
+      }
+    };
+
+    // Filter button using BackgroundFiltersProvider
+    const FilterButton = () => {
+      const {
+        isSupported,
+        applyBackgroundBlurFilter,
+        disableAllFilters,
+        currentBackgroundFilter,
+      } = useBackgroundFilters();
+
+      const toggleFilter = () => {
+        if (!isSupported) return;
+        if (!currentBackgroundFilter) {
+          applyBackgroundBlurFilter("medium");
+        } else if (currentBackgroundFilter.blur) {
+          const level = currentBackgroundFilter.blur;
+          if (level === "light") applyBackgroundBlurFilter("medium");
+          else if (level === "medium") applyBackgroundBlurFilter("heavy");
+          else disableAllFilters();
+        } else {
+          disableAllFilters();
+        }
+      };
+
+      if (!isSupported) return null;
+      return (
+        <TouchableOpacity
+          onPress={toggleFilter}
+          style={{
+            position: "absolute",
+            top: 50,
+            right: 15,
+            width: 37,
+            height: 37,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+            overflow: "hidden",
+          }}
+        >
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <Sparkles size={16} color="#fff" />
+        </TouchableOpacity>
+      );
+    };
 
     return (
       <View style={StyleSheet.absoluteFill}>
@@ -244,6 +346,86 @@ export default function HostLiveScreen(props: Props) {
             style={StyleSheet.absoluteFill}
           />
         )}
+        {/* Top-left AV controls */}
+        <View
+          style={{
+            position: "absolute",
+            top: 90,
+            left: 15,
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          {/* Mic Toggle */}
+          <TouchableOpacity
+            onPress={toggleMic}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            {isMicMuted ? (
+              <MicOff size={14} color="#fff" />
+            ) : (
+              <Mic size={14} color="#fff" />
+            )}
+          </TouchableOpacity>
+
+          {/* Camera Toggle */}
+          <TouchableOpacity
+            onPress={toggleCam}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            {!isCamOn ? (
+              <CameraOff size={14} color="#fff" />
+            ) : (
+              <Camera size={14} color="#fff" />
+            )}
+          </TouchableOpacity>
+
+          {/* Switch Camera */}
+          <TouchableOpacity
+            onPress={switchCam}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            <FlipHorizontal size={14} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Top-right Filter Button */}
+        <FilterButton />
+
+        {/* LIVE indicator */}
         <View
           style={{
             position: "absolute",
@@ -260,7 +442,15 @@ export default function HostLiveScreen(props: Props) {
             borderColor: "rgba(255,255,255,0.15)",
           }}
         >
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981", marginRight: 6 }} />
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: "#10B981",
+              marginRight: 6,
+            }}
+          />
           <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
             {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
           </Text>
@@ -269,15 +459,53 @@ export default function HostLiveScreen(props: Props) {
     );
   };
   const client = useStreamVideoClient();
+  const { client: chatClient } = useChatContext();
+  const { takeScreenshot } = useScreenshot();
   const [call, setCall] = useState<any>(null);
   const [resolvedName, setResolvedName] = useState(userName);
+  const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
+
+  // Auto-enter Picture-in-Picture when app backgrounds
+  useAutoEnterPiPEffect(false);
+  const isInPiP = useIsInPiPMode();
+
+  // Initialize chat channel when call becomes live
+  useEffect(() => {
+    if (!call || !chatClient || !channelId || !isLiveStarted) return;
+
+    const initChatChannel = async () => {
+      try {
+        const chatChannel = chatClient.channel("messaging", channelId);
+        // Try to watch; if fails, create
+        try {
+          await chatChannel.watch();
+          console.log("✅ Chat channel already exists");
+        } catch (err: any) {
+          if (err?.code === 2 || err?.message?.includes("not_found")) {
+            await chatClient
+              .channel("messaging", channelId, {
+                members: [{ user_id: userId }],
+                custom: { type: "livestream_chat" },
+              })
+              .create();
+            console.log("✅ Chat channel created");
+          }
+        }
+      } catch (e) {
+        console.error("Chat init error:", e);
+      }
+    };
+
+    initChatChannel();
+  }, [call, chatClient, channelId, userId, isLiveStarted]);
 
   useEffect(() => {
     if (userId) {
       getDoc(doc(db, "users", userId)).then((snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          const name = data.fullName || data.userName || data.name || data.displayName;
+          const name =
+            data.fullName || data.userName || data.name || data.displayName;
           if (name && name !== userId && !name.includes("@")) {
             setResolvedName(name);
             CustomBuilder.registerUserName(userId, name);
@@ -292,74 +520,117 @@ export default function HostLiveScreen(props: Props) {
     if (streamInitError || !client || !channelId) return;
 
     let isMounted = true;
-    const _call = client.call("livestream", channelId);
+    let timeoutId: NodeJS.Timeout;
+    let _call: any; // Declare outer so cleanup can access
+    let unsubscribeCustomEvent: (() => void) | null = null;
+    let unsubscribeReaction: (() => void) | null = null;
 
-    const unsubscribeCustomEvent = _call.on("custom", (event: any) => {
-      if (event.custom?.type === "stream:like") {
-        if (event.user?.id !== userId) {
-          const id = Date.now() + Math.random();
-          const x = Math.random() * 60 - 30;
-          setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
-          setTimeout(() => {
-            setFloatingHearts((prev: any) =>
-              prev.filter((h: any) => h.id !== id),
-            );
-          }, 3000);
-        }
-      }
-    });
+    const setupCall = async () => {
+      try {
+        // Create the call with proper livestream settings
+        _call = client.call("livestream", channelId);
 
-    const unsubscribeReaction = _call.on("call.reaction_new", (event: any) => {
-      if (event.user?.id !== userId && event.reaction?.type === "like") {
-        const id = Date.now() + Math.random();
-        const x = Math.random() * 60 - 30;
-        setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
-        setTimeout(() => {
-          setFloatingHearts((prev: any) =>
-            prev.filter((h: any) => h.id !== id),
-          );
-        }, 3000);
-      }
-    });
+        // Set up event listeners BEFORE joining
+        unsubscribeCustomEvent = _call.on("custom", (event: any) => {
+          if (event.custom?.type === "stream:like") {
+            if (event.user?.id !== userId) {
+              const id = Date.now() + Math.random();
+              const x = Math.random() * 60 - 30;
+              setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+              setTimeout(() => {
+                setFloatingHearts((prev: any) =>
+                  prev.filter((h: any) => h.id !== id),
+                );
+              }, 3000);
+            }
+          }
+        });
 
-    // Use getOrCreate with specific data to ensure the call is public/joinable
-    const joinPromise = _call
-      .getOrCreate()
-      .then(async () => {
+        unsubscribeReaction = _call.on("call.reaction_new", (event: any) => {
+          if (event.user?.id !== userId && event.reaction?.type === "like") {
+            const id = Date.now() + Math.random();
+            const x = Math.random() * 60 - 30;
+            setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+            setTimeout(() => {
+              setFloatingHearts((prev: any) =>
+                prev.filter((h: any) => h.id !== id),
+              );
+            }, 3000);
+          }
+        });
+
+        // Create or get existing call with proper livestream settings
+        // Use settings_override in data to configure call behavior
+        await _call.getOrCreate({
+          data: {
+            custom: {
+              type: "livestream",
+              hostId: userId,
+              hostName: userName,
+            },
+            settings_override: {
+              backstage: { enabled: true },
+              session: { inactivity_timeout_seconds: 30000 },
+              limits: { max_participants: 1000 },
+            },
+          },
+        });
+
+        // Join the call as host
         await _call.join();
+
+        // Wait a moment for join to settle
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         // Transition from backstage to live so audience can join
         await _call.goLive();
-      });
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Join timeout after 15s")), 15000),
-    );
+        if (!isMounted) return;
 
-    Promise.race([joinPromise, timeoutPromise])
-      .then(() => {
         setCall(_call);
-        console.log("✅ Joined call as host:", channelId);
-      })
-      .catch((err) => {
-        console.error("❌ Failed to join call as host:", err);
+        setIsLiveStarted(true);
+        console.log("✅ Host livestream started successfully:", channelId);
+
+        // Cleanup timeout
+        if (timeoutId) clearTimeout(timeoutId);
+      } catch (err: any) {
+        if (!isMounted) return;
+        console.error("❌ Failed to start livestream:", err);
         Alert.alert(
           t("connectionError") || "Erreur de connexion",
           t("joinFailedMsg") ||
-            "Impossible de rejoindre le direct. Veuillez réessayer.",
+            "Impossible de démarrer le direct. Veuillez réessayer.",
           [{ text: t("ok") || "OK", onPress: onClose }],
         );
-      });
-
-    return () => {
-      unsubscribeCustomEvent();
-      unsubscribeReaction();
-      if (_call.state.callingState !== "left") {
-        _call
-          .leave()
-          .catch((err) => console.error("❌ Failed to leave call:", err));
       }
     };
-  }, [client, channelId]);
+
+    // Set up timeout
+    timeoutId = setTimeout(() => {
+      if (isMounted) {
+        console.error("⏰ Livestream setup timeout after 30s");
+        Alert.alert(
+          "Timeout",
+          "Starting livestream took too long. Please check your connection.",
+          [{ text: "OK", onPress: onClose }],
+        );
+      }
+    }, 30000);
+
+    setupCall();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (unsubscribeCustomEvent) unsubscribeCustomEvent();
+      if (unsubscribeReaction) unsubscribeReaction();
+      if (_call && _call.state?.callingState !== "left") {
+        _call
+          .leave()
+          .catch((err: any) => console.error("❌ Failed to leave call:", err));
+      }
+    };
+  }, [client, channelId, userId, userName, t, onClose, streamInitError]);
 
   const mediaViewRef = useRef<any>(null);
   const mediaPlayerRef = useRef<any>(null);
@@ -439,7 +710,6 @@ export default function HostLiveScreen(props: Props) {
 
   // PK Timer State
   const [pkDuration, setPkDuration] = useState(180); // Default 3 minutes in seconds
-  const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
   const [pkTimeRemaining, setPkTimeRemaining] = useState(0);
   const [pkEndTime, setPkEndTime] = useState<number | null>(null);
   const [pkWinner, setPkWinner] = useState<string | null>(null);
@@ -456,8 +726,14 @@ export default function HostLiveScreen(props: Props) {
   const couponTimerRef = useRef<any>(null);
   const [showPKResult, setShowPKResult] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
-  const [inviter, setInviter] = useState<{ id: string; name: string; channelId: string } | null>(null);
-  const [inviteStatus, setInviteStatus] = useState<"received" | "sent" | "none">("none");
+  const [inviter, setInviter] = useState<{
+    id: string;
+    name: string;
+    channelId: string;
+  } | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<
+    "received" | "sent" | "none"
+  >("none");
 
   // Promo Video States
   const [promoUrl, setPromoUrl] = useState<string | null>(null);
@@ -470,6 +746,13 @@ export default function HostLiveScreen(props: Props) {
   const pkStartLikesRef = useRef(0); // Baseline for PK Score
   const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
   const sessionEndedRef = useRef(false); // Track if session has been ended to prevent double-calling
+
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  // Screenshot state
+  const [lastScreenshot, setLastScreenshot] = useState<string | null>(null);
 
   // Cleanup session on unmount
   useEffect(() => {
@@ -1021,7 +1304,10 @@ export default function HostLiveScreen(props: Props) {
   }, [totalLikes]);
 
   // ✅ Safe Stream command helper: replaces legacy Zego signaling
-  const sendStreamCustomEvent = async (payload: any, targets: string[] = []) => {
+  const sendStreamCustomEvent = async (
+    payload: any,
+    targets: string[] = [],
+  ) => {
     if (!call || !isLiveStarted) return;
     try {
       // Use Stream custom events for low-latency synchronization
@@ -1032,6 +1318,52 @@ export default function HostLiveScreen(props: Props) {
       console.error("Error sending custom event:", e);
     }
   };
+
+  // Chat toggle
+  const handleToggleChat = () => {
+    setShowChat(true);
+  };
+
+  // Screenshot handler
+  const handleTakeScreenshot = async () => {
+    if (!call) return;
+    try {
+      const localParticipant = call.state.localParticipant;
+      const base64 = await takeScreenshot(localParticipant, "videoTrack");
+      setLastScreenshot(base64);
+      Alert.alert("Screenshot", "Screenshot taken!");
+    } catch (error) {
+      console.error("Screenshot error:", error);
+      Alert.alert("Error", "Failed to take screenshot");
+    }
+  };
+
+  // Recording toggle
+  const toggleRecording = async () => {
+    if (!call) return;
+    try {
+      if (isRecording) {
+        await call.stopRecording();
+      } else {
+        await call.startRecording();
+      }
+    } catch (error) {
+      console.error("Recording error:", error);
+    }
+  };
+
+  // Listen for recording events to update state
+  useEffect(() => {
+    if (!call) return;
+    const onRecordingStarted = () => setIsRecording(true);
+    const onRecordingStopped = () => setIsRecording(false);
+    call.on("call.recording_started", onRecordingStarted);
+    call.on("call.recording_stopped", onRecordingStopped);
+    return () => {
+      call.off("call.recording_started", onRecordingStarted);
+      call.off("call.recording_stopped", onRecordingStopped);
+    };
+  }, [call]);
 
   // Periodically broadcast state to keep audience in sync (Stream)
   useEffect(() => {
@@ -1262,12 +1594,12 @@ export default function HostLiveScreen(props: Props) {
   const openGiftModal = () => {
     if (call) {
       // Get all participants, excluding the host themselves
-      const all = call.state.participants.filter(
-        (p: any) => p.userId !== userId,
-      ).map((p: any) => ({
-        userID: p.userId,
-        userName: p.name || p.userId,
-      }));
+      const all = call.state.participants
+        .filter((p: any) => p.userId !== userId)
+        .map((p: any) => ({
+          userID: p.userId,
+          userName: p.name || p.userId,
+        }));
       setRoomUsers(all);
       // Default to first user if available
       if (all.length > 0) setSelectedTargetUser(all[0]);
@@ -1596,7 +1928,6 @@ export default function HostLiveScreen(props: Props) {
         .catch((err) => console.error("Error getting wallet:", err));
     }
 
-
     console.log("🚀 HostLiveScreen mounted, waiting for promo selection...");
     // startFirestoreSession(); // Don't auto-start yet, wait for promo setup
 
@@ -1759,7 +2090,7 @@ export default function HostLiveScreen(props: Props) {
     }
   };
 
-    // Listen for Stream Custom Events (Gifts, PK, etc.)
+  // Listen for Stream Custom Events (Gifts, PK, etc.)
   useEffect(() => {
     if (!call) return;
 
@@ -1857,7 +2188,7 @@ export default function HostLiveScreen(props: Props) {
 
       // Handle Likes (Animations)
       if (data.type === "PK_LIKE") {
-        handleSendLike(); 
+        handleSendLike();
       }
     });
 
@@ -1983,11 +2314,13 @@ export default function HostLiveScreen(props: Props) {
 
       // Broadcast like to other participants (optional, for immediate feedback)
       if (isLiveStarted && call) {
-        call.sendCustomEvent({
-          type: "PK_LIKE",
-          count: 1,
-          hostId: userId,
-        }).catch((e: any) => console.error("PK Like Broadcast Error:", e));
+        call
+          .sendCustomEvent({
+            type: "PK_LIKE",
+            count: 1,
+            hostId: userId,
+          })
+          .catch((e: any) => console.error("PK Like Broadcast Error:", e));
       }
     }
 
@@ -2137,7 +2470,31 @@ export default function HostLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-            <HostStreamUI />
+            <BackgroundFiltersProvider>
+              {/* <HostStreamUI /> */}
+              <LivestreamLayout
+                //@ts-ignore
+                muted={false}
+                enableFullscreen={true}
+                showParticipantCount={true}
+                humanizeParticipantCount={true}
+                showDuration={true}
+                showLiveBadge={true}
+                showMuteButton={true}
+                showSpeakerName={false}
+                floatingParticipantProps={{
+                  muted: false,
+                  enableFullscreen: true,
+                  showParticipantCount: true,
+                  humanizeParticipantCount: true,
+                  showDuration: true,
+                  showLiveBadge: true,
+                  showMuteButton: true,
+                  showSpeakerName: false,
+                  position: "top-right",
+                }}
+              />
+            </BackgroundFiltersProvider>
           </StreamCall>
         </View>
       ) : (
@@ -3572,8 +3929,82 @@ export default function HostLiveScreen(props: Props) {
             <BlurView intensity={20} style={StyleSheet.absoluteFill} />
             <Share2 size={16} color="#fff" />
           </TouchableOpacity>
+
+          {/* Chat Button */}
+          <TouchableOpacity
+            onPress={() => setShowChat(true)}
+            style={{
+              width: 37,
+              height: 37,
+              borderRadius: 20,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            <MessageCircle size={16} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Screenshot Button */}
+          <TouchableOpacity
+            onPress={handleTakeScreenshot}
+            style={{
+              width: 37,
+              height: 37,
+              borderRadius: 20,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            <Camera size={16} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Recording Toggle Button */}
+          <TouchableOpacity
+            onPress={toggleRecording}
+            style={{
+              width: 37,
+              height: 37,
+              borderRadius: 20,
+              backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            {isRecording ? (
+              <LinearGradient
+                colors={["#EF4444", "#B91C1C"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ ...StyleSheet.absoluteFill, borderRadius: 20 }}
+              />
+            ) : (
+              <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            )}
+            <Radio size={16} color="#fff" />
+          </TouchableOpacity>
         </View>
       )}
+
+      {/* Live Chat Overlay */}
+      <LiveChatOverlay
+        visible={showChat}
+        channelId={channelId}
+        onClose={() => setShowChat(false)}
+        currentUserId={userId}
+      />
 
       {/* PK Invite Modal */}
       <Modal
@@ -3882,23 +4313,31 @@ export default function HostLiveScreen(props: Props) {
                               session.hostId || session.channelId;
                             if (targetId) {
                               const endTime = Date.now() + pkDuration * 1000;
-                              sendStreamCustomEvent({
-                                type: "PK_INVITE",
-                                inviterId: userId,
-                                inviterName: userName,
-                                inviterChannelId: channelId,
-                                pkDuration: pkDuration,
-                                endTime: endTime,
-                              }, [targetId]).then(() => {
-                                setShowPKInviteModal(false);
-                                Alert.alert(
-                                  t("success") || "Request Sent",
-                                  `${t("challenge")} ${session.hostName}...`,
-                                );
-                              }).catch(err => {
-                                console.error("PK Invite Error:", err);
-                                Alert.alert("Error", "Failed to send challenge request.");
-                              });
+                              sendStreamCustomEvent(
+                                {
+                                  type: "PK_INVITE",
+                                  inviterId: userId,
+                                  inviterName: userName,
+                                  inviterChannelId: channelId,
+                                  pkDuration: pkDuration,
+                                  endTime: endTime,
+                                },
+                                [targetId],
+                              )
+                                .then(() => {
+                                  setShowPKInviteModal(false);
+                                  Alert.alert(
+                                    t("success") || "Request Sent",
+                                    `${t("challenge")} ${session.hostName}...`,
+                                  );
+                                })
+                                .catch((err) => {
+                                  console.error("PK Invite Error:", err);
+                                  Alert.alert(
+                                    "Error",
+                                    "Failed to send challenge request.",
+                                  );
+                                });
                             }
                           }}
                         >

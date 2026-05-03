@@ -60,7 +60,13 @@
       "url": "https://u.expo.dev/3d48b864-f404-40a3-a69d-ac13e74fe8a2"
     },
     "plugins": [
-      "@stream-io/video-react-native-sdk",
+      [
+        "@stream-io/video-react-native-sdk",
+        {
+          "iOSEnableMultitaskingCameraAccess": true,
+          "androidPictureInPicture": true
+        }
+      ],
       [
         "@config-plugins/react-native-webrtc",
         {

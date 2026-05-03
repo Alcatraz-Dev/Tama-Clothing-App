@@ -45,6 +45,8 @@ import {
   MessageSquareOff,
   Radio,
   Settings,
+  MessageCircle,
+  Camera,
 } from "lucide-react-native";
 import { API_BASE_URL } from "../config/api";
 import { STREAM_API_KEY } from "../config/stream";
@@ -76,7 +78,10 @@ import {
   useStreamVideoClient,
   useCallStateHooks,
   ParticipantView,
+  LivestreamLayout,
 } from "@stream-io/video-react-native-sdk";
+import { useChatContext } from "stream-chat-react-native";
+import { LiveChatOverlay } from "../components/LiveChatOverlay";
 
 // ✅ Expo Go detection
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -323,6 +328,7 @@ export default function AudienceLiveScreen(props: Props) {
     return String(name) || "";
   };
   const client = useStreamVideoClient();
+  const { client: chatClient } = useChatContext();
   const [call, setCall] = useState<any>(null);
 
   useEffect(() => {
@@ -634,6 +640,11 @@ export default function AudienceLiveScreen(props: Props) {
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [hostId, setHostId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string | null>(null);
+
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  // Screenshot state
+  const [lastScreenshot, setLastScreenshot] = useState<string | null>(null);
 
   // Pinned Product Timer State
   const [pinEndTime, setPinEndTime] = useState<number | null>(null);
@@ -2245,7 +2256,29 @@ export default function AudienceLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-            <AudienceStreamUI language={language || "fr"} />
+            <LivestreamLayout
+              //@ts-ignore
+              muted={false}
+              enableFullscreen={true}
+              showParticipantCount={true}
+              humanizeParticipantCount={true}
+              showDuration={true}
+              showLiveBadge={true}
+              showMuteButton={true}
+              showSpeakerName={false}
+              floatingParticipantProps={{
+                muted: false,
+                enableFullscreen: true,
+                showParticipantCount: true,
+                humanizeParticipantCount: true,
+                showDuration: true,
+                showLiveBadge: true,
+                showMuteButton: true,
+                showSpeakerName: false,
+                position: "top-right",
+              }}
+            />
+            {/* <AudienceStreamUI language={language || "fr"} /> */}
           </StreamCall>
         </View>
       ) : (
