@@ -8,6 +8,7 @@ import {
 import { SafeAreaView, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { getStreamTokenForCurrentUser } from "../services/streamAuth";
 import { auth } from "../api/firebase";
+import { LayoutProvider } from "../contexts/LayoutContext";
 
 const STREAM_API_KEY = require("../config/stream").STREAM_API_KEY;
 const STREAM_TOKEN = require("../config/stream").STREAM_TOKEN;
@@ -80,8 +81,8 @@ export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
   if (!isReady || !chatClient) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Connecting to chat...</Text>
+        <ActivityIndicator size="large" color="#10B981" />
+        {/* <Text style={styles.loadingText}>Connecting to chat...</Text> */}
       </SafeAreaView>
     );
   }
@@ -92,11 +93,13 @@ export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
   }
 
   return (
-    <OverlayProvider i18nInstance={streami18n}>
-      <Chat client={chatClient} i18nInstance={streami18n}>
-        {children}
-      </Chat>
-    </OverlayProvider>
+    <LayoutProvider>
+      <OverlayProvider i18nInstance={streami18n}>
+        <Chat client={chatClient} i18nInstance={streami18n}>
+          {children}
+        </Chat>
+      </OverlayProvider>
+    </LayoutProvider>
   );
 };
 
