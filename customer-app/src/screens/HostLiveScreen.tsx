@@ -2084,6 +2084,15 @@ export default function HostLiveScreen(props: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Stream Video Background */}
+      {call && (
+        <View style={StyleSheet.absoluteFill}>
+          <StreamCall call={call}>
+            <CallContent layout="grid" />
+          </StreamCall>
+        </View>
+      )}
+
       {/* Flame Counter */}
       {/* Flame Counter - ONLY if reach 50 */}
       {totalLikes >= 50 && (
@@ -2600,14 +2609,7 @@ export default function HostLiveScreen(props: Props) {
           </Animatable.View>
         </Animatable.View>
       )}
-      {call ? (
-        <StreamCall call={call}>
-          <View style={{ flex: 1 }}>
-            <CallContent
-              layout="grid"
-            />
 
-            
             {!isLiveStarted && (
               <View style={{
                 position: 'absolute',
@@ -2666,9 +2668,6 @@ export default function HostLiveScreen(props: Props) {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        </StreamCall>
-      ) : null}
       {/*
 
         ref={prebuiltRef}
