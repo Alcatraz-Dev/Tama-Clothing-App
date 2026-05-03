@@ -586,7 +586,7 @@ export default function HostLiveScreen(props: Props) {
             },
             settings_override: {
               backstage: { enabled: true },
-              session: { inactivity_timeout_seconds: 30000 },
+              session: { inactivity_timeout_seconds: 900 },
               limits: { max_participants: 1000 },
             },
           },

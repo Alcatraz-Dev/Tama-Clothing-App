@@ -1399,13 +1399,16 @@ export default function App() {
       let finalName = targetUser.displayName || targetUser.email?.split('@')[0] || "Demo User";
       
       try {
+        console.log("📡 Fetching token from backend:", `${API_BASE_URL}/api/stream-token`);
         const { token: realToken, userId: realUserId, name: backendName } = await getStreamTokenForCurrentUser();
+        console.log("✅ Got token for user:", realUserId);
         token = realToken;
         userId = realUserId;
         if (backendName) finalName = backendName;
-      } catch (tokenErr) {
-        console.log("⚠️ Token fetch failed - skipping Stream Video (no backend)");
-        setStreamInitError("Stream service unavailable - requires backend setup");
+      } catch (tokenErr: any) {
+        console.log("⚠️ Token fetch failed:", tokenErr?.message || tokenErr);
+        console.log("⚠️ This usually means: backend not running, wrong API URL, or network issue");
+        setStreamInitError("Stream service unavailable - check network/backend");
         setStreamClient(null);
         setIsStreamInitializing(false);
         return;

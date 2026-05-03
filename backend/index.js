@@ -133,6 +133,7 @@ app.post('/api/stream-token', async (req, res) => {
       sub: `user/${userId}`,
       name: userName,
       apiKey: streamApiKey,
+      role: 'host', // Grant host role for livestream permissions
       iat: now,
       exp,
     })).toString('base64url');
