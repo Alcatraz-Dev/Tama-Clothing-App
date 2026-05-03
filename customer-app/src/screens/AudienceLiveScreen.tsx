@@ -337,6 +337,8 @@ export default function AudienceLiveScreen(props: Props) {
     userId,
     userName,
     userAvatar,
+    hostAvatar,
+    hostBrandName,
     onClose,
     language,
     profileData,

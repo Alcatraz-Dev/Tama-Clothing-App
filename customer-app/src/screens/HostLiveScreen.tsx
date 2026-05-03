@@ -217,6 +217,7 @@ const MemberAvatar = ({
 
 type HostStreamContentProps = {
   hostAvatar?: string;
+  brandName: string;
   resolvedName: string;
   userName: string;
   t: (key: string) => string;
@@ -248,6 +249,7 @@ type HostStreamContentProps = {
 
 const HostStreamContent = ({
   hostAvatar,
+  brandName,
   resolvedName,
   userName,
   t,
@@ -297,8 +299,8 @@ const HostStreamContent = ({
 
       {!isCameraOn && (
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
-          <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
-          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{resolvedName || userName}</Text>
+          <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
+          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{brandName || resolvedName || userName}</Text>
         </View>
       )}
 
@@ -693,7 +695,8 @@ export default function HostLiveScreen(props: Props) {
 
   const [call, setCall] = useState<any>(null);
   const [resolvedName, setResolvedName] = useState(userName);
-  const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
+  const [brandName, setBrandName] = useState<string>("");
+  const [isLiveStarted, setIsLiveStarted] = useState(false);
 
   // Auto-enter Picture-in-Picture when app backgrounds
   useAutoEnterPiPEffect(false);
@@ -744,6 +747,43 @@ export default function HostLiveScreen(props: Props) {
       });
     }
   }, [userId]);
+
+  // Fetch brand name from Firestore
+  useEffect(() => {
+    const fetchBrandName = async () => {
+      try {
+        // First try to get brand name from collaborations collection
+        if (collabId && !collabId.startsWith("live_")) {
+          const collabSnap = await getDoc(doc(db, "collaborations", collabId));
+          if (collabSnap.exists()) {
+            const collabData = collabSnap.data();
+            const name = collabData.name || collabData.brandName || collabData.marque;
+            if (name) {
+              const resolved = typeof name === "object" ? (name.fr || name.en || name.ar || Object.values(name).find(v => typeof v === "string") || "") : name;
+              setBrandName(resolved);
+              return;
+            }
+          }
+        }
+        // If no collab name, try to get brand from users collection
+        if (brandId) {
+          const brandSnap = await getDoc(doc(db, "users", brandId));
+          if (brandSnap.exists()) {
+            const brandData = brandSnap.data();
+            const name = brandData.brandName || brandData.fullName || brandData.marque;
+            if (name) {
+              const resolved = typeof name === "object" ? (name.fr || name.en || name.ar || Object.values(name).find(v => typeof v === "string") || "") : name;
+              setBrandName(resolved);
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching brand name:", e);
+      }
+    };
+    fetchBrandName();
+  }, [brandId, collabId]);
 
   useEffect(() => {
     // If we have an initialization error, we don't proceed with call setup
@@ -2720,6 +2760,7 @@ export default function HostLiveScreen(props: Props) {
             <BackgroundFiltersProvider>
               <HostStreamContent
                 hostAvatar={props.hostAvatar}
+                brandName={brandName}
                 resolvedName={resolvedName}
                 userName={userName}
                 t={t}
