@@ -2482,7 +2482,7 @@ export default function HostLiveScreen(props: Props) {
                   //@ts-ignore
                   muted={false}
                   enableFullscreen={true}
-                  showParticipantCount={true}
+                  showParticipantCount={false}
                   humanizeParticipantCount={true}
                   showDuration={true}
                   showLiveBadge={true}
@@ -2491,7 +2491,7 @@ export default function HostLiveScreen(props: Props) {
                   floatingParticipantProps={{
                     muted: false,
                     enableFullscreen: true,
-                    showParticipantCount: true,
+                    showParticipantCount: false,
                     humanizeParticipantCount: true,
                     showDuration: true,
                     showLiveBadge: true,

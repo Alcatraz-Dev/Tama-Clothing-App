@@ -80,6 +80,7 @@ import {
   useCallStateHooks,
   ParticipantView,
   LivestreamLayout,
+  ViewerLivestream,
 } from "@stream-io/video-react-native-sdk";
 import { useChatContext } from "stream-chat-react-native";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
@@ -2238,20 +2239,20 @@ export default function AudienceLiveScreen(props: Props) {
               //@ts-ignore
               muted={false}
               enableFullscreen={true}
-              showParticipantCount={true}
+              showParticipantCount={false}
               humanizeParticipantCount={true}
               showDuration={true}
               showLiveBadge={true}
-              showMuteButton={true}
+              showMuteButton={false}
               showSpeakerName={false}
               floatingParticipantProps={{
                 muted: false,
                 enableFullscreen: true,
-                showParticipantCount: true,
+                showParticipantCount: false,
                 humanizeParticipantCount: true,
                 showDuration: true,
                 showLiveBadge: true,
-                showMuteButton: true,
+                showMuteButton: false,
                 showSpeakerName: false,
                 position: "top-right",
               }}
