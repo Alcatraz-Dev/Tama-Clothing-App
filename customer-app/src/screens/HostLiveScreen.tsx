@@ -1957,28 +1957,40 @@ export default function HostLiveScreen(props: Props) {
               () => {},
             );
           } catch (e) {
-            console.log(
-              "🔇 Could not send forfeit signaling (Room already closed):",
-              e,
-            );
+            console.error("Exit PK Signaling Error:", e);
           }
         }
       }
 
+      console.log("🎬 Ending Live Session for channel:", channelId);
+
+      // 1. Mark as ended in state immediately for UI responsiveness
       setIsLiveStarted(false);
-      sessionEndedRef.current = true; // Mark as ended immediately
+      sessionEndedRef.current = true;
+
+      // 2. Update Firestore so audience knows it's over
       await LiveSessionService.endSession(channelId);
-      console.log("🎬 Firestore session ended successfully");
+      console.log("🎬 Firestore session marked as 'ended'");
+
+      // 3. Leave the Stream call
+      if (call) {
+        await call.leave();
+        console.log("🎬 Stream call left");
+      }
+
+      // 4. Close the screen
+      onClose();
     } catch (error) {
-      console.error("Error ending Firestore session:", error);
-      sessionEndedRef.current = false; // Reset on error so it can be retried
+      console.error("❌ Error ending firestore session:", error);
+      // Fallback: still close the screen
+      onClose();
     }
   };
 
 
 
   // Gift Animation Logic (Image/WebP Overlay)
-  const showGiftAnimation = async (videoUrl?: string) => {
+  async function showGiftAnimation(videoUrl?: string) {
     // Since we have images/WebP and not MP4 videos, we don't need Zego Media Player.
     // The UI overlay already handles rendering the animated gift based on recentGift.
     try {
@@ -1993,9 +2005,9 @@ export default function HostLiveScreen(props: Props) {
       console.error("Error showing gift animation:", error);
       setShowGiftVideo(false);
     }
-  };
+  }
 
-  const handleSendLike = () => {
+  function handleSendLike() {
     const x = Math.floor(Math.random() * 40) - 20; // Random offset for hearts
     const id = Date.now();
     setFloatingHearts((prev) => [...prev.slice(-20), { id, x }]); // Max 20 hearts
@@ -2038,7 +2050,7 @@ export default function HostLiveScreen(props: Props) {
     setTimeout(() => {
       setFloatingHearts((prev) => prev.filter((h) => h.id !== id));
     }, 2500);
-  };
+  }
 
   const FloatingHeart = ({ x, id }: { x: number; id: number }) => {
     const animation = useRef(new Animated.Value(0)).current;
@@ -2085,13 +2097,52 @@ export default function HostLiveScreen(props: Props) {
   return (
     <View style={styles.container}>
       {/* Stream Video Background */}
-      {call && (
+      {client && call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
             <CallContent layout="grid" />
           </StreamCall>
         </View>
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+           <ActivityIndicator size="large" color="#fff" />
+           <Text style={{ color: '#fff', marginTop: 10 }}>{client ? 'Initializing Camera...' : 'Connecting to Stream...'}</Text>
+        </View>
       )}
+
+      {/* Exit Button (Always visible) */}
+      <TouchableOpacity
+        onPress={() => {
+          Alert.alert(
+            t("endLiveTitle") || "End Live",
+            t("endLiveConfirm") || "Are you sure you want to end the live session?",
+            [
+              { text: t("cancel") || "Cancel", style: "cancel" },
+              {
+                text: t("end") || "End Live",
+                style: "destructive",
+                onPress: endFirestoreSession,
+              },
+            ]
+          );
+        }}
+        style={{
+          position: "absolute",
+          top: 50,
+          right: 20,
+          zIndex: 9999,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.2)",
+        }}
+      >
+        <X size={24} color="#fff" />
+      </TouchableOpacity>
 
       {/* Flame Counter */}
       {/* Flame Counter - ONLY if reach 50 */}

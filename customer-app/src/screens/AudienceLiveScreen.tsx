@@ -1655,19 +1655,56 @@ export default function AudienceLiveScreen(props: Props) {
                 </Animatable.View>
             )}
 
-            {call ? (
+            {client && call ? (
               <StreamCall call={call}>
                 <CallContent
                   layout="grid"
                 />
-
               </StreamCall>
             ) : (
-              <View style={styles.container}>
+              <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color="#fff" />
-                <Text style={{ color: "#fff", marginTop: 12 }}>Connecting...</Text>
+                <Text style={{ color: "#fff", marginTop: 12 }}>{client ? t('connecting') || "Connecting..." : "Waiting for Stream Client..."}</Text>
+                
+                {/* Exit button even during connecting state */}
+                <TouchableOpacity 
+                    onPress={onClose}
+                    style={{
+                        marginTop: 30,
+                        paddingVertical: 10,
+                        paddingHorizontal: 20,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)'
+                    }}
+                >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>{t('exit') || 'Exit'}</Text>
+                </TouchableOpacity>
               </View>
             )}
+
+            {/* Always visible Exit Button for Audience (Top Right) */}
+            <TouchableOpacity
+                onPress={onClose}
+                style={{
+                    position: "absolute",
+                    top: 50,
+                    right: 20,
+                    zIndex: 9999,
+                    backgroundColor: "rgba(0,0,0,0.5)",
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.2)",
+                }}
+            >
+                <X size={24} color="#fff" />
+            </TouchableOpacity>
+
             {/*
             <ZegoUIKitPrebuiltLiveStreaming
 
