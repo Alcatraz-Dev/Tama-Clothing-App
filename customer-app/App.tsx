@@ -271,6 +271,7 @@ import {
 } from "@stream-io/video-react-native-sdk";
 import { STREAM_API_KEY } from "./src/config/stream";
 import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
+import { API_BASE_URL } from "./src/config/api";
 
 // New extracted imports
 import {
@@ -318,7 +319,6 @@ if (!(isExpoGo && Platform.OS === "android")) {
 
 // --- LEGACY WRAPPERS & GLOBAL STATE ---
 let currentLang = "fr";
-const API_BASE_URL = "http://192.168.8.230:3000";
 
 // Legacy Colors support
 let Colors = getAppColors("dark");
@@ -1368,8 +1368,9 @@ export default function App() {
     }
   }, [user]);
 
-  const initStreamClient = async () => {
-    if (!user?.uid || isStreamInitializing) return;
+  const initStreamClient = async (currentUserOverride?: any) => {
+    const targetUser = currentUserOverride || user;
+    if (!targetUser?.uid || isStreamInitializing) return;
     
     setIsStreamInitializing(true);
     setStreamInitError(null);
@@ -1407,7 +1408,7 @@ export default function App() {
         setUser(u);
         setAppState("Main");
 
-        initStreamClient();
+        initStreamClient(u);
         // ────────────────────────────────────────────────────────────
 
         // Listen to user data changes in real-time
