@@ -575,19 +575,13 @@ export default function HostLiveScreen(props: Props) {
           }
         });
 
-        // Create or get existing call with proper livestream settings
-        // Use settings_override in data to configure call behavior
+        // Create or get existing call with basic settings (no custom override)
         await _call.getOrCreate({
           data: {
             custom: {
               type: "livestream",
               hostId: userId,
               hostName: userName,
-            },
-            settings_override: {
-              backstage: { enabled: true },
-              session: { inactivity_timeout_seconds: 900 },
-              limits: { max_participants: 1000 },
             },
           },
         });
