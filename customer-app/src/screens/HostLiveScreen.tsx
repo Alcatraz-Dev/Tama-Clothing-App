@@ -221,33 +221,33 @@ const HostStreamUI = () => {
         />
       )}
 
-      {/* Viewer Count Overlay - Clean top-left position */}
+      {/* Viewer Count Overlay - Compact mobile-first style */}
       <View
         style={{
           position: "absolute",
-          top: 60,
-          left: 20,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          borderRadius: 20,
+          top: 50,
+          left: 15,
+          backgroundColor: "rgba(0,0,0,0.4)",
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 15,
           flexDirection: "row",
           alignItems: "center",
           zIndex: 1000,
           borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.2)",
+          borderColor: "rgba(255,255,255,0.15)",
         }}
       >
         <View
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: "#FF0050",
-            marginRight: 8,
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: "#EF4444",
+            marginRight: 6,
           }}
         />
-        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>
           {participantCount} {participantCount === 1 ? "viewer" : "viewers"}
         </Text>
       </View>
@@ -311,6 +311,22 @@ export default function HostLiveScreen(props: Props) {
   };
   const client = useStreamVideoClient();
   const [call, setCall] = useState<any>(null);
+  const [resolvedName, setResolvedName] = useState(userName);
+
+  useEffect(() => {
+    if (userId) {
+      getDoc(doc(db, "users", userId)).then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const name = data.fullName || data.userName || data.name || data.displayName;
+          if (name && name !== userId && !name.includes("@")) {
+            setResolvedName(name);
+            CustomBuilder.registerUserName(userId, name);
+          }
+        }
+      });
+    }
+  }, [userId]);
 
   useEffect(() => {
     // If we have an initialization error, we don't proceed with call setup
@@ -1074,7 +1090,7 @@ export default function HostLiveScreen(props: Props) {
         guestScore: guestScoreRef.current,
         totalLikes: totalLikesRef.current,
         hostId: userId,
-        hostName: userName,
+        hostName: resolvedName,
         opponentName: opponentName,
         isInPK: isInPKRef.current,
       });
@@ -1089,7 +1105,7 @@ export default function HostLiveScreen(props: Props) {
         isActive: isInPK,
         // ❌ DO NOT update scores here - they use atomic increments
         opponentName: opponentName,
-        hostName: userName,
+        hostName: resolvedName,
       };
 
       // Only include opponentChannelId if it exists (Firestore doesn't accept undefined)
@@ -1158,7 +1174,7 @@ export default function HostLiveScreen(props: Props) {
         guestScore: guestScoreRef.current,
         totalLikes: totalLikesRef.current,
         hostId: userId,
-        hostName: userName,
+        hostName: resolvedName,
         opponentName: opponentName,
         isInPK: true,
       });
@@ -1195,7 +1211,7 @@ export default function HostLiveScreen(props: Props) {
             hostScore: hostScore,
             guestScore: guestScore,
             opponentName: opponentName,
-            hostName: userName,
+            hostName: resolvedName,
             winner: winner,
           };
 
@@ -1281,7 +1297,7 @@ export default function HostLiveScreen(props: Props) {
         guestScore: guestScoreRef.current,
         totalLikes: totalLikesRef.current,
         hostId: userId,
-        hostName: userName,
+        hostName: resolvedName,
         opponentName: opponentName,
         isInPK: true,
       });
@@ -1378,7 +1394,7 @@ export default function HostLiveScreen(props: Props) {
         discountType: couponType,
         expiryMinutes: expiryMins,
         endTime: Date.now() + expirySecs * 1000,
-        hostName: userName,
+        hostName: resolvedName,
       };
 
       // 1. Update Firestore session doc
@@ -1964,7 +1980,7 @@ export default function HostLiveScreen(props: Props) {
           hostScore: 0,
           guestScore: 0,
           opponentName: opponentName,
-          hostName: userName,
+          hostName: resolvedName,
           opponentChannelId: opponentChanId,
           endTime: endTime,
           duration: pkDuration,

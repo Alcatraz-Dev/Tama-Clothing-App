@@ -117,6 +117,8 @@ export class CustomBuilder {
 
     static hostAvatarBuilder = (host: any) => {
         const avatarUrl = this.getUserAvatar(host.userID);
+        const resolvedName = this.getUserName(host.userID) || host.userName || 'Host';
+        
         return (
             <View style={{
                 flexDirection: 'row',
@@ -135,12 +137,12 @@ export class CustomBuilder {
                     ) : (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                             <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
-                                {(host.userName || 'H').charAt(0).toUpperCase()}
+                                {resolvedName.charAt(0).toUpperCase()}
                             </Text>
                         </View>
                     )}
                 </View>
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }} numberOfLines={1}>{host.userName}</Text>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }} numberOfLines={1}>{resolvedName}</Text>
             </View>
         );
     };

@@ -266,7 +266,21 @@ export default function AudienceLiveScreen(props: Props) {
             }
         });
 
+        // Resolve host name if it's an email
+        if (hostId) {
+            getDoc(doc(db, "users", hostId)).then((snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const name = data.fullName || data.userName || data.name || data.displayName;
+                    if (name && !name.includes("@")) {
+                        CustomBuilder.registerUserName(hostId, name);
+                    }
+                }
+            });
+        }
+
         // Use a timeout to prevent infinite loading if join hangs
+        console.log("🔄 Attempting to join call:", channelId);
         const joinPromise = _call.join();
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Join timeout after 15s")), 15000)
@@ -282,7 +296,10 @@ export default function AudienceLiveScreen(props: Props) {
                 Alert.alert(
                     t('connectionError') || "Erreur de connexion",
                     t('joinFailedMsg') || "Impossible de rejoindre le direct. Veuillez réessayer.",
-                    [{ text: t('ok') || "OK", onPress: onClose }]
+                    [{ text: t('retry') || "Réessayer", onPress: () => {
+                        // Logic to retry could go here, but for now we just allow closing
+                        onClose();
+                    }}]
                 );
             });
 
