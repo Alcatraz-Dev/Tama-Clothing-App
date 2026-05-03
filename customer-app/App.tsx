@@ -1385,8 +1385,33 @@ export default function App() {
 
     try {
       console.log("📡 Attempting to initialize Stream client...");
-      const { token, userId, name } = await getStreamTokenForCurrentUser();
-      const streamUser: StreamUser = { id: userId, name };
+      const { token, userId, name: backendName } = await getStreamTokenForCurrentUser();
+      
+      let finalName = backendName;
+
+      // 1. Check Firebase Auth display name
+      if (targetUser.displayName) {
+        finalName = targetUser.displayName;
+      }
+
+      // 2. If name looks like an email or is missing, try Firestore for a better name
+      if (!finalName || finalName.includes('@')) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', targetUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const firestoreName = userData.fullName || userData.userName || userData.displayName || userData.name;
+            if (firestoreName) {
+              finalName = firestoreName;
+              console.log("📝 Using Firestore name for Stream:", finalName);
+            }
+          }
+        } catch (fsErr) {
+          console.warn("⚠️ Could not fetch user name from Firestore for Stream init:", fsErr);
+        }
+      }
+
+      const streamUser: StreamUser = { id: userId, name: finalName };
       const client = StreamVideoClient.getOrCreateInstance({
         apiKey: STREAM_API_KEY,
         user: streamUser,

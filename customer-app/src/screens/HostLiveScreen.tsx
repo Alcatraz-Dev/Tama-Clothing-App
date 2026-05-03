@@ -89,9 +89,10 @@ import { uploadToSanity } from "../utils/sanity";
 
 import {
   StreamCall,
-  CallContent,
   useStreamVideoClient,
   StreamVideoClient,
+  useCallStateHooks,
+  ParticipantView,
 } from "@stream-io/video-react-native-sdk";
 
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -206,6 +207,54 @@ const MemberAvatar = ({
   );
 };
 
+const HostStreamUI = () => {
+  const { useLocalParticipant, useParticipantCount } = useCallStateHooks();
+  const localParticipant = useLocalParticipant();
+  const participantCount = useParticipantCount();
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      {localParticipant && (
+        <ParticipantView
+          participant={localParticipant}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+
+      {/* Viewer Count Overlay - Clean top-left position */}
+      <View
+        style={{
+          position: "absolute",
+          top: 60,
+          left: 20,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderRadius: 20,
+          flexDirection: "row",
+          alignItems: "center",
+          zIndex: 1000,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.2)",
+        }}
+      >
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: "#FF0050",
+            marginRight: 8,
+          }}
+        />
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+          {participantCount} {participantCount === 1 ? "viewer" : "viewers"}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 export default function HostLiveScreen(props: Props) {
   const t = typeof props.t === "function" ? props.t : (key: string) => key;
   const {
@@ -298,8 +347,15 @@ export default function HostLiveScreen(props: Props) {
       }
     });
 
-    // Use a timeout to prevent infinite loading if join hangs
-    const joinPromise = _call.join({ create: true });
+    // Use getOrCreate with specific data to ensure the call is public/joinable
+    const joinPromise = _call
+      .getOrCreate()
+      .then(async () => {
+        await _call.join();
+        // Transition from backstage to live so audience can join
+        await _call.goLive();
+      });
+
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Join timeout after 15s")), 15000),
     );
@@ -322,9 +378,11 @@ export default function HostLiveScreen(props: Props) {
     return () => {
       unsubscribeCustomEvent();
       unsubscribeReaction();
-      _call
-        .leave()
-        .catch((err) => console.error("❌ Failed to leave call:", err));
+      if (_call.state.callingState !== "left") {
+        _call
+          .leave()
+          .catch((err) => console.error("❌ Failed to leave call:", err));
+      }
     };
   }, [client, channelId]);
 
@@ -2228,7 +2286,7 @@ export default function HostLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-            <CallContent layout="grid" />
+            <HostStreamUI />
           </StreamCall>
         </View>
       ) : (

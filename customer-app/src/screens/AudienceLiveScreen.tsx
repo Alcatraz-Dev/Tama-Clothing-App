@@ -19,8 +19,9 @@ import { RechargeModal } from '../components/RechargeModal';
 
 import {
   StreamCall,
-  CallContent,
   useStreamVideoClient,
+  useCallStateHooks,
+  ParticipantView,
 } from "@stream-io/video-react-native-sdk";
 
 
@@ -112,6 +113,56 @@ const MemberAvatar = ({ userId, userName, defaultAvatar }: { userId: string, use
                 uri: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || 'U')}&background=random`
             }}
         />
+    );
+};
+// --- Stream Custom UI for Audience ---
+const AudienceStreamUI = () => {
+    const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
+    const remoteParticipants = useRemoteParticipants();
+    const participantCount = useParticipantCount();
+    
+    // In a livestream, the host is usually the first (and often only) remote participant broadcasting
+    const host = remoteParticipants[0];
+
+    return (
+        <View style={StyleSheet.absoluteFill}>
+            {host ? (
+                <ParticipantView
+                    participant={host}
+                    style={StyleSheet.absoluteFill}
+                />
+            ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={{ color: '#fff', marginTop: 15, fontWeight: '600', letterSpacing: 0.5 }}>
+                        WAITING FOR HOST...
+                    </Text>
+                </View>
+            )}
+
+            {/* Viewer Count Overlay */}
+            <View
+                style={{
+                    position: "absolute",
+                    top: 60,
+                    left: 20,
+                    backgroundColor: "rgba(0,0,0,0.5)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    zIndex: 1000,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.2)'
+                }}
+            >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#EF4444", marginRight: 8 }} />
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                    {participantCount}
+                </Text>
+            </View>
+        </View>
     );
 };
 
@@ -238,7 +289,9 @@ export default function AudienceLiveScreen(props: Props) {
         return () => {
             unsubscribeCustomEvent();
             unsubscribeReaction();
-            _call.leave().catch(err => console.error("❌ Failed to leave call:", err));
+            if (_call.state.callingState !== 'left') {
+                _call.leave().catch(err => console.error("❌ Failed to leave call:", err));
+            }
         };
     }, [client, channelId, streamInitError]);
 
@@ -1728,7 +1781,7 @@ export default function AudienceLiveScreen(props: Props) {
             {call ? (
                 <View style={StyleSheet.absoluteFill}>
                     <StreamCall call={call}>
-                        <CallContent layout="grid" />
+                        <AudienceStreamUI />
                     </StreamCall>
                 </View>
             ) : (
