@@ -269,7 +269,8 @@ import {
   StreamVideoClient,
   User as StreamUser,
 } from "@stream-io/video-react-native-sdk";
-// ChatWrapper removed for testing
+// ChatWrapper disabled - needs working backend for token generation
+// import { ChatWrapper } from "./src/components/ChatWrapper";
 import { STREAM_API_KEY } from "./src/config/stream";
 import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
 import { API_BASE_URL } from "./src/config/api";
@@ -383,7 +384,12 @@ export default function App() {
     | "VendorRegistration"
     | "PrivacyPolicy"
     | "TermsOfService"
+    | "StreamLivestream"
   >("Onboarding");
+  const [streamLivestreamParams, setStreamLivestreamParams] = useState<{
+    callId?: string;
+    isHost?: boolean;
+  }>({ isHost: false });
   const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(
     null,
   );
@@ -1386,16 +1392,31 @@ export default function App() {
 
     try {
       console.log("📡 Attempting to initialize Stream client...");
-      const { token, userId, name: backendName } = await getStreamTokenForCurrentUser();
       
-      let finalName = backendName;
+      // Try to get real token - skip Stream if backend fails
+      let token = "";
+      let userId = targetUser.uid;
+      let finalName = targetUser.displayName || targetUser.email?.split('@')[0] || "Demo User";
+      
+      try {
+        const { token: realToken, userId: realUserId, name: backendName } = await getStreamTokenForCurrentUser();
+        token = realToken;
+        userId = realUserId;
+        if (backendName) finalName = backendName;
+      } catch (tokenErr) {
+        console.log("⚠️ Token fetch failed - skipping Stream Video (no backend)");
+        setStreamInitError("Stream service unavailable - requires backend setup");
+        setStreamClient(null);
+        setIsStreamInitializing(false);
+        return;
+      }
 
-      // 1. Check Firebase Auth display name
+      // Check Firebase Auth display name
       if (targetUser.displayName) {
         finalName = targetUser.displayName;
       }
 
-      // 2. If name looks like an email or is missing, try Firestore for a better name
+      // Try Firestore for a better name
       if (!finalName || finalName.includes('@')) {
         try {
           const userDoc = await getDoc(doc(db, 'users', targetUser.uid));
@@ -3334,7 +3355,6 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* ChatWrapper removed temporarily for testing */}
       <View style={{ flex: 1 }}>
         <ThemeContext.Provider
           value={{ theme, colors: getAppColors(theme), setTheme }}
@@ -3398,6 +3418,14 @@ export default function App() {
                 t={t}
                 language={language}
               />
+            ) : appState === "StreamLivestream" ? (
+              <View style={{ flex: 1 }}>
+                <LiveStreamScreen
+                  callId={streamLivestreamParams.callId}
+                  isHost={streamLivestreamParams.isHost}
+                  onClose={() => setAppState("Main")}
+                />
+              </View>
             ) : (
               <View
                 style={[

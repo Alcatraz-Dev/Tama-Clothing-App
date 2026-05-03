@@ -10,52 +10,71 @@ import { getStreamTokenForCurrentUser } from "../services/streamAuth";
 import { auth } from "../api/firebase";
 
 const STREAM_API_KEY = require("../config/stream").STREAM_API_KEY;
+const STREAM_TOKEN = require("../config/stream").STREAM_TOKEN;
 const streami18n = new Streami18n({ language: "en" });
 
 export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
   const tokenRef = useRef<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const getToken = async () => {
-      try {
-        const { token } = await getStreamTokenForCurrentUser();
-        tokenRef.current = token;
-        setIsReady(true);
-      } catch (error) {
-        console.error("Failed to get token:", error);
-        setIsReady(true);
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser: any) => {
+      if (currentUser) {
+        setUserId(currentUser.uid);
+        try {
+          const { token } = await getStreamTokenForCurrentUser();
+          tokenRef.current = token;
+        } catch (error) {
+          console.warn("⚠️ Failed to get token, using demo token:", error);
+          tokenRef.current = STREAM_TOKEN;
+        }
+      } else {
+        setUserId(null);
+        tokenRef.current = STREAM_TOKEN;
       }
-    };
-    getToken();
+      setIsReady(true);
+    });
+
+    return unsubscribe;
   }, []);
 
-  // Build user object based on Firebase auth
+  // Build user object based on Firebase auth - only create valid user
   const userData = useMemo(() => {
+    if (!userId) return null;
     const currentUser = auth.currentUser;
-    if (!currentUser) return undefined;
     return {
-      id: currentUser.uid,
-      name: currentUser.displayName || currentUser.email?.split('@')[0] || "User",
-      image: currentUser.photoURL || "",
+      id: userId,
+      name: currentUser?.displayName || currentUser?.email?.split('@')[0] || "User",
+      image: currentUser?.photoURL || "",
     };
-  }, []);
+  }, [userId]);
 
   // Token provider function - returns the token when called
   const tokenProvider = useMemo(() => {
     return async () => {
       if (!tokenRef.current) {
-        const { token } = await getStreamTokenForCurrentUser();
-        tokenRef.current = token;
+        try {
+          const { token } = await getStreamTokenForCurrentUser();
+          tokenRef.current = token;
+        } catch (err) {
+          console.warn("⚠️ Token fetch failed, using demo token");
+          tokenRef.current = STREAM_TOKEN;
+        }
       }
-      return tokenRef.current;
+      return tokenRef.current || "";
     };
   }, []);
 
+  // Always create chat client but with fallback user when not logged in
   const chatClient = useCreateChatClient({
     apiKey: STREAM_API_KEY,
-    userData: userData,
-    tokenProvider: tokenProvider,
+    userData: userData || {
+      id: userId || "guest-" + Date.now(),
+      name: "Guest User",
+      image: "",
+    },
+    tokenOrProvider: tokenProvider,
   });
 
   if (!isReady || !chatClient) {
@@ -65,6 +84,11 @@ export const ChatWrapper = ({ children }: PropsWithChildren<{}>) => {
         <Text style={styles.loadingText}>Connecting to chat...</Text>
       </SafeAreaView>
     );
+  }
+
+  // If no user is logged in, render children without Chat context  
+  if (!userId) {
+    return <>{children}</>;
   }
 
   return (
