@@ -215,6 +215,223 @@ const MemberAvatar = ({
   );
 };
 
+type HostStreamContentProps = {
+  hostAvatar?: string;
+  resolvedName: string;
+  userName: string;
+  t: (key: string) => string;
+  endFirestoreSession: () => void;
+  floatingHearts: any[];
+  totalLikes: number;
+  isInPK: boolean;
+  handleSendLike: () => void;
+  pinnedProduct: any;
+  handleUnpin: () => void;
+  getLocalizedName: (name: any) => string;
+  selectedProductIds: string[];
+  products: any[];
+  pinnedProductId: string | null;
+  setPinnedProductId: (id: string) => void;
+  setPinnedProduct: (p: any) => void;
+  setPinEndTime: (t: number | null) => void;
+  showProductModal: boolean;
+  setShowProductModal: (v: boolean) => void;
+  showPollModal: boolean;
+  setShowPollModal: (v: boolean) => void;
+  showPKInviteModal: boolean;
+  setShowPKInviteModal: (v: boolean) => void;
+  activePoll: any;
+  setActivePoll: (p: any) => void;
+  durationSeconds: number;
+  formatDuration: (s: number) => string;
+  onCameraToggle: () => void;
+  onMicToggle: () => void;
+  onCameraFlip: () => void;
+};
+
+const HostStreamContent = ({
+  hostAvatar,
+  resolvedName,
+  userName,
+  t,
+  endFirestoreSession,
+  floatingHearts,
+  totalLikes,
+  isInPK,
+  handleSendLike,
+  pinnedProduct,
+  handleUnpin,
+  getLocalizedName,
+  selectedProductIds,
+  products,
+  pinnedProductId,
+  setPinnedProductId,
+  setPinnedProduct,
+  setPinEndTime,
+  showProductModal,
+  setShowProductModal,
+  showPollModal,
+  setShowPollModal,
+  showPKInviteModal,
+  setShowPKInviteModal,
+  activePoll,
+  setActivePoll,
+  durationSeconds,
+  formatDuration,
+  onCameraToggle,
+  onMicToggle,
+  onCameraFlip,
+}: HostStreamContentProps) => {
+  const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
+  const camState = useCameraState();
+  const { microphone, optimisticIsMute: isMicMuted } = useMicrophoneState();
+  const isCameraOn = camState?.isEnabled ?? true;
+  const localParticipant = useLocalParticipant();
+  const participantCount = useParticipantCount();
+
+  return (
+    <>
+      {localParticipant && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <FloatingParticipantView
+            participant={localParticipant}
+            alignment="top-right"
+            mirror
+          />
+        </View>
+      )}
+
+      {!isCameraOn && (
+        <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
+          <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
+          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{resolvedName || userName}</Text>
+        </View>
+      )}
+
+      <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
+            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
+          </View>
+        </View>
+        <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ position: "absolute", top: 50, right: 20, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <X size={20} color="#fff" />
+      </TouchableOpacity>
+
+      {floatingHearts.map((heart: any) => (
+        <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
+          <Text style={{ fontSize: 30 }}>❤️</Text>
+        </Animatable.View>
+      ))}
+
+      {totalLikes >= 50 && <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />}
+
+      {pinnedProduct && (
+        <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
+          <BlurView intensity={90} tint="dark" style={{ borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.25)", overflow: "hidden" }}>
+            <Image source={{ uri: pinnedProduct.images?.[0] }} style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: "#333" }} />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text numberOfLines={1} style={{ color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 3 }}>{getLocalizedName(pinnedProduct.name)}</Text>
+              <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}>{pinnedProduct.discountPrice || pinnedProduct.price} TND</Text>
+            </View>
+            <TouchableOpacity onPress={handleUnpin} style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(255, 255, 255, 0.15)", width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" }}>
+              <X size={10} color="#fff" />
+            </TouchableOpacity>
+          </BlurView>
+        </Animatable.View>
+      )}
+
+      {selectedProductIds.length > 0 && (
+        <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
+            {products.filter((p) => selectedProductIds.includes(p.id)).map((p) => {
+              const isPinned = pinnedProductId === p.id;
+              return (
+                <TouchableOpacity key={p.id} onPress={() => { setPinnedProductId(p.id); setPinnedProduct(p); setPinEndTime(Date.now() + 300000); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
+                  <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
+                  {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
+                  <View style={{ marginTop: 4 }}>
+                    <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
+                    <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={{ position: "absolute", bottom: 180, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
+        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
+          <Heart size={18} color="#fff" fill="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowProductModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <ShoppingBag size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPollModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)" }}>
+          <BarChart2 size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPKInviteModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)" }}>
+          <Swords size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, zIndex: 400 }}>
+        <TouchableOpacity onPress={onCameraToggle} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          {isCameraOn ? <Camera size={20} color="#fff" /> : <CameraOff size={20} color="#fff" />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onMicToggle} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          {isMicMuted ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onCameraFlip} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <FlipHorizontal size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {activePoll && (
+        <Animatable.View animation="slideInUp" duration={400} style={{ position: "absolute", bottom: 300, left: 15, right: 15, zIndex: 350 }}>
+          <BlurView intensity={85} tint="dark" style={{ borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: "rgba(139, 92, 246, 0.5)", overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#8B5CF6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                <BarChart2 size={10} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>POLL</Text>
+              </View>
+              <TouchableOpacity onPress={() => setActivePoll(null)} style={{ padding: 4 }}><X size={14} color="rgba(255,255,255,0.6)" /></TouchableOpacity>
+            </View>
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 10 }}>{activePoll.question}</Text>
+            {activePoll.options.map((opt: any) => {
+              const totalVotes = activePoll.options.reduce((sum: number, o: any) => sum + o.votes, 0);
+              const percentage = totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
+              return (
+                <TouchableOpacity key={opt.id} onPress={() => { const updated = { ...activePoll, options: activePoll.options.map((o: any) => o.id === opt.id ? { ...o, votes: o.votes + 1 } : o) }; setActivePoll(updated); }} style={{ backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, marginBottom: 6 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ color: "#fff", fontSize: 12 }}>{opt.text}</Text>
+                    <Text style={{ color: "#8B5CF6", fontWeight: "700", fontSize: 12 }}>{percentage.toFixed(0)}%</Text>
+                  </View>
+                  <View style={{ height: 3, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
+                    <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: "#8B5CF6", borderRadius: 2 }} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </BlurView>
+        </Animatable.View>
+      )}
+
+      {/* Modals - TODO: Implement inline */}
+    </>
+  );
+};
+
 export default function HostLiveScreen(props: Props) {
   const t = typeof props.t === "function" ? props.t : (key: string) => key;
   const {
@@ -2486,19 +2703,6 @@ export default function HostLiveScreen(props: Props) {
     );
   }
 
-  // Get camera state for avatar fallback
-  const {
-    useCameraState,
-    useMicrophoneState,
-    useLocalParticipant,
-    useParticipantCount,
-  } = useCallStateHooks();
-  const camState = useCameraState();
-  const { microphone, optimisticIsMute: isMicMuted } = useMicrophoneState();
-  const isCameraOn = camState?.isEnabled ?? true;
-  const localParticipant = useLocalParticipant();
-  const participantCount = useParticipantCount();
-
   // Duration tracking
   const [durationSeconds, setDurationSeconds] = useState(0);
   useEffect(() => {
@@ -2521,687 +2725,36 @@ export default function HostLiveScreen(props: Props) {
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
             <BackgroundFiltersProvider>
-              {/* Video View - Shows avatar when camera is off */}
-              {localParticipant && (
-                <FloatingParticipantView
-                  participant={localParticipant}
-                  // style={StyleSheet.absoluteFill}
-                  alignment="top-right"
-                  mirror
-                />
-              )}
-
-              {/* Avatar Fallback when camera is off */}
-              {!isCameraOn && (
-                <View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    {
-                      justifyContent: "center",
-                      alignItems: "center",
-                      backgroundColor: "#1a1a2e",
-                      zIndex: 1,
-                    },
-                  ]}
-                >
-                  <Image
-                    source={{
-                      uri:
-                        props.hostAvatar ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(resolvedName || userName)}&background=random`,
-                    }}
-                    style={{
-                      width: 120,
-                      height: 120,
-                      borderRadius: 60,
-                      borderWidth: 3,
-                      borderColor: "#fff",
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontSize: 18,
-                      fontWeight: "700",
-                      marginTop: 16,
-                    }}
-                  >
-                    {resolvedName || userName}
-                  </Text>
-                </View>
-              )}
-
-              {/* Top Bar - LIVE Badge, Viewer Count, Duration */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 50,
-                  left: 15,
-                  right: 15,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  zIndex: 100,
-                }}
-              >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: "rgba(239, 68, 68, 0.9)",
-                      paddingHorizontal: 10,
-                      paddingVertical: 5,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: "#fff",
-                        marginRight: 6,
-                      }}
-                    />
-                    <Text
-                      style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}
-                    >
-                      LIVE
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: "rgba(0,0,0,0.5)",
-                      paddingHorizontal: 10,
-                      paddingVertical: 5,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text
-                      style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}
-                    >
-                      👁 {participantCount}
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={{
-                    backgroundColor: "rgba(0,0,0,0.5)",
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text
-                    style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}
-                  >
-                    {formatDuration(durationSeconds)}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Exit Button */}
-              <TouchableOpacity
-                onPress={() =>
-                  Alert.alert(
-                    t("endLiveTitle") || "End Live",
-                    t("endLiveConfirm") || "Are you sure?",
-                    [
-                      { text: t("cancel") || "Cancel", style: "cancel" },
-                      {
-                        text: t("end") || "End",
-                        style: "destructive",
-                        onPress: endFirestoreSession,
-                      },
-                    ],
-                  )
-                }
-                style={{
-                  position: "absolute",
-                  top: 50,
-                  right: 20,
-                  zIndex: 9999,
-                  backgroundColor: "rgba(0,0,0,0.5)",
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.2)",
-                }}
-              >
-                <X size={20} color="#fff" />
-              </TouchableOpacity>
-
-              {/* Floating Hearts Animation */}
-              {floatingHearts.map((heart: any) => (
-                <Animatable.View
-                  key={heart.id}
-                  animation="fadeInUp"
-                  duration={2000}
-                  style={{
-                    position: "absolute",
-                    bottom: 100,
-                    left: "50%",
-                    marginLeft: heart.x,
-                    zIndex: 500,
-                  }}
-                >
-                  <Text style={{ fontSize: 30 }}>❤️</Text>
-                </Animatable.View>
-              ))}
-
-              {/* Flame Counter */}
-              {totalLikes >= 50 && (
-                <FlameCounter
-                  count={totalLikes}
-                  onPress={handleSendLike}
-                  top={isInPK ? 210 : 120}
-                />
-              )}
-
-              {/* Pinned Product Card */}
-              {pinnedProduct && (
-                <Animatable.View
-                  animation="fadeInLeft"
-                  duration={400}
-                  style={{
-                    position: "absolute",
-                    bottom: 180,
-                    left: 15,
-                    width: 240,
-                    zIndex: 300,
-                  }}
-                >
-                  <BlurView
-                    intensity={90}
-                    tint="dark"
-                    style={{
-                      borderRadius: 16,
-                      padding: 10,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      borderWidth: 1.5,
-                      borderColor: "rgba(255, 255, 255, 0.25)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <Image
-                      source={{ uri: pinnedProduct.images?.[0] }}
-                      style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: 10,
-                        backgroundColor: "#333",
-                      }}
-                    />
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: "#fff",
-                          fontWeight: "700",
-                          fontSize: 11,
-                          marginBottom: 3,
-                        }}
-                      >
-                        {getLocalizedName(pinnedProduct.name)}
-                      </Text>
-                      <Text
-                        style={{
-                          color: "#F59E0B",
-                          fontWeight: "900",
-                          fontSize: 13,
-                        }}
-                      >
-                        {pinnedProduct.discountPrice || pinnedProduct.price} TND
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={handleUnpin}
-                      style={{
-                        position: "absolute",
-                        top: 4,
-                        right: 4,
-                        backgroundColor: "rgba(255, 255, 255, 0.15)",
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <X size={10} color="#fff" />
-                    </TouchableOpacity>
-                  </BlurView>
-                </Animatable.View>
-              )}
-
-              {/* Product Carousel */}
-              {selectedProductIds.length > 0 && (
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: 80,
-                    left: 0,
-                    right: 0,
-                    zIndex: 250,
-                  }}
-                >
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}
-                  >
-                    {products
-                      .filter((p) => selectedProductIds.includes(p.id))
-                      .map((p) => {
-                        const isPinned = pinnedProductId === p.id;
-                        return (
-                          <TouchableOpacity
-                            key={p.id}
-                            onPress={() => {
-                              setPinnedProductId(p.id);
-                              setPinnedProduct(p);
-                              setPinEndTime(Date.now() + 300000);
-                            }}
-                            style={{
-                              width: 90,
-                              borderRadius: 14,
-                              backgroundColor: isPinned
-                                ? "rgba(16, 185, 129, 0.2)"
-                                : "rgba(0,0,0,0.7)",
-                              borderWidth: isPinned ? 2 : 1,
-                              borderColor: isPinned
-                                ? "#10B981"
-                                : "rgba(255,255,255,0.1)",
-                              padding: 6,
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Image
-                              source={{ uri: p.images?.[0] }}
-                              style={{
-                                width: 78,
-                                height: 78,
-                                borderRadius: 10,
-                                backgroundColor: "#333",
-                              }}
-                            />
-                            {p.discountPrice && (
-                              <View
-                                style={{
-                                  position: "absolute",
-                                  top: 8,
-                                  left: 4,
-                                  backgroundColor: "#EF4444",
-                                  paddingHorizontal: 4,
-                                  paddingVertical: 2,
-                                  borderRadius: 4,
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    color: "#fff",
-                                    fontSize: 7,
-                                    fontWeight: "900",
-                                  }}
-                                >
-                                  -
-                                  {Math.round(
-                                    (1 - p.discountPrice / p.price) * 100,
-                                  )}
-                                  %
-                                </Text>
-                              </View>
-                            )}
-                            <View style={{ marginTop: 4 }}>
-                              <Text
-                                numberOfLines={1}
-                                style={{
-                                  color: "#fff",
-                                  fontSize: 9,
-                                  fontWeight: "600",
-                                }}
-                              >
-                                {getLocalizedName(p.name)}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: isPinned ? "#10B981" : "#F59E0B",
-                                  fontSize: 11,
-                                  fontWeight: "900",
-                                }}
-                              >
-                                {p.discountPrice || p.price} TND
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Right Side Action Buttons */}
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 180,
-                  right: 15,
-                  gap: 10,
-                  alignItems: "center",
-                  zIndex: 400,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={handleSendLike}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: "rgba(239, 68, 68, 0.8)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Heart size={18} color="#fff" fill="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setShowProductModal(true)}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <ShoppingBag size={18} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setShowPollModal(true)}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: activePoll
-                      ? "#A78BFA"
-                      : "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <BarChart2 size={18} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setShowPKInviteModal(true)}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <Swords size={18} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Bottom Media Controls */}
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 20,
-                  left: 0,
-                  right: 0,
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: 16,
-                  zIndex: 400,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      if (camState?.camera) {
-                        await camState.camera.toggle();
-                      }
-                    } catch (e) {
-                      console.error("Camera toggle error:", e);
-                    }
-                  }}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  {isCameraOn ? (
-                    <Camera size={20} color="#fff" />
-                  ) : (
-                    <CameraOff size={20} color="#fff" />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      if (microphone) {
-                        await microphone.toggle();
-                      }
-                    } catch (e) {
-                      console.error("Mic toggle error:", e);
-                    }
-                  }}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  {isMicMuted ? (
-                    <MicOff size={20} color="#fff" />
-                  ) : (
-                    <Mic size={20} color="#fff" />
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      if (camState?.camera) {
-                        await camState.camera.flip();
-                      }
-                    } catch (e) {
-                      console.error("Camera flip error:", e);
-                    }
-                  }}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <FlipHorizontal size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Active Poll Display */}
-              {activePoll && (
-                <Animatable.View
-                  animation="slideInUp"
-                  duration={400}
-                  style={{
-                    position: "absolute",
-                    bottom: 300,
-                    left: 15,
-                    right: 15,
-                    zIndex: 350,
-                  }}
-                >
-                  <BlurView
-                    intensity={85}
-                    tint="dark"
-                    style={{
-                      borderRadius: 16,
-                      padding: 14,
-                      borderWidth: 1.5,
-                      borderColor: "rgba(139, 92, 246, 0.5)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 10,
-                      }}
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          backgroundColor: "#8B5CF6",
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <BarChart2
-                          size={10}
-                          color="#fff"
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text
-                          style={{
-                            color: "#fff",
-                            fontSize: 9,
-                            fontWeight: "900",
-                          }}
-                        >
-                          POLL
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => setActivePoll(null)}
-                        style={{ padding: 4 }}
-                      >
-                        <X size={14} color="rgba(255,255,255,0.6)" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontSize: 14,
-                        fontWeight: "700",
-                        marginBottom: 10,
-                      }}
-                    >
-                      {activePoll.question}
-                    </Text>
-                    {activePoll.options.map((opt: any) => {
-                      const totalVotes = activePoll.options.reduce(
-                        (sum: number, o: any) => sum + o.votes,
-                        0,
-                      );
-                      const percentage =
-                        totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
-                      return (
-                        <TouchableOpacity
-                          key={opt.id}
-                          onPress={() => {
-                            const updated = {
-                              ...activePoll,
-                              options: activePoll.options.map((o: any) =>
-                                o.id === opt.id
-                                  ? { ...o, votes: o.votes + 1 }
-                                  : o,
-                              ),
-                            };
-                            setActivePoll(updated);
-                          }}
-                          style={{
-                            backgroundColor: "rgba(255,255,255,0.1)",
-                            borderRadius: 8,
-                            padding: 10,
-                            marginBottom: 6,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <Text style={{ color: "#fff", fontSize: 12 }}>
-                              {opt.text}
-                            </Text>
-                            <Text
-                              style={{
-                                color: "#8B5CF6",
-                                fontWeight: "700",
-                                fontSize: 12,
-                              }}
-                            >
-                              {percentage.toFixed(0)}%
-                            </Text>
-                          </View>
-                          <View
-                            style={{
-                              height: 3,
-                              backgroundColor: "rgba(255,255,255,0.1)",
-                              borderRadius: 2,
-                              marginTop: 6,
-                              overflow: "hidden",
-                            }}
-                          >
-                            <View
-                              style={{
-                                height: "100%",
-                                width: `${percentage}%`,
-                                backgroundColor: "#8B5CF6",
-                                borderRadius: 2,
-                              }}
-                            />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </BlurView>
-                </Animatable.View>
-              )}
-
-              {/* Modals - TODO: Implement inline */}
+              <HostStreamContent
+                hostAvatar={props.hostAvatar}
+                resolvedName={resolvedName}
+                userName={userName}
+                t={t}
+                endFirestoreSession={endFirestoreSession}
+                floatingHearts={floatingHearts}
+                totalLikes={totalLikes}
+                isInPK={isInPK}
+                handleSendLike={handleSendLike}
+                pinnedProduct={pinnedProduct}
+                handleUnpin={handleUnpin}
+                getLocalizedName={getLocalizedName}
+                selectedProductIds={selectedProductIds}
+                products={products}
+                pinnedProductId={pinnedProductId}
+                setPinnedProductId={setPinnedProductId}
+                setPinnedProduct={setPinnedProduct}
+                setPinEndTime={setPinEndTime}
+                showProductModal={showProductModal}
+                setShowProductModal={setShowProductModal}
+                showPollModal={showPollModal}
+                setShowPollModal={setShowPollModal}
+                showPKInviteModal={showPKInviteModal}
+                setShowPKInviteModal={setShowPKInviteModal}
+                activePoll={activePoll}
+                setActivePoll={setActivePoll}
+                durationSeconds={durationSeconds}
+                formatDuration={formatDuration}
+              />
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
