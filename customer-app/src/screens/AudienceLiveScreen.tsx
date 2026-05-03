@@ -140,6 +140,8 @@ type Props = {
   userId: string;
   userName: string;
   userAvatar?: string;
+  hostAvatar?: string;
+  hostBrandName?: string;
   onClose: () => void;
   t?: (key: string) => string;
   language?: "fr" | "ar" | "en";
@@ -209,6 +211,8 @@ type AudienceStreamContentProps = {
   setShowGifts: (v: boolean) => void;
   setShowChat: (v: boolean) => void;
   t: (key: string) => string;
+  hostAvatar?: string;
+  hostBrandName?: string;
 };
 
 const AudienceStreamContent = ({
@@ -226,10 +230,14 @@ const AudienceStreamContent = ({
   setShowGifts,
   setShowChat,
   t,
+  hostAvatar,
+  hostBrandName,
 }: AudienceStreamContentProps) => {
-  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
+  const { useRemoteParticipants, useParticipantCount, useCameraState } = useCallStateHooks();
   const remote = useRemoteParticipants();
   const count = useParticipantCount();
+  const camState = useCameraState();
+  const isCameraOn = camState?.isEnabled ?? true;
   const host = remote[0] || remoteParticipants[0];
   const viewerCount = count || participantCount;
 
@@ -237,6 +245,13 @@ const AudienceStreamContent = ({
     <>
       {host && (
         <ParticipantView participant={host} style={StyleSheet.absoluteFill} />
+      )}
+
+      {!isCameraOn && (
+        <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
+          <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
+          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{hostBrandName || "Host"}</Text>
+        </View>
       )}
 
       <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
@@ -248,15 +263,14 @@ const AudienceStreamContent = ({
           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {viewerCount}</Text>
           </View>
+          <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
+          </View>
         </View>
-        <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
-        </View>
+        <TouchableOpacity onPress={onClose} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <X size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity onPress={onClose} style={{ position: "absolute", top: 50, right: 20, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-        <X size={20} color="#fff" />
-      </TouchableOpacity>
 
       {floatingHearts.map((heart) => (
         <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
@@ -2338,6 +2352,8 @@ export default function AudienceLiveScreen(props: Props) {
               setShowGifts={setShowGifts}
               setShowChat={setShowChat}
               t={t}
+              hostAvatar={props.hostAvatar}
+              hostBrandName={props.hostBrandName}
             />
           </StreamCall>
         </View>

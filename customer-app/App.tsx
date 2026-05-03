@@ -2290,6 +2290,8 @@ export default function App() {
               "User"
             }
             userAvatar={profileData?.avatarUrl || user?.photoURL}
+            hostAvatar={liveStreamData?.hostAvatar}
+            hostBrandName={liveStreamData?.hostName}
             onClose={() => {
               setActiveTab("Home");
               setActiveLiveChannel("");

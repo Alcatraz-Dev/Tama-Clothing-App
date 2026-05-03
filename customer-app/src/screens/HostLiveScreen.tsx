@@ -311,15 +311,14 @@ const HostStreamContent = ({
           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
           </View>
+          <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
+          </View>
         </View>
-        <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
-        </View>
+        <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <X size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ position: "absolute", top: 50, right: 20, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-        <X size={20} color="#fff" />
-      </TouchableOpacity>
 
       {floatingHearts.map((heart: any) => (
         <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
