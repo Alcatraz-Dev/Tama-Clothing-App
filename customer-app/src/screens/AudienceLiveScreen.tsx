@@ -81,8 +81,6 @@ import {
   useCallStateHooks,
   ParticipantView,
   FloatingParticipantView,
-  LivestreamLayout,
-  ViewerLivestream,
 } from "@stream-io/video-react-native-sdk";
 import { useChatContext } from "stream-chat-react-native";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
@@ -196,55 +194,6 @@ const MemberAvatar = ({
     />
   );
 };
-// --- Stream Custom UI for Audience ---
-const AudienceStreamUI = ({ language }: { language: string }) => {
-  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
-  const remoteParticipants = useRemoteParticipants();
-  const participantCount = useParticipantCount();
-
-  const tr = (en: string, fr: string, ar: string) => {
-    return language === "ar" ? ar : language === "fr" ? fr : en;
-  };
-
-  // In a livestream, the host is usually the first (and often only) remote participant broadcasting
-  const host = remoteParticipants[0];
-
-  return (
-    <>
-      {/* Viewer Count Overlay - Compact & Premium */}
-      <View
-        style={{
-          position: "absolute",
-          top: 55,
-          left: 15,
-          backgroundColor: "rgba(0,0,0,0.4)",
-          paddingHorizontal: 10,
-          paddingVertical: 5,
-          borderRadius: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          zIndex: 1000,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.15)",
-        }}
-      >
-        <View
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: "#10B981",
-            marginRight: 6,
-          }}
-        />
-        <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
-          {participantCount} {tr("LIVE", "DIRECT", "مباشر")}
-        </Text>
-      </View>
-    </>
-  );
-};
-
 type AudienceStreamContentProps = {
   remoteParticipants: any[];
   participantCount: number;
