@@ -351,7 +351,13 @@ export const AnimatedAppText = Animated.createAnimatedComponent(Text);
 // Multi-language Translations
 
 // --- HELPERS ---
-const ConditionalStreamVideo = ({ client, children }: { client: any; children: React.ReactNode }) => {
+const ConditionalStreamVideo = ({
+  client,
+  children,
+}: {
+  client: any;
+  children: React.ReactNode;
+}) => {
   if (!client) return <>{children}</>;
   return <StreamVideo client={client}>{children}</StreamVideo>;
 };
@@ -377,7 +383,9 @@ export default function App() {
     | "PrivacyPolicy"
     | "TermsOfService"
   >("Onboarding");
-  const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(null);
+  const [streamClient, setStreamClient] = useState<StreamVideoClient | null>(
+    null,
+  );
   const [streamInitError, setStreamInitError] = useState<string | null>(null);
   const [isStreamInitializing, setIsStreamInitializing] = useState(false);
   const [activeTab, setActiveTab] = useState("Home");
@@ -1371,20 +1379,23 @@ export default function App() {
   const initStreamClient = async (currentUserOverride?: any) => {
     const targetUser = currentUserOverride || user;
     if (!targetUser?.uid || isStreamInitializing) return;
-    
+
     setIsStreamInitializing(true);
     setStreamInitError(null);
-    
-    try {
-      console.log("📡 Attempting to initialize Stream client with DEMO credentials...");
-      
-      const MOCK_STREAM_API_KEY = '6uwr9r2ypxw9';
-      const MOCK_STREAM_USER_ID = 'demo-user-sjbhsMhI';
-      const MOCK_STREAM_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZGVtby11c2VyLXNqYmhzTWhJIiwic3ViIjoidXNlci9kZW1vLXVzZXItc2piaHNNaEkiLCJhcGlLZXkiOiI2dXdyOXIyeXB4dzkiLCJpYXQiOjE3Nzc4MjAzNTMsImV4cCI6MTc3NzgyMzk1M30.oZnWQOqpY7EBGqaFwBlw_-pGQEWC1Kv3EsO-FPzScV8';
 
-      const streamUser: StreamUser = { 
-        id: MOCK_STREAM_USER_ID, 
-        name: "Demo User" 
+    try {
+      console.log(
+        "📡 Attempting to initialize Stream client with DEMO credentials...",
+      );
+
+      const MOCK_STREAM_API_KEY = "6uwr9r2ypxw9";
+      const MOCK_STREAM_USER_ID = "demo-user-sjbhsMhI";
+      const MOCK_STREAM_TOKEN =
+        "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZGVtby11c2VyLXNqYmhzTWhJIiwic3ViIjoidXNlci9kZW1vLXVzZXItc2piaHNNaEkiLCJhcGlLZXkiOiI2dXdyOXIyeXB4dzkiLCJpYXQiOjE3Nzc4MjAzNTMsImV4cCI6MTc3NzgyMzk1M30.oZnWQOqpY7EBGqaFwBlw_-pGQEWC1Kv3EsO-FPzScV8";
+
+      const streamUser: StreamUser = {
+        id: MOCK_STREAM_USER_ID,
+        name: "Demo User",
       };
 
       const client = StreamVideoClient.getOrCreateInstance({
@@ -1405,7 +1416,6 @@ export default function App() {
       setIsStreamInitializing(false);
     }
   };
-
 
   useEffect(() => {
     // Initial data fetching if needed
@@ -3308,647 +3318,655 @@ export default function App() {
       >
         <ConditionalStreamVideo client={streamClient}>
           <SafeAreaProvider>
-          <StatusBar
-            barStyle={theme === "dark" ? "light-content" : "dark-content"}
-          />
-          {appState === "Onboarding" ? (
-            <OnboardingScreen
-              onFinish={() => setAppState("Auth")}
-              t={t as any}
-              language={language}
-              setLanguage={setLanguage}
+            <StatusBar
+              barStyle={theme === "dark" ? "light-content" : "dark-content"}
             />
-          ) : appState === "Auth" ? (
-            <AuthScreen
-              isLogin={isLogin}
-              toggleAuth={() => setIsLogin(!isLogin)}
-              onComplete={() => setAppState("Main")}
-              onViewTerms={() => setAppState("TermsOfService")}
-              onViewPrivacy={() => setAppState("PrivacyPolicy")}
-              t={t}
-              language={language}
-            />
-          ) : appState === "SizeGuide" ? (
-            <SizeGuideScreen
-              onBack={handleBackToMain}
-              t={t}
-              theme={theme}
-              language={language}
-            />
-          ) : appState === "VendorRegistration" ? (
-            <VendorRegistrationScreen
-              onBack={handleBackToMain}
-              user={user}
-              profileData={profileData}
-              updateProfile={updateProfileData}
-              theme={theme}
-              t={t}
-              language={language}
-            />
-          ) : appState === "PrivacyPolicy" ? (
-            <PrivacyPolicyScreen
-              onBack={() =>
-                user
-                  ? (setAppState("Main"), setActiveTab("Settings"))
-                  : setAppState("Auth")
-              }
-              t={t}
-              language={language}
-            />
-          ) : appState === "TermsOfService" ? (
-            <TermsOfServiceScreen
-              onBack={() =>
-                user
-                  ? (setAppState("Main"), setActiveTab("Settings"))
-                  : setAppState("Auth")
-              }
-              t={t}
-              language={language}
-            />
-          ) : (
-            <View
-              style={[
-                styles.mainContainer,
-                {
-                  backgroundColor:
-                    theme === "dark"
-                      ? Theme.dark.colors.background
-                      : Theme.light.colors.background,
-                },
-              ]}
-            >
-              {renderMainContent()}
-
-              {/* USER BADGE MODAL */}
-              <Modal
-                visible={showBadge}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowBadge(false)}
+            {appState === "Onboarding" ? (
+              <OnboardingScreen
+                onFinish={() => setAppState("Auth")}
+                t={t as any}
+                language={language}
+                setLanguage={setLanguage}
+              />
+            ) : appState === "Auth" ? (
+              <AuthScreen
+                isLogin={isLogin}
+                toggleAuth={() => setIsLogin(!isLogin)}
+                onComplete={() => setAppState("Main")}
+                onViewTerms={() => setAppState("TermsOfService")}
+                onViewPrivacy={() => setAppState("PrivacyPolicy")}
+                t={t}
+                language={language}
+              />
+            ) : appState === "SizeGuide" ? (
+              <SizeGuideScreen
+                onBack={handleBackToMain}
+                t={t}
+                theme={theme}
+                language={language}
+              />
+            ) : appState === "VendorRegistration" ? (
+              <VendorRegistrationScreen
+                onBack={handleBackToMain}
+                user={user}
+                profileData={profileData}
+                updateProfile={updateProfileData}
+                theme={theme}
+                t={t}
+                language={language}
+              />
+            ) : appState === "PrivacyPolicy" ? (
+              <PrivacyPolicyScreen
+                onBack={() =>
+                  user
+                    ? (setAppState("Main"), setActiveTab("Settings"))
+                    : setAppState("Auth")
+                }
+                t={t}
+                language={language}
+              />
+            ) : appState === "TermsOfService" ? (
+              <TermsOfServiceScreen
+                onBack={() =>
+                  user
+                    ? (setAppState("Main"), setActiveTab("Settings"))
+                    : setAppState("Auth")
+                }
+                t={t}
+                language={language}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.mainContainer,
+                  {
+                    backgroundColor:
+                      theme === "dark"
+                        ? Theme.dark.colors.background
+                        : Theme.light.colors.background,
+                  },
+                ]}
               >
-                <UserBadge
-                  userProfile={{
-                    id:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.uid ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.id ||
-                      "",
-                    fullName:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.fullName ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.displayName ||
-                      "USER",
-                    avatarUrl:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.avatarUrl || "",
-                    role:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.role || "User",
-                    wallet: (activeTab === "PublicProfile"
-                      ? targetUserProfile
-                      : profileData
-                    )?.wallet,
-                    bio:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.bio || "",
-                    followersCount:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.followersCount ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.followers?.length ||
-                      0,
-                    followingCount:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.followingCount ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.following?.length ||
-                      0,
-                    worksCount:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.worksCount ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.works?.length ||
-                      0,
-                    friendsCount:
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.friendsCount ||
-                      (activeTab === "PublicProfile"
-                        ? targetUserProfile
-                        : profileData
-                      )?.friends?.length ||
-                      0,
-                  }}
-                  isDark={theme === "dark"}
-                  language={language}
-                  onClose={() => setShowBadge(false)}
-                  onVisitProfile={(uid: string) => {
-                    setShowBadge(false);
-                    setTargetUid(uid);
-                    setPreviousTab(activeTab);
-                    setActiveTab("PublicProfile");
-                  }}
-                  t={t}
-                />
-              </Modal>
+                {renderMainContent()}
 
-              {/* QR SCANNER MODAL */}
-              <Modal
-                visible={showScanner}
-                transparent={false}
-                animationType="slide"
-                onRequestClose={() => setShowScanner(false)}
-              >
-                <QRScanner
-                  onScan={handleScan}
-                  onClose={() => setShowScanner(false)}
-                  isDark={theme === "dark"}
-                  t={t}
-                />
-              </Modal>
-
-              {!activeTab.startsWith("Admin") &&
-                activeTab !== "Detail" &&
-                activeTab !== "CampaignDetail" &&
-                activeTab !== "LiveStream" &&
-                activeTab !== "Camera" &&
-                activeTab !== "DirectMessage" &&
-                activeTab !== "ProofOfDelivery" &&
-                activeTab !== "ShipmentTracking" &&
-                activeTab !== "ReelsDetail" &&
-                activeTab !== "StoryCreate" &&
-                activeTab !== "VendorRegistrationScreen" &&
-                activeTab !== "TreasureHunt" &&
-                activeTab !== "VirtualStylist" &&
-                activeTab !== "SmartSizeRecommender" &&
-                activeTab !== "AIHub" &&
-                activeTab !== "VirtualTryOn" && (
-                  <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
-                    <View
-                      style={[
-                        styles.glassTabBar,
-                        theme === "dark" && {
-                          backgroundColor: "rgba(20,20,25,0.8)",
-                          borderColor: "#2F2F3D",
-                        },
-                      ]}
-                    >
-                      <BlurView
-                        intensity={80}
-                        style={StyleSheet.absoluteFill}
-                        tint={theme}
-                      />
-                      <TouchableOpacity
-                        onPress={() => setActiveTab("Home")}
-                        style={styles.tabItem}
-                      >
-                        <Home
-                          size={22}
-                          color={
-                            activeTab === "Home"
-                              ? theme === "dark"
-                                ? "#FFF"
-                                : "#000"
-                              : "#AEAEB2"
-                          }
-                          strokeWidth={activeTab === "Home" ? 2.5 : 2}
-                        />
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Home" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("home")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setActiveTab("Feed")}
-                        style={styles.tabItem}
-                      >
-                        <LayoutGrid
-                          size={22}
-                          color={
-                            activeTab === "Feed"
-                              ? theme === "dark"
-                                ? "#FFF"
-                                : "#000"
-                              : "#AEAEB2"
-                          }
-                          strokeWidth={activeTab === "Feed" ? 2.5 : 2}
-                        />
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Feed" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("feed")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setFilterCategory(null);
-                          setActiveTab("Shop");
-                        }}
-                        style={styles.tabItem}
-                      >
-                        <Search
-                          size={22}
-                          color={
-                            activeTab === "Shop"
-                              ? theme === "dark"
-                                ? "#FFF"
-                                : "#000"
-                              : "#AEAEB2"
-                          }
-                          strokeWidth={activeTab === "Shop" ? 2.5 : 2}
-                        />
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Shop" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("shop")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setActiveTab("Collaboration")}
-                        style={styles.tabItem}
-                      >
-                        <Handshake
-                          size={22}
-                          color={
-                            activeTab === "Collaboration"
-                              ? theme === "dark"
-                                ? "#FFF"
-                                : "#000"
-                              : "#AEAEB2"
-                          }
-                          strokeWidth={activeTab === "Collaboration" ? 2.5 : 2}
-                        />
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Collaboration" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("collab")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setActiveTab("Cart")}
-                        style={styles.tabItem}
-                      >
-                        <View>
-                          <ShoppingBag
-                            size={22}
-                            color={
-                              activeTab === "Cart"
-                                ? theme === "dark"
-                                  ? "#FFF"
-                                  : "#000"
-                                : "#AEAEB2"
-                            }
-                            strokeWidth={activeTab === "Cart" ? 2.5 : 2}
-                          />
-                          {cart.length > 0 && (
-                            <View style={styles.cartBadge}>
-                              <Text style={styles.cartBadgeText}>
-                                {cart.length}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Cart" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("bag")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setActiveTab("Profile")}
-                        style={styles.tabItem}
-                      >
-                        <View>
-                          <User
-                            size={22}
-                            color={
-                              activeTab === "Profile"
-                                ? theme === "dark"
-                                  ? "#FFF"
-                                  : "#000"
-                                : "#AEAEB2"
-                            }
-                            strokeWidth={activeTab === "Profile" ? 2.5 : 2}
-                          />
-                          {totalUnread + pendingRequestsCount > 0 && (
-                            <View
-                              style={[
-                                styles.cartBadge,
-                                { backgroundColor: "#EF4444" },
-                              ]}
-                            >
-                              <Text style={styles.cartBadgeText}>
-                                {totalUnread + pendingRequestsCount > 99
-                                  ? "99+"
-                                  : totalUnread + pendingRequestsCount}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            activeTab === "Profile" && {
-                              color: theme === "dark" ? "#FFF" : "#000",
-                            },
-                          ]}
-                        >
-                          {t("me")}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-              {/* GLOBAL COMMENTS BOTTOM SHEET */}
-              <Modal
-                visible={isCommentSheetVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setIsCommentSheetVisible(false)}
-              >
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: "rgba(0,0,0,0.5)",
-                    justifyContent: "flex-end",
-                  }}
+                {/* USER BADGE MODAL */}
+                <Modal
+                  visible={showBadge}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={() => setShowBadge(false)}
                 >
-                  <TouchableOpacity
-                    activeOpacity={1}
-                    onPress={() => setIsCommentSheetVisible(false)}
-                    style={{ flex: 1 }}
+                  <UserBadge
+                    userProfile={{
+                      id:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.uid ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.id ||
+                        "",
+                      fullName:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.fullName ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.displayName ||
+                        "USER",
+                      avatarUrl:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.avatarUrl || "",
+                      role:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.role || "User",
+                      wallet: (activeTab === "PublicProfile"
+                        ? targetUserProfile
+                        : profileData
+                      )?.wallet,
+                      bio:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.bio || "",
+                      followersCount:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.followersCount ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.followers?.length ||
+                        0,
+                      followingCount:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.followingCount ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.following?.length ||
+                        0,
+                      worksCount:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.worksCount ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.works?.length ||
+                        0,
+                      friendsCount:
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.friendsCount ||
+                        (activeTab === "PublicProfile"
+                          ? targetUserProfile
+                          : profileData
+                        )?.friends?.length ||
+                        0,
+                    }}
+                    isDark={theme === "dark"}
+                    language={language}
+                    onClose={() => setShowBadge(false)}
+                    onVisitProfile={(uid: string) => {
+                      setShowBadge(false);
+                      setTargetUid(uid);
+                      setPreviousTab(activeTab);
+                      setActiveTab("PublicProfile");
+                    }}
+                    t={t}
                   />
-                  <Animatable.View
-                    animation="slideInUp"
-                    duration={300}
+                </Modal>
+
+                {/* QR SCANNER MODAL */}
+                <Modal
+                  visible={showScanner}
+                  transparent={false}
+                  animationType="slide"
+                  onRequestClose={() => setShowScanner(false)}
+                >
+                  <QRScanner
+                    onScan={handleScan}
+                    onClose={() => setShowScanner(false)}
+                    isDark={theme === "dark"}
+                    t={t}
+                  />
+                </Modal>
+
+                {!activeTab.startsWith("Admin") &&
+                  activeTab !== "Detail" &&
+                  activeTab !== "CampaignDetail" &&
+                  activeTab !== "LiveStream" &&
+                  activeTab !== "Camera" &&
+                  activeTab !== "DirectMessage" &&
+                  activeTab !== "ProofOfDelivery" &&
+                  activeTab !== "ShipmentTracking" &&
+                  activeTab !== "ReelsDetail" &&
+                  activeTab !== "StoryCreate" &&
+                  activeTab !== "VendorRegistrationScreen" &&
+                  activeTab !== "TreasureHunt" &&
+                  activeTab !== "VirtualStylist" &&
+                  activeTab !== "SmartSizeRecommender" &&
+                  activeTab !== "AIHub" &&
+                  activeTab !== "VirtualTryOn" && (
+                    <View style={[styles.tabBarWrapper, { zIndex: 1000 }]}>
+                      <View
+                        style={[
+                          styles.glassTabBar,
+                          theme === "dark" && {
+                            backgroundColor: "rgba(20,20,25,0.8)",
+                            borderColor: "#2F2F3D",
+                          },
+                        ]}
+                      >
+                        <BlurView
+                          intensity={80}
+                          style={StyleSheet.absoluteFill}
+                          tint={theme}
+                        />
+                        <TouchableOpacity
+                          onPress={() => setActiveTab("Home")}
+                          style={styles.tabItem}
+                        >
+                          <Home
+                            size={22}
+                            color={
+                              activeTab === "Home"
+                                ? theme === "dark"
+                                  ? "#FFF"
+                                  : "#000"
+                                : "#AEAEB2"
+                            }
+                            strokeWidth={activeTab === "Home" ? 2.5 : 2}
+                          />
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Home" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("home")}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setActiveTab("Feed")}
+                          style={styles.tabItem}
+                        >
+                          <LayoutGrid
+                            size={22}
+                            color={
+                              activeTab === "Feed"
+                                ? theme === "dark"
+                                  ? "#FFF"
+                                  : "#000"
+                                : "#AEAEB2"
+                            }
+                            strokeWidth={activeTab === "Feed" ? 2.5 : 2}
+                          />
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Feed" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("feed")}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setFilterCategory(null);
+                            setActiveTab("Shop");
+                          }}
+                          style={styles.tabItem}
+                        >
+                          <Search
+                            size={22}
+                            color={
+                              activeTab === "Shop"
+                                ? theme === "dark"
+                                  ? "#FFF"
+                                  : "#000"
+                                : "#AEAEB2"
+                            }
+                            strokeWidth={activeTab === "Shop" ? 2.5 : 2}
+                          />
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Shop" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("shop")}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setActiveTab("Collaboration")}
+                          style={styles.tabItem}
+                        >
+                          <Handshake
+                            size={22}
+                            color={
+                              activeTab === "Collaboration"
+                                ? theme === "dark"
+                                  ? "#FFF"
+                                  : "#000"
+                                : "#AEAEB2"
+                            }
+                            strokeWidth={
+                              activeTab === "Collaboration" ? 2.5 : 2
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Collaboration" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("collab")}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setActiveTab("Cart")}
+                          style={styles.tabItem}
+                        >
+                          <View>
+                            <ShoppingBag
+                              size={22}
+                              color={
+                                activeTab === "Cart"
+                                  ? theme === "dark"
+                                    ? "#FFF"
+                                    : "#000"
+                                  : "#AEAEB2"
+                              }
+                              strokeWidth={activeTab === "Cart" ? 2.5 : 2}
+                            />
+                            {cart.length > 0 && (
+                              <View style={styles.cartBadge}>
+                                <Text style={styles.cartBadgeText}>
+                                  {cart.length}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Cart" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("bag")}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setActiveTab("Profile")}
+                          style={styles.tabItem}
+                        >
+                          <View>
+                            <User
+                              size={22}
+                              color={
+                                activeTab === "Profile"
+                                  ? theme === "dark"
+                                    ? "#FFF"
+                                    : "#000"
+                                  : "#AEAEB2"
+                              }
+                              strokeWidth={activeTab === "Profile" ? 2.5 : 2}
+                            />
+                            {totalUnread + pendingRequestsCount > 0 && (
+                              <View
+                                style={[
+                                  styles.cartBadge,
+                                  { backgroundColor: "#EF4444" },
+                                ]}
+                              >
+                                <Text style={styles.cartBadgeText}>
+                                  {totalUnread + pendingRequestsCount > 99
+                                    ? "99+"
+                                    : totalUnread + pendingRequestsCount}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            style={[
+                              styles.tabLabel,
+                              activeTab === "Profile" && {
+                                color: theme === "dark" ? "#FFF" : "#000",
+                              },
+                            ]}
+                          >
+                            {t("me")}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                {/* GLOBAL COMMENTS BOTTOM SHEET */}
+                <Modal
+                  visible={isCommentSheetVisible}
+                  animationType="slide"
+                  transparent
+                  onRequestClose={() => setIsCommentSheetVisible(false)}
+                >
+                  <View
                     style={{
-                      height: height * 0.75,
-                      backgroundColor: Theme[theme].colors.background,
-                      borderTopLeftRadius: 30,
-                      borderTopRightRadius: 30,
-                      overflow: "hidden",
+                      flex: 1,
+                      backgroundColor: "rgba(0,0,0,0.5)",
+                      justifyContent: "flex-end",
                     }}
                   >
-                    <KeyboardAvoidingView
-                      behavior={Platform.OS === "ios" ? "padding" : undefined}
+                    <TouchableOpacity
+                      activeOpacity={1}
+                      onPress={() => setIsCommentSheetVisible(false)}
                       style={{ flex: 1 }}
-                    >
-                      <CommentsSectionComponent
-                        selectedWork={selectedWork}
-                        comments={comments}
-                        loadingComments={loadingComments}
-                        commentText={commentText}
-                        setCommentText={setCommentText}
-                        handleComment={handleComment}
-                        handleCommentReact={handleCommentReact}
-                        handleDeleteComment={handleDeleteComment}
-                        replyingTo={replyingTo}
-                        setReplyingTo={setReplyingTo}
-                        editingComment={editingComment}
-                        setEditingComment={setEditingComment}
-                        expandedReplies={expandedReplies}
-                        setExpandedReplies={setExpandedReplies}
-                        onClose={() => setIsCommentSheetVisible(false)}
-                        colors={Theme[theme].colors}
-                        theme={theme}
-                        tr={tr}
-                        user={user}
-                        isPostOwner={selectedWork?.userId === user?.uid}
-                        getInitials={getInitials}
-                      />
-                    </KeyboardAvoidingView>
-                  </Animatable.View>
-                </View>
-              </Modal>
-
-              <QuickAddModal
-                isVisible={!!quickAddProduct}
-                product={quickAddProduct}
-                onClose={() => setQuickAddProduct(null)}
-                onAddToCart={addToCart}
-                onSizeGuide={navigateToSizeGuide}
-                t={t}
-              />
-
-              <Modal
-                visible={trackingModalVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setTrackingModalVisible(false)}
-              >
-                <BlurView
-                  intensity={theme === "dark" ? 40 : 20}
-                  tint={theme}
-                  style={StyleSheet.absoluteFill}
-                >
-                  <KeyboardAvoidingView
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    style={{ flex: 1, justifyContent: "center", padding: 20 }}
-                  >
+                    />
                     <Animatable.View
-                      animation="zoomIn"
+                      animation="slideInUp"
                       duration={300}
                       style={{
-                        backgroundColor: Colors.surface,
-                        borderRadius: 30,
-                        padding: 24,
-                        borderWidth: 1,
-                        borderColor: Colors.border,
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 10 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 20,
-                        elevation: 5,
+                        height: height * 0.75,
+                        backgroundColor: Theme[theme].colors.background,
+                        borderTopLeftRadius: 30,
+                        borderTopRightRadius: 30,
+                        overflow: "hidden",
                       }}
                     >
-                      <View style={{ marginBottom: 20, alignItems: "center" }}>
-                        <View
-                          style={{
-                            width: 60,
-                            height: 60,
-                            borderRadius: 30,
-                            backgroundColor: Colors.accent + "20",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <Truck size={30} color={Colors.accent} />
-                        </View>
-                        <Text
-                          style={{
-                            fontSize: 18,
-                            fontWeight: "900",
-                            color: Colors.foreground,
-                          }}
-                        >
-                          {t("shipmentTracking")}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: Colors.textMuted,
-                            textAlign: "center",
-                            marginTop: 4,
-                          }}
-                        >
-                          {t("enterTrackingId")}
-                        </Text>
-                      </View>
+                      <KeyboardAvoidingView
+                        behavior={Platform.OS === "ios" ? "padding" : undefined}
+                        style={{ flex: 1 }}
+                      >
+                        <CommentsSectionComponent
+                          selectedWork={selectedWork}
+                          comments={comments}
+                          loadingComments={loadingComments}
+                          commentText={commentText}
+                          setCommentText={setCommentText}
+                          handleComment={handleComment}
+                          handleCommentReact={handleCommentReact}
+                          handleDeleteComment={handleDeleteComment}
+                          replyingTo={replyingTo}
+                          setReplyingTo={setReplyingTo}
+                          editingComment={editingComment}
+                          setEditingComment={setEditingComment}
+                          expandedReplies={expandedReplies}
+                          setExpandedReplies={setExpandedReplies}
+                          onClose={() => setIsCommentSheetVisible(false)}
+                          colors={Theme[theme].colors}
+                          theme={theme}
+                          tr={tr}
+                          user={user}
+                          isPostOwner={selectedWork?.userId === user?.uid}
+                          getInitials={getInitials}
+                        />
+                      </KeyboardAvoidingView>
+                    </Animatable.View>
+                  </View>
+                </Modal>
 
-                      <TextInput
+                <QuickAddModal
+                  isVisible={!!quickAddProduct}
+                  product={quickAddProduct}
+                  onClose={() => setQuickAddProduct(null)}
+                  onAddToCart={addToCart}
+                  onSizeGuide={navigateToSizeGuide}
+                  t={t}
+                />
+
+                <Modal
+                  visible={trackingModalVisible}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setTrackingModalVisible(false)}
+                >
+                  <BlurView
+                    intensity={theme === "dark" ? 40 : 20}
+                    tint={theme}
+                    style={StyleSheet.absoluteFill}
+                  >
+                    <KeyboardAvoidingView
+                      behavior={Platform.OS === "ios" ? "padding" : "height"}
+                      style={{ flex: 1, justifyContent: "center", padding: 20 }}
+                    >
+                      <Animatable.View
+                        animation="zoomIn"
+                        duration={300}
                         style={{
                           backgroundColor: Colors.surface,
-                          borderRadius: 15,
-                          padding: 18,
-                          color: Colors.foreground,
-                          fontSize: 16,
-                          fontWeight: "700",
-                          textAlign: "center",
+                          borderRadius: 30,
+                          padding: 24,
                           borderWidth: 1,
-                          borderColor: trackingInput
-                            ? Colors.accent
-                            : Colors.border,
+                          borderColor: Colors.border,
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 10 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 20,
+                          elevation: 5,
                         }}
-                        placeholder="BEY3A-XXXXXXXX"
-                        placeholderTextColor={Colors.textMuted}
-                        value={trackingInput}
-                        onChangeText={setTrackingInput}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                      />
-
-                      <View
-                        style={{ flexDirection: "row", gap: 12, marginTop: 24 }}
                       >
-                        <TouchableOpacity
-                          style={{
-                            flex: 1,
-                            height: 54,
-                            borderRadius: 18,
-                            backgroundColor: Colors.surface,
-                            borderWidth: 1,
-                            borderColor: Colors.border,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onPress={() => {
-                            setTrackingModalVisible(false);
-                            setTrackingInput("");
-                          }}
+                        <View
+                          style={{ marginBottom: 20, alignItems: "center" }}
                         >
-                          <Text
+                          <View
                             style={{
-                              color: Colors.foreground,
-                              fontWeight: "800",
+                              width: 60,
+                              height: 60,
+                              borderRadius: 30,
+                              backgroundColor: Colors.accent + "20",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              marginBottom: 12,
                             }}
                           >
-                            {t("cancel")}
+                            <Truck size={30} color={Colors.accent} />
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 18,
+                              fontWeight: "900",
+                              color: Colors.foreground,
+                            }}
+                          >
+                            {t("shipmentTracking")}
                           </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: Colors.textMuted,
+                              textAlign: "center",
+                              marginTop: 4,
+                            }}
+                          >
+                            {t("enterTrackingId")}
+                          </Text>
+                        </View>
+
+                        <TextInput
                           style={{
-                            flex: 2,
-                            height: 54,
-                            borderRadius: 18,
-                            backgroundColor:
-                              trackingInput.length >= 6
-                                ? Colors.accent
-                                : Colors.surface,
+                            backgroundColor: Colors.surface,
+                            borderRadius: 15,
+                            padding: 18,
+                            color: Colors.foreground,
+                            fontSize: 16,
+                            fontWeight: "700",
+                            textAlign: "center",
                             borderWidth: 1,
-                            borderColor:
-                              trackingInput.length >= 6
-                                ? "transparent"
-                                : Colors.border,
-                            alignItems: "center",
-                            justifyContent: "center",
+                            borderColor: trackingInput
+                              ? Colors.accent
+                              : Colors.border,
                           }}
-                          disabled={trackingInput.length < 6}
-                          onPress={() => {
-                            const id = trackingInput.trim().toUpperCase();
-                            if (id) {
-                              setActiveTrackingId(id);
+                          placeholder="BEY3A-XXXXXXXX"
+                          placeholderTextColor={Colors.textMuted}
+                          value={trackingInput}
+                          onChangeText={setTrackingInput}
+                          autoCapitalize="characters"
+                          autoCorrect={false}
+                        />
+
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            gap: 12,
+                            marginTop: 24,
+                          }}
+                        >
+                          <TouchableOpacity
+                            style={{
+                              flex: 1,
+                              height: 54,
+                              borderRadius: 18,
+                              backgroundColor: Colors.surface,
+                              borderWidth: 1,
+                              borderColor: Colors.border,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            onPress={() => {
                               setTrackingModalVisible(false);
                               setTrackingInput("");
-                              setActiveTab("ShipmentTracking");
-                            }
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                trackingInput.length >= 6
-                                  ? Colors.accentForeground
-                                  : Colors.textMuted,
-                              fontWeight: "900",
                             }}
                           >
-                            {t("track").toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </Animatable.View>
-                  </KeyboardAvoidingView>
-                </BlurView>
-              </Modal>
-            </View>
-          )}
+                            <Text
+                              style={{
+                                color: Colors.foreground,
+                                fontWeight: "800",
+                              }}
+                            >
+                              {t("cancel")}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{
+                              flex: 2,
+                              height: 54,
+                              borderRadius: 18,
+                              backgroundColor:
+                                trackingInput.length >= 6
+                                  ? Colors.accent
+                                  : Colors.surface,
+                              borderWidth: 1,
+                              borderColor:
+                                trackingInput.length >= 6
+                                  ? "transparent"
+                                  : Colors.border,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            disabled={trackingInput.length < 6}
+                            onPress={() => {
+                              const id = trackingInput.trim().toUpperCase();
+                              if (id) {
+                                setActiveTrackingId(id);
+                                setTrackingModalVisible(false);
+                                setTrackingInput("");
+                                setActiveTab("ShipmentTracking");
+                              }
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  trackingInput.length >= 6
+                                    ? Colors.accentForeground
+                                    : Colors.textMuted,
+                                fontWeight: "900",
+                              }}
+                            >
+                              {t("track").toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </Animatable.View>
+                    </KeyboardAvoidingView>
+                  </BlurView>
+                </Modal>
+              </View>
+            )}
           </SafeAreaProvider>
         </ConditionalStreamVideo>
       </ThemeContext.Provider>
@@ -6511,16 +6529,15 @@ function ProfileScreen({
                             (profileData?.wallet?.diamonds || 0)
                           ).toLocaleString()}
                         </Text>
-                        <View style={{ 
-                          marginLeft: 15, 
-                          backgroundColor: 'rgba(245, 158, 11, 0.1)', 
-                          padding: 8, 
-                          borderRadius: 12 
-                        }}>
-                          <Sparkles
-                            size={18}
-                            color="#F59E0B"
-                          />
+                        <View
+                          style={{
+                            marginLeft: 15,
+                            backgroundColor: "rgba(245, 158, 11, 0.1)",
+                            padding: 8,
+                            borderRadius: 12,
+                          }}
+                        >
+                          <Sparkles size={18} color="#F59E0B" />
                         </View>
                       </View>
                     </View>
@@ -6530,10 +6547,7 @@ function ProfileScreen({
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor:
-                          theme === "dark"
-                            ? "#000"
-                            : "#F2F2F7",
+                        backgroundColor: theme === "dark" ? "#000" : "#F2F2F7",
                         alignItems: "center",
                         justifyContent: "center",
                         borderWidth: 1,
@@ -6543,7 +6557,11 @@ function ProfileScreen({
                             : "rgba(0,0,0,0.05)",
                       }}
                     >
-                      <Wallet size={20} color={colors.foreground} strokeWidth={2.5} />
+                      <Wallet
+                        size={20}
+                        color={colors.foreground}
+                        strokeWidth={2.5}
+                      />
                     </TouchableOpacity>
                   </View>
 
