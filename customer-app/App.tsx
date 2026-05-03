@@ -269,7 +269,7 @@ import {
   StreamVideoClient,
   User as StreamUser,
 } from "@stream-io/video-react-native-sdk";
-import { ChatWrapper } from "./src/components/ChatWrapper";
+// ChatWrapper removed for testing
 import { STREAM_API_KEY } from "./src/config/stream";
 import { getStreamTokenForCurrentUser } from "./src/services/streamAuth";
 import { API_BASE_URL } from "./src/config/api";
@@ -2221,6 +2221,13 @@ export default function App() {
           />
         );
       case "LiveStream":
+        // If Stream init failed, go back to home
+        if (streamInitError) {
+          console.warn("⚠️ Stream not available, returning to Home");
+          setActiveTab("Home");
+          return null;
+        }
+        
         return isLiveHost ? (
           <HostLiveScreen
             channelId={activeLiveChannel}
@@ -3327,7 +3334,8 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ChatWrapper>
+      {/* ChatWrapper removed temporarily for testing */}
+      <View style={{ flex: 1 }}>
         <ThemeContext.Provider
           value={{ theme, colors: getAppColors(theme), setTheme }}
         >
@@ -3982,10 +3990,10 @@ export default function App() {
                 </Modal>
               </View>
             )}
-          </SafeAreaProvider>
-        </ConditionalStreamVideo>
-      </ThemeContext.Provider>
-      </ChatWrapper>
+</SafeAreaProvider>
+          </ConditionalStreamVideo>
+        </ThemeContext.Provider>
+      </View>
     </GestureHandlerRootView>
   );
 }

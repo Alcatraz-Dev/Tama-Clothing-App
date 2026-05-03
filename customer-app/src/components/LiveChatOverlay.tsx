@@ -33,9 +33,42 @@ export const LiveChatOverlay = ({
   onClose,
   currentUserId,
 }: LiveChatOverlayProps) => {
-  const { client } = useChatContext();
+  // Try to use chat context, but handle if not available
+  let client = null;
+  try {
+    const context = useChatContext();
+    client = context.client;
+  } catch (e) {
+    // Chat context not available - chat is disabled
+    console.log("Chat context not available");
+  }
+  
   const [channel, setChannel] = useState<ChannelType | null>(null);
   const insets = useSafeAreaInsets();
+
+  // Show message when chat is not available
+  if (!client) {
+    return (
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+        <View style={styles.overlay}>
+          <TouchableOpacity style={styles.backdrop} onPress={onClose} />
+          <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+            <View style={styles.header}>
+              <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+              <Text style={styles.title}>Live Chat</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.noChatContainer}>
+              <Text style={styles.noChatText}>Chat is currently unavailable</Text>
+              <Text style={styles.noChatSubtext}>Please try again later</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   useEffect(() => {
     if (!client || !channelId || !visible) return;
@@ -168,5 +201,23 @@ const styles = StyleSheet.create({
     padding: 8,
     justifyContent: "center",
     alignItems: "center",
+  },
+  noChatContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  noChatText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  noChatSubtext: {
+    color: "#888",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
   },
 });

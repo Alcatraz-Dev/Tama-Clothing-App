@@ -328,7 +328,16 @@ export default function AudienceLiveScreen(props: Props) {
     return String(name) || "";
   };
   const client = useStreamVideoClient();
-  const { client: chatClient } = useChatContext();
+  
+  // Try to get chat client, but handle if not available
+  let chatClient = null;
+  try {
+    const { client: streamChatClient } = useChatContext();
+    chatClient = streamChatClient;
+  } catch (e) {
+    console.log("Chat context not available in AudienceLiveScreen");
+  }
+  
   const [call, setCall] = useState<any>(null);
 
   useEffect(() => {

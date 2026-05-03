@@ -284,7 +284,7 @@ export default function HostLiveScreen(props: Props) {
 
     const switchCam = async () => {
       try {
-        await camera.switchCamera();
+        await camera.flip();
       } catch (e) {
         console.error("Switch camera error:", e);
       }
@@ -459,8 +459,25 @@ export default function HostLiveScreen(props: Props) {
     );
   };
   const client = useStreamVideoClient();
-  const { client: chatClient } = useChatContext();
-  const { takeScreenshot } = useScreenshot();
+  
+  // Try to get chat client, but handle if not available
+  let chatClient = null;
+  try {
+    const { client: streamChatClient } = useChatContext();
+    chatClient = streamChatClient;
+  } catch (e) {
+    console.log("Chat context not available in HostLiveScreen");
+  }
+  
+  // Try to use screenshot, handle if not available
+  let takeScreenshot = null;
+  try {
+    const screenshot = useScreenshot();
+    takeScreenshot = screenshot?.takeScreenshot;
+  } catch (e) {
+    console.log("Screenshot context not available");
+  }
+  
   const [call, setCall] = useState<any>(null);
   const [resolvedName, setResolvedName] = useState(userName);
   const [isLiveStarted, setIsLiveStarted] = useState(false); // ✅ Track if live has started to show controls
@@ -485,7 +502,6 @@ export default function HostLiveScreen(props: Props) {
             await chatClient
               .channel("messaging", channelId, {
                 members: [{ user_id: userId }],
-                custom: { type: "livestream_chat" },
               })
               .create();
             console.log("✅ Chat channel created");
@@ -1326,7 +1342,7 @@ export default function HostLiveScreen(props: Props) {
 
   // Screenshot handler
   const handleTakeScreenshot = async () => {
-    if (!call) return;
+    if (!call || !takeScreenshot) return;
     try {
       const localParticipant = call.state.localParticipant;
       const base64 = await takeScreenshot(localParticipant, "videoTrack");
