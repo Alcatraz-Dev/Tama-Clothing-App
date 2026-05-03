@@ -245,6 +245,123 @@ const AudienceStreamUI = ({ language }: { language: string }) => {
   );
 };
 
+type AudienceStreamContentProps = {
+  remoteParticipants: any[];
+  participantCount: number;
+  streamDuration: number;
+  formatDuration: (s: number) => string;
+  onClose: () => void;
+  floatingHearts: any[];
+  pinnedProduct: any;
+  getLocalizedName: (name: any) => string;
+  featuredProducts: any[];
+  setPinnedProduct: (p: any) => void;
+  handleSendLike: () => void;
+  setShowGifts: (v: boolean) => void;
+  setShowChat: (v: boolean) => void;
+  t: (key: string) => string;
+};
+
+const AudienceStreamContent = ({
+  remoteParticipants,
+  participantCount,
+  streamDuration,
+  formatDuration,
+  onClose,
+  floatingHearts,
+  pinnedProduct,
+  getLocalizedName,
+  featuredProducts,
+  setPinnedProduct,
+  handleSendLike,
+  setShowGifts,
+  setShowChat,
+  t,
+}: AudienceStreamContentProps) => {
+  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
+  const remote = useRemoteParticipants();
+  const count = useParticipantCount();
+  const host = remote[0] || remoteParticipants[0];
+  const viewerCount = count || participantCount;
+
+  return (
+    <>
+      {host && (
+        <ParticipantView participant={host} style={StyleSheet.absoluteFill} />
+      )}
+
+      <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
+            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {viewerCount}</Text>
+          </View>
+        </View>
+        <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity onPress={onClose} style={{ position: "absolute", top: 50, right: 20, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <X size={20} color="#fff" />
+      </TouchableOpacity>
+
+      {floatingHearts.map((heart) => (
+        <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
+          <Text style={{ fontSize: 30 }}>❤️</Text>
+        </Animatable.View>
+      ))}
+
+      {pinnedProduct && (
+        <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
+          <BlurView intensity={90} tint="dark" style={{ borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.25)", overflow: "hidden" }}>
+            <Image source={{ uri: pinnedProduct.images?.[0] }} style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: "#333" }} />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text numberOfLines={1} style={{ color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 3 }}>{getLocalizedName(pinnedProduct.name)}</Text>
+              <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}>{pinnedProduct.discountPrice || pinnedProduct.price} TND</Text>
+            </View>
+          </BlurView>
+        </Animatable.View>
+      )}
+
+      {featuredProducts.length > 0 && (
+        <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
+            {featuredProducts.map((p: any) => {
+              const isPinned = pinnedProduct?.id === p.id;
+              return (
+                <TouchableOpacity key={p.id} onPress={() => { setPinnedProduct(p); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
+                  <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
+                  {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
+                  <View style={{ marginTop: 4 }}>
+                    <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
+                    <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
+        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
+          <Heart size={18} color="#fff" fill="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowGifts(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <GiftIcon size={18} color="#fff" strokeWidth={2} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+          <MessageCircle size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+};
+
 export default function AudienceLiveScreen(props: Props) {
   const t = typeof props.t === "function" ? props.t : (key: string) => key;
   // Translation helper: tr(en, fr, ar)
@@ -319,11 +436,6 @@ export default function AudienceLiveScreen(props: Props) {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
   
-  // Get remote participants from hooks
-  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
-  const remoteParticipants = useRemoteParticipants();
-  const participantCount = useParticipantCount();
-
   // Try to get chat client, but handle if not available
   let chatClient = null;
   try {
@@ -334,6 +446,8 @@ export default function AudienceLiveScreen(props: Props) {
   }
 
   const [call, setCall] = useState<any>(null);
+  const [remoteParticipants, setRemoteParticipants] = useState<any[]>([]);
+  const [participantCount, setParticipantCount] = useState(0);
 
   useEffect(() => {
     if (streamInitError || !client || !channelId) return;
@@ -2260,99 +2374,22 @@ export default function AudienceLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-            {/* Video View - Shows host video */}
-            {remoteParticipants[0] && (
-              <ParticipantView participant={remoteParticipants[0]} style={StyleSheet.absoluteFill} />
-            )}
-            
-            {/* Top Bar - LIVE Badge, Viewer Count, Duration */}
-            <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
-                </View>
-              </View>
-              <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
-              </View>
-            </View>
-            
-            {/* Exit Button */}
-            <TouchableOpacity
-              onPress={onClose}
-              style={{ position: "absolute", top: 50, right: 20, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}
-            >
-              <X size={20} color="#fff" />
-            </TouchableOpacity>
-            
-            {/* Floating Hearts */}
-            {floatingHearts.map((heart) => (
-              <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
-                <Text style={{ fontSize: 30 }}>❤️</Text>
-              </Animatable.View>
-            ))}
-            
-            {/* Pinned Product Card */}
-            {pinnedProduct && (
-              <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
-                <BlurView intensity={90} tint="dark" style={{ borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.25)", overflow: "hidden" }}>
-                  <Image source={{ uri: pinnedProduct.images?.[0] }} style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: "#333" }} />
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text numberOfLines={1} style={{ color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 3 }}>{getLocalizedName(pinnedProduct.name)}</Text>
-                    <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}>{pinnedProduct.discountPrice || pinnedProduct.price} TND</Text>
-                  </View>
-                </BlurView>
-              </Animatable.View>
-            )}
-            
-            {/* Product Carousel */}
-            {featuredProducts.length > 0 && (
-              <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
-                  {featuredProducts.map((p: any) => {
-                    const isPinned = pinnedProduct?.id === p.id;
-                    return (
-                      <TouchableOpacity key={p.id} onPress={() => { setPinnedProduct(p); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
-                        <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
-                        {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
-                        <View style={{ marginTop: 4 }}>
-                          <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
-                          <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-            
-            {/* Right Side Action Buttons */}
-            <View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
-              <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
-                <Heart size={18} color="#fff" fill="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowGifts(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-                <GiftIcon size={18} color="#fff" strokeWidth={2} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-                <MessageCircle size={18} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            
-            {/* Exit Button - Bottom loading area */}
-            {!call && (
-              <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={{ color: "#fff", marginTop: 10 }}>Joining Live Stream...</Text>
-                <TouchableOpacity onPress={onClose} style={{ marginTop: 30, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-                  <Text style={{ color: "#fff", fontWeight: "600" }}>{t ? t("exit") : "Exit"}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <AudienceStreamContent
+              remoteParticipants={remoteParticipants}
+              participantCount={participantCount}
+              streamDuration={streamDuration}
+              formatDuration={formatDuration}
+              onClose={onClose}
+              floatingHearts={floatingHearts}
+              pinnedProduct={pinnedProduct}
+              getLocalizedName={getLocalizedName}
+              featuredProducts={featuredProducts}
+              setPinnedProduct={setPinnedProduct}
+              handleSendLike={handleSendLike}
+              setShowGifts={setShowGifts}
+              setShowChat={setShowChat}
+              t={t}
+            />
           </StreamCall>
         </View>
       ) : (

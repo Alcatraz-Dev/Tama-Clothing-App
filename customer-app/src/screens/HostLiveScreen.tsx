@@ -244,9 +244,6 @@ type HostStreamContentProps = {
   setActivePoll: (p: any) => void;
   durationSeconds: number;
   formatDuration: (s: number) => string;
-  onCameraToggle: () => void;
-  onMicToggle: () => void;
-  onCameraFlip: () => void;
 };
 
 const HostStreamContent = ({
@@ -278,9 +275,6 @@ const HostStreamContent = ({
   setActivePoll,
   durationSeconds,
   formatDuration,
-  onCameraToggle,
-  onMicToggle,
-  onCameraFlip,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
   const camState = useCameraState();
@@ -386,13 +380,13 @@ const HostStreamContent = ({
       </View>
 
       <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, zIndex: 400 }}>
-        <TouchableOpacity onPress={onCameraToggle} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.toggle(); } catch (e) { console.error("Camera toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
           {isCameraOn ? <Camera size={20} color="#fff" /> : <CameraOff size={20} color="#fff" />}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onMicToggle} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity onPress={async () => { try { if (microphone) await microphone.toggle(); } catch (e) { console.error("Mic toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
           {isMicMuted ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onCameraFlip} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.flip(); } catch (e) { console.error("Camera flip error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
           <FlipHorizontal size={20} color="#fff" />
         </TouchableOpacity>
       </View>
