@@ -153,31 +153,32 @@ const MemberAvatar = ({
   );
 };
 type AudienceStreamContentProps = {
-  remoteParticipants: any[];
-  participantCount: number;
-  streamDuration: number;
-  formatDuration: (s: number) => string;
-  onClose: () => void;
-  floatingHearts: any[];
-  pinnedProduct: any;
-  getLocalizedName: (name: any) => string;
-  featuredProducts: any[];
-  setPinnedProduct: (p: any) => void;
-  handleSendLike: () => void;
-  setShowGifts: (v: boolean) => void;
-  setShowChat: (v: boolean) => void;
-  t: (key: string) => string;
-  hostAvatar?: string;
-  hostBrandName?: string;
-  totalLikes: number;
-  isInPK: boolean;
-  hostCameraOn?: boolean;
-  activeCoupon?: any;
-  couponTimeRemaining?: number;
-  setCouponInput?: (v: string) => void;
-  couponInput?: string;
-  setShowPurchaseModal?: (v: boolean) => void;
-};
+   remoteParticipants: any[];
+   participantCount: number;
+   streamDuration: number;
+   formatDuration: (s: number) => string;
+   onClose: () => void;
+   floatingHearts: any[];
+   pinnedProduct: any;
+   getLocalizedName: (name: any) => string;
+   featuredProducts: any[];
+   setPinnedProduct: (p: any) => void;
+   handleSendLike: () => void;
+   setShowGifts: (v: boolean) => void;
+   setShowChat: (v: boolean) => void;
+   t: (key: string) => string;
+   hostAvatar?: string;
+   hostBrandName?: string;
+   totalLikes: number;
+   isInPK: boolean;
+   hostCameraOn?: boolean;
+   activeCoupon?: any;
+   couponTimeRemaining?: number;
+   setCouponInput: (v: string) => void;
+   couponInput?: string;
+   setShowPurchaseModal: (v: boolean) => void;
+   setSelectedProduct: (p: any) => void;
+ };
 
 const AudienceStreamContent = ({
   remoteParticipants,
@@ -204,6 +205,7 @@ const AudienceStreamContent = ({
   setCouponInput,
   couponInput,
   setShowPurchaseModal,
+  setSelectedProduct,
 }: AudienceStreamContentProps) => {
   const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
   const remote = useRemoteParticipants();
@@ -269,129 +271,138 @@ return (
         </Animatable.View>
       )}
 
-       {featuredProducts.length > 0 && (
-        <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
-            {featuredProducts.map((p: any) => {
-              const isPinned = pinnedProduct?.id === p.id;
-              return (
-                <TouchableOpacity key={p.id} onPress={() => { setPinnedProduct(p); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
-                  <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
-                  {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
-                  <View style={{ marginTop: 4 }}>
-                    <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
-                    <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
+{featuredProducts.length > 0 && (
+         <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
+           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
+             {featuredProducts.map((p: any) => {
+               const isPinned = pinnedProduct?.id === p.id;
+               return (
+                 <TouchableOpacity key={p.id} onPress={() => { setPinnedProduct(p); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
+                   <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
+                   {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
+                   <View style={{ marginTop: 4 }}>
+                     <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
+                     <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
+                   </View>
+                   <TouchableOpacity
+                     onPress={() => {
+                       setSelectedProduct(p);
+                       setShowPurchaseModal(true);
+                     }}
+                     style={{ position: "absolute", bottom: 2, right: 2, backgroundColor: "rgba(245,158,11,0.9)", borderRadius: 10, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}
+                   >
+                     <ShoppingBag size={12} color="#000" />
+                   </TouchableOpacity>
+                 </TouchableOpacity>
+               );
+             })}
+           </ScrollView>
+         </View>
+       )}
 
-      {/* Active Coupon Display Card - Modern Product Card Style */}
-      {activeCoupon && (
-        <Animatable.View animation="fadeInUp" duration={400} style={{ position: "absolute", bottom: 80, left: 15, right: 15, zIndex: 300 }}>
-          <View style={{ backgroundColor: "#121218", borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: "rgba(255,215,0,0.3)", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              {/* Coupon Icon Section */}
-              <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255, 215, 0, 0.15)", alignItems: "center", justifyContent: "center" }}>
-                <Ticket size={28} color="#F59E0B" />
-                {/* Battery indicator for coupon */}
-                <View style={{ position: "absolute", bottom: 2, right: 2, flexDirection: "row", gap: 1 }}>
-                  {[1, 2, 3].map((i) => (
-                    <View key={i} style={{ width: 3, height: 6, backgroundColor: i <= 2 ? "#F59E0B" : "rgba(245,158,11,0.3)", borderRadius: 1 }} />
-                  ))}
-                </View>
-              </View>
+{/* Active Coupon Display Card - Modern Product Card Style */}
+       {activeCoupon && (
+         <Animatable.View animation="fadeInUp" duration={400} style={{ position: "absolute", bottom: 80, left: 15, right: 15, zIndex: 300 }}>
+           <View style={{ backgroundColor: "#121218", borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: "rgba(255,215,0,0.3)", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}>
+             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+               {/* Coupon Icon Section */}
+               <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255, 215, 0, 0.15)", alignItems: "center", justifyContent: "center" }}>
+                 <Ticket size={28} color="#F59E0B" />
+                 {/* Battery indicator for coupon */}
+                 <View style={{ position: "absolute", bottom: 2, right: 2, flexDirection: "row", gap: 1 }}>
+                   {[1, 2, 3].map((i) => (
+                     <View key={i} style={{ width: 3, height: 6, backgroundColor: i <= 2 ? "#F59E0B" : "rgba(245,158,11,0.3)", borderRadius: 1 }} />
+                   ))}
+                 </View>
+               </View>
 
-              {/* Coupon Details */}
-              <View style={{ flex: 1, gap: 4 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 10, letterSpacing: 1 }}>✨ ACTIVE COUPON</Text>
-                </View>
-                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18, letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
-                
-                {/* Discount Info */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                  {activeCoupon.discountType === "percentage" && (
-                    <>
-                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount}%</Text>
-                      <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
-                    </>
-                  )}
-                  {activeCoupon.discountType === "fixed" && (
-                    <>
-                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount} TND</Text>
-                      <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
-                    </>
-                  )}
-                  {activeCoupon.discountType === "free_shipping" && (
-                    <>
-                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 14 }}>📦 FREE SHIPPING</Text>
-                    </>
-                  )}
-                </View>
+               {/* Coupon Details */}
+               <View style={{ flex: 1, gap: 4 }}>
+                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                   <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 10, letterSpacing: 1 }}>✨ ACTIVE COUPON</Text>
+                 </View>
+                 <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18, letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                 
+                 {/* Discount Info */}
+                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                   {activeCoupon.discountType === "percentage" && (
+                     <>
+                       <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount}%</Text>
+                       <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                     </>
+                   )}
+                   {activeCoupon.discountType === "fixed" && (
+                     <>
+                       <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount} TND</Text>
+                       <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                     </>
+                   )}
+                   {activeCoupon.discountType === "free_shipping" && (
+                     <>
+                       <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 14 }}>📦 FREE SHIPPING</Text>
+                     </>
+                   )}
+                 </View>
 
-                {/* Battery/Stock bars */}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
-                  {[1, 2, 3, 4].map((i) => (
-                    <View
-                      key={i}
-                      style={{
-                        width: 5,
-                        height: 10,
-                        borderRadius: 1,
-                        backgroundColor: i <= 3 ? "#F59E0B" : "rgba(245,158,11,0.2)",
-                      }}
-                    />
-                  ))}
-                  <Text style={{ color: "#888", fontSize: 9, marginLeft: 4 }}>HIGH VALUE</Text>
-                </View>
-              </View>
+                 {/* Battery/Stock bars */}
+                 <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
+                   {[1, 2, 3, 4].map((i) => (
+                     <View
+                       key={i}
+                       style={{
+                         width: 5,
+                         height: 10,
+                         borderRadius: 1,
+                         backgroundColor: i <= 3 ? "#F59E0B" : "rgba(245,158,11,0.2)",
+                       }}
+                     />
+                   ))}
+                   <Text style={{ color: "#888", fontSize: 9, marginLeft: 4 }}>HIGH VALUE</Text>
+                 </View>
+               </View>
 
-              {/* Timer */}
-              <View style={{ alignItems: "center" }}>
-                <Text style={{ color: "#888", fontSize: 9, fontWeight: "700" }}>ENDS IN</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                  <Text style={{ color: "#FFD700", fontWeight: "900", fontSize: 18 }}>
-                    {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, "0")}
-                  </Text>
-                  <Text style={{ color: "#888", fontSize: 9 }}>m</Text>
-                </View>
-                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(245,158,11,0.1)", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
-                  <Ticket size={16} color="#F59E0B" />
-                </View>
-              </View>
-            </View>
+               {/* Timer */}
+               <View style={{ alignItems: "center" }}>
+                 <Text style={{ color: "#888", fontSize: 9, fontWeight: "700" }}>ENDS IN</Text>
+                 <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+<Text style={{ color: "#FFD700", fontWeight: "900", fontSize: 18 }}>
+                      {Math.floor((couponTimeRemaining ?? 0) / 60)}:{((couponTimeRemaining ?? 0) % 60).toString().padStart(2, "0")}
+                    </Text>
+                   <Text style={{ color: "#888", fontSize: 9 }}>m</Text>
+                 </View>
+                 <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(245,158,11,0.1)", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+                   <Ticket size={16} color="#F59E0B" />
+                 </View>
+               </View>
+             </View>
 
-            {/* Divider */}
-            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 12 }} />
+             {/* Divider */}
+             <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 12 }} />
 
-            {/* Input Section */}
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TextInput
-                placeholder="Enter code"
-                placeholderTextColor="#555"
-                value={couponInput}
-                onChangeText={setCouponInput}
-                autoCapitalize="characters"
-                style={{ flex: 1, backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", fontSize: 16, fontWeight: "bold", borderWidth: 1.5, borderColor: "#2A2A35" }}
-              />
-              <TouchableOpacity
-                onPress={() => {
-                  if (couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
-                    Alert.alert("Success", `Coupon applied! ${activeCoupon.discountType === 'percentage' ? activeCoupon.discount + '%' : activeCoupon.discount + ' TND'} discount`);
-                  }
-                }}
-                style={{ backgroundColor: "#F59E0B", paddingHorizontal: 20, borderRadius: 12, justifyContent: "center", alignItems: "center" }}
-              >
-                <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>APPLY</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Animatable.View>
-      )}
+             {/* Input Section */}
+             <View style={{ flexDirection: "row", gap: 8 }}>
+               <TextInput
+                 placeholder="Enter code"
+                 placeholderTextColor="#555"
+                 value={couponInput ?? ""}
+                 onChangeText={setCouponInput}
+                 autoCapitalize="characters"
+                 style={{ flex: 1, backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", fontSize: 16, fontWeight: "bold", borderWidth: 1.5, borderColor: "#2A2A35" }}
+               />
+               <TouchableOpacity
+                 onPress={() => {
+                   if ((couponInput ?? "").trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
+                     Alert.alert("Success", `Coupon applied! ${activeCoupon.discountType === 'percentage' ? activeCoupon.discount + '%' : activeCoupon.discount + ' TND'} discount`);
+                   }
+                 }}
+                 style={{ backgroundColor: "#F59E0B", paddingHorizontal: 20, borderRadius: 12, justifyContent: "center", alignItems: "center" }}
+               >
+                 <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>APPLY</Text>
+               </TouchableOpacity>
+             </View>
+           </View>
+         </Animatable.View>
+       )}
 
       <View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
         <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
@@ -943,67 +954,68 @@ export default function AudienceLiveScreen(props: Props) {
   const lastGiftTimestampRef = useRef(0); // Track last processed gift to avoid duplicates
   const heartCounter = useRef(0);
 
-  const handlePurchase = async () => {
-    if (!customerName.trim()) {
-      Alert.alert(
-        t("error") || "Error",
-        t("nameRequired") || "Please enter your full name",
-      );
-      return;
-    }
-    if (!phoneNumber.trim()) {
-      Alert.alert(
-        t("error") || "Error",
-        t("phoneRequired") || "Please enter your phone number",
-      );
-      return;
-    }
-    if (!address.trim()) {
-      Alert.alert(
-        t("error") || "Error",
-        t("addressRequired") || "Please enter a shipping address",
-      );
-      return;
-    }
-    if (!selectedProduct) return;
-    if (
-      selectedProduct.colors &&
-      selectedProduct.colors.length > 0 &&
-      !selectedColor
-    ) {
-      Alert.alert(
-        t("error") || "Error",
-        t("selectColor") || "Please select a color",
-      );
-      return;
-    }
-    if (
-      selectedProduct.sizes &&
-      selectedProduct.sizes.length > 0 &&
-      !selectedSize
-    ) {
-      Alert.alert(
-        t("error") || "Error",
-        t("selectSize") || "Please select a size",
-      );
-      return;
-    }
+const handlePurchase = async () => {
+     if (!customerName.trim()) {
+       Alert.alert(
+         t("error") || "Error",
+         t("nameRequired") || "Please enter your full name",
+       );
+       return;
+     }
+     if (!phoneNumber.trim()) {
+       Alert.alert(
+         t("error") || "Error",
+         t("phoneRequired") || "Please enter your phone number",
+       );
+       return;
+     }
+     if (!address.trim()) {
+       Alert.alert(
+         t("error") || "Error",
+         t("addressRequired") || "Please enter a shipping address",
+       );
+       return;
+     }
+     if (!selectedProduct) return;
+     if (
+       selectedProduct.colors &&
+       selectedProduct.colors.length > 0 &&
+       !selectedColor
+     ) {
+       Alert.alert(
+         t("error") || "Error",
+         t("selectColor") || "Please select a color",
+       );
+       return;
+     }
+     if (
+       selectedProduct.sizes &&
+       selectedProduct.sizes.length > 0 &&
+       !selectedSize
+     ) {
+       Alert.alert(
+         t("error") || "Error",
+         t("selectSize") || "Please select a size",
+       );
+       return;
+     }
 
-    const basePrice = selectedProduct.discountPrice || selectedProduct.price;
-    let finalPrice = basePrice;
-    let appliedCoupon = null;
+     const basePrice = selectedProduct.discountPrice || selectedProduct.price;
+     let finalPrice = basePrice;
+     let appliedCoupon = null;
 
-    if (
-      activeCoupon &&
-      couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()
-    ) {
-      if (activeCoupon.type === "percentage") {
-        finalPrice = basePrice * (1 - activeCoupon.discount / 100);
-      } else {
-        finalPrice = Math.max(0, basePrice - activeCoupon.discount);
-      }
-      appliedCoupon = activeCoupon.code;
-    }
+     if (
+       activeCoupon &&
+       (couponInput ?? "").trim().toUpperCase() === activeCoupon.code.toUpperCase()
+     ) {
+       if (activeCoupon.discountType === "percentage") {
+         finalPrice = basePrice * (1 - activeCoupon.discount / 100);
+       } else if (activeCoupon.discountType === "fixed") {
+         finalPrice = Math.max(0, basePrice - activeCoupon.discount);
+       }
+       // free_shipping doesn't affect price but applies free shipping
+       appliedCoupon = activeCoupon.code;
+     }
 
     await LiveSessionService.broadcastPurchase(channelId, {
       purchaserName: userName || "Viewer",
@@ -2415,32 +2427,33 @@ export default function AudienceLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-             <AudienceStreamContent
-               remoteParticipants={remoteParticipants}
-               participantCount={participantCount}
-               streamDuration={streamDuration}
-               formatDuration={formatDuration}
-               onClose={onClose}
-               floatingHearts={floatingHearts}
-               pinnedProduct={pinnedProduct}
-               getLocalizedName={getLocalizedName}
-               featuredProducts={featuredProducts}
-               setPinnedProduct={setPinnedProduct}
-               handleSendLike={handleSendLike}
-               setShowGifts={setShowGifts}
-               setShowChat={setShowChat}
-               t={t}
-               hostAvatar={props.hostAvatar}
-               hostBrandName={props.hostBrandName}
-               totalLikes={totalLikes}
-               isInPK={isInPK}
-               hostCameraOn={hostCameraOn}
-               activeCoupon={activeCoupon}
-               couponTimeRemaining={couponTimeRemaining}
-               setCouponInput={setCouponInput}
-               couponInput={couponInput}
-               setShowPurchaseModal={setShowPurchaseModal}
-             />
+<AudienceStreamContent
+                remoteParticipants={remoteParticipants}
+                participantCount={participantCount}
+                streamDuration={streamDuration}
+                formatDuration={formatDuration}
+                onClose={onClose}
+                floatingHearts={floatingHearts}
+                pinnedProduct={pinnedProduct}
+                getLocalizedName={getLocalizedName}
+                featuredProducts={featuredProducts}
+                setPinnedProduct={setPinnedProduct}
+                handleSendLike={handleSendLike}
+                setShowGifts={setShowGifts}
+                setShowChat={setShowChat}
+                t={t}
+                hostAvatar={props.hostAvatar}
+                hostBrandName={props.hostBrandName}
+                totalLikes={totalLikes}
+                isInPK={isInPK}
+                hostCameraOn={hostCameraOn}
+                activeCoupon={activeCoupon}
+                couponTimeRemaining={couponTimeRemaining}
+                setCouponInput={setCouponInput}
+                couponInput={couponInput}
+                setShowPurchaseModal={setShowPurchaseModal}
+                setSelectedProduct={setSelectedProduct}
+              />
           </StreamCall>
         </View>
       ) : (
@@ -2863,9 +2876,87 @@ export default function AudienceLiveScreen(props: Props) {
                 <Send size={18} color="#fff" />
               </TouchableOpacity>
             </BlurView>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+</View>
+         </View>
+       </Modal>
+
+       {/* Purchase Modal */}
+       <Modal
+         visible={showPurchaseModal}
+         transparent={true}
+         animationType="slide"
+         onRequestClose={() => setShowPurchaseModal(false)}
+       >
+         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" }}>
+           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowPurchaseModal(false)} />
+           <View style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === "ios" ? 34 : 20 }}>
+             {selectedProduct && (
+               <>
+                 <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+                   <Image source={{ uri: selectedProduct.images?.[0] }} style={{ width: 60, height: 60, borderRadius: 10, backgroundColor: "#333" }} />
+                   <View style={{ flex: 1, marginLeft: 12 }}>
+                     <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }} numberOfLines={1}>{getLocalizedName(selectedProduct.name)}</Text>
+                     <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 18 }}>{selectedProduct.discountPrice || selectedProduct.price} TND</Text>
+                   </View>
+                 </View>
+
+                 {selectedProduct.colors && selectedProduct.colors.length > 0 && (
+                   <View style={{ marginBottom: 12 }}>
+                     <Text style={{ color: "#aaa", marginBottom: 6 }}>Color</Text>
+                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                       {selectedProduct.colors.map((c: string) => (
+                         <TouchableOpacity key={c} onPress={() => setSelectedColor(c)} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: selectedColor === c ? "#F59E0B" : "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: selectedColor === c ? "#F59E0B" : "rgba(255,255,255,0.2)" }}>
+                           <Text style={{ color: selectedColor === c ? "#000" : "#fff", fontWeight: "bold" }}>{c}</Text>
+                         </TouchableOpacity>
+                       ))}
+                     </View>
+                   </View>
+                 )}
+
+                 {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                   <View style={{ marginBottom: 12 }}>
+                     <Text style={{ color: "#aaa", marginBottom: 6 }}>Size</Text>
+                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                       {selectedProduct.sizes.map((s: string) => (
+                         <TouchableOpacity key={s} onPress={() => setSelectedSize(s)} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: selectedSize === s ? "#F59E0B" : "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: selectedSize === s ? "#F59E0B" : "rgba(255,255,255,0.2)" }}>
+                           <Text style={{ color: selectedSize === s ? "#000" : "#fff", fontWeight: "bold" }}>{s}</Text>
+                         </TouchableOpacity>
+                       ))}
+                     </View>
+                   </View>
+                 )}
+
+                 <TextInput
+                   placeholder="Full Name"
+                   placeholderTextColor="#555"
+                   value={customerName}
+                   onChangeText={setCustomerName}
+                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 12, borderWidth: 1, borderColor: "#2A2A35" }}
+                 />
+                 <TextInput
+                   placeholder="Phone Number"
+                   placeholderTextColor="#555"
+                   value={phoneNumber}
+                   onChangeText={setPhoneNumber}
+                   keyboardType="phone-pad"
+                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 12, borderWidth: 1, borderColor: "#2A2A35" }}
+                 />
+                 <TextInput
+                   placeholder="Shipping Address"
+                   placeholderTextColor="#555"
+                   value={address}
+                   onChangeText={setAddress}
+                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 20, borderWidth: 1, borderColor: "#2A2A35" }}
+                 />
+
+                 <TouchableOpacity onPress={handlePurchase} style={{ backgroundColor: "#10B981", paddingVertical: 16, borderRadius: 12, alignItems: "center" }}>
+                   <Text style={{ color: "#000", fontWeight: "900", fontSize: 16 }}>Place Order</Text>
+                 </TouchableOpacity>
+               </>
+             )}
+           </View>
+         </View>
+       </Modal>
+     </View>
+   );
 }
