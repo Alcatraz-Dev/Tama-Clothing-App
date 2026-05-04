@@ -1,4 +1,7 @@
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+// Deployed Vercel backend URL
+const PRODUCTION_URL = "https://backend-bey3a.vercel.app"; 
+
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_URL;
 
 
 
