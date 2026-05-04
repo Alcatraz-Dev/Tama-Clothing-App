@@ -185,6 +185,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+    marginBottom: 20, // To allow the container to extend to the bottom edge
   },
   backdrop: {
     flex: 1,
@@ -194,9 +195,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: Dimensions.get("window").height * 0.85,
-    overflow: "hidden",
-    paddingLeft: 12,
-    paddingRight: 12,
+
   },
   header: {
     height: 56,
@@ -223,7 +222,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#333",
     backgroundColor: "#1A1A1F",
-    paddingHorizontal: 8,
     paddingBottom: 20,
   },
   noChatContainer: {

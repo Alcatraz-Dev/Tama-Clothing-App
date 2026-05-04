@@ -327,30 +327,34 @@ setPinEndTime,
         </View>
       )}
 
-      {!isCameraOn && (
-        <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
-          <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
-          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{brandName || resolvedName || userName}</Text>
-        </View>
-      )}
+       {!isCameraOn && (
+         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
+           <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
+           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{brandName || resolvedName || userName}</Text>
+         </View>
+       )}
 
-      <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
-          </View>
-          <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
-          </View>
-        </View>
-        <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          <X size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
+       <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
+         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+             <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>{resolvedName}</Text>
+           </View>
+           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
+             <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+           </View>
+           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
+           </View>
+           <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
+           </View>
+         </View>
+         <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+           <X size={20} color="#fff" />
+         </TouchableOpacity>
+       </View>
 
       {floatingHearts.map((heart: any) => (
         <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
@@ -384,10 +388,10 @@ setPinEndTime,
                 <TouchableOpacity key={p.id} onPress={() => { setPinnedProductId(p.id); setPinnedProduct(p); setPinEndTime(Date.now() + 300000); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
                   <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
                   {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
-                  <View style={{ marginTop: 4 }}>
-                    <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600" }}>{getLocalizedName(p.name)}</Text>
-                    <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900" }}>{p.discountPrice || p.price} TND</Text>
-                  </View>
+                   <View style={{ marginTop: 4, alignItems: "center" }}>
+                     <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600", textAlign: "center" }}>{getLocalizedName(p.name)}</Text>
+                     <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900", textAlign: "center" }}>{p.discountPrice || p.price} TND</Text>
+                   </View>
                 </TouchableOpacity>
               );
             })}
@@ -3743,6 +3747,8 @@ activeCoupon={activeCoupon}
         channelId={channelId}
         onClose={() => setShowChat(false)}
         currentUserId={userId}
+        hostAvatar={hostAvatar}
+        hostName={brandName || resolvedName || userName}
       />
 
       {/* PK Invite Modal */}
@@ -6004,13 +6010,13 @@ activeCoupon={activeCoupon}
               </TouchableOpacity>
             </View>
             
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-              {["2x2", "3x3", "4x4", "5x5", "1x1"].map((layout) => (
-                <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#fff", fontWeight: "bold" }}>{layout}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+               {["1x1", "1x2", "2x1", "1x3", "3x1", "2x2", "2x3", "3x2", "3x3", "4x4", "5x5"].map((layout) => (
+                 <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
+                   <Text style={{ color: "#fff", fontWeight: "bold" }}>{layout}</Text>
+                 </TouchableOpacity>
+               ))}
+             </View>
           </Animatable.View>
         </View>
       </Modal>
