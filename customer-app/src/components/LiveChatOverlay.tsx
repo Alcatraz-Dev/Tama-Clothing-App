@@ -86,13 +86,13 @@ export const LiveChatOverlay = ({
         <View style={styles.overlay}>
           <TouchableOpacity style={styles.backdrop} onPress={onClose} />
           <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-            <View style={styles.header}>
+             <View style={styles.header}>
               <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 {hostAvatar && (
                   <Image source={{ uri: hostAvatar }} style={{ width: 32, height: 32, borderRadius: 16, marginRight: 8 }} />
                 )}
-                <Text style={styles.title}>Live Chat</Text>
+                <Text style={styles.title}>{hostName || "Live Chat"}</Text>
                 {hostName && <Crown size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
               </View>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>

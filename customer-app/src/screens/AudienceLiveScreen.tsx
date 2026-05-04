@@ -262,24 +262,24 @@ return (
       )}
 
       {/* Top Bar - Live Info - Always show host info first */}
-      <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {/* Host Avatar + Name in top left */}
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 }}>
-            <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#fff" }} />
-            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginLeft: 6 }} numberOfLines={1}>{hostBrandName || "Host"}</Text>
+        <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
+              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+            </View>
+            {/* Host Avatar + Name in top left */}
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 }}>
+              <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#fff" }} />
+              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginLeft: 6 }} numberOfLines={1}>{hostBrandName || "Host"}</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {viewerCount}</Text>
+            </View>
+            <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
+            </View>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {viewerCount}</Text>
-          </View>
-          <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(streamDuration)}</Text>
-          </View>
-        </View>
         <TouchableOpacity onPress={onClose} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
           <X size={20} color="#fff" />
         </TouchableOpacity>

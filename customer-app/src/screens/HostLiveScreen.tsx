@@ -334,23 +334,23 @@ setPinEndTime,
          </View>
        )}
 
-       <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
-         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-             <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12 }} />
-             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>{resolvedName}</Text>
-           </View>
-           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-             <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
-           </View>
-           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
-           </View>
-           <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
-           </View>
-         </View>
+        <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
+              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#fff" }} />
+              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>{resolvedName}</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
+            </View>
+            <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
+            </View>
+          </View>
          <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
            <X size={20} color="#fff" />
          </TouchableOpacity>
@@ -5998,28 +5998,87 @@ activeCoupon={activeCoupon}
         )}
       </Modal>
 
-      {/* Grid Layout Customization Modal */}
-      <Modal visible={showGridModal} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowGridModal(false)} />
-          <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Grid Layout</Text>
-              <TouchableOpacity onPress={() => setShowGridModal(false)}>
-                <X size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            
-             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-               {["1x1", "1x2", "2x1", "1x3", "3x1", "2x2", "2x3", "3x2", "3x3", "4x4", "5x5"].map((layout) => (
-                 <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center" }}>
-                   <Text style={{ color: "#fff", fontWeight: "bold" }}>{layout}</Text>
-                 </TouchableOpacity>
-               ))}
+       {/* Grid Layout Customization Modal */}
+       <Modal visible={showGridModal} transparent animationType="slide">
+         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
+           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowGridModal(false)} />
+           <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}>
+             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+               <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Grid Layout</Text>
+               <TouchableOpacity onPress={() => setShowGridModal(false)}>
+                 <X size={24} color="#fff" />
+               </TouchableOpacity>
              </View>
-          </Animatable.View>
-        </View>
-      </Modal>
+             
+             <View style={{ gap: 16 }}>
+               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 4 }}>SQUARE GRIDS</Text>
+               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                 {["1x1", "2x2", "3x3", "4x4", "5x5"].map((layout) => {
+                   const size = parseInt(layout[0]);
+                   return (
+                     <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
+                       <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+                         {Array.from({ length: Math.min(size * size, 4) }).map((_, i) => (
+                           <View key={i} style={{
+                             position: "absolute",
+                             width: 8,
+                             height: 8,
+                             backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : i === 2 ? "rgba(255,215,0,0.5)" : "rgba(245,158,11,0.3)",
+                             borderRadius: 2,
+                             left: (i % 2) * 12 - 4,
+                             top: Math.floor(i / 2) * 12 - 4,
+                           }} />
+                         ))}
+                       </View>
+                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
+                     </TouchableOpacity>
+                   );
+                 })}
+               </View>
+               
+               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginTop: 12, marginBottom: 4 }}>PORTRAIT GRIDS</Text>
+               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                 {["1x2", "1x3", "2x3"].map((layout) => (
+                   <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
+                     <View style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", height: 40 }}>
+                       {Array.from({ length: layout === "1x2" ? 2 : layout === "1x3" ? 3 : 3 }).map((_, i) => (
+                         <View key={i} style={{
+                           width: 6,
+                           height: 10,
+                           backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : "rgba(255,215,0,0.3)",
+                           borderRadius: 1,
+                           marginBottom: 2,
+                         }} />
+                       ))}
+                     </View>
+                     <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
+                   </TouchableOpacity>
+                 ))}
+               </View>
+               
+               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginTop: 12, marginBottom: 4 }}>LANDSCAPE GRIDS</Text>
+               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                 {["2x1", "3x1", "3x2"].map((layout) => (
+                   <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
+                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", width: 40 }}>
+                       {Array.from({ length: layout === "2x1" ? 2 : layout === "3x1" ? 3 : 3 }).map((_, i) => (
+                         <View key={i} style={{
+                           width: 10,
+                           height: 6,
+                           backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : "rgba(255,215,0,0.3)",
+                           borderRadius: 1,
+                           marginRight: 2,
+                         }} />
+                       ))}
+                     </View>
+                     <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
+                   </TouchableOpacity>
+                 ))}
+               </View>
+             </View>
+           </Animatable.View>
+         </View>
+       </Modal>
 
     </View>
   );
