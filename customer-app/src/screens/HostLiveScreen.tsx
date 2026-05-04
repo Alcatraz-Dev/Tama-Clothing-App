@@ -252,14 +252,18 @@ type HostStreamContentProps = {
   toggleRecording: () => void;
   isRecording: boolean;
   activeCoupon: any;
-  setShowCouponModal: (v: boolean) => void;
-  showGridModal: boolean;
-  setShowGridModal: (v: boolean) => void;
-sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
+setShowCouponModal: (v: boolean) => void;
+   showGridModal: boolean;
+   setShowGridModal: (v: boolean) => void;
+   sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
    setShowCoHostDashboard: (v: boolean) => void;
    showCoHostDashboard: boolean;
    activeCoHosts: { userId: string; userName: string; userAvatar?: string; joinedAt: number; hasVideo: boolean; hasAudio: boolean }[];
    coHostRequests: { userId: string; userName: string; userAvatar?: string; requestedAt: number; type: 'video' | 'audio' }[];
+   setCoHostRequests: React.Dispatch<React.SetStateAction<any[]>>;
+   setActiveCoHosts: React.Dispatch<React.SetStateAction<any[]>>;
+   call: any;
+   sendCoHostRequest: (userId: string, userName: string, userAvatar?: string, requestType?: string) => void;
 };
 
 const HostStreamContent = ({
@@ -301,11 +305,15 @@ setPinEndTime,
   setShowCouponModal,
   showGridModal,
   setShowGridModal,
-  sendStreamCustomEvent,
-   setShowCoHostDashboard,
-   showCoHostDashboard,
-   activeCoHosts,
-   coHostRequests,
+sendStreamCustomEvent,
+    setShowCoHostDashboard,
+    showCoHostDashboard,
+    activeCoHosts,
+    coHostRequests,
+    setCoHostRequests,
+    setActiveCoHosts,
+    call,
+    sendCoHostRequest,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
   const camState = useCameraState();
@@ -492,6 +500,91 @@ setPinEndTime,
       </View>
 
       {/* Modals - TODO: Implement inline */}
+
+      {/* Co-Host Dashboard Modal */}
+      <Modal visible={showCoHostDashboard} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowCoHostDashboard(false)} />
+          <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, maxHeight: "80%" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Co-Host Management</Text>
+              <TouchableOpacity onPress={() => setShowCoHostDashboard(false)}>
+                <X size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Co-Host Requests Section */}
+            {coHostRequests.length > 0 && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 10 }}>PENDING REQUESTS ({coHostRequests.length})</Text>
+                {coHostRequests.map((req) => (
+                  <View key={req.userId} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 12, marginBottom: 8 }}>
+                    <Image source={{ uri: req.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.userName)}&background=random` }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>{req.userName}</Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>{req.type === "video" ? "Video" : "Audio"} Request • {new Date(req.requestedAt).toLocaleTimeString()}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+<TouchableOpacity onPress={async () => {
+                         try {
+                           await call?.sendCustomEvent({
+                             type: "cohost:accepted",
+                             userId: req.userId,
+                             userName: req.userName,
+                             userAvatar: req.userAvatar,
+                             hasVideo: req.type === "video",
+                             hasAudio: true,
+                           }, [req.userId]);
+                           setActiveCoHosts((prev: any[]) => [...prev, {
+                             userId: req.userId,
+                             userName: req.userName,
+                             userAvatar: req.userAvatar,
+                             joinedAt: Date.now(),
+                             hasVideo: req.type === "video",
+                             hasAudio: true,
+                           }]);
+                           setCoHostRequests((prev: any[]) => prev.filter((r: any) => r.userId !== req.userId));
+                         } catch (e) { console.error("Accept co-host error:", e); }
+                       }} style={{ backgroundColor: "#10B981", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                         <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Accept</Text>
+                       </TouchableOpacity>
+                       <TouchableOpacity onPress={() => setCoHostRequests((prev: any[]) => prev.filter((r: any) => r.userId !== req.userId))} style={{ backgroundColor: "#EF4444", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                         <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Reject</Text>
+                       </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Active Co-Hosts Section */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 10 }}>ACTIVE CO-HOSTS ({activeCoHosts.length})</Text>
+              {activeCoHosts.length === 0 ? (
+                <Text style={{ color: "#666", textAlign: "center", padding: 20 }}>No active co-hosts</Text>
+              ) : (
+                activeCoHosts.map((cohost) => (
+                  <View key={cohost.userId} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 12, marginBottom: 8 }}>
+                    <Image source={{ uri: cohost.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(cohost.userName)}&background=random` }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>{cohost.userName}</Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>Joined {new Date(cohost.joinedAt).toLocaleTimeString()} • {cohost.hasVideo ? "📹" : "🔇"} {cohost.hasAudio ? "🔊" : "🔇"}</Text>
+                    </View>
+<TouchableOpacity onPress={async () => {
+                       try {
+                         await call?.sendCustomEvent({ type: "cohost:left", userId: cohost.userId }, [cohost.userId]);
+                         setActiveCoHosts((prev: any[]) => prev.filter((h: any) => h.userId !== cohost.userId));
+                       } catch (e) { console.error("Remove co-host error:", e); }
+                     }} style={{ backgroundColor: "#EF4444", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Remove</Text>
+                     </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </View>
+          </Animatable.View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -2599,6 +2692,24 @@ export default function HostLiveScreen(props: Props) {
     );
   };
 
+  // Send co-host request to a user
+  const sendCoHostRequest = async (userId: string, userName: string, userAvatar?: string, requestType = "video") => {
+    try {
+      if (call) {
+        await call.sendCustomEvent({
+          type: "cohost:request",
+          userId,
+          userName,
+          userAvatar,
+          requestType,
+        }, [userId]);
+        console.log("✅ Co-host request sent to:", userName);
+      }
+    } catch (e) {
+      console.error("Failed to send co-host request:", e);
+    }
+  };
+
   if (streamInitError || !client) {
     return (
       <View
@@ -2753,11 +2864,15 @@ activeCoupon={activeCoupon}
                   showGridModal={showGridModal}
                   setShowGridModal={setShowGridModal}
 sendStreamCustomEvent={sendStreamCustomEvent}
-                   setShowCoHostDashboard={setShowCoHostDashboard}
-                   showCoHostDashboard={showCoHostDashboard}
-                   activeCoHosts={activeCoHosts}
-                   coHostRequests={coHostRequests}
-                />
+                    setShowCoHostDashboard={setShowCoHostDashboard}
+                    showCoHostDashboard={showCoHostDashboard}
+                    activeCoHosts={activeCoHosts}
+                    coHostRequests={coHostRequests}
+                    setCoHostRequests={setCoHostRequests}
+                    setActiveCoHosts={setActiveCoHosts}
+                    call={call}
+                    sendCoHostRequest={sendCoHostRequest}
+                 />
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
