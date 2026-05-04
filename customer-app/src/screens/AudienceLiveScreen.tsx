@@ -92,18 +92,19 @@ const styles = StyleSheet.create({
 
 
 type Props = {
-  channelId: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
-  hostAvatar?: string;
-  hostBrandName?: string;
-  onClose: () => void;
-  t?: (key: string) => string;
-  language?: "fr" | "ar" | "en";
-  profileData?: any;
-  streamInitError?: string | null;
-  onRetryStreamInit?: () => void;
+   channelId: string;
+   userId: string;
+   userName: string;
+   userAvatar?: string;
+   hostAvatar?: string;
+   hostBrandName?: string;
+   onClose: () => void;
+   t?: (key: string) => string;
+   language?: "fr" | "ar" | "en";
+   profileData?: any;
+   streamInitError?: string | null;
+   onRetryStreamInit?: () => void;
+   sendCoHostRequest?: (userId: string, userName: string, userAvatar?: string, requestType?: string) => void;
 };
 
 const MemberAvatar = ({
@@ -178,37 +179,62 @@ type AudienceStreamContentProps = {
    couponInput?: string;
    setShowPurchaseModal: (v: boolean) => void;
    setSelectedProduct: (p: any) => void;
- };
+   call: any;
+   userId: string;
+   userName: string;
+   userAvatar?: string;
+   sendCoHostRequest: (userId: string, userName: string, userAvatar?: string, requestType?: string) => void;
+   isCoHost: boolean;
+   coHostRequestPending: boolean;
+   coHostRequestType: 'video' | 'audio';
+   setCoHostRequestPending: (pending: boolean) => void;
+   setCoHostRequestType: (type: 'video' | 'audio') => void;
+   showCoHostRequestModal: boolean;
+   setShowCoHostRequestModal: (visible: boolean) => void;
+};
 
 const AudienceStreamContent = ({
-  remoteParticipants,
-  participantCount,
-  streamDuration,
-  formatDuration,
-  onClose,
-  floatingHearts,
-  pinnedProduct,
-  getLocalizedName,
-  featuredProducts,
-  setPinnedProduct,
-  handleSendLike,
-  setShowGifts,
-  setShowChat,
-  t,
-  hostAvatar,
-  hostBrandName,
-  totalLikes,
-  isInPK,
-  hostCameraOn,
-  activeCoupon,
-  couponTimeRemaining,
-  setCouponInput,
-  couponInput,
-  setShowPurchaseModal,
-  setSelectedProduct,
+   remoteParticipants,
+   participantCount,
+   streamDuration,
+   formatDuration,
+   onClose,
+   floatingHearts,
+   pinnedProduct,
+   getLocalizedName,
+   featuredProducts,
+   setPinnedProduct,
+   handleSendLike,
+   setShowGifts,
+   setShowChat,
+   t,
+   hostAvatar,
+   hostBrandName,
+   totalLikes,
+   isInPK,
+   hostCameraOn,
+   activeCoupon,
+   couponTimeRemaining,
+   setCouponInput,
+   couponInput,
+   setShowPurchaseModal,
+   setSelectedProduct,
+   call,
+   userId,
+   userName,
+   userAvatar,
+   sendCoHostRequest,
+   isCoHost,
+   coHostRequestPending,
+   coHostRequestType,
+   setCoHostRequestPending,
+   setCoHostRequestType,
+   showCoHostRequestModal,
+   setShowCoHostRequestModal,
 }: AudienceStreamContentProps) => {
-  const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
+  const { useRemoteParticipants, useParticipantCount, useLocalParticipant } = useCallStateHooks();
   const remote = useRemoteParticipants();
+  const localParticipant = useLocalParticipant();
   const count = useParticipantCount();
   const host = remote[0] || remoteParticipants[0];
   const hasHostVideo = host ? hasVideo(host) : false;
@@ -224,6 +250,20 @@ return (
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
           <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(hostBrandName || "Host")}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{hostBrandName || "Host"}</Text>
+        </View>
+      )}
+
+      {/* Render Co-Hosts (remote participants other than host) */}
+      {remote.slice(1).map((p, index) => (
+        <View key={p.userId} style={{ position: 'absolute', top: 120 + (index * 130), right: 15, width: 90, height: 120, borderRadius: 12, overflow: 'hidden', zIndex: 1000, borderWidth: 1, borderColor: '#fff' }}>
+          <ParticipantView participant={p} style={StyleSheet.absoluteFill} />
+        </View>
+      ))}
+
+      {/* Render Local Participant if Co-Host */}
+      {isCoHost && localParticipant && (
+        <View style={{ position: 'absolute', top: 120 + (Math.max(0, remote.length - 1) * 130), right: 15, width: 90, height: 120, borderRadius: 12, overflow: 'hidden', zIndex: 1000, borderWidth: 2, borderColor: '#FF0066' }}>
+          <ParticipantView participant={localParticipant} style={StyleSheet.absoluteFill} mirror />
         </View>
       )}
 
@@ -404,41 +444,45 @@ return (
          </Animatable.View>
        )}
 
-      <View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
-        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
-          <Heart size={18} color="#fff" fill="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowGifts(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          <GiftIcon size={18} color="#fff" strokeWidth={2} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          <MessageCircle size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
+<View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
+         <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
+           <Heart size={18} color="#fff" fill="#fff" />
+         </TouchableOpacity>
+         <TouchableOpacity onPress={() => setShowGifts(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+           <GiftIcon size={18} color="#fff" strokeWidth={2} />
+         </TouchableOpacity>
+         <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+           <MessageCircle size={18} color="#fff" />
+         </TouchableOpacity>
+         <TouchableOpacity onPress={() => setShowCoHostRequestModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+           <Users size={18} color="#fff" />
+         </TouchableOpacity>
+       </View>
     </>
   );
 };
 
 export default function AudienceLiveScreen(props: Props) {
-  const t = typeof props.t === "function" ? props.t : (key: string) => key;
-  // Translation helper: tr(en, fr, ar)
-  const tr = (en: string, fr: string, ar: string) => {
-    return language === "ar" ? ar : language === "fr" ? fr : en;
-  };
+   const t = typeof props.t === "function" ? props.t : (key: string) => key;
+   // Translation helper: tr(en, fr, ar)
+   const tr = (en: string, fr: string, ar: string) => {
+     return language === "ar" ? ar : language === "fr" ? fr : en;
+   };
 
-  const {
-    channelId,
-    userId,
-    userName,
-    userAvatar,
-    hostAvatar,
-    hostBrandName,
-    onClose,
-    language,
-    profileData,
-    streamInitError,
-    onRetryStreamInit,
-  } = props;
+   const {
+     channelId,
+     userId,
+     userName,
+     userAvatar,
+     hostAvatar,
+     hostBrandName,
+     onClose,
+     language,
+     profileData,
+     streamInitError,
+     onRetryStreamInit,
+     sendCoHostRequest,
+   } = props;
 
   const getLocalizedName = (name: any): string => {
     // Handle undefined/null
@@ -513,138 +557,178 @@ export default function AudienceLiveScreen(props: Props) {
 
     const _call = client.call("livestream", channelId);
 
-    // Listen to custom events for low-latency updates
-    const unsubscribeCustomEvent = _call.on("custom", (event: any) => {
-      const data = event.custom;
-      if (!data) return;
+       // Listen to custom events for low-latency updates
+     const unsubscribeCustomEvent = _call.on("custom", (event: any) => {
+       const data = event.custom;
+       if (!data) return;
 
-      if (data.type === "product:pin") {
-        console.log("⚡ Low-latency Stream Event: Product Pinned");
-        const productId = data.productId;
-        const duration = data.duration;
-        setPinEndTime(duration ? Date.now() + duration * 60 * 1000 : null);
+       if (data.type === "product:pin") {
+         console.log("⚡ Low-latency Stream Event: Product Pinned");
+         const productId = data.productId;
+         const duration = data.duration;
+         setPinEndTime(duration ? Date.now() + duration * 60 * 1000 : null);
 
-        getDoc(doc(db, "products", productId))
-          .then((snap: any) => {
-            if (snap.exists()) {
-              setPinnedProduct({ id: snap.id, ...snap.data() });
-            } else {
-              setPinnedProduct(null);
+         getDoc(doc(db, "products", productId))
+           .then((snap: any) => {
+             if (snap.exists()) {
+               setPinnedProduct({ id: snap.id, ...snap.data() });
+             } else {
+               setPinnedProduct(null);
+             }
+           })
+           .catch((error: any) => {
+             console.error(
+               "Error fetching pinned product via stream event:",
+               error,
+             );
+             setPinnedProduct(null);
+           });
+       } else if (data.type === "product:unpin") {
+         console.log("⚡ Low-latency Stream Event: Product Unpinned");
+         setPinnedProduct(null);
+         setPinEndTime(null);
+       } else if (data.type === "stream:like") {
+         if (event.user?.id !== userId) {
+           const id = ++heartCounter.current;
+           const x = Math.random() * 60 - 30;
+           setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
+           setTimeout(() => {
+             setFloatingHearts((prev: any) =>
+               prev.filter((h: any) => h.id !== id),
+             );
+           }, 3000);
+         }
+       } else if (data.type === "PK_VOTE") {
+         setIsInPK(true);
+         if (data.hostName) setPkHostName(data.hostName);
+         if (data.hostId) setStreamHostId(data.hostId);
+         if (data.endTime) {
+           setPkEndTime(data.endTime);
+           const remaining = Math.max(
+             0,
+             Math.floor((data.endTime - Date.now()) / 1000),
+           );
+           setPkTimeRemaining(remaining);
+         }
+       } else if (data.type === "PK_LIKE") {
+         handleSendLike();
+       } else if (data.type === "PK_BATTLE_STOP") {
+         setIsInPK(false);
+       } else if (data.type === "camera_state") {
+         setHostCameraOn(data.isCameraOn);
+       } else if (data.type === "cohost:request") {
+         // Host is inviting audience
+         setInviter({
+           id: data.userId || "host",
+           name: data.userName || "Host",
+           avatar: data.userAvatar
+         });
+         setCoHostRequestType(data.requestType || "video");
+         setShowCoHostInviteModal(true);
+       } else if (data.type === "cohost:accepted") {
+          const coHostUserId = data.userId;
+          const coHostName = data.userName || "Co-Host";
+          console.log("✅ Co-host accepted:", coHostName);
+          
+          if (coHostUserId === userId) {
+            setIsCoHost(true);
+            setCoHostRequestPending(false);
+            setShowCoHostRequestModal(false);
+            if (call) {
+              call.camera.enable().catch(console.error);
+              call.microphone.enable().catch(console.error);
             }
-          })
-          .catch((error: any) => {
-            console.error(
-              "Error fetching pinned product via stream event:",
-              error,
-            );
-            setPinnedProduct(null);
-          });
-      } else if (data.type === "product:unpin") {
-        console.log("⚡ Low-latency Stream Event: Product Unpinned");
-        setPinnedProduct(null);
-        setPinEndTime(null);
-      } else if (data.type === "stream:like") {
-        if (event.user?.id !== userId) {
-          const id = ++heartCounter.current;
-          const x = Math.random() * 60 - 30;
-          setFloatingHearts((prev: any) => [...prev.slice(-15), { id, x }]);
-          setTimeout(() => {
-            setFloatingHearts((prev: any) =>
-              prev.filter((h: any) => h.id !== id),
-            );
-          }, 3000);
-        }
-      } else if (data.type === "PK_VOTE") {
-        setIsInPK(true);
-        if (data.hostName) setPkHostName(data.hostName);
-        if (data.hostId) setStreamHostId(data.hostId);
-        if (data.endTime) {
-          setPkEndTime(data.endTime);
-          const remaining = Math.max(
-            0,
-            Math.floor((data.endTime - Date.now()) / 1000),
-          );
-          setPkTimeRemaining(remaining);
-        }
-      } else if (data.type === "PK_LIKE") {
-        handleSendLike();
-      } else if (data.type === "PK_BATTLE_STOP") {
-        setIsInPK(false);
-      } else if (data.type === "camera_state") {
-        setHostCameraOn(data.isCameraOn);
-      } else if (data.type === "gift") {
-        const senderId = data.senderId || data.userId;
-        const isHost = data.isHost === true;
-        const senderName = data.userName || "Viewer";
-        const giftNameStr = String(data.giftName || "");
-
-        const foundGift = GIFTS.find(
-          (g) => g.name.toLowerCase() === giftNameStr.toLowerCase(),
-        );
-        const isBig =
-          (foundGift && (foundGift.points || 0) >= 500) ||
-          Number(data.points || 0) >= 500;
-
-        const current = recentGiftRef.current;
-        if (isSameGift(current, senderId, senderName, giftNameStr)) {
-          setRecentGift((prev) => {
-            const base = prev || current;
-            const updated = base
-              ? { ...base, count: data.combo || (base.count || 0) + 1 }
-              : null;
-            recentGiftRef.current = updated;
-            return updated;
-          });
-          if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
-          giftTimerRef.current = setTimeout(
-            () => {
-              setRecentGift(null);
-              recentGiftRef.current = null;
-            },
-            isBig ? 4500 : 3000,
-          );
-
-          if (isBig) {
-            setShowGiftVideo(true);
-            if (videoTimerRef.current) clearTimeout(videoTimerRef.current);
-            videoTimerRef.current = setTimeout(
-              () => setShowGiftVideo(false),
-              4500,
+            Alert.alert(
+              t("success") || "Success",
+              t("coHostRequestAccepted") || "Your co-host request has been accepted! You are now a co-host."
             );
           }
-        } else {
-          setGiftQueue((prev) => {
-            const last = prev[prev.length - 1];
-            if (isSameGift(last, senderId, senderName, giftNameStr)) {
-              return [
-                ...prev.slice(0, -1),
-                { ...last, count: data.combo || last.count + 1 },
-              ];
-            }
-            return [
-              ...prev.slice(-10),
-              {
-                senderName,
-                giftName: giftNameStr,
-                icon: foundGift ? foundGift.icon : data.icon,
-                count: data.combo || 1,
-                senderId,
-                senderAvatar: data.senderAvatar,
-                isHost,
-                isBig,
-              },
-            ];
-          });
-        }
-      } else if (data.type === "coupon_drop") {
-        setActiveCoupon(data);
-        const remaining = Math.max(
-          0,
-          Math.floor((data.endTime - Date.now()) / 1000),
-        );
-        setCouponTimeRemaining(remaining);
-      }
-    });
+       } else if (data.type === "gift") {
+         const senderId = data.senderId || data.userId;
+         const isHost = data.isHost === true;
+         const senderName = data.userName || "Viewer";
+         const giftNameStr = String(data.giftName || "");
+
+         const foundGift = GIFTS.find(
+           (g) => g.name.toLowerCase() === giftNameStr.toLowerCase(),
+         );
+         const isBig =
+           (foundGift && (foundGift.points || 0) >= 500) ||
+           Number(data.points || 0) >= 500;
+
+         const current = recentGiftRef.current;
+         if (isSameGift(current, senderId, senderName, giftNameStr)) {
+           setRecentGift((prev) => {
+             const base = prev || current;
+             const updated = base
+               ? { ...base, count: data.combo || (base.count || 0) + 1 }
+               : null;
+             recentGiftRef.current = updated;
+             return updated;
+           });
+           if (giftTimerRef.current) clearTimeout(giftTimerRef.current);
+           giftTimerRef.current = setTimeout(
+             () => {
+               setRecentGift(null);
+               recentGiftRef.current = null;
+             },
+             isBig ? 4500 : 3000,
+           );
+
+           if (isBig) {
+             setShowGiftVideo(true);
+             if (videoTimerRef.current) clearTimeout(videoTimerRef.current);
+             videoTimerRef.current = setTimeout(
+               () => setShowGiftVideo(false),
+               4500,
+             );
+           }
+         } else {
+           setGiftQueue((prev) => {
+             const last = prev[prev.length - 1];
+             if (isSameGift(last, senderId, senderName, giftNameStr)) {
+               return [
+                 ...prev.slice(0, -1),
+                 { ...last, count: data.combo || last.count + 1 },
+               ];
+             }
+             return [
+               ...prev.slice(-10),
+               {
+                 senderName,
+                 giftName: giftNameStr,
+                 icon: foundGift ? foundGift.icon : data.icon,
+                 count: data.combo || 1,
+                 senderId,
+                 senderAvatar: data.senderAvatar,
+                 isHost,
+                 isBig,
+               },
+             ];
+           });
+         }
+       } else if (data.type === "coupon_drop") {
+         setActiveCoupon(data);
+         const remaining = Math.max(
+           0,
+           Math.floor((data.endTime - Date.now()) / 1000),
+         );
+         setCouponTimeRemaining(remaining);
+       } else if (data.type === "cohost:left") {
+         // Handle co-host left notification from host
+         const leftUserId = data.userId;
+         console.log("👋 Co-host left:", leftUserId);
+         
+         // If this is the current user, update local state
+         if (leftUserId === userId) {
+           setIsCoHost(false);
+           Alert.alert(
+             t("info") || "Info",
+             t("coHostRemoved") || "You have been removed as a co-host."
+           );
+         }
+       }
+     });
 
     const unsubscribeReaction = _call.on("call.reaction_new", (event: any) => {
       if (event.user?.id !== userId && event.reaction?.type === "like") {
@@ -817,7 +901,15 @@ export default function AudienceLiveScreen(props: Props) {
   >("POPULAIRE");
   const [userBalance, setUserBalance] = useState(0);
   const clampedBalance = Math.max(0, userBalance);
-  const [showRechargeModal, setShowRechargeModal] = useState(false);
+   const [showRechargeModal, setShowRechargeModal] = useState(false);
+   // Co-host state
+   const [isCoHost, setIsCoHost] = useState(false);
+   const [coHostRequestPending, setCoHostRequestPending] = useState(false);
+   const [coHostRequestType, setCoHostRequestType] = useState<'video' | 'audio'>('video');
+   const [showCoHostRequestModal, setShowCoHostRequestModal] = useState(false);
+   const [showCoHostInviteModal, setShowCoHostInviteModal] = useState(false);
+   const [inviter, setInviter] = useState<{ id: string; name: string; avatar?: string } | null>(null);
+
   const [hostId, setHostId] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string | null>(null);
 
@@ -2428,32 +2520,44 @@ const handlePurchase = async () => {
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
 <AudienceStreamContent
-                remoteParticipants={remoteParticipants}
-                participantCount={participantCount}
-                streamDuration={streamDuration}
-                formatDuration={formatDuration}
-                onClose={onClose}
-                floatingHearts={floatingHearts}
-                pinnedProduct={pinnedProduct}
-                getLocalizedName={getLocalizedName}
-                featuredProducts={featuredProducts}
-                setPinnedProduct={setPinnedProduct}
-                handleSendLike={handleSendLike}
-                setShowGifts={setShowGifts}
-                setShowChat={setShowChat}
-                t={t}
-                hostAvatar={props.hostAvatar}
-                hostBrandName={props.hostBrandName}
-                totalLikes={totalLikes}
-                isInPK={isInPK}
-                hostCameraOn={hostCameraOn}
-                activeCoupon={activeCoupon}
-                couponTimeRemaining={couponTimeRemaining}
-                setCouponInput={setCouponInput}
-                couponInput={couponInput}
-                setShowPurchaseModal={setShowPurchaseModal}
-                setSelectedProduct={setSelectedProduct}
-              />
+                  remoteParticipants={remoteParticipants}
+                  participantCount={participantCount}
+                  streamDuration={streamDuration}
+                  formatDuration={formatDuration}
+                  onClose={onClose}
+                  floatingHearts={floatingHearts}
+                  pinnedProduct={pinnedProduct}
+                  getLocalizedName={getLocalizedName}
+                  featuredProducts={featuredProducts}
+                  setPinnedProduct={setPinnedProduct}
+                  handleSendLike={handleSendLike}
+                  setShowGifts={setShowGifts}
+                  setShowChat={setShowChat}
+                  t={t}
+                  hostAvatar={props.hostAvatar}
+                  hostBrandName={props.hostBrandName}
+                  totalLikes={totalLikes}
+                  isInPK={isInPK}
+                  hostCameraOn={hostCameraOn}
+                  activeCoupon={activeCoupon}
+                  couponTimeRemaining={couponTimeRemaining}
+                  setCouponInput={setCouponInput}
+                  couponInput={couponInput}
+                  setShowPurchaseModal={setShowPurchaseModal}
+                  setSelectedProduct={setSelectedProduct}
+                  call={call}
+                  userId={userId}
+                  userName={userName}
+                  userAvatar={userAvatar}
+                  sendCoHostRequest={sendCoHostRequest as any}
+                  isCoHost={isCoHost}
+                  coHostRequestPending={coHostRequestPending}
+                  coHostRequestType={coHostRequestType}
+                  setCoHostRequestPending={setCoHostRequestPending}
+                  setCoHostRequestType={setCoHostRequestType}
+                  showCoHostRequestModal={showCoHostRequestModal}
+                  setShowCoHostRequestModal={setShowCoHostRequestModal}
+                />
           </StreamCall>
         </View>
       ) : (
@@ -2911,54 +3015,223 @@ const handlePurchase = async () => {
                            <Text style={{ color: selectedColor === c ? "#000" : "#fff", fontWeight: "bold" }}>{c}</Text>
                          </TouchableOpacity>
                        ))}
-                     </View>
-                   </View>
-                 )}
+                      </View>
+                    </View>
+                  )}
 
-                 {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                   <View style={{ marginBottom: 12 }}>
-                     <Text style={{ color: "#aaa", marginBottom: 6 }}>Size</Text>
-                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                       {selectedProduct.sizes.map((s: string) => (
-                         <TouchableOpacity key={s} onPress={() => setSelectedSize(s)} style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: selectedSize === s ? "#F59E0B" : "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: selectedSize === s ? "#F59E0B" : "rgba(255,255,255,0.2)" }}>
-                           <Text style={{ color: selectedSize === s ? "#000" : "#fff", fontWeight: "bold" }}>{s}</Text>
-                         </TouchableOpacity>
-                       ))}
-                     </View>
-                   </View>
-                 )}
+                  {/* Add to Cart Button */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: "#F59E0B",
+                      padding: 16,
+                      borderRadius: 12,
+                      alignItems: "center",
+                      marginTop: 20,
+                    }}
+                    onPress={() => {
+                      if (selectedProduct) {
+                        // Add to cart logic
+                        setShowPurchaseModal(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: "#000", fontWeight: "bold", fontSize: 16 }}>
+                      {t("addToCart") || "Add to Cart"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+  
+  {/* Co-Host Request Modal */}
+  <Modal
+    visible={showCoHostRequestModal}
+    transparent={true}
+    animationType="fade"
+    onRequestClose={() => {
+      setShowCoHostRequestModal(false);
+      setCoHostRequestPending(false);
+    }}
+  >
+    <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" }}>
+      <View style={{ backgroundColor: "#121218", padding: 24, borderRadius: 16, width: "80%", maxWidth: 400 }}>
+        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", textAlign: "center", marginBottom: 24 }}>
+          {t("coHostRequestTitle") || "Become a Co-Host"}
+        </Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 24 }}>
+          <TouchableOpacity
+            onPress={() => setCoHostRequestType('video')}
+            style={{
+              flexDirection: "column",
+              alignItems: "center",
+              padding: 16,
+              borderRadius: 12,
+              backgroundColor: coHostRequestType === 'video' ? "rgba(255, 0, 102, 0.2)" : "rgba(255,255,255,0.1)",
+              borderWidth: 2,
+              borderColor: coHostRequestType === 'video' ? "#FF0066" : "transparent"
+            }}
+          >
+            <Camera size={24} color={coHostRequestType === 'video' ? "#FF0066" : "#fff"} />
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginTop: 8 }}>
+              {t("video") || "Video"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setCoHostRequestType('audio')}
+            style={{
+              flexDirection: "column",
+              alignItems: "center",
+              padding: 16,
+              borderRadius: 12,
+              backgroundColor: coHostRequestType === 'audio' ? "rgba(255, 0, 102, 0.2)" : "rgba(255,255,255,0.1)",
+              borderWidth: 2,
+              borderColor: coHostRequestType === 'audio' ? "#FF0066" : "transparent"
+            }}
+          >
+            <Mic size={24} color={coHostRequestType === 'audio' ? "#FF0066" : "#fff"} />
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginTop: 8 }}>
+              {t("audio") || "Audio"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <TouchableOpacity
+            onPress={() => {
+              setShowCoHostRequestModal(false);
+              setCoHostRequestPending(false);
+            }}
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              borderRadius: 12,
+              marginRight: 8,
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Text style={{ color: "#888", fontSize: 16 }}>
+              {t("cancel") || "Cancel"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={async () => {
+              const finalSendCoHostRequest = sendCoHostRequest || (async (uId: string, uName: string, uAvatar?: string, reqType = "video") => {
+                if (call) {
+                  await call.sendCustomEvent({
+                    type: "cohost:request",
+                    userId: uId,
+                    userName: uName,
+                    userAvatar: uAvatar,
+                    requestType: reqType,
+                  });
+                }
+              });
 
-                 <TextInput
-                   placeholder="Full Name"
-                   placeholderTextColor="#555"
-                   value={customerName}
-                   onChangeText={setCustomerName}
-                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 12, borderWidth: 1, borderColor: "#2A2A35" }}
-                 />
-                 <TextInput
-                   placeholder="Phone Number"
-                   placeholderTextColor="#555"
-                   value={phoneNumber}
-                   onChangeText={setPhoneNumber}
-                   keyboardType="phone-pad"
-                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 12, borderWidth: 1, borderColor: "#2A2A35" }}
-                 />
-                 <TextInput
-                   placeholder="Shipping Address"
-                   placeholderTextColor="#555"
-                   value={address}
-                   onChangeText={setAddress}
-                   style={{ backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", marginBottom: 20, borderWidth: 1, borderColor: "#2A2A35" }}
-                 />
+              if (finalSendCoHostRequest) {
+                finalSendCoHostRequest(userId, userName, userAvatar, coHostRequestType);
+                setCoHostRequestPending(true); // Mark as pending
+                setShowCoHostRequestModal(false);
+                // Show success feedback
+                Alert.alert(
+                  t("success") || "Success",
+                  t("coHostRequestSent") || "Your co-host request has been sent to the host."
+                );
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: "#FF0066",
+              borderRadius: 12,
+              marginLeft: 8,
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+              {t("sendRequest") || "Send Request"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
 
-                 <TouchableOpacity onPress={handlePurchase} style={{ backgroundColor: "#10B981", paddingVertical: 16, borderRadius: 12, alignItems: "center" }}>
-                   <Text style={{ color: "#000", fontWeight: "900", fontSize: 16 }}>Place Order</Text>
-                 </TouchableOpacity>
-               </>
-             )}
-           </View>
-         </View>
-       </Modal>
-     </View>
-   );
+  {/* Co-Host Invite Modal (from host) */}
+  <Modal
+    visible={showCoHostInviteModal}
+    transparent={true}
+    animationType="fade"
+    onRequestClose={() => setShowCoHostInviteModal(false)}
+  >
+    <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" }}>
+      <View style={{ backgroundColor: "#121218", padding: 24, borderRadius: 16, width: "80%", maxWidth: 400 }}>
+        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", textAlign: "center", marginBottom: 16 }}>
+          {t("coHostInviteTitle") || "Co-Host Invitation"}
+        </Text>
+        <Text style={{ color: "#aaa", fontSize: 16, textAlign: "center", marginBottom: 24 }}>
+          {inviter?.name} {t("invitedYouToCoHost") || "has invited you to be a co-host!"}
+        </Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <TouchableOpacity
+            onPress={() => setShowCoHostInviteModal(false)}
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              borderRadius: 12,
+              marginRight: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16 }}>
+              {t("decline") || "Decline"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={async () => {
+              setShowCoHostInviteModal(false);
+              if (call) {
+                try {
+                  setIsCoHost(true);
+                  // Enable camera and microphone
+                  await call.camera.enable();
+                  await call.microphone.enable();
+                  
+                  // Notify host that we accepted
+                  await call.sendCustomEvent({
+                    type: "cohost:accepted",
+                    userId: userId,
+                    userName: userName,
+                    userAvatar: userAvatar,
+                    hasVideo: coHostRequestType === "video",
+                    hasAudio: true,
+                  });
+                } catch (e) {
+                  console.error("Error accepting co-host invite:", e);
+                }
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: "#FF0066",
+              borderRadius: 12,
+              marginLeft: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+              {t("accept") || "Accept"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+</View>
+);
 }

@@ -5863,10 +5863,15 @@ sendStreamCustomEvent={sendStreamCustomEvent}
                       target: memberActionSheet.userId,
                     });
                   } else {
-                    // Zego co-host invitation removed
+                    sendCoHostRequest(
+                      memberActionSheet.userId,
+                      memberActionSheet.userName,
+                      undefined,
+                      "video"
+                    );
                     Alert.alert(
                       t("success") || "Success",
-                      `${t("invitationSentTo") || "Invitation sent to"} ${memberActionSheet.userName} (Stream)`,
+                      `${t("invitationSentTo") || "Invitation sent to"} ${memberActionSheet.userName}`,
                     );
                   }
                 },
