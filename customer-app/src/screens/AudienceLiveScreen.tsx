@@ -49,6 +49,7 @@ import {
   Camera,
   Mic,
   Pin,
+  BarChart2,
 } from "lucide-react-native";
 import { API_BASE_URL } from "../config/api";
 import { STREAM_API_KEY } from "../config/stream";
@@ -191,6 +192,14 @@ type AudienceStreamContentProps = {
    setCoHostRequestType: (type: 'video' | 'audio') => void;
    showCoHostRequestModal: boolean;
    setShowCoHostRequestModal: (visible: boolean) => void;
+   channelId: string;
+   activePoll: any;
+   setActivePoll: (poll: any) => void;
+   hasVoted: boolean;
+   setHasVoted: (v: boolean) => void;
+   votedOptionId: string | null;
+   setVotedOptionId: (id: string | null) => void;
+   handleVote: (optionId: string) => void;
 };
 
 const AudienceStreamContent = ({
@@ -231,15 +240,28 @@ const AudienceStreamContent = ({
    setCoHostRequestType,
    showCoHostRequestModal,
    setShowCoHostRequestModal,
+   channelId,
+   activePoll,
+   setActivePoll,
+   hasVoted,
+   setHasVoted,
+   votedOptionId,
+   setVotedOptionId,
+   handleVote,
 }: AudienceStreamContentProps) => {
   const { useRemoteParticipants, useParticipantCount, useLocalParticipant } = useCallStateHooks();
   const remote = useRemoteParticipants();
   const localParticipant = useLocalParticipant();
   const count = useParticipantCount();
-  const host = remote[0] || remoteParticipants[0];
+
+  // Identify host by userId matching channelId
+  const host = remote.find(p => p.userId === channelId) || remote[0];
   const hasHostVideo = host ? hasVideo(host) : false;
   const isHostCameraOn = hostCameraOn !== undefined ? hostCameraOn : hasHostVideo;
   const viewerCount = count || participantCount;
+
+  // Remote participants other than the identified host
+  const coHosts = remote.filter(p => p.userId !== (host?.userId || channelId));
 return (
     <>
       {host && isHostCameraOn && (
@@ -254,7 +276,7 @@ return (
       )}
 
       {/* Render Co-Hosts (remote participants other than host) */}
-      {remote.slice(1).map((p, index) => (
+      {coHosts.map((p, index) => (
         <View key={p.userId} style={{ position: 'absolute', top: 120 + (index * 130), right: 15, width: 90, height: 120, borderRadius: 12, overflow: 'hidden', zIndex: 1000, borderWidth: 1, borderColor: '#fff' }}>
           <ParticipantView participant={p} style={StyleSheet.absoluteFill} />
         </View>
@@ -272,7 +294,7 @@ return (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
+              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>{t("live") || "LIVE"}</Text>
             </View>
             {/* Host Avatar + Name in top left */}
             <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 }}>
@@ -310,6 +332,42 @@ return (
           </BlurView>
         </Animatable.View>
       )}
+      {activePoll && (
+        <Animatable.View animation="slideInUp" duration={400} style={{ position: "absolute", bottom: 300, left: 15, right: 15, zIndex: 350 }}>
+          <BlurView intensity={85} tint="dark" style={{ borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: "rgba(139, 92, 246, 0.5)", overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#8B5CF6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                <BarChart2 size={10} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{t("poll") || "POLL"}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setActivePoll(null)} style={{ padding: 4 }}><X size={14} color="rgba(255,255,255,0.6)" /></TouchableOpacity>
+            </View>
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 10 }}>{activePoll.question}</Text>
+            {activePoll.options.map((opt: any) => {
+              const totalVotes = activePoll.options.reduce((sum: number, o: any) => sum + o.votes, 0);
+              const percentage = totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
+              const isVoted = votedOptionId === opt.id;
+              return (
+                <TouchableOpacity 
+                  key={opt.id} 
+                  disabled={hasVoted}
+                  onPress={() => handleVote(opt.id)} 
+                  style={{ backgroundColor: isVoted ? "rgba(139, 92, 246, 0.2)" : "rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: isVoted ? 1 : 0, borderColor: "#8B5CF6" }}
+                >
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ color: "#fff", fontSize: 12 }}>{opt.text}</Text>
+                    <Text style={{ color: "#8B5CF6", fontWeight: "700", fontSize: 12 }}>{percentage.toFixed(0)}%</Text>
+                  </View>
+                  <View style={{ height: 3, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
+                    <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: "#8B5CF6", borderRadius: 2 }} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </BlurView>
+        </Animatable.View>
+      )}
+
 
 {featuredProducts.length > 0 && (
          <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
@@ -359,7 +417,7 @@ return (
                {/* Coupon Details */}
                <View style={{ flex: 1, gap: 4 }}>
                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                   <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 10, letterSpacing: 1 }}>✨ ACTIVE COUPON</Text>
+                   <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 10, letterSpacing: 1 }}>✨ {t("activeCoupon") || "ACTIVE COUPON"}</Text>
                  </View>
                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18, letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
                  
@@ -368,18 +426,18 @@ return (
                    {activeCoupon.discountType === "percentage" && (
                      <>
                        <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount}%</Text>
-                       <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                       <Text style={{ color: "#888", fontSize: 12 }}>{t("off") || "OFF"}</Text>
                      </>
                    )}
                    {activeCoupon.discountType === "fixed" && (
                      <>
                        <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount} TND</Text>
-                       <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                       <Text style={{ color: "#888", fontSize: 12 }}>{t("off") || "OFF"}</Text>
                      </>
                    )}
                    {activeCoupon.discountType === "free_shipping" && (
                      <>
-                       <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 14 }}>📦 FREE SHIPPING</Text>
+                       <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 14 }}>📦 {t("freeShipping") || "FREE SHIPPING"}</Text>
                      </>
                    )}
                  </View>
@@ -397,13 +455,13 @@ return (
                        }}
                      />
                    ))}
-                   <Text style={{ color: "#888", fontSize: 9, marginLeft: 4 }}>HIGH VALUE</Text>
+                   <Text style={{ color: "#888", fontSize: 9, marginLeft: 4 }}>{t("highValue") || "HIGH VALUE"}</Text>
                  </View>
                </View>
 
                {/* Timer */}
                <View style={{ alignItems: "center" }}>
-                 <Text style={{ color: "#888", fontSize: 9, fontWeight: "700" }}>ENDS IN</Text>
+                 <Text style={{ color: "#888", fontSize: 9, fontWeight: "700" }}>{t("endsIn") || "ENDS IN"}</Text>
                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
 <Text style={{ color: "#FFD700", fontWeight: "900", fontSize: 18 }}>
                       {Math.floor((couponTimeRemaining ?? 0) / 60)}:{((couponTimeRemaining ?? 0) % 60).toString().padStart(2, "0")}
@@ -422,7 +480,7 @@ return (
              {/* Input Section */}
              <View style={{ flexDirection: "row", gap: 8 }}>
                <TextInput
-                 placeholder="Enter code"
+                 placeholder={t("enterCode") || "Enter code"}
                  placeholderTextColor="#555"
                  value={couponInput ?? ""}
                  onChangeText={setCouponInput}
@@ -437,7 +495,7 @@ return (
                  }}
                  style={{ backgroundColor: "#F59E0B", paddingHorizontal: 20, borderRadius: 12, justifyContent: "center", alignItems: "center" }}
                >
-                 <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>APPLY</Text>
+                 <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>{t("apply") || "APPLY"}</Text>
                </TouchableOpacity>
              </View>
            </View>
@@ -454,9 +512,7 @@ return (
          <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
            <MessageCircle size={18} color="#fff" />
          </TouchableOpacity>
-         <TouchableOpacity onPress={() => setShowCoHostRequestModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-           <Users size={18} color="#fff" />
-         </TouchableOpacity>
+
        </View>
     </>
   );
@@ -643,6 +699,15 @@ export default function AudienceLiveScreen(props: Props) {
               t("coHostRequestAccepted") || "Your co-host request has been accepted! You are now a co-host."
             );
           }
+       } else if (data.type === "cohost:rejected") {
+         if (data.userId === userId) {
+           setCoHostRequestPending(false);
+           setShowCoHostRequestModal(false);
+           Alert.alert(
+             t("info") || "Info",
+             t("coHostRequestRejected") || "Your co-host request was rejected by the host."
+           );
+         }
        } else if (data.type === "gift") {
          const senderId = data.senderId || data.userId;
          const isHost = data.isHost === true;
@@ -714,6 +779,20 @@ export default function AudienceLiveScreen(props: Props) {
            Math.floor((data.endTime - Date.now()) / 1000),
          );
          setCouponTimeRemaining(remaining);
+        } else if (data.type === "poll:start") {
+          setActivePoll(data.poll);
+          setHasVoted(false);
+          setVotedOptionId(null);
+        } else if (data.type === "poll:vote") {
+          setActivePoll((prev: any) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              options: prev.options.map((o: any) => 
+                o.id === data.optionId ? { ...o, votes: data.votes } : o
+              )
+            };
+          });
        } else if (data.type === "cohost:left") {
          // Handle co-host left notification from host
          const leftUserId = data.userId;
@@ -722,6 +801,10 @@ export default function AudienceLiveScreen(props: Props) {
          // If this is the current user, update local state
          if (leftUserId === userId) {
            setIsCoHost(false);
+           if (call) {
+             call.camera.disable().catch(console.error);
+             call.microphone.disable().catch(console.error);
+           }
            Alert.alert(
              t("info") || "Info",
              t("coHostRemoved") || "You have been removed as a co-host."
@@ -917,6 +1000,11 @@ export default function AudienceLiveScreen(props: Props) {
   const [showChat, setShowChat] = useState(false);
   // Screenshot state
   const [lastScreenshot, setLastScreenshot] = useState<string | null>(null);
+
+  // Poll state
+  const [activePoll, setActivePoll] = useState<any>(null);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [votedOptionId, setVotedOptionId] = useState<string | null>(null);
 
   // Pinned Product Timer State
   const [pinEndTime, setPinEndTime] = useState<number | null>(null);
@@ -1807,6 +1895,26 @@ const handlePurchase = async () => {
   const likeBatchRef = useRef(0);
   const lastLikeSentTimeRef = useRef(0);
 
+  const handleVote = async (optionId: string) => {
+    if (!activePoll || hasVoted || !call) return;
+    try {
+      setHasVoted(true);
+      setVotedOptionId(optionId);
+      const option = activePoll.options.find((o: any) => o.id === optionId);
+      const newVotes = (option?.votes || 0) + 1;
+      await call.sendCustomEvent({
+        type: "poll:vote",
+        optionId: optionId,
+        votes: newVotes,
+        userId: userId
+      });
+    } catch (error) {
+      console.error("Error sending vote:", error);
+      setHasVoted(false);
+      setVotedOptionId(null);
+    }
+  };
+
   const handleSendLike = () => {
     // Visual effects
     const id = ++heartCounter.current;
@@ -2557,14 +2665,22 @@ const handlePurchase = async () => {
                   setCoHostRequestType={setCoHostRequestType}
                   showCoHostRequestModal={showCoHostRequestModal}
                   setShowCoHostRequestModal={setShowCoHostRequestModal}
+                  channelId={channelId}
+                  activePoll={activePoll}
+                  setActivePoll={setActivePoll}
+                  hasVoted={hasVoted}
+                  setHasVoted={setHasVoted}
+                  votedOptionId={votedOptionId}
+                  setVotedOptionId={setVotedOptionId}
+                  handleVote={handleVote}
                 />
           </StreamCall>
         </View>
       ) : (
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#000" }]}>
           <ActivityIndicator size="large" color="#10B981" />
-          <Text style={{ color: "#fff", marginTop: 16, fontSize: 16, fontWeight: "600" }}>Joining Live Stream...</Text>
-          <Text style={{ color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 12 }}>Connecting to host</Text>
+          <Text style={{ color: "#fff", marginTop: 16, fontSize: 16, fontWeight: "600" }}>{t("joiningLive") || "Joining Live Stream..."}</Text>
+          <Text style={{ color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 12 }}>{t("connectingToHost") || "Connecting to host"}</Text>
           <TouchableOpacity onPress={onClose} style={{ marginTop: 30, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>{t ? t("exit") : "Exit"}</Text>
           </TouchableOpacity>

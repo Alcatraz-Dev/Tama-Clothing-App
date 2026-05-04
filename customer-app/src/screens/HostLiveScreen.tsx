@@ -252,18 +252,37 @@ type HostStreamContentProps = {
   toggleRecording: () => void;
   isRecording: boolean;
   activeCoupon: any;
-setShowCouponModal: (v: boolean) => void;
-   showGridModal: boolean;
-   setShowGridModal: (v: boolean) => void;
-   sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
-   setShowCoHostDashboard: (v: boolean) => void;
-   showCoHostDashboard: boolean;
-   activeCoHosts: { userId: string; userName: string; userAvatar?: string; joinedAt: number; hasVideo: boolean; hasAudio: boolean }[];
-   coHostRequests: { userId: string; userName: string; userAvatar?: string; requestedAt: number; type: 'video' | 'audio' }[];
-   setCoHostRequests: React.Dispatch<React.SetStateAction<any[]>>;
-   setActiveCoHosts: React.Dispatch<React.SetStateAction<any[]>>;
-   call: any;
-   sendCoHostRequest: (userId: string, userName: string, userAvatar?: string, requestType?: string) => void;
+  setShowCouponModal: (v: boolean) => void;
+  showGridModal: boolean;
+  setShowGridModal: (v: boolean) => void;
+  sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
+  setShowCoHostDashboard: (v: boolean) => void;
+  showCoHostDashboard: boolean;
+  activeCoHosts: {
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+    joinedAt: number;
+    hasVideo: boolean;
+    hasAudio: boolean;
+  }[];
+  coHostRequests: {
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+    requestedAt: number;
+    type: "video" | "audio";
+  }[];
+  setCoHostRequests: React.Dispatch<React.SetStateAction<any[]>>;
+  setActiveCoHosts: React.Dispatch<React.SetStateAction<any[]>>;
+  call: any;
+  sendCoHostRequest: (
+    userId: string,
+    userName: string,
+    userAvatar?: string,
+    requestType?: string,
+  ) => void;
+  isLiveStarted: boolean;
 };
 
 const HostStreamContent = ({
@@ -285,7 +304,7 @@ const HostStreamContent = ({
   pinnedProductId,
   setPinnedProductId,
   setPinnedProduct,
-setPinEndTime,
+  setPinEndTime,
   showProductModal,
   setShowProductModal,
   showPollModal,
@@ -305,90 +324,315 @@ setPinEndTime,
   setShowCouponModal,
   showGridModal,
   setShowGridModal,
-sendStreamCustomEvent,
-    setShowCoHostDashboard,
-    showCoHostDashboard,
-    activeCoHosts,
-    coHostRequests,
-    setCoHostRequests,
-    setActiveCoHosts,
-    call,
-    sendCoHostRequest,
+  sendStreamCustomEvent,
+  call,
+  sendCoHostRequest,
+  isLiveStarted,
+  setShowCoHostDashboard,
+  showCoHostDashboard,
+  activeCoHosts,
+  setActiveCoHosts,
+  coHostRequests,
+  setCoHostRequests,
 }: HostStreamContentProps) => {
-  const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
+  const {
+    useCameraState,
+    useMicrophoneState,
+    useLocalParticipant,
+    useParticipantCount,
+    useRemoteParticipants,
+  } = useCallStateHooks();
   const camState = useCameraState();
   const { microphone, optimisticIsMute: isMicMuted } = useMicrophoneState();
   const isCameraOn = camState?.isEnabled ?? true;
   const localParticipant = useLocalParticipant();
+  const remoteParticipants = useRemoteParticipants();
   const participantCount = useParticipantCount();
 
   useEffect(() => {
-    if (sendStreamCustomEvent && isCameraOn !== undefined) {
+    if (sendStreamCustomEvent && isCameraOn !== undefined && isLiveStarted) {
       sendStreamCustomEvent({
         type: "camera_state",
         isCameraOn: isCameraOn,
       }).catch(console.error);
     }
-  }, [isCameraOn, sendStreamCustomEvent]);
+  }, [isCameraOn, sendStreamCustomEvent, isLiveStarted]);
 
   return (
     <>
       {localParticipant && (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          <FloatingParticipantView
+          <ParticipantView
             participant={localParticipant}
-            alignment="top-right"
+            style={StyleSheet.absoluteFill}
             mirror
           />
         </View>
       )}
 
-       {!isCameraOn && (
-         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center", backgroundColor: "#1a1a2e", zIndex: 1 }]}>
-           <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: "#fff" }} />
-           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 16 }}>{brandName || resolvedName || userName}</Text>
-         </View>
-       )}
+      {/* Render Remote Participants (Co-Hosts) */}
+      {remoteParticipants.map((p, index) => (
+        <View
+          key={p.userId}
+          style={{
+            position: "absolute",
+            top: 120 + index * 130,
+            right: 15,
+            width: 90,
+            height: 120,
+            borderRadius: 12,
+            overflow: "hidden",
+            zIndex: 1000,
+            borderWidth: 1,
+            borderColor: "#fff",
+          }}
+        >
+          <ParticipantView participant={p} style={StyleSheet.absoluteFill} />
+        </View>
+      ))}
 
-        <View style={{ position: "absolute", top: 50, left: 15, right: 15, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 100 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(239, 68, 68, 0.9)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff", marginRight: 6 }} />
-              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>LIVE</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Image source={{ uri: hostAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || resolvedName || userName)}&background=random` }} style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#fff" }} />
-              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>{resolvedName}</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>👁 {participantCount}</Text>
-            </View>
-            <View style={{ backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>{formatDuration(durationSeconds)}</Text>
-            </View>
+      {!isCameraOn && (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#1a1a2e",
+              zIndex: 1,
+            },
+          ]}
+        >
+          <Image
+            source={{
+              uri:
+                hostAvatar ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || "Host")}&background=random`,
+            }}
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              borderWidth: 3,
+              borderColor: "#fff",
+            }}
+          />
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 18,
+              fontWeight: "700",
+              marginTop: 16,
+            }}
+          >
+            {brandName || resolvedName || userName}
+          </Text>
+        </View>
+      )}
+
+      <View
+        style={{
+          position: "absolute",
+          top: 50,
+          left: 15,
+          right: 15,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          zIndex: 100,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "rgba(239, 68, 68, 0.9)",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: "#fff",
+                marginRight: 6,
+              }}
+            />
+            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>
+              {t("live") || "LIVE"}
+            </Text>
           </View>
-         <TouchableOpacity onPress={() => Alert.alert(t("endLiveTitle") || "End Live", t("endLiveConfirm") || "Are you sure?", [{ text: t("cancel") || "Cancel", style: "cancel" }, { text: t("end") || "End", style: "destructive", onPress: endFirestoreSession }])} style={{ backgroundColor: "rgba(0,0,0,0.5)", width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-           <X size={20} color="#fff" />
-         </TouchableOpacity>
-       </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Image
+              source={{
+                uri:
+                  hostAvatar ||
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(brandName || "Host")}&background=random`,
+              }}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#fff",
+              }}
+            />
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>
+              {brandName || resolvedName}
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.5)",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 12,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>
+              👁 {participantCount}
+            </Text>
+          </View>
+          <View
+            style={{
+              backgroundColor: "rgba(0,0,0,0.5)",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 12,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>
+              {formatDuration(durationSeconds)}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() =>
+            Alert.alert(
+              t("endLiveTitle") || "End Live",
+              t("endLiveConfirm") || "Are you sure?",
+              [
+                { text: t("cancel") || "Cancel", style: "cancel" },
+                {
+                  text: t("end") || "End",
+                  style: "destructive",
+                  onPress: endFirestoreSession,
+                },
+              ],
+            )
+          }
+          style={{
+            backgroundColor: "rgba(0,0,0,0.5)",
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
+          <X size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       {floatingHearts.map((heart: any) => (
-        <Animatable.View key={heart.id} animation="fadeInUp" duration={2000} style={{ position: "absolute", bottom: 100, left: "50%", marginLeft: heart.x, zIndex: 500 }}>
+        <Animatable.View
+          key={heart.id}
+          animation="fadeInUp"
+          duration={2000}
+          style={{
+            position: "absolute",
+            bottom: 100,
+            left: "50%",
+            marginLeft: heart.x,
+            zIndex: 500,
+          }}
+        >
           <Text style={{ fontSize: 30 }}>❤️</Text>
         </Animatable.View>
       ))}
 
-      {totalLikes >= 50 && <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />}
+      {totalLikes >= 50 && (
+        <FlameCounter
+          count={totalLikes}
+          onPress={handleSendLike}
+          top={isInPK ? 210 : 120}
+        />
+      )}
 
       {pinnedProduct && (
-        <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
-          <BlurView intensity={90} tint="dark" style={{ borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.25)", overflow: "hidden" }}>
-            <Image source={{ uri: pinnedProduct.images?.[0] }} style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: "#333" }} />
+        <Animatable.View
+          animation="fadeInLeft"
+          duration={400}
+          style={{
+            position: "absolute",
+            bottom: 180,
+            left: 15,
+            width: 240,
+            zIndex: 300,
+          }}
+        >
+          <BlurView
+            intensity={90}
+            tint="dark"
+            style={{
+              borderRadius: 16,
+              padding: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              borderWidth: 1.5,
+              borderColor: "rgba(255, 255, 255, 0.25)",
+              overflow: "hidden",
+            }}
+          >
+            <Image
+              source={{ uri: pinnedProduct.images?.[0] }}
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 10,
+                backgroundColor: "#333",
+              }}
+            />
             <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text numberOfLines={1} style={{ color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 3 }}>{getLocalizedName(pinnedProduct.name)}</Text>
-              <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}>{pinnedProduct.discountPrice || pinnedProduct.price} TND</Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: "#fff",
+                  fontWeight: "700",
+                  fontSize: 11,
+                  marginBottom: 3,
+                }}
+              >
+                {getLocalizedName(pinnedProduct.name)}
+              </Text>
+              <Text
+                style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}
+              >
+                {pinnedProduct.discountPrice || pinnedProduct.price} TND
+              </Text>
             </View>
-            <TouchableOpacity onPress={handleUnpin} style={{ position: "absolute", top: 4, right: 4, backgroundColor: "rgba(255, 255, 255, 0.15)", width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" }}>
+            <TouchableOpacity
+              onPress={handleUnpin}
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                backgroundColor: "rgba(255, 255, 255, 0.15)",
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <X size={10} color="#fff" />
             </TouchableOpacity>
           </BlurView>
@@ -396,47 +640,233 @@ sendStreamCustomEvent,
       )}
 
       {selectedProductIds.length > 0 && (
-        <View style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 250 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
-            {products.filter((p) => selectedProductIds.includes(p.id)).map((p) => {
-              const isPinned = pinnedProductId === p.id;
-              return (
-                <TouchableOpacity key={p.id} onPress={() => { setPinnedProductId(p.id); setPinnedProduct(p); setPinEndTime(Date.now() + 300000); }} style={{ width: 90, borderRadius: 14, backgroundColor: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.7)", borderWidth: isPinned ? 2 : 1, borderColor: isPinned ? "#10B981" : "rgba(255,255,255,0.1)", padding: 6, overflow: "hidden" }}>
-                  <Image source={{ uri: p.images?.[0] }} style={{ width: 78, height: 78, borderRadius: 10, backgroundColor: "#333" }} />
-                  {p.discountPrice && <View style={{ position: "absolute", top: 8, left: 4, backgroundColor: "#EF4444", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}><Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>-{Math.round((1 - p.discountPrice / p.price) * 100)}%</Text></View>}
-                   <View style={{ marginTop: 4, alignItems: "center" }}>
-                     <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontWeight: "600", textAlign: "center" }}>{getLocalizedName(p.name)}</Text>
-                     <Text style={{ color: isPinned ? "#10B981" : "#F59E0B", fontSize: 11, fontWeight: "900", textAlign: "center" }}>{p.discountPrice || p.price} TND</Text>
-                   </View>
-                </TouchableOpacity>
-              );
-            })}
+        <View
+          style={{
+            position: "absolute",
+            bottom: 100,
+            left: 0,
+            right: 0,
+            zIndex: 250,
+          }}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}
+          >
+            {products
+              .filter((p) => selectedProductIds.includes(p.id))
+              .map((p) => {
+                const isPinned = pinnedProductId === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => {
+                      setPinnedProductId(p.id);
+                      setPinnedProduct(p);
+                      setPinEndTime(Date.now() + 300000);
+                    }}
+                    style={{
+                      width: 90,
+                      borderRadius: 14,
+                      backgroundColor: isPinned
+                        ? "rgba(16, 185, 129, 0.2)"
+                        : "rgba(0,0,0,0.7)",
+                      borderWidth: isPinned ? 2 : 1,
+                      borderColor: isPinned
+                        ? "#10B981"
+                        : "rgba(255,255,255,0.1)",
+                      padding: 6,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Image
+                      source={{ uri: p.images?.[0] }}
+                      style={{
+                        width: 78,
+                        height: 78,
+                        borderRadius: 10,
+                        backgroundColor: "#333",
+                      }}
+                    />
+                    {p.discountPrice && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          left: 4,
+                          backgroundColor: "#EF4444",
+                          paddingHorizontal: 4,
+                          paddingVertical: 2,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 7,
+                            fontWeight: "900",
+                          }}
+                        >
+                          -{Math.round((1 - p.discountPrice / p.price) * 100)}%
+                        </Text>
+                      </View>
+                    )}
+                    <View style={{ marginTop: 4, alignItems: "center" }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: "#fff",
+                          fontSize: 9,
+                          fontWeight: "600",
+                          textAlign: "center",
+                        }}
+                      >
+                        {getLocalizedName(p.name)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: isPinned ? "#10B981" : "#F59E0B",
+                          fontSize: 11,
+                          fontWeight: "900",
+                          textAlign: "center",
+                        }}
+                      >
+                        {p.discountPrice || p.price} TND
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
           </ScrollView>
         </View>
       )}
 
       {activePoll && (
-        <Animatable.View animation="slideInUp" duration={400} style={{ position: "absolute", bottom: 300, left: 15, right: 15, zIndex: 350 }}>
-          <BlurView intensity={85} tint="dark" style={{ borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: "rgba(139, 92, 246, 0.5)", overflow: "hidden" }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#8B5CF6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+        <Animatable.View
+          animation="slideInUp"
+          duration={400}
+          style={{
+            position: "absolute",
+            bottom: 300,
+            left: 15,
+            right: 15,
+            zIndex: 350,
+          }}
+        >
+          <BlurView
+            intensity={85}
+            tint="dark"
+            style={{
+              borderRadius: 16,
+              padding: 14,
+              borderWidth: 1.5,
+              borderColor: "rgba(139, 92, 246, 0.5)",
+              overflow: "hidden",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#8B5CF6",
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 6,
+                }}
+              >
                 <BarChart2 size={10} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>POLL</Text>
+                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>
+                  {t("poll") || "POLL"}
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => setActivePoll(null)} style={{ padding: 4 }}><X size={14} color="rgba(255,255,255,0.6)" /></TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setActivePoll(null)}
+                style={{ padding: 4 }}
+              >
+                <X size={14} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
             </View>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700", marginBottom: 10 }}>{activePoll.question}</Text>
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: "700",
+                marginBottom: 10,
+              }}
+            >
+              {activePoll.question}
+            </Text>
             {activePoll.options.map((opt: any) => {
-              const totalVotes = activePoll.options.reduce((sum: number, o: any) => sum + o.votes, 0);
-              const percentage = totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
+              const totalVotes = activePoll.options.reduce(
+                (sum: number, o: any) => sum + o.votes,
+                0,
+              );
+              const percentage =
+                totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
               return (
-                <TouchableOpacity key={opt.id} onPress={() => { const updated = { ...activePoll, options: activePoll.options.map((o: any) => o.id === opt.id ? { ...o, votes: o.votes + 1 } : o) }; setActivePoll(updated); }} style={{ backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, marginBottom: 6 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text style={{ color: "#fff", fontSize: 12 }}>{opt.text}</Text>
-                    <Text style={{ color: "#8B5CF6", fontWeight: "700", fontSize: 12 }}>{percentage.toFixed(0)}%</Text>
+                <TouchableOpacity
+                  key={opt.id}
+                  onPress={() => {
+                    const updated = {
+                      ...activePoll,
+                      options: activePoll.options.map((o: any) =>
+                        o.id === opt.id ? { ...o, votes: o.votes + 1 } : o,
+                      ),
+                    };
+                    setActivePoll(updated);
+                  }}
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.1)",
+                    borderRadius: 8,
+                    padding: 10,
+                    marginBottom: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 12 }}>
+                      {opt.text}
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#8B5CF6",
+                        fontWeight: "700",
+                        fontSize: 12,
+                      }}
+                    >
+                      {percentage.toFixed(0)}%
+                    </Text>
                   </View>
-                  <View style={{ height: 3, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
-                    <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: "#8B5CF6", borderRadius: 2 }} />
+                  <View
+                    style={{
+                      height: 3,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 2,
+                      marginTop: 6,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View
+                      style={{
+                        height: "100%",
+                        width: `${percentage}%`,
+                        backgroundColor: "#8B5CF6",
+                        borderRadius: 2,
+                      }}
+                    />
                   </View>
                 </TouchableOpacity>
               );
@@ -445,56 +875,250 @@ sendStreamCustomEvent,
         </Animatable.View>
       )}
 
-      <View style={{ position: "absolute", bottom: 180, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>
-        <TouchableOpacity onPress={handleSendLike} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(239, 68, 68, 0.8)", alignItems: "center", justifyContent: "center" }}>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 180,
+          right: 15,
+          gap: 10,
+          alignItems: "center",
+          zIndex: 400,
+        }}
+      >
+        <TouchableOpacity
+          onPress={handleSendLike}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(239, 68, 68, 0.8)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Heart size={18} color="#fff" fill="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowProductModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowProductModal(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <ShoppingBag size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowPollModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowPollModal(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)",
+          }}
+        >
           <BarChart2 size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowPKInviteModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowPKInviteModal(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)",
+          }}
+        >
           <Swords size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowCoHostDashboard(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activeCoHosts.length > 0 ? "#10B981" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activeCoHosts.length > 0 ? "#10B981" : "rgba(255,255,255,0.2)" }}>
-          <Users size={18} color="#fff" />
-          {coHostRequests.length > 0 && (
-            <View style={{ position: "absolute", top: -4, right: -4, backgroundColor: "#EF4444", width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{coHostRequests.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={openGiftModal} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+
+        <TouchableOpacity
+          onPress={openGiftModal}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <GiftIcon size={18} color="#fff" strokeWidth={2} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowCouponModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activeCoupon ? "#F59E0B" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activeCoupon ? "#fff" : "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowCouponModal(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: activeCoupon ? "#F59E0B" : "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: activeCoupon ? "#fff" : "rgba(255,255,255,0.2)",
+          }}
+        >
           <Ticket size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowChat(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowChat(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <MessageCircle size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleTakeScreenshot} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={handleTakeScreenshot}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <Camera size={18} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={toggleRecording} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={toggleRecording}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)",
+          }}
+        >
           <Radio size={18} color="#fff" />
         </TouchableOpacity>
         {/* Grid Layout Customization Button */}
-        <TouchableOpacity onPress={() => setShowGridModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={() => setShowGridModal(true)}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <LayoutGrid size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, zIndex: 400 }}>
-        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.toggle(); } catch (e) { console.error("Camera toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          {isCameraOn ? <Camera size={20} color="#fff" /> : <CameraOff size={20} color="#fff" />}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 20,
+          left: 0,
+          right: 0,
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 16,
+          zIndex: 400,
+        }}
+      >
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              if (camState?.camera) await camState.camera.toggle();
+            } catch (e) {
+              console.error("Camera toggle error:", e);
+            }
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
+          {isCameraOn ? (
+            <Camera size={20} color="#fff" />
+          ) : (
+            <CameraOff size={20} color="#fff" />
+          )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={async () => { try { if (microphone) await microphone.toggle(); } catch (e) { console.error("Mic toggle error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-          {isMicMuted ? <MicOff size={20} color="#fff" /> : <Mic size={20} color="#fff" />}
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              if (microphone) await microphone.toggle();
+            } catch (e) {
+              console.error("Mic toggle error:", e);
+            }
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
+          {isMicMuted ? (
+            <MicOff size={20} color="#fff" />
+          ) : (
+            <Mic size={20} color="#fff" />
+          )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={async () => { try { if (camState?.camera) await camState.camera.flip(); } catch (e) { console.error("Camera flip error:", e); } }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              if (camState?.camera) await camState.camera.flip();
+            } catch (e) {
+              console.error("Camera flip error:", e);
+            }
+          }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <FlipHorizontal size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -503,11 +1127,40 @@ sendStreamCustomEvent,
 
       {/* Co-Host Dashboard Modal */}
       <Modal visible={showCoHostDashboard} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" }}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowCoHostDashboard(false)} />
-          <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, maxHeight: "80%" }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Co-Host Management</Text>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.8)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => setShowCoHostDashboard(false)}
+          />
+          <Animatable.View
+            animation="slideInUp"
+            duration={300}
+            style={{
+              backgroundColor: "#121218",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 20,
+              paddingBottom: 40,
+              maxHeight: "80%",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
+                {t("coHostManagement") || "Co-Host Management"}
+              </Text>
               <TouchableOpacity onPress={() => setShowCoHostDashboard(false)}>
                 <X size={24} color="#fff" />
               </TouchableOpacity>
@@ -516,41 +1169,126 @@ sendStreamCustomEvent,
             {/* Co-Host Requests Section */}
             {coHostRequests.length > 0 && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 10 }}>PENDING REQUESTS ({coHostRequests.length})</Text>
+                <Text
+                  style={{
+                    color: "#888",
+                    fontSize: 12,
+                    fontWeight: "600",
+                    marginBottom: 10,
+                  }}
+                >
+                  {t("pendingRequests") || "PENDING REQUESTS"} (
+                  {coHostRequests.length})
+                </Text>
                 {coHostRequests.map((req) => (
-                  <View key={req.userId} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 12, marginBottom: 8 }}>
-                    <Image source={{ uri: req.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.userName)}&background=random` }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                  <View
+                    key={req.userId}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "rgba(255,255,255,0.05)",
+                      padding: 12,
+                      borderRadius: 12,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Image
+                      source={{
+                        uri:
+                          req.userAvatar ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(req.userName)}&background=random`,
+                      }}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        marginRight: 12,
+                      }}
+                    />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: "#fff", fontWeight: "600" }}>{req.userName}</Text>
-                      <Text style={{ color: "#888", fontSize: 12 }}>{req.type === "video" ? "Video" : "Audio"} Request • {new Date(req.requestedAt).toLocaleTimeString()}</Text>
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>
+                        {req.userName}
+                      </Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>
+                        {req.type === "video"
+                          ? t("video") || "Video"
+                          : t("audio") || "Audio"}{" "}
+                        {t("request") || "Request"} •{" "}
+                        {new Date(req.requestedAt).toLocaleTimeString()}
+                      </Text>
                     </View>
                     <View style={{ flexDirection: "row", gap: 8 }}>
-<TouchableOpacity onPress={async () => {
-                         try {
-                           await call?.sendCustomEvent({
-                             type: "cohost:accepted",
-                             userId: req.userId,
-                             userName: req.userName,
-                             userAvatar: req.userAvatar,
-                             hasVideo: req.type === "video",
-                             hasAudio: true,
-                           }, [req.userId]);
-                           setActiveCoHosts((prev: any[]) => [...prev, {
-                             userId: req.userId,
-                             userName: req.userName,
-                             userAvatar: req.userAvatar,
-                             joinedAt: Date.now(),
-                             hasVideo: req.type === "video",
-                             hasAudio: true,
-                           }]);
-                           setCoHostRequests((prev: any[]) => prev.filter((r: any) => r.userId !== req.userId));
-                         } catch (e) { console.error("Accept co-host error:", e); }
-                       }} style={{ backgroundColor: "#10B981", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
-                         <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Accept</Text>
-                       </TouchableOpacity>
-                       <TouchableOpacity onPress={() => setCoHostRequests((prev: any[]) => prev.filter((r: any) => r.userId !== req.userId))} style={{ backgroundColor: "#EF4444", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
-                         <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Reject</Text>
-                       </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await call?.sendCustomEvent(
+                              {
+                                type: "cohost:accepted",
+                                userId: req.userId,
+                                userName: req.userName,
+                                userAvatar: req.userAvatar,
+                                hasVideo: req.type === "video",
+                                hasAudio: true,
+                              }
+                            );
+                            setActiveCoHosts((prev: any[]) => [
+                              ...prev,
+                              {
+                                userId: req.userId,
+                                userName: req.userName,
+                                userAvatar: req.userAvatar,
+                                joinedAt: Date.now(),
+                                hasVideo: req.type === "video",
+                                hasAudio: true,
+                              },
+                            ]);
+                            setCoHostRequests((prev: any[]) =>
+                              prev.filter((r: any) => r.userId !== req.userId),
+                            );
+                          } catch (e) {
+                            console.error("Accept co-host error:", e);
+                          }
+                        }}
+                        style={{
+                          backgroundColor: "#10B981",
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "600",
+                            fontSize: 12,
+                          }}
+                        >
+                          {t("accept") || "Accept"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setCoHostRequests((prev: any[]) =>
+                            prev.filter((r: any) => r.userId !== req.userId),
+                          )
+                        }
+                        style={{
+                          backgroundColor: "#EF4444",
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "600",
+                            fontSize: 12,
+                          }}
+                        >
+                          {t("reject") || "Reject"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -559,25 +1297,89 @@ sendStreamCustomEvent,
 
             {/* Active Co-Hosts Section */}
             <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 10 }}>ACTIVE CO-HOSTS ({activeCoHosts.length})</Text>
+              <Text
+                style={{
+                  color: "#888",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginBottom: 10,
+                }}
+              >
+                {t("activeCoHosts") || "ACTIVE CO-HOSTS"} (
+                {activeCoHosts.length})
+              </Text>
               {activeCoHosts.length === 0 ? (
-                <Text style={{ color: "#666", textAlign: "center", padding: 20 }}>No active co-hosts</Text>
+                <Text
+                  style={{ color: "#666", textAlign: "center", padding: 20 }}
+                >
+                  {t("noActiveCoHosts") || "No active co-hosts"}
+                </Text>
               ) : (
                 activeCoHosts.map((cohost) => (
-                  <View key={cohost.userId} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 12, marginBottom: 8 }}>
-                    <Image source={{ uri: cohost.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(cohost.userName)}&background=random` }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                  <View
+                    key={cohost.userId}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "rgba(255,255,255,0.05)",
+                      padding: 12,
+                      borderRadius: 12,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Image
+                      source={{
+                        uri:
+                          cohost.userAvatar ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(cohost.userName)}&background=random`,
+                      }}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        marginRight: 12,
+                      }}
+                    />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: "#fff", fontWeight: "600" }}>{cohost.userName}</Text>
-                      <Text style={{ color: "#888", fontSize: 12 }}>Joined {new Date(cohost.joinedAt).toLocaleTimeString()} • {cohost.hasVideo ? "📹" : "🔇"} {cohost.hasAudio ? "🔊" : "🔇"}</Text>
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>
+                        {cohost.userName}
+                      </Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>
+                        {t("joinedAt")} {new Date(cohost.joinedAt).toLocaleTimeString()}{" "}
+                        • {cohost.hasVideo ? "📹" : "🔇"}{" "}
+                        {cohost.hasAudio ? "🔊" : "🔇"}
+                      </Text>
                     </View>
-<TouchableOpacity onPress={async () => {
-                       try {
-                         await call?.sendCustomEvent({ type: "cohost:left", userId: cohost.userId }, [cohost.userId]);
-                         setActiveCoHosts((prev: any[]) => prev.filter((h: any) => h.userId !== cohost.userId));
-                       } catch (e) { console.error("Remove co-host error:", e); }
-                     }} style={{ backgroundColor: "#EF4444", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
-                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>Remove</Text>
-                     </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          await call?.sendCustomEvent(
+                            { type: "cohost:left", userId: cohost.userId }
+                          );
+                          setActiveCoHosts((prev: any[]) =>
+                            prev.filter((h: any) => h.userId !== cohost.userId),
+                          );
+                        } catch (e) {
+                          console.error("Remove co-host error:", e);
+                        }
+                      }}
+                      style={{
+                        backgroundColor: "#EF4444",
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "600",
+                          fontSize: 12,
+                        }}
+                      >
+                        {t("remove") || "Remove"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ))
               )}
@@ -715,9 +1517,17 @@ export default function HostLiveScreen(props: Props) {
           const collabSnap = await getDoc(doc(db, "collaborations", collabId));
           if (collabSnap.exists()) {
             const collabData = collabSnap.data();
-            const name = collabData.name || collabData.brandName || collabData.marque;
+            const name =
+              collabData.name || collabData.brandName || collabData.marque;
             if (name) {
-              const resolved = typeof name === "object" ? (name.fr || name.en || name.ar || Object.values(name).find(v => typeof v === "string") || "") : name;
+              const resolved =
+                typeof name === "object"
+                  ? name.fr ||
+                    name.en ||
+                    name.ar ||
+                    Object.values(name).find((v) => typeof v === "string") ||
+                    ""
+                  : name;
               setBrandName(resolved);
               return;
             }
@@ -728,9 +1538,17 @@ export default function HostLiveScreen(props: Props) {
           const brandSnap = await getDoc(doc(db, "users", brandId));
           if (brandSnap.exists()) {
             const brandData = brandSnap.data();
-            const name = brandData.brandName || brandData.fullName || brandData.marque;
+            const name =
+              brandData.brandName || brandData.fullName || brandData.marque;
             if (name) {
-              const resolved = typeof name === "object" ? (name.fr || name.en || name.ar || Object.values(name).find(v => typeof v === "string") || "") : name;
+              const resolved =
+                typeof name === "object"
+                  ? name.fr ||
+                    name.en ||
+                    name.ar ||
+                    Object.values(name).find((v) => typeof v === "string") ||
+                    ""
+                  : name;
               setBrandName(resolved);
               return;
             }
@@ -854,7 +1672,9 @@ export default function HostLiveScreen(props: Props) {
           if (data.type === "cohost:left") {
             const leftUserId = data.userId;
             console.log("👋 Co-host left:", leftUserId);
-            setActiveCoHosts((prev) => prev.filter((h) => h.userId !== leftUserId));
+            setActiveCoHosts((prev) =>
+              prev.filter((h) => h.userId !== leftUserId),
+            );
           }
         });
 
@@ -942,22 +1762,26 @@ export default function HostLiveScreen(props: Props) {
     isMuted: boolean;
   } | null>(null);
   // Co-Host Requests State
-  const [coHostRequests, setCoHostRequests] = useState<{
-    userId: string;
-    userName: string;
-    userAvatar?: string;
-    requestedAt: number;
-    type: 'video' | 'audio'; // Request type
-  }[]>([]);
+  const [coHostRequests, setCoHostRequests] = useState<
+    {
+      userId: string;
+      userName: string;
+      userAvatar?: string;
+      requestedAt: number;
+      type: "video" | "audio"; // Request type
+    }[]
+  >([]);
   const [showCoHostDashboard, setShowCoHostDashboard] = useState(false);
-  const [activeCoHosts, setActiveCoHosts] = useState<{
-    userId: string;
-    userName: string;
-    userAvatar?: string;
-    joinedAt: number;
-    hasVideo: boolean;
-    hasAudio: boolean;
-  }[]>([]);
+  const [activeCoHosts, setActiveCoHosts] = useState<
+    {
+      userId: string;
+      userName: string;
+      userAvatar?: string;
+      joinedAt: number;
+      hasVideo: boolean;
+      hasAudio: boolean;
+    }[]
+  >([]);
   const [showGiftVideo, setShowGiftVideo] = useState(false);
   // Gift Queue System
   const [giftQueue, setGiftQueue] = React.useState<
@@ -2693,16 +3517,24 @@ export default function HostLiveScreen(props: Props) {
   };
 
   // Send co-host request to a user
-  const sendCoHostRequest = async (userId: string, userName: string, userAvatar?: string, requestType = "video") => {
+  const sendCoHostRequest = async (
+    userId: string,
+    userName: string,
+    userAvatar?: string,
+    requestType = "video",
+  ) => {
     try {
       if (call) {
-        await call.sendCustomEvent({
-          type: "cohost:request",
-          userId,
-          userName,
-          userAvatar,
-          requestType,
-        }, [userId]);
+        await call.sendCustomEvent(
+          {
+            type: "cohost:request",
+            userId,
+            userName,
+            userAvatar,
+            requestType,
+          },
+          [userId],
+        );
         console.log("✅ Co-host request sent to:", userName);
       }
     } catch (e) {
@@ -2852,27 +3684,28 @@ export default function HostLiveScreen(props: Props) {
                 setShowPKInviteModal={setShowPKInviteModal}
                 activePoll={activePoll}
                 setActivePoll={setActivePoll}
-durationSeconds={durationSeconds}
-                 formatDuration={formatDuration}
-                 openGiftModal={openGiftModal}
-                 setShowChat={setShowChat}
-                 handleTakeScreenshot={handleTakeScreenshot}
-                 toggleRecording={toggleRecording}
-                 isRecording={isRecording}
-activeCoupon={activeCoupon}
-                  setShowCouponModal={setShowCouponModal}
-                  showGridModal={showGridModal}
-                  setShowGridModal={setShowGridModal}
-sendStreamCustomEvent={sendStreamCustomEvent}
-                    setShowCoHostDashboard={setShowCoHostDashboard}
-                    showCoHostDashboard={showCoHostDashboard}
-                    activeCoHosts={activeCoHosts}
-                    coHostRequests={coHostRequests}
-                    setCoHostRequests={setCoHostRequests}
-                    setActiveCoHosts={setActiveCoHosts}
-                    call={call}
-                    sendCoHostRequest={sendCoHostRequest}
-                 />
+                durationSeconds={durationSeconds}
+                formatDuration={formatDuration}
+                openGiftModal={openGiftModal}
+                setShowChat={setShowChat}
+                handleTakeScreenshot={handleTakeScreenshot}
+                toggleRecording={toggleRecording}
+                isRecording={isRecording}
+                activeCoupon={activeCoupon}
+                setShowCouponModal={setShowCouponModal}
+                showGridModal={showGridModal}
+                setShowGridModal={setShowGridModal}
+                sendStreamCustomEvent={sendStreamCustomEvent}
+                setShowCoHostDashboard={setShowCoHostDashboard}
+                showCoHostDashboard={showCoHostDashboard}
+                activeCoHosts={activeCoHosts}
+                coHostRequests={coHostRequests}
+                setCoHostRequests={setCoHostRequests}
+                setActiveCoHosts={setActiveCoHosts}
+                call={call}
+                sendCoHostRequest={sendCoHostRequest}
+                isLiveStarted={isLiveStarted}
+              />
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
@@ -2919,7 +3752,9 @@ sendStreamCustomEvent={sendStreamCustomEvent}
               borderColor: "rgba(255,255,255,0.2)",
             }}
           >
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Cancel</Text>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>
+              {t("cancel") || "Cancel"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -4799,386 +5634,384 @@ sendStreamCustomEvent={sendStreamCustomEvent}
         </View>
       </Modal>
 
-       {/* 🎫 Coupon Creation Modal */}
-       <Modal
-         visible={showCouponModal}
-         transparent={true}
-         animationType="fade"
-         onRequestClose={() => setShowCouponModal(false)}
-       >
-         <KeyboardAvoidingView
-           behavior={Platform.OS === "ios" ? "padding" : "height"}
-           style={{
-             flex: 1,
-             backgroundColor: "rgba(0,0,0,0.8)",
-             justifyContent: "center",
-             alignItems: "center",
-           }}
-         >
-           <TouchableOpacity
-             style={StyleSheet.absoluteFill}
-             activeOpacity={1}
-             onPress={() => setShowCouponModal(false)}
-           />
+      {/* 🎫 Coupon Creation Modal */}
+      <Modal
+        visible={showCouponModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCouponModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.8)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowCouponModal(false)}
+          />
 
-           <Animatable.View
-             animation="zoomIn"
-             duration={300}
-             style={{
-               backgroundColor: "#121218",
-               width: Dimensions.get("window").width * 0.9,
-               maxWidth: 420,
-               borderRadius: 20,
-               padding: 20,
-               borderWidth: 1.5,
-               borderColor: "rgba(255,255,255,0.15)",
-               shadowColor: "#000",
-               shadowOffset: { width: 0, height: 12 },
-               shadowOpacity: 0.3,
-               shadowRadius: 20,
-               elevation: 15,
-               alignItems: "center",
-             }}
-           >
-             <View
-               style={{
-                 width: 40,
-                 height: 4,
-                 backgroundColor: "rgba(255,255,255,0.2)",
-                 borderRadius: 2,
-                 alignSelf: "center",
-                 marginBottom: 20,
-               }}
-             />
+          <Animatable.View
+            animation="zoomIn"
+            duration={300}
+            style={{
+              backgroundColor: "#121218",
+              width: Dimensions.get("window").width * 0.9,
+              maxWidth: 420,
+              borderRadius: 20,
+              padding: 20,
+              borderWidth: 1.5,
+              borderColor: "rgba(255,255,255,0.15)",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+              elevation: 15,
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                backgroundColor: "rgba(255,255,255,0.2)",
+                borderRadius: 2,
+                alignSelf: "center",
+                marginBottom: 20,
+              }}
+            />
 
-             <View style={{ width: "100%", gap: 20 }}>
-               <View style={{ alignItems: "center", gap: 8 }}>
-                 <View
-                   style={{
-                     width: 60,
-                     height: 60,
-                     borderRadius: 30,
-                     backgroundColor: "rgba(255, 215, 0, 0.15)",
-                     alignItems: "center",
-                     justifyContent: "center",
-                   }}
-                 >
-                   <Ticket size={28} color="#F59E0B" />
-                 </View>
-                 <Text
-                   style={{
-                     color: "#fff",
-                     fontSize: 20,
-                     fontWeight: "900",
-                     letterSpacing: 0.5,
-                   }}
-                 >
-                   {t("createCoupon")}
-                 </Text>
-                 <Text
-                   style={{
-                     color: "#888",
-                     fontSize: 12,
-                     textAlign: "center",
-                     lineHeight: 18,
-                   }}
-                 >
-                   {t("couponDesc") || "Create a special coupon code for your viewers to use during the live stream"}
-                 </Text>
-               </View>
+            <View style={{ width: "100%", gap: 20 }}>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: "rgba(255, 215, 0, 0.15)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ticket size={28} color="#F59E0B" />
+                </View>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 20,
+                    fontWeight: "900",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {t("createCoupon")}
+                </Text>
+                <Text
+                  style={{
+                    color: "#888",
+                    fontSize: 12,
+                    textAlign: "center",
+                    lineHeight: 18,
+                  }}
+                >
+                  {t("couponDesc") ||
+                    "Create a special coupon code for your viewers to use during the live stream"}
+                </Text>
+              </View>
 
-               {/* Coupon Code Input */}
-               <View>
-                 <Text
-                   style={{
-                     color: "rgba(255,255,255,0.6)",
-                     fontSize: 11,
-                     marginBottom: 8,
-                     fontWeight: "700",
-                     letterSpacing: 1,
-                   }}
-                 >
-                   {t("couponCode").toUpperCase()}
-                 </Text>
-                 <TextInput
-                   placeholder="e.g. LIVE30"
-                   placeholderTextColor="#555"
-                   value={couponCode}
-                   onChangeText={setCouponCode}
-                   autoCapitalize="characters"
-                   style={{
-                     backgroundColor: "#0F0F16",
-                     borderRadius: 14,
-                     padding: 16,
-                     color: "#fff",
-                     fontSize: 16,
-                     fontWeight: "bold",
-                     borderWidth: 1.5,
-                     borderColor: "#2A2A35",
-                   }}
-                 />
-               </View>
+              {/* Coupon Code Input */}
+              <View>
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 11,
+                    marginBottom: 8,
+                    fontWeight: "700",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {t("couponCode").toUpperCase()}
+                </Text>
+                <TextInput
+                  placeholder="e.g. LIVE30"
+                  placeholderTextColor="#555"
+                  value={couponCode}
+                  onChangeText={setCouponCode}
+                  autoCapitalize="characters"
+                  style={{
+                    backgroundColor: "#0F0F16",
+                    borderRadius: 14,
+                    padding: 16,
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: "bold",
+                    borderWidth: 1.5,
+                    borderColor: "#2A2A35",
+                  }}
+                />
+              </View>
 
-               {/* Discount Type Selector */}
-               <View>
-                 <Text
-                   style={{
-                     color: "rgba(255,255,255,0.6)",
-                     fontSize: 11,
-                     marginBottom: 8,
-                     fontWeight: "700",
-                     letterSpacing: 1,
-                   }}
-                 >
-                   {"DISCOUNT TYPE"}
-                 </Text>
-                 <View style={{ flexDirection: "row", gap: 8 }}>
-                   <TouchableOpacity
-                     onPress={() => setCouponType("percentage")}
-                     style={{
-                       flex: 1,
-                       paddingVertical: 14,
-                       paddingHorizontal: 8,
-                       borderRadius: 14,
-                       backgroundColor:
-                         couponType === "percentage" ? "#F59E0B" : "#0F0F16",
-                       borderWidth: 1.5,
-                       borderColor:
-                         couponType === "percentage" ? "#F59E0B" : "#2A2A35",
-                       alignItems: "center",
-                       flexDirection: "row",
-                       justifyContent: "center",
-                       gap: 4,
-                     }}
-                   >
-                     {couponType === "percentage" && (
-                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
-                     )}
-                     <Text
-                       style={{
-                         color: couponType === "percentage" ? "#000" : "#fff",
-                         fontWeight: "800",
-                         fontSize: 13,
-                       }}
-                     >
-                       Percentage
-                     </Text>
-                     <Text
-                       style={{
-                         color: couponType === "percentage" ? "#000" : "#fff",
-                         fontWeight: "800",
-                         fontSize: 16,
-                       }}
-                     >
-                       %
-                     </Text>
-                   </TouchableOpacity>
-                   <TouchableOpacity
-                     onPress={() => setCouponType("fixed")}
-                     style={{
-                       flex: 1,
-                       paddingVertical: 14,
-                       paddingHorizontal: 8,
-                       borderRadius: 14,
-                       backgroundColor:
-                         couponType === "fixed" ? "#F59E0B" : "#0F0F16",
-                       borderWidth: 1.5,
-                       borderColor:
-                         couponType === "fixed" ? "#F59E0B" : "#2A2A35",
-                       alignItems: "center",
-                       flexDirection: "row",
-                       justifyContent: "center",
-                       gap: 4,
-                     }}
-                   >
-                     {couponType === "fixed" && (
-                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
-                     )}
-                     <Text
-                       style={{
-                         color: couponType === "fixed" ? "#000" : "#fff",
-                         fontWeight: "800",
-                         fontSize: 13,
-                       }}
-                     >
-                       Fixed Amount
-                     </Text>
-                     <Text
-                       style={{
-                         color: couponType === "fixed" ? "#000" : "#fff",
-                         fontWeight: "800",
-                         fontSize: 16,
-                       }}
-                     >
-                       TND
-                     </Text>
-                   </TouchableOpacity>
-                   <TouchableOpacity
-                     onPress={() => setCouponType("free_shipping")}
-                     style={{
-                       flex: 1,
-                       paddingVertical: 14,
-                       paddingHorizontal: 8,
-                       borderRadius: 14,
-                       backgroundColor:
-                         couponType === "free_shipping" ? "#F59E0B" : "#0F0F16",
-                       borderWidth: 1.5,
-                       borderColor:
-                         couponType === "free_shipping"
-                           ? "#F59E0B"
-                           : "#2A2A35",
-                       alignItems: "center",
-                       justifyContent: "center",
-                     }}
-                   >
-                     {couponType === "free_shipping" && (
-                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
-                     )}
-                     <Text
-                       style={{
-                         color: couponType === "free_shipping" ? "#000" : "#fff",
-                         fontWeight: "800",
-                         fontSize: 11,
-                       }}
-                     >
-                       Free Ship
-                     </Text>
-                   </TouchableOpacity>
-                 </View>
-               </View>
+              {/* Discount Type Selector */}
+              <View>
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 11,
+                    marginBottom: 8,
+                    fontWeight: "700",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {"DISCOUNT TYPE"}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setCouponType("percentage")}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingHorizontal: 8,
+                      borderRadius: 14,
+                      backgroundColor:
+                        couponType === "percentage" ? "#F59E0B" : "#0F0F16",
+                      borderWidth: 1.5,
+                      borderColor:
+                        couponType === "percentage" ? "#F59E0B" : "#2A2A35",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 4,
+                    }}
+                  >
+                    {couponType === "percentage" && (
+                      <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                    )}
+                    <Text
+                      style={{
+                        color: couponType === "percentage" ? "#000" : "#fff",
+                        fontWeight: "800",
+                        fontSize: 13,
+                      }}
+                    >
+                      Percentage
+                    </Text>
+                    <Text
+                      style={{
+                        color: couponType === "percentage" ? "#000" : "#fff",
+                        fontWeight: "800",
+                        fontSize: 16,
+                      }}
+                    >
+                      %
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCouponType("fixed")}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingHorizontal: 8,
+                      borderRadius: 14,
+                      backgroundColor:
+                        couponType === "fixed" ? "#F59E0B" : "#0F0F16",
+                      borderWidth: 1.5,
+                      borderColor:
+                        couponType === "fixed" ? "#F59E0B" : "#2A2A35",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 4,
+                    }}
+                  >
+                    {couponType === "fixed" && (
+                      <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                    )}
+                    <Text
+                      style={{
+                        color: couponType === "fixed" ? "#000" : "#fff",
+                        fontWeight: "800",
+                        fontSize: 13,
+                      }}
+                    >
+                      Fixed Amount
+                    </Text>
+                    <Text
+                      style={{
+                        color: couponType === "fixed" ? "#000" : "#fff",
+                        fontWeight: "800",
+                        fontSize: 16,
+                      }}
+                    >
+                      TND
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCouponType("free_shipping")}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingHorizontal: 8,
+                      borderRadius: 14,
+                      backgroundColor:
+                        couponType === "free_shipping" ? "#F59E0B" : "#0F0F16",
+                      borderWidth: 1.5,
+                      borderColor:
+                        couponType === "free_shipping" ? "#F59E0B" : "#2A2A35",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {couponType === "free_shipping" && (
+                      <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                    )}
+                    <Text
+                      style={{
+                        color: couponType === "free_shipping" ? "#000" : "#fff",
+                        fontWeight: "800",
+                        fontSize: 11,
+                      }}
+                    >
+                      Free Ship
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
-               {/* Discount Amount - hide for free shipping */}
-               {couponType !== "free_shipping" && (
-                 <View>
-                   <Text
-                     style={{
-                       color: "rgba(255,255,255,0.6)",
-                       fontSize: 11,
-                       marginBottom: 8,
-                       fontWeight: "700",
-                       letterSpacing: 1,
-                     }}
-                   >
-                     {couponType === "percentage"
-                       ? "DISCOUNT PERCENTAGE (%)"
-                       : "DISCOUNT AMOUNT (TND)"}
-                   </Text>
-                   <TextInput
-                     placeholder={couponType === "percentage" ? "30" : "10"}
-                     placeholderTextColor="#555"
-                     value={discountAmount}
-                     onChangeText={setDiscountAmount}
-                     keyboardType="numeric"
-                     style={{
-                       backgroundColor: "#0F0F16",
-                       borderRadius: 14,
-                       padding: 16,
-                       color: "#fff",
-                       fontSize: 20,
-                       fontWeight: "bold",
-                       borderWidth: 1.5,
-                       borderColor: "#2A2A35",
-                       textAlign: "center",
-                     }}
-                   />
-                   {discountAmount && (
-                     <View
-                       style={{
-                         position: "absolute",
-                         right: 40,
-                         top: 4,
-                       }}
-                     >
-                       <Text
-                         style={{
-                           color: "#888",
-                           fontSize: 18,
-                           fontWeight: "800",
-                         }}
-                       >
-                         {couponType === "percentage" ? "%" : "TND"}
-                       </Text>
-                     </View>
-                   )}
-                 </View>
-               )}
+              {/* Discount Amount - hide for free shipping */}
+              {couponType !== "free_shipping" && (
+                <View>
+                  <Text
+                    style={{
+                      color: "rgba(255,255,255,0.6)",
+                      fontSize: 11,
+                      marginBottom: 8,
+                      fontWeight: "700",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {couponType === "percentage"
+                      ? "DISCOUNT PERCENTAGE (%)"
+                      : "DISCOUNT AMOUNT (TND)"}
+                  </Text>
+                  <TextInput
+                    placeholder={couponType === "percentage" ? "30" : "10"}
+                    placeholderTextColor="#555"
+                    value={discountAmount}
+                    onChangeText={setDiscountAmount}
+                    keyboardType="numeric"
+                    style={{
+                      backgroundColor: "#0F0F16",
+                      borderRadius: 14,
+                      padding: 16,
+                      color: "#fff",
+                      fontSize: 20,
+                      fontWeight: "bold",
+                      borderWidth: 1.5,
+                      borderColor: "#2A2A35",
+                      textAlign: "center",
+                    }}
+                  />
+                  {discountAmount && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        right: 40,
+                        top: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#888",
+                          fontSize: 18,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {couponType === "percentage" ? "%" : "TND"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
-               {/* Expiry Duration */}
-               <View>
-                 <Text
-                   style={{
-                     color: "rgba(255,255,255,0.6)",
-                     fontSize: 11,
-                     marginBottom: 8,
-                     fontWeight: "700",
-                     letterSpacing: 1,
-                   }}
-                 >
-                   EXPIRY DURATION (MINUTES)
-                 </Text>
-                 <View
-                   style={{
-                     flexDirection: "row",
-                     gap: 8,
-                     flexWrap: "wrap",
-                   }}
-                 >
-                   {["5", "10", "15", "30", "60", "120"].map((mins) => (
-                     <TouchableOpacity
-                       key={mins}
-                       onPress={() => setCouponExpiry(mins)}
-                       style={{
-                         paddingVertical: 10,
-                         paddingHorizontal: 16,
-                         borderRadius: 14,
-                         backgroundColor:
-                           couponExpiry === mins ? "#F59E0B" : "#0F0F16",
-                         borderWidth: 1.5,
-                         borderColor:
-                           couponExpiry === mins ? "#F59E0B" : "#2A2A35",
-                       }}
-                     >
-                       <Text
-                         style={{
-                           color:
-                             couponExpiry === mins ? "#000" : "#888",
-                           fontSize: 13,
-                           fontWeight: "bold",
-                         }}
-                       >
-                         {mins}m
-                       </Text>
-                     </TouchableOpacity>
-                   ))}
-                 </View>
-               </View>
+              {/* Expiry Duration */}
+              <View>
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 11,
+                    marginBottom: 8,
+                    fontWeight: "700",
+                    letterSpacing: 1,
+                  }}
+                >
+                  EXPIRY DURATION (MINUTES)
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {["5", "10", "15", "30", "60", "120"].map((mins) => (
+                    <TouchableOpacity
+                      key={mins}
+                      onPress={() => setCouponExpiry(mins)}
+                      style={{
+                        paddingVertical: 10,
+                        paddingHorizontal: 16,
+                        borderRadius: 14,
+                        backgroundColor:
+                          couponExpiry === mins ? "#F59E0B" : "#0F0F16",
+                        borderWidth: 1.5,
+                        borderColor:
+                          couponExpiry === mins ? "#F59E0B" : "#2A2A35",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: couponExpiry === mins ? "#000" : "#888",
+                          fontSize: 13,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {mins}m
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
-               {/* Drop Button */}
-               <TouchableOpacity
-                 onPress={dropCoupon}
-                 style={{
-                   backgroundColor: "#F59E0B",
-                   paddingVertical: 18,
-                   borderRadius: 14,
-                   alignItems: "center",
-                   marginTop: 10,
-                 }}
-               >
-                 <Text
-                   style={{
-                     color: "#000",
-                     fontSize: 16,
-                     fontWeight: "900",
-                     letterSpacing: 1,
-                   }}
-                 >
-                   DROP COUPON
-                 </Text>
-               </TouchableOpacity>
-             </View>
-           </Animatable.View>
-         </KeyboardAvoidingView>
-       </Modal>
+              {/* Drop Button */}
+              <TouchableOpacity
+                onPress={dropCoupon}
+                style={{
+                  backgroundColor: "#F59E0B",
+                  paddingVertical: 18,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  marginTop: 10,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#000",
+                    fontSize: 16,
+                    fontWeight: "900",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {t("dropCoupon") || "DROP COUPON"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Animatable.View>
+        </KeyboardAvoidingView>
+      </Modal>
       {recentGift && !recentGift.isBig && (
         <View
           style={{
@@ -5867,7 +6700,7 @@ sendStreamCustomEvent={sendStreamCustomEvent}
                       memberActionSheet.userId,
                       memberActionSheet.userName,
                       undefined,
-                      "video"
+                      "video",
                     );
                     Alert.alert(
                       t("success") || "Success",
@@ -6056,88 +6889,260 @@ sendStreamCustomEvent={sendStreamCustomEvent}
         )}
       </Modal>
 
-       {/* Grid Layout Customization Modal */}
-       <Modal visible={showGridModal} transparent animationType="slide">
-         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}>
-           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowGridModal(false)} />
-           <Animatable.View animation="slideInUp" duration={300} style={{ backgroundColor: "#121218", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 }}>
-             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-               <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>Grid Layout</Text>
-               <TouchableOpacity onPress={() => setShowGridModal(false)}>
-                 <X size={24} color="#fff" />
-               </TouchableOpacity>
-             </View>
-             
-             <View style={{ gap: 16 }}>
-               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginBottom: 4 }}>SQUARE GRIDS</Text>
-               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                 {["1x1", "2x2", "3x3", "4x4", "5x5"].map((layout) => {
-                   const size = parseInt(layout[0]);
-                   return (
-                     <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
-                       <View style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
-                         {Array.from({ length: Math.min(size * size, 4) }).map((_, i) => (
-                           <View key={i} style={{
-                             position: "absolute",
-                             width: 8,
-                             height: 8,
-                             backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : i === 2 ? "rgba(255,215,0,0.5)" : "rgba(245,158,11,0.3)",
-                             borderRadius: 2,
-                             left: (i % 2) * 12 - 4,
-                             top: Math.floor(i / 2) * 12 - 4,
-                           }} />
-                         ))}
-                       </View>
-                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
-                     </TouchableOpacity>
-                   );
-                 })}
-               </View>
-               
-               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginTop: 12, marginBottom: 4 }}>PORTRAIT GRIDS</Text>
-               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                 {["1x2", "1x3", "2x3"].map((layout) => (
-                   <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
-                     <View style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", height: 40 }}>
-                       {Array.from({ length: layout === "1x2" ? 2 : layout === "1x3" ? 3 : 3 }).map((_, i) => (
-                         <View key={i} style={{
-                           width: 6,
-                           height: 10,
-                           backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : "rgba(255,215,0,0.3)",
-                           borderRadius: 1,
-                           marginBottom: 2,
-                         }} />
-                       ))}
-                     </View>
-                     <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
-                   </TouchableOpacity>
-                 ))}
-               </View>
-               
-               <Text style={{ color: "#888", fontSize: 12, fontWeight: "600", marginTop: 12, marginBottom: 4 }}>LANDSCAPE GRIDS</Text>
-               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                 {["2x1", "3x1", "3x2"].map((layout) => (
-                   <TouchableOpacity key={layout} style={{ width: "30%", aspectRatio: 1, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}>
-                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", width: 40 }}>
-                       {Array.from({ length: layout === "2x1" ? 2 : layout === "3x1" ? 3 : 3 }).map((_, i) => (
-                         <View key={i} style={{
-                           width: 10,
-                           height: 6,
-                           backgroundColor: i === 0 ? "#FFD700" : i === 1 ? "#F59E0B" : "rgba(255,215,0,0.3)",
-                           borderRadius: 1,
-                           marginRight: 2,
-                         }} />
-                       ))}
-                     </View>
-                     <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11, marginTop: 4 }}>{layout}</Text>
-                   </TouchableOpacity>
-                 ))}
-               </View>
-             </View>
-           </Animatable.View>
-         </View>
-       </Modal>
+      {/* Grid Layout Customization Modal */}
+      <Modal visible={showGridModal} transparent animationType="slide">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => setShowGridModal(false)}
+          />
+          <Animatable.View
+            animation="slideInUp"
+            duration={300}
+            style={{
+              backgroundColor: "#121218",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 20,
+              paddingBottom: 40,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
+                {t("gridLayout") || "Grid Layout"}
+              </Text>
+              <TouchableOpacity onPress={() => setShowGridModal(false)}>
+                <X size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
 
+            <View style={{ gap: 16 }}>
+              <Text
+                style={{
+                  color: "#888",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginBottom: 4,
+                }}
+              >
+                {t("squareGrids") || "SQUARE GRIDS"}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                {["1x1", "2x2", "3x3", "4x4", "5x5"].map((layout) => {
+                  const size = parseInt(layout[0]);
+                  return (
+                    <TouchableOpacity
+                      key={layout}
+                      style={{
+                        width: "30%",
+                        aspectRatio: 1,
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 1.5,
+                        borderColor: "rgba(255,255,255,0.15)",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {Array.from({ length: Math.min(size * size, 4) }).map(
+                          (_, i) => (
+                            <View
+                              key={i}
+                              style={{
+                                position: "absolute",
+                                width: 8,
+                                height: 8,
+                                backgroundColor:
+                                  i === 0
+                                    ? "#FFD700"
+                                    : i === 1
+                                      ? "#F59E0B"
+                                      : i === 2
+                                        ? "rgba(255,215,0,0.5)"
+                                        : "rgba(245,158,11,0.3)",
+                                borderRadius: 2,
+                                left: (i % 2) * 12 - 4,
+                                top: Math.floor(i / 2) * 12 - 4,
+                              }}
+                            />
+                          ),
+                        )}
+                      </View>
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "600",
+                          fontSize: 11,
+                          marginTop: 4,
+                        }}
+                      >
+                        {layout}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text
+                style={{
+                  color: "#888",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginTop: 12,
+                  marginBottom: 4,
+                }}
+              >
+                {t("portraitGrids") || "PORTRAIT GRIDS"}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                {["1x2", "1x3", "2x3"].map((layout) => (
+                  <TouchableOpacity
+                    key={layout}
+                    style={{
+                      width: "30%",
+                      aspectRatio: 1,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1.5,
+                      borderColor: "rgba(255,255,255,0.15)",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: 40,
+                      }}
+                    >
+                      {Array.from({
+                        length: layout === "1x2" ? 2 : layout === "1x3" ? 3 : 3,
+                      }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={{
+                            width: 6,
+                            height: 10,
+                            backgroundColor:
+                              i === 0
+                                ? "#FFD700"
+                                : i === 1
+                                  ? "#F59E0B"
+                                  : "rgba(255,215,0,0.3)",
+                            borderRadius: 1,
+                            marginBottom: 2,
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "600",
+                        fontSize: 11,
+                        marginTop: 4,
+                      }}
+                    >
+                      {layout}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text
+                style={{
+                  color: "#888",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  marginTop: 12,
+                  marginBottom: 4,
+                }}
+              >
+                LANDSCAPE GRIDS
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                {["2x1", "3x1", "3x2"].map((layout) => (
+                  <TouchableOpacity
+                    key={layout}
+                    style={{
+                      width: "30%",
+                      aspectRatio: 1,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1.5,
+                      borderColor: "rgba(255,255,255,0.15)",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 40,
+                      }}
+                    >
+                      {Array.from({
+                        length: layout === "2x1" ? 2 : layout === "3x1" ? 3 : 3,
+                      }).map((_, i) => (
+                        <View
+                          key={i}
+                          style={{
+                            width: 10,
+                            height: 6,
+                            backgroundColor:
+                              i === 0
+                                ? "#FFD700"
+                                : i === 1
+                                  ? "#F59E0B"
+                                  : "rgba(255,215,0,0.3)",
+                            borderRadius: 1,
+                            marginRight: 2,
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "600",
+                        fontSize: 11,
+                        marginTop: 4,
+                      }}
+                    >
+                      {layout}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Animatable.View>
+        </View>
+      </Modal>
     </View>
   );
 }
