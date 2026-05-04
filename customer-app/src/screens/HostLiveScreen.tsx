@@ -255,7 +255,11 @@ type HostStreamContentProps = {
   setShowCouponModal: (v: boolean) => void;
   showGridModal: boolean;
   setShowGridModal: (v: boolean) => void;
-  sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
+sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
+   setShowCoHostDashboard: (v: boolean) => void;
+   showCoHostDashboard: boolean;
+   activeCoHosts: { userId: string; userName: string; userAvatar?: string; joinedAt: number; hasVideo: boolean; hasAudio: boolean }[];
+   coHostRequests: { userId: string; userName: string; userAvatar?: string; requestedAt: number; type: 'video' | 'audio' }[];
 };
 
 const HostStreamContent = ({
@@ -298,6 +302,10 @@ setPinEndTime,
   showGridModal,
   setShowGridModal,
   sendStreamCustomEvent,
+   setShowCoHostDashboard,
+   showCoHostDashboard,
+   activeCoHosts,
+   coHostRequests,
 }: HostStreamContentProps) => {
   const { useCameraState, useMicrophoneState, useLocalParticipant, useParticipantCount } = useCallStateHooks();
   const camState = useCameraState();
@@ -441,6 +449,14 @@ setPinEndTime,
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowPKInviteModal(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)" }}>
           <Swords size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowCoHostDashboard(true)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: activeCoHosts.length > 0 ? "#10B981" : "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: activeCoHosts.length > 0 ? "#10B981" : "rgba(255,255,255,0.2)" }}>
+          <Users size={18} color="#fff" />
+          {coHostRequests.length > 0 && (
+            <View style={{ position: "absolute", top: -4, right: -4, backgroundColor: "#EF4444", width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{coHostRequests.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity onPress={openGiftModal} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
           <GiftIcon size={18} color="#fff" strokeWidth={2} />
@@ -643,6 +659,7 @@ export default function HostLiveScreen(props: Props) {
     let _call: any; // Declare outer so cleanup can access
     let unsubscribeCustomEvent: (() => void) | null = null;
     let unsubscribeReaction: (() => void) | null = null;
+    let unsubscribeCoHostRequest: (() => void) | null = null;
 
     const setupCall = async () => {
       try {
@@ -675,6 +692,76 @@ export default function HostLiveScreen(props: Props) {
                 prev.filter((h: any) => h.id !== id),
               );
             }, 3000);
+          }
+        });
+
+        // Listen for co-host requests
+        unsubscribeCoHostRequest = _call.on("custom", (event: any) => {
+          const data = event.custom;
+          if (!data) return;
+
+          // Handle co-host request
+          if (data.type === "cohost:request") {
+            const requestUserId = event.user?.id || data.userId;
+            const userName = data.userName || event.user?.name || "User";
+            const userAvatar = data.userAvatar;
+            const requestType = data.requestType || "video"; // 'video' or 'audio'
+
+            console.log("🎥 Co-host request received:", userName, requestType);
+
+            setCoHostRequests((prev) => {
+              // Check if already requested
+              if (prev.some((r) => r.userId === requestUserId)) return prev;
+              return [
+                ...prev,
+                {
+                  userId: requestUserId,
+                  userName,
+                  userAvatar,
+                  requestedAt: Date.now(),
+                  type: requestType,
+                },
+              ];
+            });
+
+            // Show notification via member action sheet
+            setMemberActionSheet({
+              visible: true,
+              userId: requestUserId,
+              userName,
+              isCoHost: false,
+              isBlocked: blockedApplying.includes(requestUserId),
+              isMuted: mutedUsers.includes(requestUserId),
+            });
+          }
+
+          // Handle co-host accepted notification
+          if (data.type === "cohost:accepted") {
+            const coHostUserId = data.userId;
+            const coHostName = data.userName || "Co-Host";
+            const coHostAvatar = data.userAvatar;
+            console.log("✅ Co-host accepted:", coHostName);
+            setActiveCoHosts((prev) => {
+              if (prev.some((h) => h.userId === coHostUserId)) return prev;
+              return [
+                ...prev,
+                {
+                  userId: coHostUserId,
+                  userName: coHostName,
+                  userAvatar: coHostAvatar,
+                  joinedAt: Date.now(),
+                  hasVideo: data.hasVideo ?? true,
+                  hasAudio: data.hasAudio ?? true,
+                },
+              ];
+            });
+          }
+
+          // Handle co-host left
+          if (data.type === "cohost:left") {
+            const leftUserId = data.userId;
+            console.log("👋 Co-host left:", leftUserId);
+            setActiveCoHosts((prev) => prev.filter((h) => h.userId !== leftUserId));
           }
         });
 
@@ -739,6 +826,7 @@ export default function HostLiveScreen(props: Props) {
       if (timeoutId) clearTimeout(timeoutId);
       if (unsubscribeCustomEvent) unsubscribeCustomEvent();
       if (unsubscribeReaction) unsubscribeReaction();
+      if (unsubscribeCoHostRequest) unsubscribeCoHostRequest();
       if (_call && _call.state?.callingState !== "left") {
         _call
           .leave()
@@ -760,6 +848,23 @@ export default function HostLiveScreen(props: Props) {
     isBlocked: boolean;
     isMuted: boolean;
   } | null>(null);
+  // Co-Host Requests State
+  const [coHostRequests, setCoHostRequests] = useState<{
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+    requestedAt: number;
+    type: 'video' | 'audio'; // Request type
+  }[]>([]);
+  const [showCoHostDashboard, setShowCoHostDashboard] = useState(false);
+  const [activeCoHosts, setActiveCoHosts] = useState<{
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+    joinedAt: number;
+    hasVideo: boolean;
+    hasAudio: boolean;
+  }[]>([]);
   const [showGiftVideo, setShowGiftVideo] = useState(false);
   // Gift Queue System
   const [giftQueue, setGiftQueue] = React.useState<
@@ -2647,8 +2752,12 @@ activeCoupon={activeCoupon}
                   setShowCouponModal={setShowCouponModal}
                   showGridModal={showGridModal}
                   setShowGridModal={setShowGridModal}
-                  sendStreamCustomEvent={sendStreamCustomEvent}
-               />
+sendStreamCustomEvent={sendStreamCustomEvent}
+                   setShowCoHostDashboard={setShowCoHostDashboard}
+                   showCoHostDashboard={showCoHostDashboard}
+                   activeCoHosts={activeCoHosts}
+                   coHostRequests={coHostRequests}
+                />
             </BackgroundFiltersProvider>
           </StreamCall>
         </View>
