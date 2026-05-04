@@ -41,13 +41,14 @@ const CARD_SPACING = 12;
 const VISIBLE_COUNT = 4;
 
 export const TikTokProductCarousel: React.FC<TikTokProductCarouselProps> = ({
-  products,
-  pinnedProductIds,
-  selectedProductIds,
-  onProductPress,
-  onPinProduct,
-  getLocalizedName,
-}) => {
+   products,
+   pinnedProductIds,
+   selectedProductIds,
+   onProductPress,
+   onPinProduct,
+   getLocalizedName,
+   language = "en",
+ }) => {
   // Sort: pinned first, then others
   const sortedProducts = [...products].sort((a, b) => {
     const aPinned = pinnedProductIds.includes(a.id) ? 1 : 0;

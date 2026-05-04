@@ -25,6 +25,8 @@
     "@stream-io/react-native-webrtc": "^137.2.0",
     "@stream-io/video-filters-react-native": "^0.12.1",
     "@stream-io/video-react-native-sdk": "^1.33.0",
+    "agora-rn-uikit": "^5.0.2",
+    "agora-rtm": "^2.2.4",
     "bna-ui": "^2.0.4",
     "buffer": "^6.0.3",
     "expo": "~55.0.19",

@@ -35,9 +35,10 @@ import {
   Check,
 } from "lucide-react-native";
 import { AgoraLiveShoppingService, liveShoppingService } from "../services/AgoraLiveShoppingService";
+import { LiveSessionService } from "../services/LiveSessionService";
 import { LIVE_UI_THEME, AGORA_CONFIG, ENHANCED_GIFTS } from "../config/stream";
 import { db } from "../api/firebase";
-import { doc, getDoc, updateDoc, onSnapshot, collection, query, orderBy, limit, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, orderBy, limit, addDoc, serverTimestamp, increment } from "firebase/firestore";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -91,7 +92,8 @@ export default function AgoraAudienceLiveScreen(props: Props) {
   const [viewerCount, setViewerCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const [totalLikes, setTotalLikes] = useState(0);
-  const [userBalance, setUserBalance] = useState(1000); // Demo balance
+  const [userBalance, setUserBalance] = useState(0);
+  const [walletId, setWalletId] = useState<string>("");
 
   // Chat
   const [showChat, setShowChat] = useState(false);
@@ -107,6 +109,10 @@ export default function AgoraAudienceLiveScreen(props: Props) {
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [selectedGift, setSelectedGift] = useState<any>(null);
   const [recentGift, setRecentGift] = useState<any>(null);
+  const [giftQueue, setGiftQueue] = useState<any[]>([]);
+  const [showGiftAnimation, setShowGiftAnimation] = useState(false);
+  const [giftAnimationUrl, setGiftAnimationUrl] = useState<string>("");
+  const recentGiftRef = useRef<any>(null);
 
   // Floating hearts
   const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number }[]>([]);
@@ -133,6 +139,18 @@ export default function AgoraAudienceLiveScreen(props: Props) {
         role: "audience",
       });
       setIsLive(true);
+
+      // Load wallet balance
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.wallet?.coins !== undefined) {
+          setUserBalance(userData.wallet.coins);
+        }
+        if (userData.walletId) {
+          setWalletId(userData.walletId);
+        }
+      }
 
       // Start duration timer
       durationInterval.current = setInterval(() => {
@@ -209,34 +227,145 @@ export default function AgoraAudienceLiveScreen(props: Props) {
     }, 2000);
   };
 
+  const isSameGift = (gift: any, senderId: string, senderName: string, giftName: string) => {
+    return gift?.senderId === senderId && gift?.senderName === senderName && gift?.giftName === giftName;
+  };
+
   const sendGift = async () => {
     if (!selectedGift) return;
 
     if (userBalance < selectedGift.points) {
-      Alert.alert("Insufficient balance", "You need more coins");
+      Alert.alert("Insufficient balance", "You need more coins to send this gift.");
       return;
     }
 
-    // Deduct balance
+    // Calculate combo
+    const current = recentGiftRef.current;
+    let newCount = 1;
+    if (isSameGift(current, userId, userName || "Viewer", selectedGift.name)) {
+      newCount = (current?.count || 0) + 1;
+    }
+
+    // Show locally immediately
+    setRecentGift({
+      senderName: userName || "Viewer",
+      senderId: userId,
+      giftName: selectedGift.name,
+      points: selectedGift.points,
+      icon: selectedGift.icon,
+      senderAvatar: userAvatar,
+      combo: newCount,
+      isBig: selectedGift.points >= 500,
+    });
+    recentGiftRef.current = {
+      senderId: userId,
+      senderName: userName || "Viewer",
+      giftName: selectedGift.name,
+      count: newCount,
+    };
+
+    // Show big gift animation
+    if (selectedGift.points >= 500 && selectedGift.url) {
+      setGiftAnimationUrl(selectedGift.url);
+      setShowGiftAnimation(true);
+      setTimeout(() => setShowGiftAnimation(false), 3000);
+    }
+
+    // Optimistic balance update
     setUserBalance((prev) => prev - selectedGift.points);
 
-    // Send gift via chat
-    const chatRef = collection(db, "liveChats", channelId, "messages");
-    await addDoc(chatRef, {
-      userId,
-      userName,
-      userAvatar,
-      message: `sent a ${selectedGift.name}`,
-      type: "gift",
-      createdAt: serverTimestamp(),
-      giftData: {
+    // Firestore updates
+    try {
+      // Deduct coins from sender
+      const senderRef = doc(db, "users", userId);
+      const walletRef = walletId ? doc(db, "wallets", walletId) : null;
+
+      if (walletRef) {
+        await updateDoc(walletRef, {
+          coins: increment(-selectedGift.points),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(senderRef, {
+          wallet: {
+            coins: increment(-selectedGift.points),
+          },
+        }, { merge: true });
+      }
+
+      // Add 70% of value to Host as diamonds
+      if (hostId) {
+        const earnings = Math.ceil(selectedGift.points * 0.7);
+        const hostWalletId = await getOrCreateWallet(hostId, "customer");
+        const hostWalletRef = doc(db, "wallets", hostWalletId);
+
+        await updateDoc(hostWalletRef, {
+          diamonds: increment(earnings),
+          updatedAt: serverTimestamp(),
+        });
+
+        // Record Transaction for Host (Earnings)
+        await addDoc(
+          collection(db, "wallets", hostWalletId, "transactions"),
+          {
+            type: "gift_received",
+            amountDiamonds: earnings,
+            giftName: selectedGift.name,
+            senderName: userName || "Viewer",
+            senderId: userId,
+            timestamp: serverTimestamp(),
+            status: "completed",
+          },
+        );
+      }
+
+      // Record Transaction for Sender (Spending)
+      await addDoc(collection(db, "users", userId, "transactions"), {
+        type: "gift_sent",
+        amountCoins: selectedGift.points,
         giftName: selectedGift.name,
+        recipientName: hostName || "Host",
+        timestamp: serverTimestamp(),
+        status: "completed",
+      });
+
+      // Broadcast gift via Firestore
+      await LiveSessionService.broadcastGift(channelId, {
+        giftName: selectedGift.name,
+        icon: selectedGift.icon,
         points: selectedGift.points,
-      },
-    });
+        senderName: userName || "Viewer",
+        senderId: userId,
+        senderAvatar: userAvatar,
+        targetName: hostName || "Host",
+        combo: newCount,
+      });
+
+      // Update session stats
+      LiveSessionService.incrementGifts(channelId, selectedGift.points || 1).catch((e) => console.error("Gift Score Error:", e));
+
+    } catch (error) {
+      console.error("Audience Gift Error:", error);
+    }
 
     setShowGiftModal(false);
     setSelectedGift(null);
+  };
+
+  const getOrCreateWallet = async (userId: string, role: string): Promise<string> => {
+    const userDoc = await getDoc(doc(db, "users", userId));
+    if (userDoc.exists() && userDoc.data().walletId) {
+      return userDoc.data().walletId;
+    }
+    const walletRef = await addDoc(collection(db, "wallets"), {
+      userId,
+      role,
+      coins: 0,
+      diamonds: 0,
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "users", userId), { walletId: walletRef.id });
+    return walletRef.id;
   };
 
   const formatDuration = (seconds: number): string => {
@@ -303,6 +432,35 @@ export default function AgoraAudienceLiveScreen(props: Props) {
             <Text style={styles.heartEmoji}>❤️</Text>
           </Animatable.View>
         ))}
+
+        {/* Gift Pill */}
+        {recentGift && !recentGift.isBig && (
+          <Animatable.View 
+            animation="slideInLeft" 
+            duration={400}
+            style={styles.giftPillContainer}
+          >
+            <View style={styles.giftPill}>
+              <Image
+                source={{ uri: recentGift.senderAvatar || `https://ui-avatars.com/api/?name=${recentGift.senderName}&background=random` }}
+                style={styles.giftPillAvatar}
+              />
+              <View style={styles.giftPillInfo}>
+                <Text style={styles.giftPillName}>{recentGift.senderName}</Text>
+                <Text style={styles.giftPillText}>
+                  🎁 {recentGift.giftName}
+                  {recentGift.combo > 1 && (
+                    <Text style={styles.giftPillCombo}> x{recentGift.combo}</Text>
+                  )}
+                </Text>
+              </View>
+              <View style={styles.giftPillPoints}>
+                <Coins size={10} color="#FFD700" />
+                <Text style={styles.giftPillPointsText}>{recentGift.points}</Text>
+              </View>
+            </View>
+          </Animatable.View>
+        )}
       </View>
 
       {/* Pinned Product Banner */}
@@ -657,6 +815,62 @@ const styles = StyleSheet.create({
   },
   heartEmoji: {
     fontSize: 30,
+  },
+
+  // Gift Pill
+  giftPillContainer: {
+    position: "absolute",
+    top: 180,
+    left: 10,
+    zIndex: 10000,
+  },
+  giftPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderRadius: 25,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  giftPillAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#FF0066",
+  },
+  giftPillInfo: {
+    marginLeft: 8,
+  },
+  giftPillName: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  giftPillText: {
+    color: "#FFD700",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  giftPillCombo: {
+    color: "#FF0066",
+  },
+  giftPillPoints: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 8,
+    backgroundColor: "rgba(255, 215, 0, 0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  giftPillPointsText: {
+    color: "#FFD700",
+    fontSize: 12,
+    fontWeight: "800",
+    marginLeft: 2,
   },
 
   // Pinned Banner
