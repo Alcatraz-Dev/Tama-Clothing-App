@@ -86,55 +86,10 @@ import { hasVideo } from '@stream-io/video-client';
 import { useChatContext } from "stream-chat-react-native";
 import { LiveChatOverlay } from "../components/LiveChatOverlay";
 
-// ✅ Expo Go detection
-const isExpoGo = Constants.executionEnvironment === "storeClient";
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
 });
 
-// ✅ Legacy Zego Mocks (Required after package removal to prevent crashes/errors)
-let ZegoUIKitPrebuiltLiveStreaming: any;
-let ZegoUIKit: any;
-let AUDIENCE_DEFAULT_CONFIG: any;
-let ZIM: any;
-let ZegoMenuBarButtonName: any;
-let ZegoLiveStreamingRole: any;
-let ZegoExpressEngine: any;
-let ZegoTextureView: any;
-
-let ZegoMediaPlayerState: any = null;
-let ZegoMultimediaLoadType: any = null;
-let ZegoAlphaLayoutType: any = null;
-let ZegoMediaPlayerResource: any = null;
-
-if (!isExpoGo) {
-  try {
-    const ZegoModule = require("@zegocloud/zego-uikit-prebuilt-live-streaming-rn");
-    ZegoUIKitPrebuiltLiveStreaming = ZegoModule.default;
-    AUDIENCE_DEFAULT_CONFIG = ZegoModule.AUDIENCE_DEFAULT_CONFIG;
-    ZegoMenuBarButtonName = ZegoModule.ZegoMenuBarButtonName;
-    ZegoLiveStreamingRole = ZegoModule.ZegoLiveStreamingRole;
-    ZIM = require("zego-zim-react-native");
-    // Import ZegoUIKit for sending commands
-    const ZegoUIKitModule = require("@zegocloud/zego-uikit-rn");
-    ZegoUIKit = ZegoUIKitModule.default;
-
-    const ZegoExpress = require("zego-express-engine-react-native");
-    ZegoExpressEngine = ZegoExpress.default;
-    ZegoTextureView = ZegoExpress.ZegoTextureView;
-    ZegoMediaPlayerState = ZegoExpress.ZegoMediaPlayerState;
-    ZegoMultimediaLoadType = ZegoExpress.ZegoMultimediaLoadType;
-    ZegoAlphaLayoutType = ZegoExpress.ZegoAlphaLayoutType;
-    ZegoMediaPlayerResource = ZegoExpress.ZegoMediaPlayerResource;
-  } catch (e) {
-    console.log("ZEGO modules not available");
-  }
-}
-
-const ZEGO_APP_ID = 1327315162;
-const ZEGO_APP_SIGN =
-  "2c0f518d65e837480793f1ebe41b0ad44e999bca88ef783b65ef4391b4514ace";
 
 type Props = {
   channelId: string;
@@ -217,6 +172,11 @@ type AudienceStreamContentProps = {
   totalLikes: number;
   isInPK: boolean;
   hostCameraOn?: boolean;
+  activeCoupon?: any;
+  couponTimeRemaining?: number;
+  setCouponInput?: (v: string) => void;
+  couponInput?: string;
+  setShowPurchaseModal?: (v: boolean) => void;
 };
 
 const AudienceStreamContent = ({
@@ -239,6 +199,11 @@ const AudienceStreamContent = ({
   totalLikes,
   isInPK,
   hostCameraOn,
+  activeCoupon,
+  couponTimeRemaining,
+  setCouponInput,
+  couponInput,
+  setShowPurchaseModal,
 }: AudienceStreamContentProps) => {
   const { useRemoteParticipants, useParticipantCount } = useCallStateHooks();
   const remote = useRemoteParticipants();
@@ -247,7 +212,6 @@ const AudienceStreamContent = ({
   const hasHostVideo = host ? hasVideo(host) : false;
   const isHostCameraOn = hostCameraOn !== undefined ? hostCameraOn : hasHostVideo;
   const viewerCount = count || participantCount;
-
 return (
     <>
       {host && isHostCameraOn && (
@@ -2451,17 +2415,17 @@ export default function AudienceLiveScreen(props: Props) {
       {call ? (
         <View style={StyleSheet.absoluteFill}>
           <StreamCall call={call}>
-            <AudienceStreamContent
-              remoteParticipants={remoteParticipants}
-              participantCount={participantCount}
-              streamDuration={streamDuration}
-              formatDuration={formatDuration}
-              onClose={onClose}
-              floatingHearts={floatingHearts}
-              pinnedProduct={pinnedProduct}
-              getLocalizedName={getLocalizedName}
-              featuredProducts={featuredProducts}
-setPinnedProduct={setPinnedProduct}
+             <AudienceStreamContent
+               remoteParticipants={remoteParticipants}
+               participantCount={participantCount}
+               streamDuration={streamDuration}
+               formatDuration={formatDuration}
+               onClose={onClose}
+               floatingHearts={floatingHearts}
+               pinnedProduct={pinnedProduct}
+               getLocalizedName={getLocalizedName}
+               featuredProducts={featuredProducts}
+               setPinnedProduct={setPinnedProduct}
                handleSendLike={handleSendLike}
                setShowGifts={setShowGifts}
                setShowChat={setShowChat}
@@ -2471,6 +2435,11 @@ setPinnedProduct={setPinnedProduct}
                totalLikes={totalLikes}
                isInPK={isInPK}
                hostCameraOn={hostCameraOn}
+               activeCoupon={activeCoupon}
+               couponTimeRemaining={couponTimeRemaining}
+               setCouponInput={setCouponInput}
+               couponInput={couponInput}
+               setShowPurchaseModal={setShowPurchaseModal}
              />
           </StreamCall>
         </View>
