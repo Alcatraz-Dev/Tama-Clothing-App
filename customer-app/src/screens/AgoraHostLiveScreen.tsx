@@ -49,6 +49,8 @@ import {
   Settings,
 } from "lucide-react-native";
 import { AgoraLiveShoppingService, liveShoppingService } from "../services/AgoraLiveShoppingService";
+import { LiveSessionService } from "../services/LiveSessionService";
+import { TikTokProductCarousel } from "../components/TikTokProductCarousel";
 import { LIVE_UI_THEME, AGORA_CONFIG, LIVE_LAYOUT, ENHANCED_GIFTS, RTM_EVENTS } from "../config/stream";
 import { db } from "../api/firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, orderBy, limit, addDoc, serverTimestamp } from "firebase/firestore";
@@ -99,6 +101,7 @@ export default function AgoraHostLiveScreen(props: Props) {
   } = props;
 
   const [isLive, setIsLive] = useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
   const [viewerCount, setViewerCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const [totalLikes, setTotalLikes] = useState(0);
@@ -114,6 +117,7 @@ export default function AgoraHostLiveScreen(props: Props) {
   const [products, setProducts] = useState<Product[]>([]);
   const [pinnedProduct, setPinnedProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
   // Gifts
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -142,6 +146,7 @@ export default function AgoraHostLiveScreen(props: Props) {
 
   // Timer
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize
   useEffect(() => {
@@ -177,15 +182,22 @@ export default function AgoraHostLiveScreen(props: Props) {
         setDuration((prev) => prev + 1);
       }, 1000);
 
-      // Create Firestore session
-      await liveShoppingService.createSession({
+      // Create Firestore session using LiveSessionService (same as old HostLiveScreen)
+      await LiveSessionService.startSession(
         channelId,
-        hostId: userId,
-        hostName: userName,
-        hostAvatar,
+        userName,
         brandId,
-      });
-      await liveShoppingService.startSession(channelId);
+        hostAvatar,
+        userId,
+      );
+      setSessionId(channelId);
+
+      // Start heartbeat to keep session visible (every 30 seconds)
+      heartbeatInterval.current = setInterval(() => {
+        if (sessionId) {
+          LiveSessionService.updateHeartbeat(channelId);
+        }
+      }, 30000);
 
       // Subscribe to chat
       subscribeToChat();
@@ -203,11 +215,17 @@ export default function AgoraHostLiveScreen(props: Props) {
   const endLive = async () => {
     try {
       await videoService.leaveChannel();
-      await liveShoppingService.endSession(channelId);
+      if (sessionId) {
+        await liveShoppingService.endSession(sessionId);
+      }
       setIsLive(false);
+      setSessionId("");
 
       if (durationInterval.current) {
         clearInterval(durationInterval.current);
+      }
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
       }
 
       console.log("[AgoraHost] Live ended");
@@ -231,7 +249,8 @@ export default function AgoraHostLiveScreen(props: Props) {
   };
 
   const subscribeToViewers = () => {
-    return liveShoppingService.subscribeToSession(channelId, (session) => {
+    if (!sessionId) return () => {};
+    return liveShoppingService.subscribeToSession(sessionId, (session) => {
       if (session) {
         setViewerCount(session.viewerCount || 0);
         setTotalLikes(session.totalLikes || 0);
@@ -257,7 +276,9 @@ export default function AgoraHostLiveScreen(props: Props) {
 
   const sendLike = () => {
     // Send like via Firestore
-    liveShoppingService.sendLike(channelId, 1);
+    if (sessionId) {
+      liveShoppingService.sendLike(sessionId, 1);
+    }
 
     // Add floating heart
     const id = Date.now();
@@ -297,10 +318,15 @@ export default function AgoraHostLiveScreen(props: Props) {
   const cleanup = async () => {
     if (isLive) {
       await videoService.leaveChannel();
-      await liveShoppingService.endSession(channelId);
+      if (sessionId) {
+        await liveShoppingService.endSession(sessionId);
+      }
     }
     if (durationInterval.current) {
       clearInterval(durationInterval.current);
+    }
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
     }
     liveShoppingService.unsubscribeAll();
   };
@@ -448,6 +474,33 @@ export default function AgoraHostLiveScreen(props: Props) {
         </Animatable.View>
       )}
 
+      {/* TikTok Product Carousel */}
+      {selectedProductIds.length > 0 && (
+        <TikTokProductCarousel
+          products={products}
+          pinnedProductIds={pinnedProduct ? [pinnedProduct.id] : []}
+          selectedProductIds={selectedProductIds}
+          onProductPress={(id) => {
+            const product = products.find(p => p.id === id);
+            if (product) {
+              setPinnedProduct(product);
+              if (sessionId) {
+                liveShoppingService.pinProduct(sessionId, id, 5);
+              }
+            }
+          }}
+          onPinProduct={(id) => {
+            const product = products.find(p => p.id === id);
+            if (product) {
+              setPinnedProduct(product);
+              if (sessionId) {
+                liveShoppingService.pinProduct(sessionId, id, 5);
+              }
+            }
+          }}
+        />
+      )}
+
       {/* Chat Overlay */}
       {showChat && (
         <View style={styles.chatOverlay}>
@@ -484,51 +537,60 @@ export default function AgoraHostLiveScreen(props: Props) {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        <TouchableOpacity style={styles.actionButton} onPress={sendLike}>
-          <Heart size={24} color="#fff" fill="#fff" />
-          <Text style={styles.actionCount}>{totalLikes}</Text>
-        </TouchableOpacity>
+        {/* Main Actions Row - Top */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionButton} onPress={sendLike}>
+            <Heart size={24} color="#fff" fill="#fff" />
+            <Text style={styles.actionCount}>{totalLikes}</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => setShowChat(!showChat)}>
-          <MessageCircle size={24} color="#fff" />
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowChat(!showChat)}>
+            <MessageCircle size={24} color="#fff" />
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => setShowProductModal(true)}>
-          <ShoppingBag size={24} color="#fff" />
-          {products.length > 0 && (
-            <View style={styles.actionBadge}>
-              <Text style={styles.actionBadgeText}>{products.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowProductModal(true)}>
+            <ShoppingBag size={24} color="#fff" />
+            {products.length > 0 && (
+              <View style={styles.actionBadge}>
+                <Text style={styles.actionBadgeText}>{products.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={() => setShowGiftModal(true)}>
-          <Gift size={24} color="#fff" />
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowGiftModal(true)}>
+            <Gift size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={[styles.actionButton, isInPK && styles.actionButtonActive]} onPress={() => setShowPKModal(true)}>
-          <Swords size={24} color={isInPK ? "#FFA500" : "#fff"} />
-        </TouchableOpacity>
+        {/* Engagement Tools Row - Middle */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={[styles.actionButton, isInPK && styles.actionButtonActive]} onPress={() => setShowPKModal(true)}>
+            <Swords size={24} color={isInPK ? "#FFA500" : "#fff"} />
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, activePoll && styles.actionButtonActive]} onPress={() => setShowPollModal(true)}>
-          <BarChart2 size={24} color={activePoll ? "#8B5CF6" : "#fff"} />
-        </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionButton, activePoll && styles.actionButtonActive]} onPress={() => setShowPollModal(true)}>
+            <BarChart2 size={24} color={activePoll ? "#8B5CF6" : "#fff"} />
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, activeCoupon && styles.actionButtonActive]} onPress={() => setShowCouponModal(true)}>
-          <Ticket size={24} color={activeCoupon ? "#22C55E" : "#fff"} />
-        </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionButton, activeCoupon && styles.actionButtonActive]} onPress={() => setShowCouponModal(true)}>
+            <Ticket size={24} color={activeCoupon ? "#22C55E" : "#fff"} />
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={styles.actionButton} onPress={toggleCamera}>
-          {isCameraOn ? <Camera size={24} color="#fff" /> : <CameraOff size={24} color="#EF4444" />}
-        </TouchableOpacity>
+        {/* Device Controls Row - Bottom */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionButton} onPress={toggleCamera}>
+            {isCameraOn ? <Camera size={24} color="#fff" /> : <CameraOff size={24} color="#EF4444" />}
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={toggleMic}>
-          {isMicOn ? <Mic size={24} color="#fff" /> : <MicOff size={24} color="#EF4444" />}
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={toggleMic}>
+            {isMicOn ? <Mic size={24} color="#fff" /> : <MicOff size={24} color="#EF4444" />}
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={onClose}>
-          <X size={24} color="#fff" />
-        </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionButton, styles.closeButton]} onPress={onClose}>
+            <X size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Product Selection Modal */}
@@ -566,8 +628,13 @@ export default function AgoraHostLiveScreen(props: Props) {
                     style={styles.productItem}
                     onPress={() => {
                       setPinnedProduct(item);
+                      if (!selectedProductIds.includes(item.id)) {
+                        setSelectedProductIds([...selectedProductIds, item.id]);
+                      }
                       setShowProductModal(false);
-                      liveShoppingService.pinProduct(channelId, item.id, 5);
+                      if (sessionId) {
+                        liveShoppingService.pinProduct(sessionId, item.id, 5);
+                      }
                     }}
                   >
                     <Image
@@ -1174,6 +1241,10 @@ const styles = StyleSheet.create({
     right: 12,
     bottom: 100,
     alignItems: "center",
+    gap: 16,
+  },
+  actionRow: {
+    flexDirection: "column",
     gap: 16,
   },
   actionButton: {

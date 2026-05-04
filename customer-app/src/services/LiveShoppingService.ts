@@ -139,8 +139,16 @@ export class LiveShoppingService {
     await updateDoc(sessionRef, {
       status: "live",
       startedAt: serverTimestamp(),
+      lastHeartbeat: serverTimestamp(),
     });
     console.log("[LiveShopping] Started session:", sessionId);
+  }
+
+  async updateHeartbeat(sessionId: string): Promise<void> {
+    const sessionRef = doc(db, "liveSessions", sessionId);
+    await updateDoc(sessionRef, {
+      lastHeartbeat: serverTimestamp(),
+    });
   }
 
   async endSession(sessionId: string): Promise<void> {
