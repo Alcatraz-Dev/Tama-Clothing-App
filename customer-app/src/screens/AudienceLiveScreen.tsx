@@ -305,7 +305,7 @@ return (
         </Animatable.View>
       )}
 
-      {featuredProducts.length > 0 && (
+       {featuredProducts.length > 0 && (
         <View style={{ position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 250 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}>
             {featuredProducts.map((p: any) => {
@@ -323,6 +323,110 @@ return (
             })}
           </ScrollView>
         </View>
+      )}
+
+      {/* Active Coupon Display Card - Modern Product Card Style */}
+      {activeCoupon && (
+        <Animatable.View animation="fadeInUp" duration={400} style={{ position: "absolute", bottom: 80, left: 15, right: 15, zIndex: 300 }}>
+          <View style={{ backgroundColor: "#121218", borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: "rgba(255,215,0,0.3)", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {/* Coupon Icon Section */}
+              <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255, 215, 0, 0.15)", alignItems: "center", justifyContent: "center" }}>
+                <Ticket size={28} color="#F59E0B" />
+                {/* Battery indicator for coupon */}
+                <View style={{ position: "absolute", bottom: 2, right: 2, flexDirection: "row", gap: 1 }}>
+                  {[1, 2, 3].map((i) => (
+                    <View key={i} style={{ width: 3, height: 6, backgroundColor: i <= 2 ? "#F59E0B" : "rgba(245,158,11,0.3)", borderRadius: 1 }} />
+                  ))}
+                </View>
+              </View>
+
+              {/* Coupon Details */}
+              <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 10, letterSpacing: 1 }}>✨ ACTIVE COUPON</Text>
+                </View>
+                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 18, letterSpacing: 0.5 }}>{activeCoupon.code}</Text>
+                
+                {/* Discount Info */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                  {activeCoupon.discountType === "percentage" && (
+                    <>
+                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount}%</Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                    </>
+                  )}
+                  {activeCoupon.discountType === "fixed" && (
+                    <>
+                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 20 }}>{activeCoupon.discount} TND</Text>
+                      <Text style={{ color: "#888", fontSize: 12 }}>OFF</Text>
+                    </>
+                  )}
+                  {activeCoupon.discountType === "free_shipping" && (
+                    <>
+                      <Text style={{ color: "#10B981", fontWeight: "900", fontSize: 14 }}>📦 FREE SHIPPING</Text>
+                    </>
+                  )}
+                </View>
+
+                {/* Battery/Stock bars */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
+                  {[1, 2, 3, 4].map((i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: 5,
+                        height: 10,
+                        borderRadius: 1,
+                        backgroundColor: i <= 3 ? "#F59E0B" : "rgba(245,158,11,0.2)",
+                      }}
+                    />
+                  ))}
+                  <Text style={{ color: "#888", fontSize: 9, marginLeft: 4 }}>HIGH VALUE</Text>
+                </View>
+              </View>
+
+              {/* Timer */}
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ color: "#888", fontSize: 9, fontWeight: "700" }}>ENDS IN</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                  <Text style={{ color: "#FFD700", fontWeight: "900", fontSize: 18 }}>
+                    {Math.floor(couponTimeRemaining / 60)}:{(couponTimeRemaining % 60).toString().padStart(2, "0")}
+                  </Text>
+                  <Text style={{ color: "#888", fontSize: 9 }}>m</Text>
+                </View>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(245,158,11,0.1)", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+                  <Ticket size={16} color="#F59E0B" />
+                </View>
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 12 }} />
+
+            {/* Input Section */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TextInput
+                placeholder="Enter code"
+                placeholderTextColor="#555"
+                value={couponInput}
+                onChangeText={setCouponInput}
+                autoCapitalize="characters"
+                style={{ flex: 1, backgroundColor: "#0F0F16", borderRadius: 12, padding: 14, color: "#fff", fontSize: 16, fontWeight: "bold", borderWidth: 1.5, borderColor: "#2A2A35" }}
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  if (couponInput.trim().toUpperCase() === activeCoupon.code.toUpperCase()) {
+                    Alert.alert("Success", `Coupon applied! ${activeCoupon.discountType === 'percentage' ? activeCoupon.discount + '%' : activeCoupon.discount + ' TND'} discount`);
+                  }
+                }}
+                style={{ backgroundColor: "#F59E0B", paddingHorizontal: 20, borderRadius: 12, justifyContent: "center", alignItems: "center" }}
+              >
+                <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>APPLY</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animatable.View>
       )}
 
       <View style={{ position: "absolute", bottom: 160, right: 15, gap: 10, alignItems: "center", zIndex: 400 }}>

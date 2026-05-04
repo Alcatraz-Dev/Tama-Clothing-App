@@ -176,7 +176,7 @@ export default function ProductCard({
                 </Text>
               </View>
             )}
-            {(product.categoryName || product.subCategoryName) && (
+             {(product.categoryName || product.subCategoryName) && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 {product.categoryName && (
                   <Text variant="caption" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '800' }}>
@@ -204,6 +204,24 @@ export default function ProductCard({
                 </View>
               </View>
             )}
+            <View style={styles.batteryRow}>
+              {[1, 2, 3, 4].map((i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.batteryBar,
+                    {
+                      backgroundColor:
+                        i === 1
+                          ? "#FFD700"
+                          : i === 2
+                          ? "#F59E0B"
+                          : "rgba(255,215,0,0.3)",
+                    },
+                  ]}
+                />
+              ))}
+            </View>
             <Text
               variant="title"
               style={styles.heroProductName}
@@ -306,18 +324,36 @@ export default function ProductCard({
             </View>
           )}
         </View>
-        <View style={styles.horizontalInfo}>
-          <View>
-            {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-              <Store size={10} color={colors?.accent || fgColor} />
-              <Text
-                variant="caption"
-                style={{ color: textMutedColor, letterSpacing: 0.5 }}
-              >
-                {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
-              </Text>
-            </View>
+           <View style={styles.horizontalInfo}>
+            <View>
+              {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                <Store size={10} color={colors?.accent || fgColor} />
+                <Text
+                  variant="caption"
+                  style={{ color: textMutedColor, letterSpacing: 0.5 }}
+                >
+                  {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.batteryRow}>
+                {[1, 2, 3, 4].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.batteryBar,
+                      {
+                        backgroundColor:
+                          i === 1
+                            ? "#FFD700"
+                            : i === 2
+                            ? "#F59E0B"
+                            : "rgba(255,215,0,0.3)",
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
             <Text
               variant="subtitle"
               style={{ color: fgColor }}
@@ -433,108 +469,127 @@ export default function ProductCard({
             onPress={onToggleWishlist}
           />
         )}
-        <View style={styles.modernCardContent}>
-          {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
-          {product.status === "sold_out" && (
-            <View style={styles.soldOutBadgeModern}>
-              <View style={styles.soldOutDot} />
-              <Text variant="caption" style={styles.soldOutTextModern}>
-                {translate("soldOut").toUpperCase()}
-              </Text>
-            </View>
-          )}
-          {(product.categoryName || product.subCategoryName) && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, flexWrap: 'wrap' }}>
-              {product.categoryName && (
-                <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
-                  {getName(product.categoryName).toUpperCase()}
-                </Text>
-              )}
-              {product.subCategoryName && (
-                <>
-                  <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.4)' }} />
-                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
-                    {getName(product.subCategoryName).toUpperCase()}
-                  </Text>
-                </>
-              )}
-              <View style={{ width: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Store size={8} color="rgba(255,255,255,0.8)" />
-                <Text
-                  variant="caption"
-                  style={[styles.modernBrandName, { marginBottom: 0, fontSize: 8, fontWeight: '800' }]}
-                  numberOfLines={1}
-                >
-                  {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
+           <View style={styles.modernCardContent}>
+            {flashSaleEndTime && <MiniFlashTimer endTime={flashSaleEndTime} />}
+            {product.status === "sold_out" && (
+              <View style={styles.soldOutBadgeModern}>
+                <View style={styles.soldOutDot} />
+                <Text variant="caption" style={styles.soldOutTextModern}>
+                  {translate("soldOut").toUpperCase()}
                 </Text>
               </View>
-            </View>
-          )}
-          <Text
-            variant="subtitle"
-            style={styles.modernProductName}
-            numberOfLines={2}
-          >
-            {getName(product.name)}
-          </Text>
-          <View style={styles.modernPriceRow}>
+            )}
+            {(product.categoryName || product.subCategoryName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, flexWrap: 'wrap' }}>
+                {product.categoryName && (
+                  <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
+                    {getName(product.categoryName).toUpperCase()}
+                  </Text>
+                )}
+                {product.subCategoryName && (
+                  <>
+                    <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+                    <Text variant="caption" style={{ color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '800' }}>
+                      {getName(product.subCategoryName).toUpperCase()}
+                    </Text>
+                  </>
+                )}
+                <View style={{ width: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 2 }} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Store size={8} color="rgba(255,255,255,0.8)" />
+                  <Text
+                    variant="caption"
+                    style={[styles.modernBrandName, { marginBottom: 0, fontSize: 8, fontWeight: '800' }]}
+                    numberOfLines={1}
+                  >
+                    {String(product.brandName || product.brand || product.marque || "TAMA CLOTHING").toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            )}
             <Text
-              variant="body"
-              style={{ color: "#FFFFFF", fontWeight: "900" }}
+              variant="subtitle"
+              style={styles.modernProductName}
+              numberOfLines={2}
             >
-              {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price)
-                ? Number(product.discountPrice).toFixed(3)
-                : product.price
+              {getName(product.name)}
+            </Text>
+            {/* Battery/Stock indicator */}
+            <View style={styles.batteryRow}>
+              {[1, 2, 3, 4].map((i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.batteryBar,
+                    {
+                      backgroundColor:
+                        i === 1
+                          ? "#FFD700"
+                          : i === 2
+                          ? "#F59E0B"
+                          : "rgba(255,215,0,0.3)",
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.modernPriceRow}>
+              <Text
+                variant="body"
+                style={{ color: "#FFFFFF", fontWeight: "900" }}
+              >
+                {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price)
+                  ? Number(product.discountPrice).toFixed(3)
+                  : product.price
                   ? Number(product.price).toFixed(3)
                   : "0.000"}{" "}
-              TND
-            </Text>
-            {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price) && (
-              <Text variant="caption" style={styles.originalPriceModern}>
-                {product.price ? Number(product.price).toFixed(3) : "0.000"} TND
+                TND
               </Text>
-            )}
-          </View>
-          {showRating && (
-            <View style={styles.modernRatingRow}>
-              <Star size={12} color="#FFFFFF" fill="#FFFFFF" />
-              <Text
-                variant="caption"
-                style={{ color: "#FFFFFF", fontWeight: "800" }}
-              >
-                {product.rating || "5.0"}{" "}
-                <Text variant="caption" style={{ opacity: 0.6 }}>
-                  {product.reviewsCount !== undefined
-                    ? product.reviewsCount
-                    : product.reviews?.length || 0}{" "}
-                  {translate("reviews").toUpperCase()}
+              {(product.discountPrice !== undefined && product.discountPrice !== null && product.discountPrice < product.price) && (
+                <Text variant="caption" style={styles.originalPriceModern}>
+                  {product.price ? Number(product.price).toFixed(3) : "0.000"} TND
                 </Text>
-              </Text>
+              )}
             </View>
-          )}
-          <View style={styles.modernBottomActions}>
-            <Button
-              variant="glass"
-              label={translate("seeMore")}
-              textStyle={{ fontSize: 11 }}
-              style={styles.modernSeeMoreBtn}
-              onPress={onPress}
-            />
-            {onAddToCart && (
-              <Button
-                variant="primary"
-                size="icon"
-                icon={ShoppingBag}
-                iconColor="#000000"
-                style={[styles.modernQuickAdd, { backgroundColor: isDark ? '#FFFFFF' : '#E5E5EA' }]}
-                onPress={onAddToCart}
-                disabled={product.status === "sold_out"}
-                textStyle={{ color: "#000000" }}
-              />
+            {showRating && (
+              <View style={styles.modernRatingRow}>
+                <Star size={12} color="#FFFFFF" fill="#FFFFFF" />
+                <Text
+                  variant="caption"
+                  style={{ color: "#FFFFFF", fontWeight: "800" }}
+                >
+                  {product.rating || "5.0"}{" "}
+                  <Text variant="caption" style={{ opacity: 0.6 }}>
+                    {product.reviewsCount !== undefined
+                      ? product.reviewsCount
+                      : product.reviews?.length || 0}{" "}
+                    {translate("reviews").toUpperCase()}
+                  </Text>
+                </Text>
+              </View>
             )}
+            <View style={styles.modernBottomActions}>
+              <Button
+                variant="glass"
+                label={translate("seeMore")}
+                textStyle={{ fontSize: 11 }}
+                style={styles.modernSeeMoreBtn}
+                onPress={onPress}
+              />
+              {onAddToCart && (
+                <Button
+                  variant="primary"
+                  size="icon"
+                  icon={ShoppingBag}
+                  iconColor="#000000"
+                  style={[styles.modernQuickAdd, { backgroundColor: isDark ? '#FFFFFF' : '#E5E5EA' }]}
+                  onPress={onAddToCart}
+                  disabled={product.status === "sold_out"}
+                  textStyle={{ color: "#000000" }}
+                />
+              )}
+            </View>
           </View>
-        </View>
       </View>
     </TouchableOpacity>
   );
@@ -838,6 +893,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     marginBottom: 12,
+  },
+  batteryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 8,
+  },
+  batteryBar: {
+    width: 5,
+    height: 12,
+    borderRadius: 1,
   },
   modernBottomActions: {
     flexDirection: "row",

@@ -4573,559 +4573,386 @@ activeCoupon={activeCoupon}
         </View>
       </Modal>
 
-      {/* NEW COUPON CREATION MODAL */}
-      <Modal
-        visible={showCouponModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowCouponModal(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.8)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowCouponModal(false)}
-          />
+       {/* 🎫 Coupon Creation Modal */}
+       <Modal
+         visible={showCouponModal}
+         transparent={true}
+         animationType="fade"
+         onRequestClose={() => setShowCouponModal(false)}
+       >
+         <KeyboardAvoidingView
+           behavior={Platform.OS === "ios" ? "padding" : "height"}
+           style={{
+             flex: 1,
+             backgroundColor: "rgba(0,0,0,0.8)",
+             justifyContent: "center",
+             alignItems: "center",
+           }}
+         >
+           <TouchableOpacity
+             style={StyleSheet.absoluteFill}
+             activeOpacity={1}
+             onPress={() => setShowCouponModal(false)}
+           />
 
-          <Animatable.View
-            animation="zoomIn"
-            duration={300}
-            style={{
-              backgroundColor: "#1A1A24",
-              width: Dimensions.get("window").width * 0.9,
-              maxWidth: 400,
-              borderRadius: 30,
-              padding: 24,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.1)",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.5,
-              shadowRadius: 20,
-              elevation: 15,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 20,
-              }}
-            >
-              <Text
-                style={{
-                  color: "#fff",
-                  fontSize: 20,
-                  fontWeight: "900",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {t("createCoupon")}
-              </Text>
-              <TouchableOpacity onPress={() => setShowCouponModal(false)}>
-                <X size={24} color="rgba(255,255,255,0.5)" />
-              </TouchableOpacity>
-            </View>
+           <Animatable.View
+             animation="zoomIn"
+             duration={300}
+             style={{
+               backgroundColor: "#121218",
+               width: Dimensions.get("window").width * 0.9,
+               maxWidth: 420,
+               borderRadius: 20,
+               padding: 20,
+               borderWidth: 1.5,
+               borderColor: "rgba(255,255,255,0.15)",
+               shadowColor: "#000",
+               shadowOffset: { width: 0, height: 12 },
+               shadowOpacity: 0.3,
+               shadowRadius: 20,
+               elevation: 15,
+               alignItems: "center",
+             }}
+           >
+             <View
+               style={{
+                 width: 40,
+                 height: 4,
+                 backgroundColor: "rgba(255,255,255,0.2)",
+                 borderRadius: 2,
+                 alignSelf: "center",
+                 marginBottom: 20,
+               }}
+             />
 
-            <View style={{ gap: 16 }}>
-              <View>
-                <Text
-                  style={{
-                    color: "rgba(255,255,255,0.5)",
-                    fontSize: 12,
-                    marginBottom: 8,
-                    fontWeight: "700",
-                  }}
-                >
-                  {t("couponCode").toUpperCase()}
-                </Text>
-                <TextInput
-                  placeholder="e.g. LIVE30"
-                  placeholderTextColor="#555"
-                  value={couponCode}
-                  onChangeText={setCouponCode}
-                  autoCapitalize="characters"
-                  style={{
-                    backgroundColor: "#0F0F16",
-                    borderRadius: 12,
-                    padding: 14,
-                    color: "#fff",
-                    fontSize: 16,
-                    fontWeight: "bold",
-                    borderWidth: 1,
-                    borderColor: "#333",
-                  }}
-                />
-              </View>
+             <View style={{ width: "100%", gap: 20 }}>
+               <View style={{ alignItems: "center", gap: 8 }}>
+                 <View
+                   style={{
+                     width: 60,
+                     height: 60,
+                     borderRadius: 30,
+                     backgroundColor: "rgba(255, 215, 0, 0.15)",
+                     alignItems: "center",
+                     justifyContent: "center",
+                   }}
+                 >
+                   <Ticket size={28} color="#F59E0B" />
+                 </View>
+                 <Text
+                   style={{
+                     color: "#fff",
+                     fontSize: 20,
+                     fontWeight: "900",
+                     letterSpacing: 0.5,
+                   }}
+                 >
+                   {t("createCoupon")}
+                 </Text>
+                 <Text
+                   style={{
+                     color: "#888",
+                     fontSize: 12,
+                     textAlign: "center",
+                     lineHeight: 18,
+                   }}
+                 >
+                   {t("couponDesc") || "Create a special coupon code for your viewers to use during the live stream"}
+                 </Text>
+               </View>
 
-              {/* Discount Type Selector */}
-              <View>
-                <Text
-                  style={{
-                    color: "rgba(255,255,255,0.5)",
-                    fontSize: 12,
-                    marginBottom: 8,
-                    fontWeight: "700",
-                  }}
-                >
-                  {"TYPE DE RÉDUCTION"}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => setCouponType("percentage")}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      paddingHorizontal: 8,
-                      borderRadius: 10,
-                      backgroundColor:
-                        couponType === "percentage" ? "#F59E0B" : "#0F0F16",
-                      borderWidth: 1,
-                      borderColor:
-                        couponType === "percentage" ? "#F59E0B" : "#333",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      justifyContent: "center",
-                      gap: 4,
-                    }}
-                  >
-                    {couponType === "percentage" && (
-                      <Text style={{ color: "#000", fontSize: 10 }}>✓</Text>
-                    )}
-                    <Text
-                      style={{
-                        color: couponType === "percentage" ? "#000" : "#fff",
-                        fontWeight: "700",
-                        fontSize: 11,
-                      }}
-                    >
-                      Pourcentage
-                    </Text>
-                    <Text
-                      style={{
-                        color: couponType === "percentage" ? "#000" : "#fff",
-                        fontWeight: "700",
-                        fontSize: 14,
-                      }}
-                    >
-                      %
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setCouponType("fixed")}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      paddingHorizontal: 8,
-                      borderRadius: 10,
-                      backgroundColor:
-                        couponType === "fixed" ? "#F59E0B" : "#0F0F16",
-                      borderWidth: 1,
-                      borderColor: couponType === "fixed" ? "#F59E0B" : "#333",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      justifyContent: "center",
-                      gap: 4,
-                    }}
-                  >
-                    {couponType === "fixed" && (
-                      <Text style={{ color: "#000", fontSize: 10 }}>✓</Text>
-                    )}
-                    <Text
-                      style={{
-                        color: couponType === "fixed" ? "#000" : "#fff",
-                        fontWeight: "700",
-                        fontSize: 11,
-                      }}
-                    >
-                      Montant
-                    </Text>
-                    <Text
-                      style={{
-                        color: couponType === "fixed" ? "#000" : "#fff",
-                        fontWeight: "700",
-                        fontSize: 14,
-                      }}
-                    >
-                      TND
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {/* Free Shipping Toggle */}
-                <TouchableOpacity
-                  onPress={() => {
-                    setCouponType("free_shipping");
-                    setDiscountAmount("");
-                  }}
-                  style={{
-                    marginTop: 8,
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 10,
-                    backgroundColor:
-                      couponType === "free_shipping"
-                        ? "rgba(245, 158, 11, 0.2)"
-                        : "#0F0F16",
-                    borderWidth: 1,
-                    borderColor:
-                      couponType === "free_shipping" ? "#F59E0B" : "#333",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 4,
-                        borderWidth: 2,
-                        borderColor:
-                          couponType === "free_shipping" ? "#F59E0B" : "#555",
-                        backgroundColor:
-                          couponType === "free_shipping"
-                            ? "#F59E0B"
-                            : "transparent",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {couponType === "free_shipping" && (
-                        <Text
-                          style={{
-                            color: "#000",
-                            fontSize: 12,
-                            fontWeight: "900",
-                          }}
-                        >
-                          ✓
-                        </Text>
-                      )}
-                    </View>
-                    <Text
-                      style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}
-                    >
-                      Livraison gratuite
-                    </Text>
-                  </View>
-                  <Text
-                    style={{ color: "rgba(255,255,255,0.5)", fontSize: 16 }}
-                  >
-                    🚚
-                  </Text>
-                </TouchableOpacity>
-              </View>
+               {/* Coupon Code Input */}
+               <View>
+                 <Text
+                   style={{
+                     color: "rgba(255,255,255,0.6)",
+                     fontSize: 11,
+                     marginBottom: 8,
+                     fontWeight: "700",
+                     letterSpacing: 1,
+                   }}
+                 >
+                   {t("couponCode").toUpperCase()}
+                 </Text>
+                 <TextInput
+                   placeholder="e.g. LIVE30"
+                   placeholderTextColor="#555"
+                   value={couponCode}
+                   onChangeText={setCouponCode}
+                   autoCapitalize="characters"
+                   style={{
+                     backgroundColor: "#0F0F16",
+                     borderRadius: 14,
+                     padding: 16,
+                     color: "#fff",
+                     fontSize: 16,
+                     fontWeight: "bold",
+                     borderWidth: 1.5,
+                     borderColor: "#2A2A35",
+                   }}
+                 />
+               </View>
 
-              {/* Discount Amount */}
-              {couponType !== "free_shipping" && (
-                <View>
-                  <Text
-                    style={{
-                      color: "rgba(255,255,255,0.5)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {"MONTANT DU RÉDUCTION"}
-                  </Text>
-                  <View style={{ position: "relative" }}>
-                    <TextInput
-                      placeholder={couponType === "percentage" ? "30" : "10"}
-                      placeholderTextColor="#555"
-                      value={discountAmount}
-                      onChangeText={setDiscountAmount}
-                      keyboardType="numeric"
-                      style={{
-                        backgroundColor: "#0F0F16",
-                        borderRadius: 12,
-                        padding: 14,
-                        paddingRight: 50,
-                        color: "#fff",
-                        fontSize: 16,
-                        fontWeight: "bold",
-                        borderWidth: 1,
-                        borderColor: "#333",
-                      }}
-                    />
-                    <View
-                      style={{
-                        position: "absolute",
-                        right: 14,
-                        top: 0,
-                        bottom: 0,
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "rgba(255,255,255,0.5)",
-                          fontSize: 14,
-                          fontWeight: "700",
-                        }}
-                      >
-                        {couponType === "percentage" ? "%" : "TND"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
+               {/* Discount Type Selector */}
+               <View>
+                 <Text
+                   style={{
+                     color: "rgba(255,255,255,0.6)",
+                     fontSize: 11,
+                     marginBottom: 8,
+                     fontWeight: "700",
+                     letterSpacing: 1,
+                   }}
+                 >
+                   {"DISCOUNT TYPE"}
+                 </Text>
+                 <View style={{ flexDirection: "row", gap: 8 }}>
+                   <TouchableOpacity
+                     onPress={() => setCouponType("percentage")}
+                     style={{
+                       flex: 1,
+                       paddingVertical: 14,
+                       paddingHorizontal: 8,
+                       borderRadius: 14,
+                       backgroundColor:
+                         couponType === "percentage" ? "#F59E0B" : "#0F0F16",
+                       borderWidth: 1.5,
+                       borderColor:
+                         couponType === "percentage" ? "#F59E0B" : "#2A2A35",
+                       alignItems: "center",
+                       flexDirection: "row",
+                       justifyContent: "center",
+                       gap: 4,
+                     }}
+                   >
+                     {couponType === "percentage" && (
+                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                     )}
+                     <Text
+                       style={{
+                         color: couponType === "percentage" ? "#000" : "#fff",
+                         fontWeight: "800",
+                         fontSize: 13,
+                       }}
+                     >
+                       Percentage
+                     </Text>
+                     <Text
+                       style={{
+                         color: couponType === "percentage" ? "#000" : "#fff",
+                         fontWeight: "800",
+                         fontSize: 16,
+                       }}
+                     >
+                       %
+                     </Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity
+                     onPress={() => setCouponType("fixed")}
+                     style={{
+                       flex: 1,
+                       paddingVertical: 14,
+                       paddingHorizontal: 8,
+                       borderRadius: 14,
+                       backgroundColor:
+                         couponType === "fixed" ? "#F59E0B" : "#0F0F16",
+                       borderWidth: 1.5,
+                       borderColor:
+                         couponType === "fixed" ? "#F59E0B" : "#2A2A35",
+                       alignItems: "center",
+                       flexDirection: "row",
+                       justifyContent: "center",
+                       gap: 4,
+                     }}
+                   >
+                     {couponType === "fixed" && (
+                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                     )}
+                     <Text
+                       style={{
+                         color: couponType === "fixed" ? "#000" : "#fff",
+                         fontWeight: "800",
+                         fontSize: 13,
+                       }}
+                     >
+                       Fixed Amount
+                     </Text>
+                     <Text
+                       style={{
+                         color: couponType === "fixed" ? "#000" : "#fff",
+                         fontWeight: "800",
+                         fontSize: 16,
+                       }}
+                     >
+                       TND
+                     </Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity
+                     onPress={() => setCouponType("free_shipping")}
+                     style={{
+                       flex: 1,
+                       paddingVertical: 14,
+                       paddingHorizontal: 8,
+                       borderRadius: 14,
+                       backgroundColor:
+                         couponType === "free_shipping" ? "#F59E0B" : "#0F0F16",
+                       borderWidth: 1.5,
+                       borderColor:
+                         couponType === "free_shipping"
+                           ? "#F59E0B"
+                           : "#2A2A35",
+                       alignItems: "center",
+                       justifyContent: "center",
+                     }}
+                   >
+                     {couponType === "free_shipping" && (
+                       <Text style={{ color: "#000", fontSize: 12 }}>✓</Text>
+                     )}
+                     <Text
+                       style={{
+                         color: couponType === "free_shipping" ? "#000" : "#fff",
+                         fontWeight: "800",
+                         fontSize: 11,
+                       }}
+                     >
+                       Free Ship
+                     </Text>
+                   </TouchableOpacity>
+                 </View>
+               </View>
 
-              {/* Expiry */}
-              <View>
-                <Text
-                  style={{
-                    color: "rgba(255,255,255,0.5)",
-                    fontSize: 12,
-                    marginBottom: 8,
-                    fontWeight: "700",
-                  }}
-                >
-                  {"DURATION"}
-                </Text>
-                <View style={{ position: "relative" }}>
-                  <TextInput
-                    keyboardType="numeric"
-                    value={couponExpiry}
-                    onChangeText={setCouponExpiry}
-                    placeholder="5"
-                    placeholderTextColor="#555"
-                    style={{
-                      backgroundColor: "#0F0F16",
-                      borderRadius: 12,
-                      padding: 14,
-                      paddingRight: 50,
-                      color: "#fff",
-                      fontSize: 14,
-                      fontWeight: "bold",
-                      textAlign: "left",
-                      borderWidth: 1,
-                      borderColor: "#333",
-                    }}
-                  />
-                  <View
-                    style={{
-                      position: "absolute",
-                      right: 14,
-                      top: 0,
-                      bottom: 0,
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.5)",
-                        fontSize: 14,
-                        fontWeight: "700",
-                      }}
-                    >
-                      min
-                    </Text>
-                  </View>
-                </View>
-              </View>
+               {/* Discount Amount - hide for free shipping */}
+               {couponType !== "free_shipping" && (
+                 <View>
+                   <Text
+                     style={{
+                       color: "rgba(255,255,255,0.6)",
+                       fontSize: 11,
+                       marginBottom: 8,
+                       fontWeight: "700",
+                       letterSpacing: 1,
+                     }}
+                   >
+                     {couponType === "percentage"
+                       ? "DISCOUNT PERCENTAGE (%)"
+                       : "DISCOUNT AMOUNT (TND)"}
+                   </Text>
+                   <TextInput
+                     placeholder={couponType === "percentage" ? "30" : "10"}
+                     placeholderTextColor="#555"
+                     value={discountAmount}
+                     onChangeText={setDiscountAmount}
+                     keyboardType="numeric"
+                     style={{
+                       backgroundColor: "#0F0F16",
+                       borderRadius: 14,
+                       padding: 16,
+                       color: "#fff",
+                       fontSize: 20,
+                       fontWeight: "bold",
+                       borderWidth: 1.5,
+                       borderColor: "#2A2A35",
+                       textAlign: "center",
+                     }}
+                   />
+                   {discountAmount && (
+                     <View
+                       style={{
+                         position: "absolute",
+                         right: 40,
+                         top: 4,
+                       }}
+                     >
+                       <Text
+                         style={{
+                           color: "#888",
+                           fontSize: 18,
+                           fontWeight: "800",
+                         }}
+                       >
+                         {couponType === "percentage" ? "%" : "TND"}
+                       </Text>
+                     </View>
+                   )}
+                 </View>
+               )}
 
-              {/* Discount Preview with calculations */}
-              {couponType !== "free_shipping" && discountAmount && (
-                <View
-                  style={{
-                    backgroundColor: "rgba(34, 197, 94, 0.1)",
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: "rgba(34, 197, 94, 0.3)",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#22C55E",
-                      fontSize: 12,
-                      fontWeight: "700",
-                      marginBottom: 12,
-                    }}
-                  >
-                    {"APERÇU"}
-                  </Text>
+               {/* Expiry Duration */}
+               <View>
+                 <Text
+                   style={{
+                     color: "rgba(255,255,255,0.6)",
+                     fontSize: 11,
+                     marginBottom: 8,
+                     fontWeight: "700",
+                     letterSpacing: 1,
+                   }}
+                 >
+                   EXPIRY DURATION (MINUTES)
+                 </Text>
+                 <View
+                   style={{
+                     flexDirection: "row",
+                     gap: 8,
+                     flexWrap: "wrap",
+                   }}
+                 >
+                   {["5", "10", "15", "30", "60", "120"].map((mins) => (
+                     <TouchableOpacity
+                       key={mins}
+                       onPress={() => setCouponExpiry(mins)}
+                       style={{
+                         paddingVertical: 10,
+                         paddingHorizontal: 16,
+                         borderRadius: 14,
+                         backgroundColor:
+                           couponExpiry === mins ? "#F59E0B" : "#0F0F16",
+                         borderWidth: 1.5,
+                         borderColor:
+                           couponExpiry === mins ? "#F59E0B" : "#2A2A35",
+                       }}
+                     >
+                       <Text
+                         style={{
+                           color:
+                             couponExpiry === mins ? "#000" : "#888",
+                           fontSize: 13,
+                           fontWeight: "bold",
+                         }}
+                       >
+                         {mins}m
+                       </Text>
+                     </TouchableOpacity>
+                   ))}
+                 </View>
+               </View>
 
-                  {/* Original Price */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text
-                      style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}
-                    >
-                      Prix original
-                    </Text>
-                    <Text
-                      style={{
-                        color: "rgba(255,255,255,0.7)",
-                        fontSize: 13,
-                        fontWeight: "600",
-                      }}
-                    >
-                      200 TND
-                    </Text>
-                  </View>
-
-                  {/* Discount Calculation */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text style={{ color: "#EF4444", fontSize: 13 }}>
-                      Réduction
-                    </Text>
-                    <Text
-                      style={{
-                        color: "#EF4444",
-                        fontSize: 13,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {couponType === "percentage"
-                        ? `${discountAmount}% = ${((200 * parseFloat(discountAmount)) / 100).toFixed(0)} TND`
-                        : `${discountAmount} TND`}
-                    </Text>
-                  </View>
-
-                  {/* Divider */}
-                  <View
-                    style={{
-                      height: 1,
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                      marginVertical: 8,
-                    }}
-                  />
-
-                  {/* Final Price */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#22C55E",
-                        fontSize: 15,
-                        fontWeight: "700",
-                      }}
-                    >
-                      Prix finale
-                    </Text>
-                    <Text
-                      style={{
-                        color: "#22C55E",
-                        fontSize: 18,
-                        fontWeight: "900",
-                      }}
-                    >
-                      {couponType === "percentage"
-                        ? `${(200 - (200 * parseFloat(discountAmount)) / 100).toFixed(0)} TND`
-                        : `${Math.max(0, 200 - parseFloat(discountAmount)).toFixed(0)} TND`}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Free Shipping Preview */}
-              {couponType === "free_shipping" && (
-                <View
-                  style={{
-                    backgroundColor: "rgba(34, 197, 94, 0.1)",
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: "rgba(34, 197, 94, 0.3)",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#22C55E",
-                      fontSize: 12,
-                      fontWeight: "700",
-                      marginBottom: 8,
-                    }}
-                  >
-                    {"APERÇU"}
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}
-                    >
-                      Livraison gratuite
-                    </Text>
-                    <Text
-                      style={{
-                        color: "#22C55E",
-                        fontSize: 20,
-                        fontWeight: "900",
-                      }}
-                    >
-                      ✓
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <TouchableOpacity
-                onPress={dropCoupon}
-                activeOpacity={0.8}
-                style={{ marginTop: 10, borderRadius: 15, overflow: "hidden" }}
-              >
-                <LinearGradient
-                  colors={["#F59E0B", "#D97706"]}
-                  style={{
-                    paddingVertical: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#000",
-                      fontWeight: "900",
-                      fontSize: 16,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {t("dropCoupon").toUpperCase()}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </Animatable.View>
-        </KeyboardAvoidingView>
-      </Modal>
+               {/* Drop Button */}
+               <TouchableOpacity
+                 onPress={dropCoupon}
+                 style={{
+                   backgroundColor: "#F59E0B",
+                   paddingVertical: 18,
+                   borderRadius: 14,
+                   alignItems: "center",
+                   marginTop: 10,
+                 }}
+               >
+                 <Text
+                   style={{
+                     color: "#000",
+                     fontSize: 16,
+                     fontWeight: "900",
+                     letterSpacing: 1,
+                   }}
+                 >
+                   DROP COUPON
+                 </Text>
+               </TouchableOpacity>
+             </View>
+           </Animatable.View>
+         </KeyboardAvoidingView>
+       </Modal>
       {recentGift && !recentGift.isBig && (
         <View
           style={{
