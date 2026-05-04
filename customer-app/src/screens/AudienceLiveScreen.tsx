@@ -2467,13 +2467,14 @@ const handlePurchase = async () => {
         </View>
       )}
 <LiveChatOverlay
-         visible={showChat}
-         channelId={channelId}
-         onClose={() => setShowChat(false)}
-         currentUserId={userId}
-         hostAvatar={hostAvatar}
-         hostName={hostBrandName}
-       />
+          visible={showChat}
+          channelId={channelId}
+          onClose={() => setShowChat(false)}
+          currentUserId={userId}
+          hostAvatar={hostAvatar}
+          hostName={hostBrandName}
+          isHost={false}
+        />
 
       {/* Gift Pill Notification */}
       {recentGift && !recentGift.isBig && (
