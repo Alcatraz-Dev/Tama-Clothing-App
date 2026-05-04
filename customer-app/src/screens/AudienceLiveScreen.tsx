@@ -50,7 +50,10 @@ import {
   Mic,
   Pin,
   BarChart2,
+  ShoppingBag as ShoppingBagIcon,
 } from "lucide-react-native";
+import { FloatingProductSticker } from "../components/FloatingProductSticker";
+import { TikTokProductCarousel } from "../components/TikTokProductCarousel";
 import { API_BASE_URL } from "../config/api";
 import { STREAM_API_KEY } from "../config/stream";
 import {
@@ -321,17 +324,25 @@ return (
 
       {totalLikes >= 50 && <FlameCounter count={totalLikes} onPress={handleSendLike} top={isInPK ? 210 : 120} />}
 
-      {pinnedProduct && (
-        <Animatable.View animation="fadeInLeft" duration={400} style={{ position: "absolute", bottom: 180, left: 15, width: 240, zIndex: 300 }}>
-          <BlurView intensity={90} tint="dark" style={{ borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.25)", overflow: "hidden" }}>
-            <Image source={{ uri: pinnedProduct.images?.[0] }} style={{ width: 50, height: 50, borderRadius: 10, backgroundColor: "#333" }} />
-            <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text numberOfLines={1} style={{ color: "#fff", fontWeight: "700", fontSize: 11, marginBottom: 3 }}>{getLocalizedName(pinnedProduct.name)}</Text>
-              <Text style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}>{pinnedProduct.discountPrice || pinnedProduct.price} TND</Text>
-            </View>
-          </BlurView>
-        </Animatable.View>
-      )}
+       {pinnedProduct && (
+         <FloatingProductSticker
+           product={pinnedProduct}
+           isVisible={true}
+           onClose={() => {
+             setPinnedProduct(null);
+           }}
+           onBuyNow={() => {
+             setSelectedProduct(pinnedProduct);
+             setShowPurchaseModal(true);
+           }}
+           onViewDetails={() => {
+             setSelectedProduct(pinnedProduct);
+             setShowPurchaseModal(true);
+           }}
+           getLocalizedName={getLocalizedName}
+           autoHideDelay={0}
+         />
+       )}
       {activePoll && (
         <Animatable.View animation="slideInUp" duration={400} style={{ position: "absolute", bottom: 300, left: 15, right: 15, zIndex: 350 }}>
           <BlurView intensity={85} tint="dark" style={{ borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: "rgba(139, 92, 246, 0.5)", overflow: "hidden" }}>
@@ -3097,12 +3108,12 @@ const handlePurchase = async () => {
                 </Text>
                 <Send size={18} color="#fff" />
               </TouchableOpacity>
-            </BlurView>
-</View>
-         </View>
-       </Modal>
+</BlurView>
+          </View>
+        </View>
+      </Modal>
 
-       {/* Purchase Modal */}
+      {/* Purchase Modal */}
        <Modal
          visible={showPurchaseModal}
          transparent={true}

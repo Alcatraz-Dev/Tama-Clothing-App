@@ -70,7 +70,11 @@ import {
   Square,
   CircleDot,
   LayoutGrid,
+  ShoppingBag as ShoppingBagIcon,
 } from "lucide-react-native";
+import { FloatingProductSticker } from "../components/FloatingProductSticker";
+import { TikTokBottomDock } from "../components/TikTokBottomDock";
+import { TikTokProductCarousel } from "../components/TikTokProductCarousel";
 import Constants from "expo-constants";
 import { API_BASE_URL } from "../config/api";
 import { STREAM_API_KEY } from "../config/stream";
@@ -233,7 +237,7 @@ type HostStreamContentProps = {
   selectedProductIds: string[];
   products: any[];
   pinnedProductId: string | null;
-  setPinnedProductId: (id: string) => void;
+  setPinnedProductId: (id: string | null) => void;
   setPinnedProduct: (p: any) => void;
   setPinEndTime: (t: number | null) => void;
   showProductModal: boolean;
@@ -254,11 +258,13 @@ type HostStreamContentProps = {
   activeCoupon: any;
   setShowCouponModal: (v: boolean) => void;
   showGridModal: boolean;
-  setShowGridModal: (v: boolean) => void;
-  sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
-  setShowCoHostDashboard: (v: boolean) => void;
-  showCoHostDashboard: boolean;
-  activeCoHosts: {
+   setShowGridModal: (v: boolean) => void;
+   sendStreamCustomEvent: (payload: any, targets?: string[]) => Promise<void>;
+   setShowCoHostDashboard: (v: boolean) => void;
+   showCoHostDashboard: boolean;
+   setShowGifts: (v: boolean) => void;
+   channelId: string;
+   activeCoHosts: {
     userId: string;
     userName: string;
     userAvatar?: string;
@@ -324,16 +330,18 @@ const HostStreamContent = ({
   setShowCouponModal,
   showGridModal,
   setShowGridModal,
-  sendStreamCustomEvent,
-  call,
-  sendCoHostRequest,
-  isLiveStarted,
-  setShowCoHostDashboard,
-  showCoHostDashboard,
-  activeCoHosts,
-  setActiveCoHosts,
-  coHostRequests,
-  setCoHostRequests,
+   sendStreamCustomEvent,
+   call,
+   sendCoHostRequest,
+   isLiveStarted,
+   setShowCoHostDashboard,
+   showCoHostDashboard,
+   setShowGifts,
+   channelId,
+   activeCoHosts,
+   setActiveCoHosts,
+   coHostRequests,
+   setCoHostRequests,
 }: HostStreamContentProps) => {
   const {
     useCameraState,
@@ -568,178 +576,43 @@ const HostStreamContent = ({
       )}
 
       {pinnedProduct && (
-        <Animatable.View
-          animation="fadeInLeft"
-          duration={400}
-          style={{
-            position: "absolute",
-            bottom: 180,
-            left: 15,
-            width: 240,
-            zIndex: 300,
+        <FloatingProductSticker
+          product={pinnedProduct}
+          isVisible={true}
+          onClose={() => {
+            setPinnedProductId(null);
+            setPinnedProduct(null);
           }}
-        >
-          <BlurView
-            intensity={90}
-            tint="dark"
-            style={{
-              borderRadius: 16,
-              padding: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              borderWidth: 1.5,
-              borderColor: "rgba(255, 255, 255, 0.25)",
-              overflow: "hidden",
-            }}
-          >
-            <Image
-              source={{ uri: pinnedProduct.images?.[0] }}
-              style={{
-                width: 50,
-                height: 50,
-                borderRadius: 10,
-                backgroundColor: "#333",
-              }}
-            />
-            <View style={{ flex: 1, marginLeft: 8 }}>
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: "#fff",
-                  fontWeight: "700",
-                  fontSize: 11,
-                  marginBottom: 3,
-                }}
-              >
-                {getLocalizedName(pinnedProduct.name)}
-              </Text>
-              <Text
-                style={{ color: "#F59E0B", fontWeight: "900", fontSize: 13 }}
-              >
-                {pinnedProduct.discountPrice || pinnedProduct.price} TND
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleUnpin}
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                backgroundColor: "rgba(255, 255, 255, 0.15)",
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <X size={10} color="#fff" />
-            </TouchableOpacity>
-          </BlurView>
-        </Animatable.View>
+          onBuyNow={() => {
+            setShowProductModal(true);
+          }}
+          onViewDetails={() => {
+            setShowProductModal(true);
+          }}
+          getLocalizedName={getLocalizedName}
+          autoHideDelay={0}
+        />
       )}
 
+      {/* TikTok Product Carousel - Quick Pin & Shop */}
       {selectedProductIds.length > 0 && (
-        <View
-          style={{
-            position: "absolute",
-            bottom: 100,
-            left: 0,
-            right: 0,
-            zIndex: 250,
+        <TikTokProductCarousel
+          products={products}
+          pinnedProductIds={pinnedProductId ? [pinnedProductId!] : []}
+          selectedProductIds={selectedProductIds}
+          onProductPress={(id) => {
+            // Optional: open product details
           }}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 15, gap: 10 }}
-          >
-            {products
-              .filter((p) => selectedProductIds.includes(p.id))
-              .map((p) => {
-                const isPinned = pinnedProductId === p.id;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => {
-                      setPinnedProductId(p.id);
-                      setPinnedProduct(p);
-                      setPinEndTime(Date.now() + 300000);
-                    }}
-                    style={{
-                      width: 90,
-                      borderRadius: 14,
-                      backgroundColor: isPinned
-                        ? "rgba(16, 185, 129, 0.2)"
-                        : "rgba(0,0,0,0.7)",
-                      borderWidth: isPinned ? 2 : 1,
-                      borderColor: isPinned
-                        ? "#10B981"
-                        : "rgba(255,255,255,0.1)",
-                      padding: 6,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <Image
-                      source={{ uri: p.images?.[0] }}
-                      style={{
-                        width: 78,
-                        height: 78,
-                        borderRadius: 10,
-                        backgroundColor: "#333",
-                      }}
-                    />
-                    {p.discountPrice && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 8,
-                          left: 4,
-                          backgroundColor: "#EF4444",
-                          paddingHorizontal: 4,
-                          paddingVertical: 2,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: "#fff",
-                            fontSize: 7,
-                            fontWeight: "900",
-                          }}
-                        >
-                          -{Math.round((1 - p.discountPrice / p.price) * 100)}%
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ marginTop: 4, alignItems: "center" }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: "#fff",
-                          fontSize: 9,
-                          fontWeight: "600",
-                          textAlign: "center",
-                        }}
-                      >
-                        {getLocalizedName(p.name)}
-                      </Text>
-                      <Text
-                        style={{
-                          color: isPinned ? "#10B981" : "#F59E0B",
-                          fontSize: 11,
-                          fontWeight: "900",
-                          textAlign: "center",
-                        }}
-                      >
-                        {p.discountPrice || p.price} TND
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-          </ScrollView>
-        </View>
+          onPinProduct={(id) => {
+            setPinnedProductId(id);
+            const product = products.find(p => p.id === id);
+            if (product) {
+              setPinnedProduct(product);
+              setPinEndTime(Date.now() + 300000);
+            }
+          }}
+          getLocalizedName={getLocalizedName}
+        />
       )}
 
       {activePoll && (
@@ -875,253 +748,49 @@ const HostStreamContent = ({
         </Animatable.View>
       )}
 
-      <View
-        style={{
-          position: "absolute",
-          bottom: 180,
-          right: 15,
-          gap: 10,
-          alignItems: "center",
-          zIndex: 400,
+      {/* Modern TikTok-Style Bottom Dock */}
+      <TikTokBottomDock
+        isMicOn={!isMicMuted}
+        isCameraOn={isCameraOn}
+        totalLikes={totalLikes}
+        onLike={handleSendLike}
+        totalViewers={participantCount}
+        durationSeconds={durationSeconds}
+        formatDuration={formatDuration}
+        onToggleMic={async () => {
+          try {
+            if (microphone) await microphone.toggle();
+          } catch (e) {
+            console.error("Mic toggle error:", e);
+          }
         }}
-      >
-        <TouchableOpacity
-          onPress={handleSendLike}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(239, 68, 68, 0.8)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Heart size={18} color="#fff" fill="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowProductModal(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <ShoppingBag size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowPollModal(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: activePoll ? "#8B5CF6" : "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: activePoll ? "#A78BFA" : "rgba(255,255,255,0.2)",
-          }}
-        >
-          <BarChart2 size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowPKInviteModal(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: isInPK ? "#FFA500" : "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: isInPK ? "#FFD700" : "rgba(255,255,255,0.2)",
-          }}
-        >
-          <Swords size={18} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={openGiftModal}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <GiftIcon size={18} color="#fff" strokeWidth={2} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowCouponModal(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: activeCoupon ? "#F59E0B" : "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: activeCoupon ? "#fff" : "rgba(255,255,255,0.2)",
-          }}
-        >
-          <Ticket size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setShowChat(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <MessageCircle size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleTakeScreenshot}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <Camera size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={toggleRecording}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: isRecording ? "#EF4444" : "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: isRecording ? "#fff" : "rgba(255,255,255,0.2)",
-          }}
-        >
-          <Radio size={18} color="#fff" />
-        </TouchableOpacity>
-        {/* Grid Layout Customization Button */}
-        <TouchableOpacity
-          onPress={() => setShowGridModal(true)}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <LayoutGrid size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      <View
-        style={{
-          position: "absolute",
-          bottom: 20,
-          left: 0,
-          right: 0,
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 16,
-          zIndex: 400,
+        onToggleCamera={async () => {
+          try {
+            if (camState?.camera) await camState.camera.toggle();
+          } catch (e) {
+            console.error("Camera toggle error:", e);
+          }
         }}
-      >
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              if (camState?.camera) await camState.camera.toggle();
-            } catch (e) {
-              console.error("Camera toggle error:", e);
-            }
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: isCameraOn ? "rgba(0,0,0,0.6)" : "#EF4444",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          {isCameraOn ? (
-            <Camera size={20} color="#fff" />
-          ) : (
-            <CameraOff size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              if (microphone) await microphone.toggle();
-            } catch (e) {
-              console.error("Mic toggle error:", e);
-            }
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          {isMicMuted ? (
-            <MicOff size={20} color="#fff" />
-          ) : (
-            <Mic size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              if (camState?.camera) await camState.camera.flip();
-            } catch (e) {
-              console.error("Camera flip error:", e);
-            }
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <FlipHorizontal size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
+        onFlipCamera={async () => {
+          try {
+            if (camState?.camera) await camState.camera.flip();
+          } catch (e) {
+            console.error("Camera flip error:", e);
+          }
+        }}
+        onOpenProducts={() => setShowProductModal(true)}
+        onOpenGifts={() => setShowGifts(true)}
+        onOpenChat={() => setShowChat(true)}
+        onOpenSettings={() => setShowGridModal(true)}
+        onShare={() => {
+          Share.share({
+            message: `Join my live shopping session on TamaClothing! Channel: ${channelId}`,
+            title: "Live Shopping Invitation",
+          }).catch(() => {});
+        }}
+        onEndStream={endFirestoreSession}
+        onOpenCoHosts={() => setShowCoHostDashboard(true)}
+      />
 
       {/* Modals - TODO: Implement inline */}
 
@@ -3694,17 +3363,19 @@ export default function HostLiveScreen(props: Props) {
                 activeCoupon={activeCoupon}
                 setShowCouponModal={setShowCouponModal}
                 showGridModal={showGridModal}
-                setShowGridModal={setShowGridModal}
-                sendStreamCustomEvent={sendStreamCustomEvent}
-                setShowCoHostDashboard={setShowCoHostDashboard}
-                showCoHostDashboard={showCoHostDashboard}
-                activeCoHosts={activeCoHosts}
-                coHostRequests={coHostRequests}
-                setCoHostRequests={setCoHostRequests}
-                setActiveCoHosts={setActiveCoHosts}
-                call={call}
-                sendCoHostRequest={sendCoHostRequest}
-                isLiveStarted={isLiveStarted}
+                 setShowGridModal={setShowGridModal}
+                 sendStreamCustomEvent={sendStreamCustomEvent}
+                 setShowCoHostDashboard={setShowCoHostDashboard}
+                 showCoHostDashboard={showCoHostDashboard}
+                 setShowGifts={setShowGifts}
+                 channelId={channelId}
+                 activeCoHosts={activeCoHosts}
+                 coHostRequests={coHostRequests}
+                 setCoHostRequests={setCoHostRequests}
+                 setActiveCoHosts={setActiveCoHosts}
+                 call={call}
+                 sendCoHostRequest={sendCoHostRequest}
+                 isLiveStarted={isLiveStarted}
               />
             </BackgroundFiltersProvider>
           </StreamCall>

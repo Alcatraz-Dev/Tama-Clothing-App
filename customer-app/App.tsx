@@ -232,6 +232,8 @@ import CollaborationDetailScreen from "./src/screens/CollaborationDetailScreen";
 import LiveStreamScreen from "./src/screens/LiveStreamScreen";
 import HostLiveScreen from "./src/screens/HostLiveScreen";
 import AudienceLiveScreen from "./src/screens/AudienceLiveScreen";
+import AgoraHostLiveScreen from "./src/screens/AgoraHostLiveScreen";
+import AgoraAudienceLiveScreen from "./src/screens/AgoraAudienceLiveScreen";
 import LiveAnalyticsScreen from "./src/screens/LiveAnalyticsScreen";
 import KYCScreen from "./src/screens/KYCScreen";
 import AdminKYCScreen from "./src/screens/admin/AdminKYCScreen";
@@ -2252,7 +2254,7 @@ export default function App() {
         }
         
         return isLiveHost ? (
-          <HostLiveScreen
+          <AgoraHostLiveScreen
             channelId={activeLiveChannel}
             userId={user?.uid || "guest"}
             userName={
@@ -2263,7 +2265,6 @@ export default function App() {
               "Host"
             }
             brandId={liveStreamData?.brandId}
-            collabId={liveStreamData?.collabId}
             onClose={() => {
               setActiveTab("Home");
               setIsLiveHost(false);
@@ -2276,11 +2277,9 @@ export default function App() {
               profileData?.avatarUrl ||
               user?.photoURL
             }
-            streamInitError={streamInitError}
-            onRetryStreamInit={initStreamClient}
           />
         ) : (
-          <AudienceLiveScreen
+          <AgoraAudienceLiveScreen
             channelId={activeLiveChannel}
             userId={user?.uid || "guest"}
             userName={
@@ -2290,17 +2289,15 @@ export default function App() {
               "User"
             }
             userAvatar={profileData?.avatarUrl || user?.photoURL}
+            hostId={liveStreamData?.hostId || ""}
+            hostName={liveStreamData?.hostName || "Host"}
             hostAvatar={liveStreamData?.hostAvatar}
-            hostBrandName={liveStreamData?.hostName}
             onClose={() => {
               setActiveTab("Home");
               setActiveLiveChannel("");
             }}
             t={t}
             language={language}
-            profileData={profileData}
-            streamInitError={streamInitError}
-            onRetryStreamInit={initStreamClient}
           />
         );
       case "Notifications":
