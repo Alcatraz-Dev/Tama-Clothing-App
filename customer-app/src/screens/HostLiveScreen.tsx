@@ -3746,9 +3746,11 @@ activeCoupon={activeCoupon}
         visible={showChat}
         channelId={channelId}
         onClose={() => setShowChat(false)}
+        onOpen={() => setShowChat(true)}
         currentUserId={userId}
         hostAvatar={hostAvatar}
         hostName={brandName || resolvedName || userName}
+        isHost={true}
       />
 
       {/* PK Invite Modal */}

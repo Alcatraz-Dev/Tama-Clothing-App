@@ -36,6 +36,7 @@ type LiveChatOverlayProps = {
   visible: boolean;
   channelId: string;
   onClose: () => void;
+  onOpen?: () => void;
   currentUserId?: string;
   hostAvatar?: string;
   hostName?: string;
@@ -46,6 +47,7 @@ export const LiveChatOverlay = ({
   visible,
   channelId,
   onClose,
+  onOpen,
   currentUserId,
   hostAvatar,
   hostName,
@@ -67,8 +69,16 @@ export const LiveChatOverlay = ({
   const [notificationCount, setNotificationCount] = useState(0);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [mutedUsers, setMutedUsers] = useState<Record<string, boolean>>({});
+  const [chatAvailable, setChatAvailable] = useState(false);
   const insets = useSafeAreaInsets();
   const prevUnreadCountRef = useRef(0);
+
+  // Initialize chat client
+  useEffect(() => {
+    if (client && channelId) {
+      setChatAvailable(true);
+    }
+  }, [client, channelId]);
 
   // Fetch participants when channel is ready
   useEffect(() => {
@@ -76,11 +86,15 @@ export const LiveChatOverlay = ({
 
     const fetchParticipants = async () => {
       try {
-        const members = channel.state.members || {};
+        const members = channel.state?.members || {};
+        if (!members || Object.keys(members).length === 0) {
+          console.log("No members found in channel");
+          return;
+        }
         const users = Object.values(members).map((m: any) => ({
           id: m.user_id,
-          name: m.user?.name || `User ${m.user_id.substring(0, 5)}`,
-          avatar: m.user?.image,
+          name: m.user?.name || m.user?.userName || `User ${m.user_id.substring(0, 5)}`,
+          avatar: m.user?.image || m.user?.avatar,
           isHost: m.user_id === channel.data?.created_by?.id || m.user?.name === hostName,
           isModerator: m.channel_role === "moderator",
           isMuted: mutedUsers[m.user_id] || false,
@@ -96,14 +110,20 @@ export const LiveChatOverlay = ({
 
   // Track unread messages for notification badge
   useEffect(() => {
-    if (!channel || !visible) {
-      setNotificationCount(prevUnreadCountRef.current);
+    if (!channel) {
+      return;
+    }
+
+    if (!visible) {
+      const count = channel.countUnread();
+      setNotificationCount(count);
+      prevUnreadCountRef.current = count;
       return;
     }
 
     const count = channel.countUnread();
-    setNotificationCount(count);
-    prevUnreadCountRef.current = count;
+    setNotificationCount(0);
+    prevUnreadCountRef.current = 0;
 
     const handleNewMessage = () => {
       if (!visible) {
@@ -224,7 +244,7 @@ export const LiveChatOverlay = ({
   }
 
   useEffect(() => {
-    if (!client || !channelId || !visible) return;
+    if (!client || !channelId) return;
 
     const ch = client.channel("livestream", channelId);
 
@@ -250,15 +270,23 @@ export const LiveChatOverlay = ({
     return () => {
       // We don't stop watching on close to keep messages cached
     };
-  }, [client, channelId, visible]);
+  }, [client, channelId]);
 
-  if (!client || !channel) return null;
+  // Don't render anything if client is not available
+  if (!client) return null;
+
+  // Helper function to open chat
+  const openChat = () => {
+    setNotificationCount(0);
+    prevUnreadCountRef.current = 0;
+    if (onOpen) onOpen(); // This will open the chat
+  };
 
   return (
     <>
-      {/* FAB with Notification Badge */}
+      {/* FAB with Notification Badge - Always show when chat is available and overlay is closed */}
       {!visible && (
-        <View style={styles.fabContainer}>
+        <View style={styles.fabContainer} pointerEvents="box-none">
           {notificationCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{notificationCount > 99 ? "99+" : notificationCount}</Text>
@@ -266,57 +294,57 @@ export const LiveChatOverlay = ({
           )}
           <TouchableOpacity 
             style={styles.fab}
-            onPress={() => {
-              setNotificationCount(0);
-              prevUnreadCountRef.current = 0;
-            }}
+            onPress={openChat}
           >
             <Users size={24} color="#fff" />
           </TouchableOpacity>
         </View>
       )}
 
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <View style={styles.overlay}>
-          <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-          <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-            {/* Header with Host Info - TikTok Style */}
-            <View style={styles.header}>
-              <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {hostAvatar && (
-                  <Image 
-                    source={{ uri: hostAvatar }} 
-                    style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: "#fff" }} 
-                  />
-                )}
-                <Text style={styles.title}>{hostName || "Live Chat"}</Text>
-                <Crown size={14} color="#FFD700" />
+      {/* Show modal only when visible and channel exists */}
+      {channel && (
+        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+          <View style={styles.overlay}>
+            <TouchableOpacity style={styles.backdrop} onPress={onClose} />
+            <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+              {/* Header with Host Info - TikTok Style */}
+              <View style={styles.header}>
+                <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {hostAvatar && (
+                    <Image 
+                      source={{ uri: hostAvatar }} 
+                      style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: "#fff" }} 
+                    />
+                  )}
+                  <Text style={styles.title}>{hostName || "Live Chat"}</Text>
+                  <Crown size={14} color="#FFD700" />
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <TouchableOpacity onPress={() => setShowParticipants(true)} style={{ padding: 4 }}>
+                    <Users size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <X size={24} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <TouchableOpacity onPress={() => setShowParticipants(true)} style={{ padding: 4 }}>
-                  <Users size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <X size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
+
+              {/* Messages */}
+              <Channel channel={channel}>
+                <View style={styles.messageListContainer}>
+                  <MessageList />
+                </View>
+
+                {/* Message Input */}
+                <View style={styles.inputContainer}>
+                  <MessageInput />
+                </View>
+              </Channel>
             </View>
-
-            {/* Messages */}
-            <Channel channel={channel}>
-              <View style={styles.messageListContainer}>
-                <MessageList />
-              </View>
-
-              {/* Message Input */}
-              <View style={styles.inputContainer}>
-                <MessageInput />
-              </View>
-            </Channel>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Participants Sidebar */}
       <Modal visible={showParticipants} animationType="slide" transparent onRequestClose={() => setShowParticipants(false)}>

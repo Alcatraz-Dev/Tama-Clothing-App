@@ -2470,6 +2470,7 @@ const handlePurchase = async () => {
           visible={showChat}
           channelId={channelId}
           onClose={() => setShowChat(false)}
+          onOpen={() => setShowChat(true)}
           currentUserId={userId}
           hostAvatar={hostAvatar}
           hostName={hostBrandName}
