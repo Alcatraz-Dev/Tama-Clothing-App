@@ -113,9 +113,8 @@ if (!isExpoGo) {
   }
 }
 
-const ZEGO_APP_ID = 1978768024;
-const ZEGO_APP_SIGN =
-  "6e6939b8825c44bab33f5ffbdae0fe9b9f58be6af13a249ce8bcd9b2c76b928d";
+const ZEGO_APP_ID = 345866340;
+const ZEGO_APP_SIGN = 'ce922142c1c9adcdcc9d6833b935ae96ef63f564c143ec2f1b557ddcff53ae7a';
 
 type Props = {
   channelId: string;
@@ -2615,7 +2614,7 @@ export default function HostLiveScreen(props: Props) {
       )}
       <ZegoUIKitPrebuiltLiveStreaming
         ref={prebuiltRef}
-        appID={ZEGO_APP_ID}
+        appID={ ZEGO_APP_ID }
         appSign={ZEGO_APP_SIGN}
         userID={userId}
         userName={

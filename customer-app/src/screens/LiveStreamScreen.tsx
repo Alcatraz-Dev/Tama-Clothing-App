@@ -67,7 +67,7 @@ if (!isExpoGo) {
 
 // ✅ Put them in env or constants
 const ZEGO_APP_ID = 1978768024; // Placeholder ID - User should replace with real one
-const ZEGO_APP_SIGN = '6e6939b8825c44bab33f5ffbdae0fe9b9f58be6af13a249ce8bcd9b2c76b928d'; // Placeholder Sign
+const ZEGO_APP_SIGN = '12056210e8df2aecfeb1b26d092a4778'; // Placeholder Sign
 
 type ChatMessage = {
     id: string;
