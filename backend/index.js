@@ -22,8 +22,10 @@ async function initFirebase() {
     let sa;
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       let s = process.env.FIREBASE_SERVICE_ACCOUNT;
+      // Handle both escaped and unescaped newlines
+      s = s.replace(/\\n/g, '\n');
       if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1);
-      sa = JSON.parse(s.replace(/\\n/g, '\n'));
+      sa = JSON.parse(s);
     } else {
       sa = require('./serviceAccountKey.json');
     }
