@@ -53,7 +53,16 @@
     "extra": {
       "eas": {
         "projectId": "3d48b864-f404-40a3-a69d-ac13e74fe8a2"
-      }
+      },
+      "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAZYgY-PsjDK5vSxssjsWmUI9J8CE6FUFw",
+      "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyDZQ457nFb5Y5iIxGqL_mm2zx3H6TA0opY",
+      "EXPO_PUBLIC_STIPOP_API_KEY": "7d018481566cac045d6bee55d685d7f2",
+      "EXPO_PUBLIC_SANITY_TOKEN": "skISPZcwJET3Tmpm0XVfHxoMzvo0hX6eLK8OhB9VRAHqaPMFsYfh7eIxJFHW7mDSQJjmzhLK4QGt65BGNXZ0nqDFgz3P9oZ0TQF2yxrVmOlFwp5td9ISRIBNepKRyfY1mSnEMomxwqL3I1PF56rzcPA5mLF2YQVL2kv8QcqAYeMo3fnbd6jR",
+      "EXPO_PUBLIC_SANITY_PROJECT_ID": "93i3skro",
+      "EXPO_PUBLIC_SANITY_DATASET": "production",
+      "EXPO_PUBLIC_AGORA_APP_ID": "fe207e83d3614d3e9305e4fed9746cf3",
+      "EXPO_PUBLIC_AGORA_TOKEN": "007eJxTYOj/94Q3j6Xr7XTR9JJXhZbcP/X1F1Rr7LlcpF70IlUiqkSBIS3VyMA81cI4xdjM0CTFONXS2MA01SQtNcXS3MQsOc14FtfPzIZARgaHtcdZGBkgEMRnZSjJz07NY2AAAEqTH5I=",
+      "EXPO_PUBLIC_API_URL": "https://backend-bey3a.vercel.app"
     },
     "runtimeVersion": {
       "policy": "appVersion"
