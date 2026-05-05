@@ -16,7 +16,8 @@ import { RechargeModal } from '../components/RechargeModal';
 
 
 // ✅ Expo Go detection
-const isExpoGo = Constants.executionEnvironment === "storeClient";
+// Use appOwnership to specifically detect Expo Go (not dev builds)
+const isExpoGo = Constants.appOwnership === 'expo';
 
 // ✅ Conditionally import ZEGO and ZIM
 let ZegoUIKitPrebuiltLiveStreaming: any;
@@ -56,8 +57,8 @@ if (!isExpoGo) {
     }
 }
 
-const ZEGO_APP_ID = 1327315162;
-const ZEGO_APP_SIGN = '2c0f518d65e837480793f1ebe41b0ad44e999bca88ef783b65ef4391b4514ace';
+const ZEGO_APP_ID = 1978768024;
+const ZEGO_APP_SIGN = '6e6939b8825c44bab33f5ffbdae0fe9b9f58be6af13a249ce8bcd9b2c76b928d';
 
 type Props = {
     channelId: string;
