@@ -4,21 +4,17 @@ import { getStorage } from "firebase/storage";
 import { getDatabase } from "firebase/database";
 import * as FirebaseAuth from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
-// Get config from expo.extra (injected from app.json at build time)
-const expoExtra = Constants.expoConfig?.extra || (Constants as any).manifest?.extra;
-const apiKey = expoExtra?.EXPO_PUBLIC_FIREBASE_API_KEY || process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+// For Expo Go, use .env loaded via babel-plugin-inline-dotenv or expo-constants
+const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
 
 if (!apiKey) {
-  throw new Error(
-    'Firebase API key missing. Set EXPO_PUBLIC_FIREBASE_API_KEY in .env (dev) or app.json extra (production). Current expoExtra: ' +
-    JSON.stringify(expoExtra)
-  );
+  console.error('⚠️ Firebase API key not found. Check .env file and expo start command.');
+  // Fallback to a dummy config to prevent crash (will fail at runtime with clear error)
 }
 
 const firebaseConfig = {
-  apiKey,
+  apiKey: apiKey || "dummy",
   authDomain: "tama-clothing-v2-alcatraz.firebaseapp.com",
   projectId: "tama-clothing-v2-alcatraz",
   storageBucket: "tama-clothing-v2-alcatraz.firebasestorage.app",
@@ -27,14 +23,13 @@ const firebaseConfig = {
   databaseURL: "https://tama-clothing-v2-alcatraz-default-rtdb.europe-west1.firebasedatabase.app/"
 };
 
-// Initialize Firebase
+// Initialize Firebase (singleton)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Use casting to bypass TypeScript errors if the member is not in the type definition
+// Auth with React Native persistence
 const { initializeAuth, getReactNativePersistence } = FirebaseAuth as any;
-
 export const auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
+  persistence: getReactNativePersistence(AsyncStorage)
 });
 
 export const db = getFirestore(app);
