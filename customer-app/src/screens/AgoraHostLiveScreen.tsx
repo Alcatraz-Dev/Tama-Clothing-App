@@ -52,12 +52,15 @@ import { AgoraLiveShoppingService, liveShoppingService, getAgoraComponents } fro
 import { LiveSessionService } from "../services/LiveSessionService";
 import { TikTokProductCarousel } from "../components/TikTokProductCarousel";
 import { LIVE_UI_THEME, AGORA_CONFIG, LIVE_LAYOUT, ENHANCED_GIFTS, RTM_EVENTS } from "../config/stream";
+import { ModernGiftPanel } from "../components/ModernGiftPanel";
 import { db } from "../api/firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, orderBy, limit, addDoc, serverTimestamp, increment } from "firebase/firestore";
 
 // Agora components - loaded dynamically
 let RtcSurfaceView: any = null;
 let VideoCanvas: any = null;
+let RenderModeType: any = null;
+let VideoMirrorModeType: any = null;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -113,11 +116,13 @@ export default function AgoraHostLiveScreen(props: Props) {
   const [walletId, setWalletId] = useState<string>("");
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
-  // Agora Video State
-  const [localUid, setLocalUid] = useState<number>(0);
-  const [remoteUsers, setRemoteUsers] = useState<{ uid: number; hasVideo: boolean }[]>([]);
-  const [agoraComponentsLoaded, setAgoraComponentsLoaded] = useState(false);
+   // Agora Video State
+   const [localUid, setLocalUid] = useState<number>(0);
+   const [remoteUsers, setRemoteUsers] = useState<{ uid: number; hasVideo: boolean }[]>([]);
+   const [agoraComponentsLoaded, setAgoraComponentsLoaded] = useState(false);
+   const [videoRenderError, setVideoRenderError] = useState<string | null>(null);
 
   // Chat
   const [showChat, setShowChat] = useState(false);
@@ -162,6 +167,32 @@ export default function AgoraHostLiveScreen(props: Props) {
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
 
+  // Event handlers for remote users (useCallback to keep stable refs)
+  const handleUserJoined = useCallback((uid: number) => {
+    console.log("[AgoraHost] Remote user joined:", uid);
+    setRemoteUsers(prev => {
+      if (prev.some(u => u.uid === uid)) return prev;
+      return [...prev, { uid, hasVideo: false }];
+    });
+  }, []);
+
+  const handleUserLeft = useCallback((uid: number) => {
+    console.log("[AgoraHost] Remote user left:", uid);
+    setRemoteUsers(prev => prev.filter(u => u.uid !== uid));
+  }, []);
+
+  const handleUserPublished = useCallback((uid: number, mediaType: string) => {
+    if (mediaType === 'video') {
+      setRemoteUsers(prev => prev.map(u => u.uid === uid ? { ...u, hasVideo: true } : u));
+    }
+  }, []);
+
+  const handleUserUnpublished = useCallback((uid: number, mediaType: string) => {
+    if (mediaType === 'video') {
+      setRemoteUsers(prev => prev.map(u => u.uid === uid ? { ...u, hasVideo: false } : u));
+    }
+  }, []);
+
   // Initialize
   useEffect(() => {
     initServices();
@@ -172,14 +203,38 @@ export default function AgoraHostLiveScreen(props: Props) {
 
   const initServices = async () => {
     try {
+      console.log("[AgoraHost] Initializing service...");
       await videoService.initialize();
-      console.log("[AgoraHost] Services initialized");
+      console.log("[AgoraHost] Service initialized");
 
-      // Load Agora UI components
-      const agora = await getAgoraComponents();
-      RtcSurfaceView = agora.RtcSurfaceView;
+      // Load Agora video components
+      const {
+        RtcSurfaceView: RtcSV,
+        VideoCanvas: VC,
+        RenderModeType: RMT,
+        VideoMirrorModeType: VMMT
+      } = await getAgoraComponents();
+
+      RtcSurfaceView = RtcSV;
+      VideoCanvas = VC;
+      RenderModeType = RMT;
+      VideoMirrorModeType = VMMT;
+
+      console.log("[AgoraHost] Agora components loaded:", {
+        RtcSurfaceView: !!RtcSurfaceView,
+        VideoCanvas: !!VideoCanvas,
+        RenderModeType: !!RenderModeType,
+        VideoMirrorModeType: !!VideoMirrorModeType
+      });
+
       setAgoraComponentsLoaded(!!RtcSurfaceView);
-      
+
+      // Set up event listeners for remote users
+      videoService.addListener('user-joined', handleUserJoined);
+      videoService.addListener('user-left', handleUserLeft);
+      videoService.addListener('user-published', handleUserPublished);
+      videoService.addListener('user-unpublished', handleUserUnpublished);
+
       // Load wallet balance
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
@@ -475,6 +530,12 @@ export default function AgoraHostLiveScreen(props: Props) {
   };
 
   const cleanup = async () => {
+    // Remove event listeners
+    videoService.removeListener('user-joined', handleUserJoined);
+    videoService.removeListener('user-left', handleUserLeft);
+    videoService.removeListener('user-published', handleUserPublished);
+    videoService.removeListener('user-unpublished', handleUserUnpublished);
+
     if (isLive) {
       await videoService.leaveChannel();
       if (sessionId) {
@@ -542,19 +603,24 @@ export default function AgoraHostLiveScreen(props: Props) {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Agora Video Container */}
-      <View style={styles.videoContainer}>
-        {/* Local Video (Host) - Only show when Agora components are loaded */}
-        {agoraComponentsLoaded && localUid > 0 && RtcSurfaceView && isCameraOn ? (
-          <RtcSurfaceView
-            style={styles.localVideo}
-            uid={localUid}
-            channelId={channelId}
-            renderMode={1} // VideoRenderMode.FIT
-          />
-        ) : (
+   return (
+     <View style={styles.container}>
+       {/* Agora Video Container */}
+       <View style={styles.videoContainer}>
+         {/* Local Video (Host) - Only show when Agora components are loaded */}
+         {agoraComponentsLoaded && localUid > 0 && RtcSurfaceView && isCameraOn ? (
+           <RtcSurfaceView
+             style={styles.localVideo}
+             canvas={{
+               uid: localUid,
+               channelId: channelId,
+               renderMode: RenderModeType?.RenderModeHidden ?? 1,
+               mirrorMode: isFrontCamera
+                 ? VideoMirrorModeType?.VideoMirrorModeEnabled ?? 1
+                 : VideoMirrorModeType?.VideoMirrorModeDisabled ?? 2,
+             }}
+           />
+         ) : (
           <View style={styles.videoPlaceholder}>
             {isCameraOn ? (
               <View>
@@ -575,18 +641,22 @@ export default function AgoraHostLiveScreen(props: Props) {
           </View>
         )}
 
-        {/* Remote Users Video Grid */}
-        {remoteUsers.map((user) => (
-          agoraComponentsLoaded && RtcSurfaceView ? (
+         {/* Remote Users Video Grid */}
+         {agoraComponentsLoaded && RtcSurfaceView &&
+          remoteUsers
+            .filter(user => user.hasVideo)
+            .map((user) => (
             <RtcSurfaceView
               key={user.uid}
               style={styles.remoteVideo}
-              uid={user.uid}
-              channelId={channelId}
-              renderMode={1}
+              canvas={{
+                uid: user.uid,
+                channelId: channelId,
+                renderMode: RenderModeType?.RenderModeHidden ?? 1,
+                mirrorMode: VideoMirrorModeType?.VideoMirrorModeDisabled ?? 2,
+              }}
             />
-          ) : null
-        ))}
+          ))}
 
         {/* Top Bar */}
         <View style={styles.topBar}>
@@ -872,75 +942,27 @@ export default function AgoraHostLiveScreen(props: Props) {
         </View>
       </Modal>
 
-      {/* Gift Modal */}
-      <Modal visible={showGiftModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            onPress={() => setShowGiftModal(false)}
-          />
-          <BlurView intensity={90} tint="dark" style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t?.("sendGift") || "Send Gift"}
-              </Text>
-              <TouchableOpacity onPress={() => setShowGiftModal(false)}>
-                <X size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <FlatList
-              data={Object.values(ENHANCED_GIFTS)}
-              keyExtractor={(item) => item.id}
-              numColumns={4}
-              contentContainerStyle={styles.giftGrid}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.giftItem,
-                    selectedGift?.id === item.id && styles.giftItemSelected,
-                  ]}
-                  onPress={() => setSelectedGift(item)}
-                >
-                  <View style={[styles.giftIcon, { backgroundColor: item.color + "30" }]}>
-                    <Text style={{ fontSize: 24 }}>🎁</Text>
-                  </View>
-                  <Text style={styles.giftName}>{item.name}</Text>
-                  <View style={styles.giftPointsContainer}>
-                    <Coins size={10} color="#FFD700" />
-                    <Text style={styles.giftPoints}>{item.points}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-
-            <View style={styles.giftBottomBar}>
-              <View style={styles.giftBalanceContainer}>
-                <Coins size={14} color="#FFD700" />
-                <Text style={styles.giftBalanceText}>{userBalance}</Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.sendGiftButton,
-                  !selectedGift && styles.sendGiftButtonDisabled,
-                ]}
-                onPress={() => {
-                  if (selectedGift) {
-                    sendGift(selectedGift);
-                    setShowGiftModal(false);
-                    setSelectedGift(null);
-                  }
-                }}
-                disabled={!selectedGift}
-              >
-                <Text style={styles.sendGiftButtonText}>
-                  {t?.("send") || "SEND"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </BlurView>
-        </View>
-      </Modal>
+{/* Modern Gift Panel - Premium TikTok Style */}
+      <ModernGiftPanel
+        visible={showGiftModal}
+        onClose={() => setShowGiftModal(false)}
+        onSendGift={async (gift, qty) => {
+          const totalCost = gift.price * qty;
+          if (userBalance < totalCost) {
+            Alert.alert("Insufficient Coins", "Please recharge your wallet");
+            return;
+          }
+          try {
+            setUserBalance((prev) => prev - totalCost);
+            sendGift(gift);
+            setShowGiftModal(false);
+          } catch (e) {
+            console.error("Gift send error:", e);
+          }
+        }}
+        userCoins={userBalance}
+        hostName={userName || "Host"}
+      />
 
       {/* Poll Modal */}
       <Modal visible={showPollModal} transparent animationType="slide">

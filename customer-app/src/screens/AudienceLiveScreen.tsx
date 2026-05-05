@@ -78,6 +78,7 @@ import { FlameCounter } from "../components/FlameCounter";
 import { db } from "../api/firebase";
 import { GIFTS, Gift } from "../config/gifts";
 import { RechargeModal } from "../components/RechargeModal";
+import { ModernGiftPanel } from "../components/ModernGiftPanel";
 
 import {
   StreamCall,
@@ -995,7 +996,8 @@ export default function AudienceLiveScreen(props: Props) {
   >("POPULAIRE");
   const [userBalance, setUserBalance] = useState(0);
   const clampedBalance = Math.max(0, userBalance);
-   const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [quantity, setQuantity] = useState(1);
    // Co-host state
    const [isCoHost, setIsCoHost] = useState(false);
    const [coHostRequestPending, setCoHostRequestPending] = useState(false);
@@ -2882,236 +2884,32 @@ const handlePurchase = async () => {
         </View>
       )}
 
-      {/* Audience Gift Modal */}
-      <Modal
+{/* Modern Gift Panel - Premium TikTok Style */}
+      <ModernGiftPanel
         visible={showGifts}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowGifts(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={() => setShowGifts(false)}
-          />
-          <View
-            style={{
-              backgroundColor: "#121218",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              height: Dimensions.get("window").height * 0.55,
-              paddingBottom: Platform.OS === "ios" ? 34 : 10,
-            }}
-          >
-            {/* Categories Bar */}
-            <View
-              style={{
-                flexDirection: "row",
-                borderBottomWidth: 1,
-                borderBottomColor: "#222",
-                paddingHorizontal: 10,
-              }}
-            >
-              {["POPULAIRE", "SPÉCIAL", "LUXE"].map((cat: any) => (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setGiftCategory(cat)}
-                  style={{
-                    paddingVertical: 15,
-                    paddingHorizontal: 20,
-                    borderBottomWidth: giftCategory === cat ? 2 : 0,
-                    borderBottomColor: "#FF0066",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: giftCategory === cat ? "#fff" : "#888",
-                      fontWeight: "bold",
-                      fontSize: 13,
-                    }}
-                  >
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Gift Grid */}
-            <FlatList
-              key={giftCategory}
-              numColumns={4}
-              data={GIFTS.filter((g) => {
-                if (giftCategory === "POPULAIRE") return g.points < 100;
-                if (giftCategory === "SPÉCIAL")
-                  return g.points >= 100 && g.points < 500;
-                if (giftCategory === "LUXE") return g.points >= 500;
-                return true;
-              })}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 10 }}
-              renderItem={({ item: gift }) => {
-                const isSelected = selectedGift?.id === gift.id;
-                return (
-                  <TouchableOpacity
-                    onPress={() => setSelectedGift(gift)}
-                    style={{
-                      width: "25%",
-                      aspectRatio: 0.85,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: 5,
-                      marginVertical: 5,
-                      borderRadius: 12,
-                      backgroundColor: isSelected
-                        ? "rgba(255, 0, 102, 0.15)"
-                        : "transparent",
-                      borderWidth: 1.5,
-                      borderColor: isSelected ? "#FF0066" : "transparent",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 55,
-                        height: 55,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: 6,
-                      }}
-                    >
-                      <Image
-                        source={
-                          typeof gift.icon === "number"
-                            ? gift.icon
-                            : { uri: gift.icon }
-                        }
-                        style={{ width: 48, height: 48 }}
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
-                    >
-                      {gift.name}
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        marginTop: 2,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: isSelected ? "#fff" : "#FFD700",
-                          fontSize: 9,
-                          fontWeight: "900",
-                        }}
-                      >
-                        {gift.points}
-                      </Text>
-                      <Coins
-                        size={8}
-                        color={isSelected ? "#fff" : "#FFD700"}
-                        style={{ marginLeft: 2 }}
-                        fill={isSelected ? "#fff" : "#FFD700"}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-
-            {/* Bottom Actions */}
-            <BlurView
-              intensity={90}
-              tint="dark"
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 20,
-                paddingVertical: 14,
-                borderTopWidth: 1,
-                borderTopColor: "rgba(255,255,255,0.1)",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.1)",
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 15,
-                    flexDirection: "row",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text
-                    style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}
-                  >
-                    {userBalance.toLocaleString()}
-                  </Text>
-                  <Coins
-                    size={12}
-                    color="#F59E0B"
-                    style={{ marginLeft: 4 }}
-                    fill="#F59E0B"
-                  />
-                  <TouchableOpacity
-                    style={{ marginLeft: 8 }}
-                    onPress={() => {
-                      setShowGifts(false);
-                    }}
-                  >
-                    <PlusCircle size={16} color="#FF0066" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedGift) {
-                    sendGift(selectedGift);
-                    setSelectedGift(null);
-                  }
-                }}
-                disabled={!selectedGift}
-                style={{
-                  backgroundColor: selectedGift
-                    ? "#FF0066"
-                    : "rgba(255,255,255,0.1)",
-                  paddingHorizontal: 28,
-                  paddingVertical: 12,
-                  borderRadius: 25,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  opacity: selectedGift ? 1 : 0.5,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#fff",
-                    fontWeight: "900",
-                    fontSize: 15,
-                    marginRight: 8,
-                  }}
-                >
-                  {t("send") || "ENVOYER"}
-                </Text>
-                <Send size={18} color="#fff" />
-              </TouchableOpacity>
-</BlurView>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowGifts(false)}
+        onSendGift={async (gift, qty) => {
+          const totalCost = gift.price * qty;
+          if (userBalance < totalCost) {
+            setShowRechargeModal(true);
+            return;
+          }
+          try {
+            setUserBalance((prev) => prev - totalCost);
+            await call?.sendReaction("gift", {
+              giftId: gift.id,
+              giftName: gift.name,
+              quantity: qty,
+              senderId: userId,
+            });
+            setShowGifts(false);
+          } catch (e) {
+            console.error("Gift send error:", e);
+          }
+        }}
+        userCoins={userBalance}
+        hostName={hostBrandName || "Host"}
+      />
 
       {/* Purchase Modal */}
        <Modal

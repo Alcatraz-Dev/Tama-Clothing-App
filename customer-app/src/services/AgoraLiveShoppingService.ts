@@ -20,20 +20,64 @@ import { LiveShoppingService } from "./LiveShoppingService";
 // Agora SDK imports - these will only work on real devices
 // Using require for proper dynamic loading
 let RtcSurfaceView: any = null;
+let VideoCanvas: any = null;
+let ChannelProfileType: any = null;
+let ClientRoleType: any = null;
+let VideoRenderMode: any = null;
+let RenderModeType: any = null;
+let VideoMirrorModeType: any = null;
+let VideoSourceType: any = null;
 
 export const getAgoraComponents = async () => {
-  if (RtcSurfaceView) {
-    return { RtcSurfaceView };
+  // If already loaded, return all
+  if (RtcSurfaceView && VideoCanvas && VideoSourceType && RenderModeType && VideoMirrorModeType) {
+    return {
+      RtcSurfaceView,
+      VideoCanvas,
+      ChannelProfileType,
+      ClientRoleType,
+      VideoRenderMode,
+      RenderModeType,
+      VideoMirrorModeType,
+      VideoSourceType,
+    };
   }
-  
+
   try {
     // Try to load the Agora module dynamically
     const agoraModule = require("react-native-agora");
     RtcSurfaceView = agoraModule.RtcSurfaceView;
-    return { RtcSurfaceView };
+    VideoCanvas = agoraModule.VideoCanvas;
+    ChannelProfileType = agoraModule.ChannelProfileType;
+    ClientRoleType = agoraModule.ClientRoleType;
+    VideoRenderMode = agoraModule.RenderModeType || agoraModule.VideoRenderMode;
+    RenderModeType = agoraModule.RenderModeType;
+    VideoMirrorModeType = agoraModule.VideoMirrorModeType;
+    VideoSourceType = agoraModule.VideoSourceType;
+
+    console.log("[Agora] Components loaded successfully");
+    return {
+      RtcSurfaceView,
+      VideoCanvas,
+      ChannelProfileType,
+      ClientRoleType,
+      VideoRenderMode,
+      RenderModeType,
+      VideoMirrorModeType,
+      VideoSourceType,
+    };
   } catch (e) {
     console.warn("[Agora] Failed to load Agora modules:", e);
-    return { RtcSurfaceView: null };
+    return {
+      RtcSurfaceView: null,
+      VideoCanvas: null,
+      ChannelProfileType: null,
+      ClientRoleType: null,
+      VideoRenderMode: null,
+      RenderModeType: null,
+      VideoMirrorModeType: null,
+      VideoSourceType: null,
+    };
   }
 };
 
@@ -167,6 +211,27 @@ export class AgoraLiveShoppingService extends RNEventEmitter {
 
       // Enable video
       await this.rtcEngine.enableVideo();
+
+      // Enable low light enhancement if configured
+      if (AGORA_CONFIG.enableLowLightEnhancement) {
+        try {
+          await this.rtcEngine.enableLowLightEnhancement(true);
+        } catch (e) {
+          console.warn("[Agora] Low light enhancement not supported", e);
+        }
+      }
+
+      // Enable AI audio enhancements (noise suppression, echo cancellation, AGC)
+      try {
+        await this.rtcEngine.setParameters(JSON.stringify({
+          "che.audio.enhancement": true,
+          "che.audio.ai_echo_cancel": true,
+          "che.audio.ai_noise_suppress": true,
+          "che.audio.ai_gain_control": true,
+        }));
+      } catch (e) {
+        console.warn("[Agora] AI audio enhancements not supported", e);
+      }
 
       // Set up channel profile for live broadcasting
       await this.rtcEngine.setClientRole(

@@ -5,11 +5,11 @@ import {
   Streami18n,
   useCreateChatClient,
 } from "stream-chat-react-native";
-import { SafeAreaView, ActivityIndicator, StyleSheet, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { getStreamTokenForCurrentUser } from "../services/streamAuth";
 import { auth } from "../api/firebase";
 import { LayoutProvider } from "../contexts/LayoutContext";
-import { View } from "react-native-animatable";
 
 const STREAM_API_KEY = require("../config/stream").STREAM_API_KEY;
 const STREAM_TOKEN = require("../config/stream").STREAM_TOKEN;
