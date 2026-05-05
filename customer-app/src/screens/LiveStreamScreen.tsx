@@ -250,6 +250,7 @@ function LiveDevBuildOnly({
 
     // Enhanced UI State
     const [streamStatus, setStreamStatus] = useState<'loading' | 'live' | 'buffering' | 'ended' | 'error'>('loading');
+    const [cameraOff, setCameraOff] = useState(false);
     const [showChat, setShowChat] = useState(true);
     const [chatInputVisible, setChatInputVisible] = useState(false);
     const [showProductDrawer, setShowProductDrawer] = useState(false);
@@ -321,32 +322,37 @@ function LiveDevBuildOnly({
         return () => unsub();
     }, [likesDoc]);
 
-    // Subscribe to Session Data (for pinned product, etc)
-    useEffect(() => {
-        const sessionRef = doc(db, "Live_sessions", channelId);
-        const unsub = onSnapshot(sessionRef, async (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                setSessionData(data);
+// Subscribe to Session Data (for pinned product, etc)
+     useEffect(() => {
+         const sessionRef = doc(db, "Live_sessions", channelId);
+         const unsub = onSnapshot(sessionRef, async (snap) => {
+             if (snap.exists()) {
+                 const data = snap.data();
+                 setSessionData(data);
+                 
+                 // Update stream status based on session status
+                 if (data.status === 'ended') {
+                     setStreamStatus('ended');
+                 }
+                 
+                 // If product pinned, fetch its details
+                 if (data.currentProductId) {
+                     try {
+                         const prodDoc = await getDoc(doc(db, "products", data.currentProductId));
+                         if (prodDoc.exists()) {
+                             setPinnedProduct({ id: prodDoc.id, ...prodDoc.data() });
+                         }
+                     } catch (err) {
+                         console.error("Error fetching pinned product:", err);
+                     }
+                 } else {
+                     setPinnedProduct(null);
+                 }
+             }
+         });
 
-                // If product pinned, fetch its details
-                if (data.currentProductId) {
-                    try {
-                        const prodDoc = await getDoc(doc(db, "products", data.currentProductId));
-                        if (prodDoc.exists()) {
-                            setPinnedProduct({ id: prodDoc.id, ...prodDoc.data() });
-                        }
-                    } catch (err) {
-                        console.error("Error fetching pinned product:", err);
-                    }
-                } else {
-                    setPinnedProduct(null);
-                }
-            }
-        });
-
-        return () => unsub();
-    }, [db, channelId]);
+         return () => unsub();
+     }, [db, channelId]);
 
     // Fetch products if host
     // Fetch products
@@ -380,54 +386,60 @@ function LiveDevBuildOnly({
         }
     }, [showProductPicker, brandId, sessionData]);
 
-    // Handle session lifecycle (host starts/ends session in Firestore)
-    useEffect(() => {
-        if (!isHost || isReplay) return;
+// Handle session lifecycle (host starts/ends session in Firestore)
+     useEffect(() => {
+         if (!isHost || isReplay) return;
 
-        const start = async () => {
-            try {
-                // Generate HLS Playback URL for Zego (Common format)
-                // Note: Domain might vary based on your Zego CDN cluster configuration
-                const playbackUrl = `https://hls.zego.im/${ZEGO_APP_ID}/${channelId}.m3u8`;
+         const start = async () => {
+             try {
+                 // Generate HLS Playback URL for Zego (Common format)
+                 // Note: Domain might vary based on your Zego CDN cluster configuration
+                 const playbackUrl = `https://hls.zego.im/${ZEGO_APP_ID}/${channelId}.m3u8`;
 
-                // Determine if it's a collaboration or brand session
-                // Already destructured from props in the component signature
+                 // Determine if it's a collaboration or brand session
+                 // Already destructured from props in the component signature
 
-                if (collabId) {
-                    await LiveSessionService.startCollabSession(
-                        channelId,
-                        userName,
-                        userId,
-                        collabId,
-                        brandId,
-                        user?.photoURL || undefined,
-                        playbackUrl
-                    );
-                } else {
-                    await LiveSessionService.startSession(
-                        channelId,
-                        userName,
-                        brandId,
-                        user?.photoURL || undefined,
-                        user?.uid,
-                        [],
-                        playbackUrl
-                    );
-                }
-            } catch (err) {
-                console.error("Error starting live session:", err);
-            }
-        };
+                 if (collabId) {
+                     await LiveSessionService.startCollabSession(
+                         channelId,
+                         userName,
+                         userId,
+                         collabId,
+                         brandId,
+                         user?.photoURL || undefined,
+                         playbackUrl
+                     );
+                 } else {
+                     await LiveSessionService.startSession(
+                         channelId,
+                         userName,
+                         brandId,
+                         user?.photoURL || undefined,
+                         user?.uid,
+                         [],
+                         playbackUrl
+                     );
+                 }
+             } catch (err) {
+                 console.error("Error starting live session:", err);
+             }
+         };
 
-        start();
+         start();
 
-        return () => {
-            // End session when host leaves
-            LiveSessionService.endSession(channelId).catch(err =>
-                console.error("Error ending live session:", err)
-            );
-        };
-    }, [isHost, isReplay, channelId, userName, brandId, user?.photoURL, user?.uid]);
+         // Heartbeat interval for host to indicate active status
+         const heartbeatInterval = setInterval(() => {
+             LiveSessionService.updateHeartbeat(channelId).catch(console.error);
+         }, 60000); // Update every 60 seconds
+
+         return () => {
+             clearInterval(heartbeatInterval);
+             // End session when host leaves
+             LiveSessionService.endSession(channelId).catch(err =>
+                 console.error("Error ending live session:", err)
+             );
+         };
+     }, [isHost, isReplay, channelId, userName, brandId, user?.photoURL, user?.uid, collabId]);
 
     // Mark viewer joined and update view count
     useEffect(() => {
@@ -475,6 +487,7 @@ function LiveDevBuildOnly({
             try {
                 // Mark session as ended in Firestore
                 await LiveSessionService.endSession(channelId);
+                setStreamStatus('ended');
             } catch (error) {
                 console.error("Error ending session:", error);
             }
@@ -501,6 +514,9 @@ function LiveDevBuildOnly({
             return {
                 ...HOST_DEFAULT_CONFIG,
                 onLeaveLiveStreaming: onLeave,
+                // Camera state callbacks for host
+                onCameraPermissionDenied: () => setCameraOff(true),
+                onCameraPermissionGranted: () => setCameraOff(false),
             };
         }
 
@@ -509,7 +525,7 @@ function LiveDevBuildOnly({
             ...AUDIENCE_DEFAULT_CONFIG,
             onLeaveLiveStreaming: onLeave,
         };
-    }, [isHost]);
+    }, [isHost, onLeave]);
 
     if (!ZegoUIKitPrebuiltLiveStreaming) return null;
 
@@ -528,6 +544,27 @@ function LiveDevBuildOnly({
                         config={config}
                         {...(ZIM ? { plugins: [ZIM] } : {})}
                     />
+
+                    {/* Camera Off Overlay - Shows host avatar when camera is disabled */}
+                    {isHost && cameraOff && (
+                        <View style={styles.cameraOffOverlay}>
+                            <View style={styles.cameraOffContainer}>
+                                {user?.photoURL ? (
+                                    <Image
+                                        source={{ uri: user.photoURL }}
+                                        style={styles.cameraOffAvatar}
+                                    />
+                                ) : (
+                                    <View style={styles.cameraOffPlaceholder}>
+                                        <Text style={styles.cameraOffInitials}>
+                                            {userName?.charAt(0)?.toUpperCase() || 'H'}
+                                        </Text>
+                                    </View>
+                                )}
+                                <Text style={styles.cameraOffText}>{translate('cameraOff')}</Text>
+                            </View>
+                        </View>
+                    )}
 
                     {/* Pinned Product Overlay - Adjusted position to not overlap Zego header */}
                     {pinnedProduct && (
@@ -1061,4 +1098,45 @@ const styles = StyleSheet.create({
     pickerInfo: { flex: 1, gap: 4 },
     pickerName: { color: '#fff', fontSize: 13.5, fontWeight: '700' },
     pickerPrice: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+
+    // Camera Off Overlay Styles
+    cameraOffOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    cameraOffContainer: {
+        alignItems: 'center',
+        gap: 20,
+    },
+    cameraOffAvatar: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 4,
+        borderColor: '#FF3B30',
+    },
+    cameraOffPlaceholder: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 4,
+        borderColor: '#FF3B30',
+    },
+    cameraOffInitials: {
+        color: '#FF3B30',
+        fontSize: 48,
+        fontWeight: '900',
+    },
+    cameraOffText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        opacity: 0.8,
+    },
 });
