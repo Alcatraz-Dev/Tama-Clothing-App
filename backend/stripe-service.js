@@ -65,7 +65,7 @@ function constructWebhookEvent(rawBody, signature) {
  */
 async function createCheckoutSession(amountCents, currency = 'usd', metadata = {}, successUrl, cancelUrl) {
   const session = await stripe.checkout.sessions.create({
-    ui_mode: 'hosted',
+    ui_mode: 'hosted_page',
     line_items: [
       {
         price_data: {
