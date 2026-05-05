@@ -1,18 +1,15 @@
 // Payment API Routes
-// Multi-vendor marketplace payment endpoints
-
 const express = require('express');
 const router = express.Router();
 const paymentService = require('./payment-service');
 const stripeService = require('./stripe-service');
 const cryptoService = require('./crypto-service');
-const { db: getDb, isInitialized, admin } = require('./index.js');
 
-function getFirestore() {
-  if (!isInitialized()) {
-    throw new Error('Firebase not initialized. Set FIREBASE_SERVICE_ACCOUNT environment variable.');
-  }
-  return getDb();
+// Get from index.js exports - call at runtime, not require time
+let admin;
+function getAdminFn() {
+  if (!admin) admin = require('./index.js').getAdminFn();
+  return admin;
 }
 
 // ============================================================================
@@ -300,7 +297,7 @@ router.post('/stripe/create-intent', async (req, res) => {
     );
 
     // Store pending payment in Firestore
-    const db = getFirestore();
+    const db = getDB();
     await db.collection('pending_payments').doc(result.paymentIntentId).set({
       userId,
       pack,
@@ -355,7 +352,7 @@ router.post('/stripe/checkout', async (req, res) => {
     );
 
     // Store a pending payment record keyed by session ID
-    const db = getFirestore();
+    const db = getDB();
     await db.collection('pending_payments').doc(session.sessionId).set({
       userId,
       pack,
@@ -363,6 +360,7 @@ router.post('/stripe/checkout', async (req, res) => {
       currency,
       status: 'pending',
       provider: 'stripe_checkout',
+      createdAt: const admin = getAdminFn();
       createdAt: admin.FieldValue.serverTimestamp()
     });
 
@@ -385,7 +383,8 @@ router.post('/stripe/verify/:paymentIntentId', async (req, res) => {
 
     if (result.success) {
       const admin = require('firebase-admin');
-      const db = admin.firestore();
+      const db = getDB();
+      const admin = getAdminFn();
 
       const paymentRef = db.collection('pending_payments').doc(paymentIntentId);
       const paymentDoc = await paymentRef.get();
@@ -397,7 +396,8 @@ router.post('/stripe/verify/:paymentIntentId', async (req, res) => {
       }
 
       await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, paymentIntentId);
-      await paymentRef.update({ status: 'completed', verifiedAt: admin.FieldValue.serverTimestamp() });
+      await paymentRef.update({ status: 'completed', verifiedAt: const admin = getAdminFn();
+      createdAt: admin.FieldValue.serverTimestamp() });
 
       res.json({ success: true, status: 'succeeded' });
     } else {
@@ -421,7 +421,8 @@ router.post('/stripe/webhook', require('express').raw({ type: 'application/json'
     if (event.type === 'payment_intent.succeeded') {
       const pi = event.data.object;
       const admin = require('firebase-admin');
-      const db = admin.firestore();
+      const db = getDB();
+      const admin = getAdminFn();
 
       const paymentRef = db.collection('pending_payments').doc(pi.id);
       const paymentDoc = await paymentRef.get();
@@ -429,7 +430,8 @@ router.post('/stripe/webhook', require('express').raw({ type: 'application/json'
       if (paymentDoc.exists && paymentDoc.data().status !== 'completed') {
         const paymentData = paymentDoc.data();
         await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, pi.id);
-        await paymentRef.update({ status: 'completed', verifiedAt: admin.FieldValue.serverTimestamp() });
+        await paymentRef.update({ status: 'completed', verifiedAt: const admin = getAdminFn();
+      createdAt: admin.FieldValue.serverTimestamp() });
       }
     }
 
