@@ -6,6 +6,14 @@ const router = express.Router();
 const paymentService = require('./payment-service');
 const stripeService = require('./stripe-service');
 const cryptoService = require('./crypto-service');
+const { db: getDb, isInitialized, admin } = require('./index.js');
+
+function getFirestore() {
+  if (!isInitialized()) {
+    throw new Error('Firebase not initialized. Set FIREBASE_SERVICE_ACCOUNT environment variable.');
+  }
+  return getDb();
+}
 
 // ============================================================================
 // DELIVERY FEE
@@ -292,8 +300,7 @@ router.post('/stripe/create-intent', async (req, res) => {
     );
 
     // Store pending payment in Firestore
-    const admin = require('firebase-admin');
-    const db = admin.firestore();
+    const db = getFirestore();
     await db.collection('pending_payments').doc(result.paymentIntentId).set({
       userId,
       pack,
@@ -301,7 +308,7 @@ router.post('/stripe/create-intent', async (req, res) => {
       currency,
       status: 'pending',
       provider: 'stripe',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: admin.FieldValue.serverTimestamp()
     });
 
     res.json({ success: true, clientSecret: result.clientSecret, paymentIntentId: result.paymentIntentId });
@@ -348,8 +355,7 @@ router.post('/stripe/checkout', async (req, res) => {
     );
 
     // Store a pending payment record keyed by session ID
-    const admin = require('firebase-admin');
-    const db = admin.firestore();
+    const db = getFirestore();
     await db.collection('pending_payments').doc(session.sessionId).set({
       userId,
       pack,
@@ -357,7 +363,7 @@ router.post('/stripe/checkout', async (req, res) => {
       currency,
       status: 'pending',
       provider: 'stripe_checkout',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: admin.FieldValue.serverTimestamp()
     });
 
     res.json({ success: true, url: session.url, sessionId: session.sessionId });
@@ -391,7 +397,7 @@ router.post('/stripe/verify/:paymentIntentId', async (req, res) => {
       }
 
       await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, paymentIntentId);
-      await paymentRef.update({ status: 'completed', verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+      await paymentRef.update({ status: 'completed', verifiedAt: admin.FieldValue.serverTimestamp() });
 
       res.json({ success: true, status: 'succeeded' });
     } else {
@@ -423,7 +429,7 @@ router.post('/stripe/webhook', require('express').raw({ type: 'application/json'
       if (paymentDoc.exists && paymentDoc.data().status !== 'completed') {
         const paymentData = paymentDoc.data();
         await paymentService.rechargeUserWallet(paymentData.userId, paymentData.pack, pi.id);
-        await paymentRef.update({ status: 'completed', verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+        await paymentRef.update({ status: 'completed', verifiedAt: admin.FieldValue.serverTimestamp() });
       }
     }
 

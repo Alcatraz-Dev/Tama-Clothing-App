@@ -4,10 +4,9 @@ import { getStorage } from "firebase/storage";
 import { getDatabase } from "firebase/database";
 import * as FirebaseAuth from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAZYgY-PsjDK5vSxssjsWmUI9J8CE6FUFw",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyAZYgY-PsjDK5vSxssjsWmUI9J8CE6FUFw",
   authDomain: "tama-clothing-v2-alcatraz.firebaseapp.com",
   projectId: "tama-clothing-v2-alcatraz",
   storageBucket: "tama-clothing-v2-alcatraz.firebasestorage.app",

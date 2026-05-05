@@ -38,38 +38,51 @@ const upload = multer({ storage: storage });
 app.use(cors());
 app.use(bodyParser.json());
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin - export db for use in routes
 let db = null;
-try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    let saString = process.env.FIREBASE_SERVICE_ACCOUNT;
-    // Remove potential outer quotes if the string was pasted with them
-    if (saString.startsWith('"') && saString.endsWith('"')) {
-      saString = saString.substring(1, saString.length - 1);
-    }
-    // Ensure escaped newlines are handled correctly
-    const serviceAccount = JSON.parse(saString.replace(/\\n/g, '\n'));
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-    console.log('✅ Firebase Admin initialized via environment variable');
-  } else {
-    const serviceAccount = require('./serviceAccountKey.json');
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-    console.log('✅ Firebase Admin initialized via serviceAccountKey.json');
+let firebaseInitialized = false;
+
+async function initFirebase() {
+  if (admin.apps.length > 0) {
+    db = admin.firestore();
+    firebaseInitialized = true;
+    return true;
   }
-  db = admin.firestore();
-} catch (error) {
-  console.error('❌ CRITICAL: Firebase Admin could not be initialized.');
-  console.error('Reason:', error.message);
-  console.log('Action: For local development, add serviceAccountKey.json. For production, set FIREBASE_SERVICE_ACCOUNT environment variable.');
+
+  try {
+    let serviceAccount;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      let saString = process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (saString.startsWith('"') && saString.endsWith('"')) {
+        saString = saString.substring(1, saString.length - 1);
+      }
+      serviceAccount = JSON.parse(saString.replace(/\\n/g, '\n'));
+    } else {
+      serviceAccount = require('./serviceAccountKey.json');
+    }
+    
+    await admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    db = admin.firestore();
+    firebaseInitialized = true;
+    console.log('✅ Firebase Admin initialized');
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase Admin initialization failed:', error.message);
+    return false;
+  }
 }
+
+initFirebase().catch(console.error);
+
+// Export db for routes
+module.exports = { 
+  db: () => db, 
+  isInitialized: () => firebaseInitialized,
+  admin,
+  Firestore: admin.firestore
+};
 
 // Routes
 app.get('/', (req, res) => {
